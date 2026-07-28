@@ -614,7 +614,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			ListTag positionsList = tag.getList("wirePositions", 10);
 			for (int i = 0; i < Math.min(positionsList.size(), wirePositions.length); i++) {
 				CompoundTag posTag = positionsList.getCompound(i);
-				wirePositions[i] = new Vec3(posTag.getDouble("x"), posTag.getDouble("y"), posTag.getDouble("z"));
+				// an empty tag means the centre was never computed, so leave the entry null.
+				// Reading it unguarded would turn it into Vec3(0, 0, 0) and anchor a wire at
+				// the world origin, which is not the same thing as having no position.
+				if (posTag.contains("x") && posTag.contains("y") && posTag.contains("z")) {
+					wirePositions[i] = new Vec3(posTag.getDouble("x"), posTag.getDouble("y"), posTag.getDouble("z"));
+				}
 			}
 		}
 
@@ -666,13 +671,23 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		super.saveAdditional(tag);
 		ensureYawInitialized();
 
+		// An entry is null whenever the insulator centre could not be computed, which is
+		// always the case on a dedicated server: the centres come from the OBJ bounding
+		// boxes, and only the client renderers ever register those. Writing an empty tag
+		// keeps this list index-aligned with insulatorIds, which is what load() relies on.
+		// The Power Box and Electric Cabin already do exactly this; the turbine did not,
+		// so saveAdditional threw and the whole block entity was never persisted.
 		ListTag positionsList = new ListTag();
 		for (Vec3 pos : wirePositions) {
-			CompoundTag posTag = new CompoundTag();
-			posTag.putDouble("x", pos.x);
-			posTag.putDouble("y", pos.y);
-			posTag.putDouble("z", pos.z);
-			positionsList.add(posTag);
+			if (pos != null) {
+				CompoundTag posTag = new CompoundTag();
+				posTag.putDouble("x", pos.x);
+				posTag.putDouble("y", pos.y);
+				posTag.putDouble("z", pos.z);
+				positionsList.add(posTag);
+			} else {
+				positionsList.add(new CompoundTag());
+			}
 		}
 
 		tag.put("wirePositions", positionsList);
