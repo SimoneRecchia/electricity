@@ -55,21 +55,33 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: true
-      # the published coordinates come from gradle.properties, so a mismatch here
-      # would put the artifact under a version nobody finds from the release page
-      - name: verify release matches mod_version
+      # the release is the source of truth for the version: it is fed to gradle as
+      # -Pmod_version, which lands in the jar name, in the maven coordinates and in
+      # the version the mod declares in mods.toml. gradle.properties only says what
+      # a local build produces, and is allowed to disagree
+      - name: report the version being published
         env:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
-          if [ "$mod_version" != "$VERSION" ]; then
-            echo "::error::release $VERSION does not match mod_version=$mod_version in gradle.properties"
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not work out a version from the release tag"
             exit 1
+          fi
+          case "$VERSION" in
+            */*|*' '*)
+              echo "::error::version '$VERSION' cannot be used as a maven version or a file name"
+              exit 1 ;;
+          esac
+          declared=$(sed -n 's/^mod_version=//p' gradle.properties)
+          if [ "$declared" != "$VERSION" ]; then
+            echo "::notice::publishing $VERSION from the release; gradle.properties says mod_version=$declared and is being overridden"
           fi
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
-        run: ./gradlew build
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./gradlew build "-Pmod_version=$VERSION"
       # this is the only place that attaches the jar, so a release cut by hand from
       # the ui ends up with the same assets as one cut by pushing a tag. it runs
       # before the package publish, so a rejected re-publish still leaves the
@@ -97,6 +109,8 @@ jobs:
       - name: publish to github packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: >
           ./gradlew publishMavenJavaPublicationToGitHubPackagesRepository
+          "-Pmod_version=$VERSION"
           --init-script .github/publish-github-packages.init.gradle
