@@ -1,0 +1,29 @@
+// Adds GitHub Packages as a publishing target without the mod's own build script
+// having to know that this repository is hosted on github at all. Applied with
+// --init-script from .github/workflows/publish-package.yml.
+//
+// Nothing here is reachable from a normal build: an init script only takes effect
+// when it is passed on the command line.
+
+def repository = System.getenv('GITHUB_REPOSITORY')
+def actor = System.getenv('GITHUB_ACTOR')
+def token = System.getenv('GITHUB_TOKEN')
+
+if (!repository || !actor || !token) {
+    throw new GradleException('GITHUB_REPOSITORY, GITHUB_ACTOR and GITHUB_TOKEN must all be set to publish to GitHub Packages')
+}
+
+// beforeProject runs ahead of the build script, so the repository is already in
+// place by the time maven-publish creates its publish tasks
+gradle.beforeProject { project ->
+    project.plugins.withId('maven-publish') {
+        project.extensions.getByType(PublishingExtension).repositories.maven {
+            name = 'GitHubPackages'
+            url = "https://maven.pkg.github.com/${repository}"
+            credentials {
+                username = actor
+                password = token
+            }
+        }
+    }
+}

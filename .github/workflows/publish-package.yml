@@ -1,0 +1,78 @@
+name: publish package
+on:
+  # a release published by hand from the github ui
+  release:
+    types: [published]
+  # ...and release.yml calls this one, because a release created with the
+  # repository's GITHUB_TOKEN never fires the release event above
+  workflow_call:
+    inputs:
+      tag:
+        description: tag of the release to build and publish
+        required: true
+        type: string
+  # re-running a failed publish without cutting a new release
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: tag of an existing release to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+# github packages rejects a second upload of the same coordinates, so two
+# concurrent runs for one tag would leave one of them red for no reason
+concurrency:
+  group: publish-package-${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: resolve release version
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+      - name: setup jdk
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'microsoft'
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      # the published coordinates come from gradle.properties, so a mismatch here
+      # would put the artifact under a version nobody finds from the release page
+      - name: verify release matches mod_version
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mod_version=$(sed -n 's/^mod_version=//p' gradle.properties)
+          if [ "$mod_version" != "$VERSION" ]; then
+            echo "::error::release $VERSION does not match mod_version=$mod_version in gradle.properties"
+            exit 1
+          fi
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      # the registry is added by the init script rather than by build.gradle, which
+      # keeps the mod's build unaware of where it gets published; the init script
+      # reads GITHUB_ACTOR and GITHUB_REPOSITORY straight from the runner
+      - name: publish to github packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          ./gradlew build publishMavenJavaPublicationToGitHubPackagesRepository
+          --init-script .github/publish-github-packages.init.gradle

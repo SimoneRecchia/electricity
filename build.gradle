@@ -218,18 +218,30 @@ tasks.named('jar', Jar).configure {
 //     dependsOn 'reobfJar'
 // }
 
-// Example configuration to allow publishing using the maven-publish plugin
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
+            // stated explicitly: the artifact id would otherwise default to the
+            // name of the checkout directory, which CI is free to change
+            groupId = mod_group_id
+            artifactId = mod_id
+            version = mod_version
             artifact jar
         }
     }
+    // remote repositories are the concern of whoever is doing the publishing, not
+    // of the mod: CI injects its own with an init script
     repositories {
         maven {
             url "file://${project.projectDir}/mcmodsrepo"
         }
     }
+}
+
+// `jar` is only finalizedBy reobfJar, which leaves Gradle free to upload the
+// still-deobfuscated jar before reobfJar has rewritten it in place
+tasks.withType(PublishToMavenRepository).configureEach {
+    dependsOn 'reobfJar'
 }
 
 tasks.withType(JavaCompile).configureEach {

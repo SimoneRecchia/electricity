@@ -58,3 +58,14 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" "${args[@]}" build/libs/*.jar
+
+  # the release above is created with the repository's GITHUB_TOKEN, which does
+  # not fire the release event, so the package publish is chained explicitly
+  publish-package:
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-package.yml
+    with:
+      tag: ${{ github.ref_name }}
