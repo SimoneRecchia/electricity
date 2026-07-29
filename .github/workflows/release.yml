@@ -1,9 +1,13 @@
 name: release
+# nothing here starts on its own: no tag push, no merge. cutting a release is
+# always a deliberate act, either from this workflow or from the github ui
 on:
-  push:
-    # both conventions fire, with or without the v: a version tag that matched
-    # nothing would sit there looking released without a workflow ever running
-    tags: ['v*', '[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: existing tag to release; the version is taken from it
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,64 +18,43 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-      - name: setup jdk
-        uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'microsoft'
-      - name: setup gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: true
-      - name: read mod metadata
-        id: mod
+          ref: ${{ inputs.tag }}
+      # the version is whatever the tag says; gradle.properties does not get a vote
+      - name: read release metadata
+        id: meta
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          version=$(sed -n 's/^mod_version=//p' gradle.properties)
+          version=${TAG#v}
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)" >> "$GITHUB_OUTPUT"
           case "$version" in
             *-alpha*|*-beta*|*-rc*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
             *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
-      # a jar whose internal version disagrees with the tag is the classic
-      # release footgun, so fail before anything is published
-      - name: verify tag matches mod_version
-        env:
-          VERSION: ${{ steps.mod.outputs.version }}
-        run: |
-          if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match mod_version=$VERSION in gradle.properties"
-            exit 1
-          fi
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      # a gate, not the source of the release assets: nothing gets announced for a
-      # commit that does not compile
-      - name: build
-        run: ./gradlew build
       - name: create github release
         env:
           GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ steps.mod.outputs.prerelease }}
-          TITLE: Electricity ${{ steps.mod.outputs.version }} (MC ${{ steps.mod.outputs.mc }})
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          TITLE: Electricity ${{ steps.meta.outputs.version }} (MC ${{ steps.meta.outputs.mc }})
+          TAG: ${{ inputs.tag }}
         run: |
-          # the release may already exist, cut by hand from the ui before the tag
-          # was pushed; that used to fail the whole job and take the jar with it
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release $GITHUB_REF_NAME already exists, leaving its notes alone"
+          # the release may already exist, cut by hand from the ui; that used to
+          # fail the whole job and take the jar with it
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists, leaving its notes alone"
             exit 0
           fi
           args=(--generate-notes --title "$TITLE")
           if [ "$PRERELEASE" = "true" ]; then
             args+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" "${args[@]}"
+          gh release create "$TAG" "${args[@]}"
 
-  # the release above is created with the repository's GITHUB_TOKEN, which does
-  # not fire the release event, so the package publish is chained explicitly.
-  # it is also what attaches the jar to the release
+  # a release created with the repository's GITHUB_TOKEN does not fire the release
+  # event, so the publish is chained explicitly. it is also what builds the jar and
+  # attaches it to the release
   publish-package:
     needs: release
     permissions:
@@ -79,4 +62,4 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-package.yml
     with:
-      tag: ${{ github.ref_name }}
+      tag: ${{ inputs.tag }}
