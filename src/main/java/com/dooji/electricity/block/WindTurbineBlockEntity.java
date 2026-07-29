@@ -666,13 +666,24 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		super.saveAdditional(tag);
 		ensureYawInitialized();
 
+		// An entry is null whenever calculateOrientedInsulatorCenter could not find the
+		// insulator's bounding box, and on a dedicated server that is *always*: every
+		// method that fills ObjBoundingBoxRegistry is @OnlyIn(Dist.CLIENT), so the
+		// registry is permanently empty there. Writing an empty tag as a placeholder
+		// keeps the list index-aligned with the array, which is what ElectricCabin and
+		// PowerBox already do; load() reads a missing key back as 0 and then recomputes
+		// the real positions anyway.
 		ListTag positionsList = new ListTag();
 		for (Vec3 pos : wirePositions) {
-			CompoundTag posTag = new CompoundTag();
-			posTag.putDouble("x", pos.x);
-			posTag.putDouble("y", pos.y);
-			posTag.putDouble("z", pos.z);
-			positionsList.add(posTag);
+			if (pos != null) {
+				CompoundTag posTag = new CompoundTag();
+				posTag.putDouble("x", pos.x);
+				posTag.putDouble("y", pos.y);
+				posTag.putDouble("z", pos.z);
+				positionsList.add(posTag);
+			} else {
+				positionsList.add(new CompoundTag());
+			}
 		}
 
 		tag.put("wirePositions", positionsList);
