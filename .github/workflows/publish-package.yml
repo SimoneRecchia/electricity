@@ -20,7 +20,8 @@ on:
         type: string
 
 permissions:
-  contents: read
+  # contents: write is for attaching the jar to the release
+  contents: write
   packages: write
 
 # github packages rejects a second upload of the same coordinates, so two
@@ -67,6 +68,29 @@ jobs:
           fi
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      - name: build
+        run: ./gradlew build
+      # this is the only place that attaches the jar, so a release cut by hand from
+      # the ui ends up with the same assets as one cut by pushing a tag. it runs
+      # before the package publish, so a rejected re-publish still leaves the
+      # download in place
+      - name: attach the jar to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          jars=(build/libs/*.jar)
+          if [ ${#jars[@]} -ne 1 ]; then
+            echo "::error::expected exactly one jar in build/libs, found ${#jars[@]}"
+            exit 1
+          fi
+          # a second copy under a name that never changes, so a download url only
+          # has to vary by tag: .../releases/download/<tag>/electricity.jar
+          mod_id=$(sed -n 's/^mod_id=//p' gradle.properties)
+          mkdir -p build/release-assets
+          cp "${jars[0]}" "build/release-assets/${mod_id}.jar"
+          gh release upload "$TAG" "${jars[0]}" "build/release-assets/${mod_id}.jar" --clobber
       # the registry is added by the init script rather than by build.gradle, which
       # keeps the mod's build unaware of where it gets published; the init script
       # reads GITHUB_ACTOR and GITHUB_REPOSITORY straight from the runner
@@ -74,5 +98,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
-          ./gradlew build publishMavenJavaPublicationToGitHubPackagesRepository
+          ./gradlew publishMavenJavaPublicationToGitHubPackagesRepository
           --init-script .github/publish-github-packages.init.gradle

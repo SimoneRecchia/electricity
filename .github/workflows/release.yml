@@ -47,6 +47,8 @@ jobs:
           fi
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      # a gate, not the source of the release assets: nothing gets announced for a
+      # commit that does not compile
       - name: build
         run: ./gradlew build
       - name: create github release
@@ -55,18 +57,25 @@ jobs:
           PRERELEASE: ${{ steps.mod.outputs.prerelease }}
           TITLE: Electricity ${{ steps.mod.outputs.version }} (MC ${{ steps.mod.outputs.mc }})
         run: |
+          # the release may already exist, cut by hand from the ui before the tag
+          # was pushed; that used to fail the whole job and take the jar with it
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists, leaving its notes alone"
+            exit 0
+          fi
           args=(--generate-notes --title "$TITLE")
           if [ "$PRERELEASE" = "true" ]; then
             args+=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" "${args[@]}" build/libs/*.jar
+          gh release create "$GITHUB_REF_NAME" "${args[@]}"
 
   # the release above is created with the repository's GITHUB_TOKEN, which does
-  # not fire the release event, so the package publish is chained explicitly
+  # not fire the release event, so the package publish is chained explicitly.
+  # it is also what attaches the jar to the release
   publish-package:
     needs: release
     permissions:
-      contents: read
+      contents: write
       packages: write
     uses: ./.github/workflows/publish-package.yml
     with:
