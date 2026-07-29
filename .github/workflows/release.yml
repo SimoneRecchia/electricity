@@ -1,7 +1,9 @@
 name: release
 on:
   push:
-    tags: ['v*']
+    # both conventions fire, with or without the v: a version tag that matched
+    # nothing would sit there looking released without a workflow ever running
+    tags: ['v*', '[0-9]*']
 
 permissions:
   contents: write
