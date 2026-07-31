@@ -86,5 +86,9 @@
   "tooltip.electricity.turbine_tower": "Stack it to the height you want, then seat a turbine on top. Nothing stands above 16 blocks.",
   "message.electricity.turbine.tower_height": "%s is built for %s to %s blocks of tower. This one stands %s.",
   "screen.electricity.wind_turbine.tower_gain": "One block taller: %s output",
-  "message.electricity.tower.collapsed": "The steel groans, and the tower folds under its own weight."
+  "message.electricity.tower.collapsed": "The steel groans, and the tower folds under its own weight.",
+  "block.electricity.solar_panel": "Solar Panel",
+  "tooltip.electricity.solar_panel": "20 kW of modules over a hundred square metres. Wants an open sky; a desert sky is worth a quarter more than a rainforest one.",
+  "gamerule.electricityRealTimeClock": "Follow the real-world clock",
+  "gamerule.electricityRealTimeClock.description": "The sun stands where the real sun stands: a day takes a day, and sleeping no longer moves it."
 }

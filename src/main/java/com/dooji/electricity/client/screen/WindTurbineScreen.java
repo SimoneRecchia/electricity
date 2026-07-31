@@ -237,10 +237,14 @@ public class WindTurbineScreen extends Screen {
 	private void drawWind(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
 		double scale = spec.cutOutSpeed();
-		double wind = turbine.getWindSpeed();
+		// the mean, not the instantaneous wind: this is the figure the machine supervises on and
+		// the one a wind report quotes, and a needle chasing every gust would be unreadable. The
+		// gust gets its own mark below, because it is what explains a shutdown in wind that looks
+		// well short of the cut-out
+		double wind = turbine.getMeanWindSpeed();
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 86, LABEL_COLOUR, false);
-		String value = fmt("%.1f m/s", wind);
+		String value = fmt("%.1f / %.1f m/s", wind, turbine.getGustWindSpeed());
 		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - MARGIN - font.width(value), topPos + 86, VALUE_COLOUR, false);
 
 		int cutIn = barWidth(spec.cutInSpeed() / scale);
@@ -252,9 +256,9 @@ public class WindTurbineScreen extends Screen {
 		zone(graphics, WIND_BAR_Y, rated, storm, GREEN);         // on the plateau
 		zone(graphics, WIND_BAR_Y, storm, BAR_WIDTH, RED);       // shedding output
 
-		int needle = barWidth(wind / scale);
-		graphics.fill(leftPos + BAR_X + Mth.clamp(needle - 1, 0, BAR_WIDTH - 2), topPos + WIND_BAR_Y - 2,
-				leftPos + BAR_X + Mth.clamp(needle + 1, 2, BAR_WIDTH), topPos + WIND_BAR_Y + BAR_HEIGHT + 2, 0xFFF0F0F0);
+		// the gust first, so the mean draws over it where the two coincide
+		needle(graphics, barWidth(turbine.getGustWindSpeed() / scale), 0x80F0F0F0);
+		needle(graphics, barWidth(wind / scale), 0xFFF0F0F0);
 
 		separator(graphics, topPos + 112);
 	}
@@ -274,18 +278,27 @@ public class WindTurbineScreen extends Screen {
 
 		// what one more block of tower would be worth, so the climb is a decision rather than
 		// a gamble.
-		// Asked as a ratio between the two hub heights, which needs no detour back to the
-		// reference height and holds whatever the wind happens to be doing right now.
+		//
+		// The exponent comes from the server with the rest of the machine's state, because it is
+		// a property of the ground this tower stands on and the air over it tonight: the same
+		// block is worth two percent on a beach and eight in a forest, and a figure baked in
+		// here would have told every player the same lie.
 		int segments = turbine.getTowerSegments();
 		if (segments < spec.maxTowerSegments()) {
 			double here = turbine.getReportedPowerKw();
-			double tallerWind = turbine.getWindSpeed() * TurbineSpec.windRatio(spec.hubHeightM(segments), spec.hubHeightM(segments + 1));
-			double taller = spec.powerAtKw(tallerWind, turbine.getAirDensity());
+			double ratio = Math.pow(spec.hubHeightM(segments + 1) / spec.hubHeightM(segments), turbine.getShearExponent());
+			double taller = spec.powerWhileRunningKw(turbine.getWindSpeed() * ratio, turbine.getAirDensity());
 			if (here > 0.01 && taller > here) {
 				String gain = fmt("+%.0f%%", (taller / here - 1.0) * 100.0);
 				graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower_gain", gain), leftPos + 8, topPos + 128, FAINT_COLOUR, false);
 			}
 		}
+	}
+
+	/** A two-pixel mark standing across the wind gauge, clamped so it stays inside the bar. */
+	private void needle(GuiGraphics graphics, int at, int colour) {
+		graphics.fill(leftPos + BAR_X + Mth.clamp(at - 1, 0, BAR_WIDTH - 2), topPos + WIND_BAR_Y - 2,
+				leftPos + BAR_X + Mth.clamp(at + 1, 2, BAR_WIDTH), topPos + WIND_BAR_Y + BAR_HEIGHT + 2, colour);
 	}
 
 	private void separator(GuiGraphics graphics, int y) {

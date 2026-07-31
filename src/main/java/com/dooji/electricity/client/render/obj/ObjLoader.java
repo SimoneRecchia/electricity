@@ -21,12 +21,4 @@ public class ObjLoader {
 		}
 		return model;
 	}
-
-	public static void unloadModel(ResourceLocation location) {
-		loadedModels.remove(location);
-	}
-
-	public static void clearCache() {
-		loadedModels.clear();
-	}
 }

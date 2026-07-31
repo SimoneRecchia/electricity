@@ -6,8 +6,6 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.api.power.PowerDeliveryEvent;
 import com.dooji.electricity.main.network.ElectricityNetworking;
-import com.dooji.electricity.main.weather.GlobalWeatherManager;
-import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.main.wire.WireConnection;
 import com.dooji.electricity.main.wire.WireManager;
 import java.util.*;
@@ -219,20 +217,25 @@ public class PowerNetwork {
 			return new PowerDeliveryEvent(state.severity, nextRemaining, state.disconnect, state.brownout);
 		}
 
-		WeatherSnapshot weather = GlobalWeatherManager.get(level).sample(turbine.getBlockPos());
-		double turbulence = weather.turbulence();
-		double windSpeed = weather.windSpeed();
+		// asked of the machine rather than of the weather. The turbine has already sampled the
+		// wind at its own hub over its own ground, and re-sampling here at the nacelle's block
+		// would have described a met mast standing thirteen blocks up in mid-air instead
+		double turbulence = turbine.getTurbulenceIntensity();
+		double windSpeed = turbine.getMeanWindSpeed();
 		var random = level.getRandom();
 
+		// both thresholds moved onto real turbulence intensity. 0.14 is where a site stops being
+		// smooth and 0.24 is genuinely rough air; the old 0.25 and 0.75 belonged to a scale that
+		// ran to 1.0, and on this one the second of them could never have been reached at all
 		double gustFactor = Mth.clamp((windSpeed - 8.0) / 12.0, 0.0, 1.0);
-		double baseSeverity = Math.max(0.0, (turbulence - 0.25) * 0.6 + gustFactor * 0.4);
+		double baseSeverity = Math.max(0.0, (turbulence - 0.14) * 1.7 + gustFactor * 0.4);
 		double severity = Math.max(0.0, baseSeverity + random.nextDouble() * 0.05);
 		int duration = severity > 0.25 ? 4 + random.nextInt(5) : 0;
 
 		boolean disconnect = false;
 		double brownout = 1.0;
-		if (windSpeed > 18.0 || turbulence > 0.75) {
-			double faultChance = Mth.clamp((windSpeed - 18.0) * 0.04 + (turbulence - 0.75) * 0.25, 0.0, 0.5);
+		if (windSpeed > 18.0 || turbulence > 0.24) {
+			double faultChance = Mth.clamp((windSpeed - 18.0) * 0.04 + (turbulence - 0.24) * 0.7, 0.0, 0.5);
 			if (random.nextDouble() < faultChance) {
 				disconnect = true;
 				duration = Math.max(duration, 6 + random.nextInt(5));
@@ -334,12 +337,6 @@ public class PowerNetwork {
 
 		return connections;
 	}
-
-	public double getPowerForInsulator(int insulatorId) {
-		PowerNode node = powerNodes.get(insulatorId);
-		return node != null ? node.getPower() : 0.0;
-	}
-
 	public void syncToClients() {
 		Map<BlockPos, Double> blockPower = new HashMap<>();
 		Map<BlockPos, PowerNode> representatives = new HashMap<>();
@@ -427,10 +424,6 @@ public class PowerNetwork {
 
 		void setPower(double power) {
 			this.power = power;
-		}
-
-		double getPower() {
-			return power;
 		}
 
 		boolean hasLocalSurge() {

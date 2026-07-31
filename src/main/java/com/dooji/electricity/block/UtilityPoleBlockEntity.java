@@ -2,7 +2,6 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
-import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
@@ -245,25 +244,6 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 	private void updateWirePositions() {
 		initializeWirePositions();
 	}
-
-	public ObjModel.OrientedBoundingBox getOrientedBoundingBoxForInsulator(String insulatorGroup) {
-		try {
-			ObjModel.BoundingBox localBbox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), insulatorGroup);
-			if (localBbox == null) return null;
-
-			Vector3f worldCenter = new Vector3f(getBlockPos().getX() + 0.5f, getBlockPos().getY(), getBlockPos().getZ() + 0.5f);
-
-			Vector3f localCenter = applyFacingRotation(localBbox.center);
-			worldCenter.add(localCenter);
-
-			worldCenter.add(offsetX, offsetY, offsetZ);
-
-			return new ObjModel.OrientedBoundingBox(worldCenter, localBbox.size, yaw, pitch);
-		} catch (Exception e) {
-			return null;
-		}
-	}
-
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);

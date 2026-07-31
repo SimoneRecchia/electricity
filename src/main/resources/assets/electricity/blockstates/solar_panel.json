@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "electricity:block/solar_panel" }
+  }
+}

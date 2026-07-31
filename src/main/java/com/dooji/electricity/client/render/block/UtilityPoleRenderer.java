@@ -5,7 +5,6 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
-import com.dooji.electricity.client.render.obj.ObjInteractionRegistry;
 import com.dooji.electricity.client.render.obj.ObjLoader;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.render.obj.ObjRenderUtil;
@@ -57,10 +56,7 @@ public class UtilityPoleRenderer extends ObjRendererBase {
 	public static void init() {
 		ObjBlockDefinition definition = ObjDefinitions.get(Electricity.UTILITY_POLE_BLOCK.get());
 		if (definition == null) return;
-		ObjBlockRegistry.register(definition.block(), definition.model(), null);
-		for (String insulator : definition.insulators()) {
-			ObjInteractionRegistry.register(definition.block(), insulator, null);
-		}
+		ObjBlockRegistry.register(definition);
 
 		calculateAndRegisterBoundingBoxes(definition);
 	}

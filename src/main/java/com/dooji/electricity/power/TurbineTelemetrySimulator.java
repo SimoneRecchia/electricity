@@ -1,5 +1,6 @@
 package com.dooji.electricity.power;
 
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.api.power.TurbineTelemetry;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +25,6 @@ public final class TurbineTelemetrySimulator {
 	/** Line-to-line volts, the usual LV level for a machine this size. */
 	private static final double NOMINAL_VOLTAGE = 690.0;
 	private static final double NOMINAL_FREQUENCY = 50.0;
-	private static final double SEA_LEVEL_PRESSURE = 1013.25;
 	/** Reaches 63% of a step in roughly 25 seconds. Slow enough to read as thermal mass. */
 	private static final double THERMAL_LAG = 0.002;
 	/** Degrees of blade pitch at the top of the normal regulating range. */
@@ -58,7 +58,8 @@ public final class TurbineTelemetrySimulator {
 			boolean stoppedByRedstone,
 			boolean yawing,
 			double ambientTempC,
-			int blockY,
+			/** Air pressure at the site, in hPa. The weather model's own, not derived from anything here. */
+			double pressureHpa,
 			boolean raining,
 			boolean thundering,
 			long gameTime,
@@ -83,7 +84,7 @@ public final class TurbineTelemetrySimulator {
 		double ambient = s.ambientTempC();
 		boolean spinning = s.rotorDegreesPerTick() > 0.05;
 
-		double rotorRpm = s.rotorDegreesPerTick() * 20.0 * 60.0 / 360.0;
+		double rotorRpm = s.rotorDegreesPerTick() / TurbineSpec.DEGREES_PER_TICK_PER_RPM;
 		double pitch = bladePitch(s);
 		double pitchActivity = s.braked() || pitch > 0.5 ? 1.0 : 0.15;
 
@@ -155,17 +156,12 @@ public final class TurbineTelemetrySimulator {
 		out.put(TurbineTelemetry.BLADE_PITCH_ANGLE_2, clampPitch(pitch + wobble(s, 97.0, 0.25) - 0.1));
 		out.put(TurbineTelemetry.BLADE_PITCH_ANGLE_3, clampPitch(pitch + wobble(s, 101.0, 0.25) + 0.15));
 
-		// pressure falls with altitude, and with the weather. The wind term is the one
-		// that matters for coherence: wind exists because of a pressure gradient, so a
-		// gale reading 1013 hPa would be nonsense sitting next to a 22 m/s wind speed.
-		// At the cut-out wind this lands near 990 hPa, which is a real storm low.
-		double pressure = SEA_LEVEL_PRESSURE - (s.blockY() - 64) * 0.12 - s.windSpeed() * 0.9;
-		if (s.thundering()) {
-			pressure -= 8.0;
-		} else if (s.raining()) {
-			pressure -= 4.0;
-		}
-		out.put(TurbineTelemetry.AIR_PRESSURE, pressure + wobble(s, 1201.0, 0.6));
+		// the barometer reads the weather model's own field now, rather than a figure worked
+		// backwards from the wind speed. That is the right way round: the wind exists because of
+		// the pressure gradient, so a station reading 993 hPa beside a 22 m/s wind is not a
+		// coincidence arranged for the look of the thing, it is the cause standing next to its
+		// effect. The wobble stays, because no real barometer sits perfectly still.
+		out.put(TurbineTelemetry.AIR_PRESSURE, s.pressureHpa() + wobble(s, 1201.0, 0.6));
 
 		// ---- simulated ----
 		out.put(TurbineTelemetry.GEARBOX_OIL_TEMP, lag(TurbineTelemetry.GEARBOX_OIL_TEMP, ambient + 18.0 + 42.0 * load, ambient));

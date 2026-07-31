@@ -104,13 +104,14 @@ Above 22 m/s the turbine no longer trips straight to zero. It sheds a fifth of r
 m/s — 80%, 60%, 40% at 22, 23 and 24 — and brakes at 25. Coming off full load in one
 step is a shock to the drivetrain, and no real turbine does it.
 
-→ [Power curve, thresholds and all the numbers](docs/telemetry.md#power-curve)
+→ [Power curve, thresholds and all the numbers](docs/telemetry.md#3-the-catalogue)
 
 ## Blocks and items
 
 | | Name | What it does |
 |---|---|---|
-| 🌬️ | **Wind Turbine** | Generates from wind. Yaws to follow it, pitches its blades above rated speed, brakes in a storm. |
+| 🌬️ | **Wind Turbine** | Six machines from 10 kW to 4 MW, following the real Vestas line. Yaws to follow the wind, pitches its blades above rated, idles through a storm. |
+| 🗼 | **Turbine Tower** | Stack it to the height you want, then seat a turbine on top. Hub height is something you build, and it is worth about 3% a block. |
 | 📦 | **Electric Cabin** | Collects from generators and passes it to utility poles. Two insulators: **left is output, right is input**. |
 | 🗼 | **Utility Pole** | Carries power across distance. Eight insulators, configurable. |
 | 🔋 | **Power Box** | Distributes within a radius, and bridges to Forge Energy. |
@@ -118,6 +119,7 @@ step is a shock to the drivetrain, and no real turbine does it.
 | 🔧 | **Power Wrench** | Opens a live diagnostics panel on any electric block. |
 | 🧵 | **Wire** | Right-click one insulator, then another. |
 | 🛠️ | **Electric Workbench** | Crafts every component below. |
+| ☀️ | **Solar Panel** | 20 kW of modules. **Alpha** — it works and it is honest about the physics, but it is not finished. |
 | 📡 | **Weather Tablet** | Weather intensity map. Not functional yet. |
 
 Components — Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core — are all
@@ -126,8 +128,10 @@ made at the Electric Workbench. Recipes are visible in-game; use JEI or the work
 ## Getting started
 
 1. Craft an **Electric Workbench** at a crafting table, then the components at it.
-2. Place a **Wind Turbine** somewhere with wind — check it with the Weather Tablet.
-   Below 3 m/s it produces nothing.
+2. Stack **Turbine Towers** to the height you want and seat a **Wind Turbine** on top.
+   Each machine is sold on a range of tower heights and refuses to mount outside it.
+   Below its cut-in wind — 3 to 4 m/s — it produces nothing. High ground is worth more
+   than anything else you can do: a ridge beats three extra blocks of tower.
 3. With a **Wire** in hand, right-click the turbine's insulator, then the **right**
    insulator of an **Electric Cabin**.
 4. Cabin's **left** insulator → a **Utility Pole** → more poles → the **Power Box**

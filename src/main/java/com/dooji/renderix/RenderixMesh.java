@@ -58,19 +58,6 @@ public final class RenderixMesh {
 	List<RenderixFace> facesView() {
 		return faces;
 	}
-
-	List<float[]> positionsView() {
-		return positions;
-	}
-
-	List<float[]> normalsView() {
-		return normals;
-	}
-
-	List<float[]> texCoordsView() {
-		return texCoords;
-	}
-
 	RenderixMesh withFaces(List<RenderixFace> subset) {
 		return new RenderixMesh(positions, normals, texCoords, subset, materialLibraries, true);
 	}

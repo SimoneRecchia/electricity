@@ -1,5 +1,6 @@
 package com.dooji.electricity.api.power;
 
+import com.dooji.electricity.api.WorldConditions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
@@ -18,7 +19,7 @@ import net.minecraft.util.Mth;
  *
  * The dimensions here are the real machine's, in metres, and they are what the
  * physics and the telemetry work on. The world renders them at
- * {@link #METRES_PER_BLOCK}, because a 130 m rotor drawn at one block per metre
+ * {@link WorldScale#METRES_PER_BLOCK}, because a 130 m rotor drawn at one block per metre
  * would not fit under the build height together with its tower. So a C130 has a
  * 130 m rotor that occupies thirteen blocks, and the GUI reports the 130.
  *
@@ -44,10 +45,22 @@ public record TurbineSpec(
 		double cutOutSpeed,
 		/** Where storm control starts shedding output. Equal to {@link #cutOutSpeed} on a machine without it. */
 		double stormOnsetSpeed,
+		/**
+		 * The rotor's operating speed range in rpm, as the datasheet prints it.
+		 *
+		 * Declared rather than derived, and that is a correction: it used to come out of one
+		 * tip speed limit shared by the whole catalogue, which was right for a V80 at 80 m/s
+		 * and thirty percent wrong for a V112, whose longer blades are allowed 104. The two
+		 * ends are the real ones - a V52 runs 14.0 to 31.4 rpm, a V112 6.2 to 17.7 - and the
+		 * bottom end is not decoration: below it there is not enough in the generator to stay
+		 * on load, so the controller holds the speed there instead of tracking the wind.
+		 */
+		double minRotorRpm,
+		double maxRotorRpm,
 		int minTowerSegments,
 		int maxTowerSegments,
 		/**
-		 * Visual exaggeration of the rotor, on top of {@link #METRES_PER_BLOCK}.
+		 * Visual exaggeration of the rotor, on top of {@link WorldScale#METRES_PER_BLOCK}.
 		 *
 		 * 1.0 for the whole C line, which is what keeps the convention legible: a C90
 		 * really is nine blocks across. The small-wind machine is the one exception,
@@ -57,10 +70,6 @@ public record TurbineSpec(
 		double rotorRenderScale,
 		Nacelle nacelle
 ) {
-	/** How many metres of real machine one block of world represents. */
-	public static final double METRES_PER_BLOCK = 10.0;
-	/** Air density at sea level and 15 C, the reference every power curve is quoted at. */
-	public static final double REFERENCE_AIR_DENSITY = 1.225;
 	/** 16/27: no rotor of any design extracts more than this fraction of the wind's power. */
 	public static final double BETZ_LIMIT = 16.0 / 27.0;
 	/**
@@ -89,8 +98,7 @@ public record TurbineSpec(
 	 * proportion the model was built at.
 	 */
 	private static final double SMALL_WIND_NACELLE_FLOOR = 0.25;
-	/** Fraction of rated output shed per m/s above the storm onset. */
-	private static final double STORM_DERATE_PER_MS = 0.2;
+
 
 	public enum Nacelle {
 		/** Three blades, pitch regulated, active yaw. Everything from the C52 up. */
@@ -111,6 +119,7 @@ public record TurbineSpec(
 			throw new IllegalArgumentException(id + ": storm onset must fall between cut-in and cut-out");
 		}
 
+		if (minRotorRpm <= 0.0 || maxRotorRpm < minRotorRpm) throw new IllegalArgumentException(id + ": invalid rotor speed range");
 		if (minTowerSegments < 1 || maxTowerSegments < minTowerSegments) throw new IllegalArgumentException(id + ": invalid tower segment range");
 		if (rotorRenderScale <= 0.0) throw new IllegalArgumentException(id + ": rotor render scale must be positive");
 	}
@@ -124,7 +133,7 @@ public record TurbineSpec(
 
 	/** On-screen rotor diameter in blocks, exaggeration included. */
 	public double rotorDiameterBlocks() {
-		return rotorDiameterM / METRES_PER_BLOCK * rotorRenderScale;
+		return rotorDiameterM / WorldConditions.METRES_PER_BLOCK * rotorRenderScale;
 	}
 
 	/** Scale to draw the authored rotor at. */
@@ -166,108 +175,233 @@ public record TurbineSpec(
 	 * height above the ground and the block grid is ten times too short to show it.
 	 */
 	public double hubHeightM(int towerSegments) {
-		return clampTowerSegments(towerSegments) * METRES_PER_BLOCK;
+		return clampTowerSegments(towerSegments) * WorldConditions.METRES_PER_BLOCK;
 	}
 
 	// ---- the power curve ----
 
 	/**
-	 * Wind speed at which this machine first reaches its nameplate power.
+	 * How sharply the curve turns over as it approaches nameplate power.
 	 *
-	 * Derived rather than declared: it is where the cubic below meets the generator's
-	 * limit, so the two cannot disagree. A datasheet usually prints a higher figure,
-	 * because a real rotor's efficiency tails off gradually as it approaches rated and
-	 * the last few percent arrive slowly. Below the knee the cubic tracks a real curve
-	 * closely; above it, both are flat. The disagreement is confined to the band
-	 * between the two knees.
+	 * A real power curve has no corner in it. The textbook one does - it is the cubic until the
+	 * generator's limit and flat after - but a machine approaches its ceiling over three to five
+	 * m/s, because the rotor reaches its speed limit first and its efficiency falls away as the
+	 * tip speed ratio drops, while the pitch controller takes over by degrees rather than at a
+	 * stroke. That corner was this model's largest error against the real machines: the sharp
+	 * knee arrived two to five m/s early, so every datasheet's rated wind speed disagreed with
+	 * the mod's.
+	 *
+	 * Four rounds it about right. Checked against the published curves: a V90 comes to 98% of
+	 * nameplate at 15 m/s against a datasheet 15, a V112 to 96% at 12 against a datasheet 12,
+	 * and the implied power coefficient collapses from 0.44 to 0.16 across a V52's regulating
+	 * band, which is what that machine's narrow speed range forces on it.
+	 */
+	private static final double KNEE_SHARPNESS = 4.0;
+	/** What counts as having reached nameplate, for a curve that only ever approaches it. */
+	private static final double RATED_POWER_FRACTION = 0.99;
+	/** Where that fraction is reached, as a multiple of the sharp knee. Derived, so the two agree. */
+	private static final double RATED_SPEED_FACTOR = ratedSpeedFactor();
+
+	private static double ratedSpeedFactor() {
+		double reached = Math.pow(RATED_POWER_FRACTION, KNEE_SHARPNESS);
+		return Math.cbrt(Math.pow(reached / (1.0 - reached), 1.0 / KNEE_SHARPNESS));
+	}
+
+	/**
+	 * Wind speed at which this machine reaches its nameplate power, in the sense a datasheet
+	 * means it: where the curve gets to {@link #RATED_POWER_FRACTION} of nameplate.
+	 *
+	 * Still derived rather than declared, so it cannot drift away from the curve it describes -
+	 * but now derived from the rounded curve rather than the cornered one, which is what brings
+	 * it up onto the published figures. The C line lands between 14.6 and 15.5 m/s, against
+	 * Vestas figures of 15 and 16 for the machines it is drawn from.
 	 */
 	public double ratedSpeed() {
-		double available = 0.5 * REFERENCE_AIR_DENSITY * sweptAreaM2() * peakCp;
+		return aerodynamicKneeSpeed() * RATED_SPEED_FACTOR;
+	}
+
+	/** Where the unrounded cubic would have crossed nameplate. The scale of the knee, not a speed a machine reaches. */
+	private double aerodynamicKneeSpeed() {
+		double available = 0.5 * WorldConditions.REFERENCE_AIR_DENSITY * sweptAreaM2() * peakCp;
 		return Math.cbrt(ratedPowerKw * 1000.0 / available);
 	}
 
-	public double powerAtKw(double windSpeed) {
-		return powerAtKw(windSpeed, REFERENCE_AIR_DENSITY);
-	}
-
 	/**
-	 * Output at a given wind speed and air density, in kW.
+	 * Output at a given wind speed and air density, in kW, for a machine known to be on load.
 	 *
-	 * Density enters the cubic directly, which is the same correction IEC 61400-12
-	 * applies to the wind speed by a factor of (rho/rho0)^(1/3) — cubing that factor
-	 * puts it back exactly here. It matters more than it looks: cold air is denser, so
-	 * the same wind on a winter night carries appreciably more power than on a summer
-	 * afternoon.
+	 * Density enters the cubic directly, which is the same correction IEC 61400-12 applies to
+	 * the wind speed by a factor of (rho/rho0)^(1/3) - cubing that factor puts it back exactly
+	 * here. It matters more than it looks: cold air is denser, so the same wind on a winter
+	 * night carries appreciably more power than on a summer afternoon.
+	 *
+	 * The cut-out is deliberately not applied. Once the wind arrives gust by gust rather than
+	 * as a ten-minute average, a gust past the cut-out must not switch a running turbine off -
+	 * storm control just holds it further down - and the decision to come off load belongs to
+	 * the controller, which supervises the mean and the gust separately with hysteresis on both.
 	 */
-	public double powerAtKw(double windSpeed, double airDensity) {
-		if (windSpeed < cutInSpeed || windSpeed >= cutOutSpeed) return 0.0;
+	public double powerWhileRunningKw(double windSpeed, double airDensity) {
+		if (windSpeed < cutInSpeed) return 0.0;
 
 		double harvested = 0.5 * airDensity * sweptAreaM2() * peakCp * windSpeed * windSpeed * windSpeed / 1000.0;
-		return Math.min(harvested, ratedPowerKw) * stormDerating(windSpeed);
+		return roundedToNameplate(harvested) * stormDerating(windSpeed);
 	}
 
 	/**
-	 * How much of its output the machine keeps in a storm: 1.0 below the onset, falling
-	 * to 0 at the cut-out.
+	 * Holds a figure under the nameplate without putting a corner in it.
 	 *
-	 * Coming off full load in one step is a shock to the drivetrain and to the grid
-	 * behind it, so a real machine sheds output as the wind keeps rising instead of
-	 * tripping. The ramp is continuous rather than stepped at whole m/s, since a
-	 * staircase would put fresh discontinuities in the very curve this exists to smooth.
+	 * The smooth minimum of the harvested power and the nameplate: it follows the cubic while
+	 * that is well under, approaches the nameplate from below without ever quite arriving, and
+	 * passes through 84% of it exactly where the sharp version would have cornered.
+	 */
+	private double roundedToNameplate(double harvested) {
+		if (harvested <= 0.0) return 0.0;
+
+		double ratio = harvested / ratedPowerKw;
+		return harvested / Math.pow(1.0 + Math.pow(ratio, KNEE_SHARPNESS), 1.0 / KNEE_SHARPNESS);
+	}
+
+	/**
+	 * How much of its output the machine keeps in a storm: 1.0 at the onset, falling to 0 at the
+	 * cut-out.
+	 *
+	 * Coming off full load in one step is a shock to the drivetrain and to the grid behind it,
+	 * so a real machine sheds output as the wind keeps rising instead of tripping.
+	 *
+	 * The slope is derived from the two speeds rather than fixed, which also closes a hole: at a
+	 * fixed fifth per m/s the ramp began at 80% instead of 100%, so a machine crossing its own
+	 * storm onset dropped a fifth of its output in one tick - a step, in the middle of the curve
+	 * that exists to remove steps. Now it leaves full load at the onset and arrives at nothing
+	 * exactly at the cut-out, continuous at both ends.
 	 */
 	public double stormDerating(double windSpeed) {
 		if (windSpeed < stormOnsetSpeed) return 1.0;
 		if (windSpeed >= cutOutSpeed) return 0.0;
 
-		return Mth.clamp(1.0 - STORM_DERATE_PER_MS * (windSpeed - stormOnsetSpeed + 1.0), 0.0, 1.0);
-	}
-
-	/**
-	 * Air density at a given temperature, from the ideal gas law at constant pressure.
-	 *
-	 * Pressure varies too little across the build height to matter — under four percent
-	 * from bedrock to the height limit — while a swing from a snowy night to a desert
-	 * afternoon moves density by fifteen, so temperature is the term worth carrying.
-	 */
-	public static double airDensityAt(double celsius) {
-		return REFERENCE_AIR_DENSITY * 288.15 / Math.max(1.0, 273.15 + celsius);
+		// a machine with no storm control has its onset sitting on its cut-out, so there is no
+		// band to ramp across and the two tests above have already answered
+		double band = cutOutSpeed - stormOnsetSpeed;
+		return band <= 0.0 ? 0.0 : Mth.clamp((cutOutSpeed - windSpeed) / band, 0.0, 1.0);
 	}
 
 	// ---- drivetrain ----
 
 	/**
-	 * Tip speed ratio the rotor is held at below its rated wind: the blade tips travel
-	 * about seven times the wind speed, which is where a three-bladed rotor of this kind
-	 * takes the most out of the air.
+	 * Tip speed ratio the rotor is held at while it can be: the blade tips travel about eight
+	 * times the wind speed, which is where a modern three-bladed rotor takes the most out of
+	 * the air - the optimum sits between seven and nine.
+	 *
+	 * Eight rather than seven because seven left the longer-bladed machines short of their own
+	 * datasheet speed: a C112 only reached 15.9 rpm of its published 17.7 by the time it was at
+	 * rated power. At eight, every machine in the catalogue arrives at the top of its range
+	 * exactly as it reaches nameplate, which is where a real one arrives.
 	 */
-	public static final double TIP_SPEED_RATIO = 7.0;
-	/** Tip speed no real machine exceeds, in m/s. A noise limit rather than a strength one. */
-	public static final double MAX_TIP_SPEED = 80.0;
-	/** Synchronous speed of a 4-pole generator at 50 Hz: what every gearbox here is sized to reach. */
-	public static final double GENERATOR_SYNCHRONOUS_RPM = 1500.0;
+	private static final double TIP_SPEED_RATIO = 8.0;
+	/**
+	 * Speed a four-pole generator runs at when the machine is at full load.
+	 *
+	 * Twenty percent above its 1500 rpm synchronous speed, because these are doubly-fed
+	 * machines and that is where one sits at rated. Using the synchronous speed instead put
+	 * every derived gear ratio a quarter low - a V80's works out at 95 against the 1:101 its
+	 * datasheet prints, where synchronous gave 79.
+	 */
+	private static final double GENERATOR_RATED_RPM = 1800.0;
+	/**
+	 * Tip speed ratio of a rotor that is idling rather than working.
+	 *
+	 * A machine that is off load has its blades pitched most of the way out of the wind, so it
+	 * makes almost no torque and settles at a far lower ratio than the 7 it is held at while
+	 * generating. Two is about it.
+	 */
+	private static final double IDLING_TIP_SPEED_RATIO = 2.0;
+	/**
+	 * Ceiling on an idling rotor's speed, as a fraction of rated.
+	 *
+	 * Feathered blades make so little torque that the speed stops following the wind and is
+	 * held down by the drivetrain's own friction instead - which is why a parked machine turns
+	 * at much the same lazy pace in a gale as in a breeze. Real large machines idle at one to
+	 * three rpm whatever the storm outside is doing.
+	 */
+	private static final double IDLING_SPEED_FRACTION = 0.15;
+	/** Degrees of rotation per tick for one rpm: 360 degrees over 60 seconds over 20 ticks. */
+	public static final double DEGREES_PER_TICK_PER_RPM = 0.3;
+
+	/**
+	 * Speed of a rotor that is turning but not working, in rpm.
+	 *
+	 * A turbine off load does not stand still, and that is worth stating because it is not the
+	 * obvious behaviour. Below the cut-in wind and above the cut-out one alike, a real machine
+	 * feathers its blades and lets the rotor idle at a couple of rpm rather than parking it:
+	 * standing still lets the oil film drain off the main bearing and risks the races
+	 * brinelling under the rotor's own weight, and an idling machine can come back on load in
+	 * seconds where a stopped one has to be spun up. The mechanical brake exists for
+	 * emergencies and for maintenance, not for weather.
+	 */
+	public double idlingRpmAt(double windSpeed) {
+		if (windSpeed <= 0.0) return 0.0;
+
+		return Math.min(rpmForTipSpeed(IDLING_TIP_SPEED_RATIO * windSpeed), maxRotorRpm * IDLING_SPEED_FRACTION);
+	}
 
 	/**
 	 * Rotor speed in rpm at a given wind.
 	 *
-	 * Holding the tip speed ratio is what makes a big rotor turn visibly slower than a
-	 * small one in the same wind: the tips have further to travel for each revolution. So
-	 * the whole catalogue does not spin at one rate — the C130 comes out near 10 rpm and
-	 * the small-wind machine near 200, which is the difference between the two that is
-	 * most obvious from the ground.
+	 * <h2>What the speed follows</h2>
 	 *
-	 * Above the rated wind the speed stops climbing, because that is what pitching the
-	 * blades out is for: the machine holds both its speed and its power there.
+	 * The wind, not the load. A variable-speed pitch-regulated machine holds its tip speed
+	 * ratio while it can, so the rotor speed rises in proportion to the wind; once it reaches
+	 * the top of its speed range it stops rising, and holding speed while the power goes on
+	 * climbing is exactly what pitching the blades does. Power meanwhile goes with the cube of
+	 * the wind, so the two are only loosely related: across the partial-load band the speed
+	 * varies by two while the output varies by more than thirty. Watching a real rotor tells
+	 * you the wind, not the megawatts.
+	 *
+	 * The two ends of the range are the datasheet's, so the figures come out on the published
+	 * ones: 31.4 rpm for the C52 against a V52's 31.4, 17.7 for the C112 against a V112's 17.7.
 	 */
 	public double rotorRpmAt(double windSpeed) {
-		if (windSpeed <= 0.0) return 0.0;
+		// below the cut-in there is nothing to hold a speed with, so the rotor is idling
+		if (windSpeed < cutInSpeed) return idlingRpmAt(windSpeed);
 
-		double regulated = Math.min(windSpeed, ratedSpeed());
-		double tipSpeed = Math.min(TIP_SPEED_RATIO * regulated, MAX_TIP_SPEED);
+		return Mth.clamp(rpmForTipSpeed(TIP_SPEED_RATIO * windSpeed), minRotorRpm, maxRotorRpm);
+	}
+
+	private double rpmForTipSpeed(double tipSpeed) {
 		return tipSpeed * 60.0 / (Math.PI * rotorDiameterM);
 	}
 
-	public double ratedRotorRpm() {
-		return rotorRpmAt(ratedSpeed());
+	/**
+	 * How fast a rotor at its rated speed is drawn turning, in revolutions a second.
+	 *
+	 * A presentation figure rather than a physical one, and the only one in this class that is
+	 * chosen by eye rather than derived. It is here because no single time scale suits the
+	 * catalogue: every rotor is drawn a tenth of its real size, so a C130 reads as a thirteen
+	 * metre rotor while turning at the ten rpm of a hundred-and-thirty metre one, and looks
+	 * becalmed - while the small-wind machine, drawn three times larger than its scale, looked
+	 * like a desk fan. Preserving the real speeds keeps that pair five times apart on screen,
+	 * with one of them wrong at each end.
+	 *
+	 * So the drawn speed is not the real speed. It is the machine's speed as a fraction of its
+	 * own rated speed, put on one common rate, which means every machine looks the same at full
+	 * speed and slower in proportion when it is running slower. What a player reads off a rotor
+	 * is then how hard that machine is working - which is what a rotor is worth watching for -
+	 * rather than a rpm figure the panel prints anyway.
+	 */
+	private static final double DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED = 0.40;
+
+	/**
+	 * The rotation to draw, from the rotation the machine is actually doing.
+	 *
+	 * Only the drawing is scaled. The speed the machine reports, the generator speed derived
+	 * from it and everything the telemetry publishes stay the real ones - which is why the two
+	 * had to be pulled apart before this could exist at all.
+	 *
+	 * @see #DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED
+	 */
+	public double drawnRotation(double realDegreesPerTick) {
+		double atRated = maxRotorRpm * DEGREES_PER_TICK_PER_RPM;
+		if (atRated <= 0.0) return 0.0;
+
+		return realDegreesPerTick / atRated * DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED * 360.0 / 20.0;
 	}
 
 	/**
@@ -278,53 +412,14 @@ public record TurbineSpec(
 	 * machine is effectively direct drive.
 	 */
 	public double gearboxRatio() {
-		double rotorRpm = ratedRotorRpm();
-		return rotorRpm <= 0.0 ? 1.0 : GENERATOR_SYNCHRONOUS_RPM / rotorRpm;
+		return maxRotorRpm <= 0.0 ? 1.0 : GENERATOR_RATED_RPM / maxRotorRpm;
 	}
 
-	/**
-	 * Hub height the weather model's wind speed is quoted at.
-	 *
-	 * The zone wind is a single figure per area with no height to it, so it has to be
-	 * pinned to one before a tower can be taller or shorter than it. Eighty metres is
-	 * both the standard hub height for the 2 to 3 MW class and, more practically, the
-	 * middle of this catalogue's range: pinning it there leaves the balance the mod
-	 * already had roughly where it was, whereas quoting the same wind at the
-	 * meteorological ten metres would extrapolate it up by nearly half and leave every
-	 * machine pinned to its plateau in ordinary weather, with the power curve doing
-	 * nothing.
-	 */
-	public static final double REFERENCE_HUB_HEIGHT_M = 80.0;
-	/** Power-law shear exponent for open terrain. */
-	private static final double SHEAR_EXPONENT = 0.14;
-
-	/**
-	 * Wind speed at a hub this high, from the speed at {@link #REFERENCE_HUB_HEIGHT_M}.
-	 *
-	 * Wind is slowed by friction with the ground, so a taller tower stands in faster
-	 * air. The exponent is small, but power goes with the cube: across this catalogue's
-	 * range of tower heights the wind varies by a third and the output by more than
-	 * double, which is the whole reason real towers are worth what they cost.
-	 *
-	 * Terrain elevation deliberately does not enter here. The weather model already
-	 * carries it as its own altitude bias, and counting it twice would pay a mountain
-	 * turbine for its mountain in both places.
-	 */
-	public static double windAtHubHeight(double referenceWind, double hubHeightM) {
-		return referenceWind * windRatio(REFERENCE_HUB_HEIGHT_M, hubHeightM);
-	}
-
-	/**
-	 * How much faster the wind is at one hub height than at another.
-	 *
-	 * Separate from {@link #windAtHubHeight} because the interesting question is usually
-	 * comparative - what one more tower segment would be worth - and asking it this way
-	 * needs no detour back through the reference height, which would mean undoing a shear
-	 * only to reapply it.
-	 */
-	public static double windRatio(double fromHubHeightM, double toHubHeightM) {
-		if (fromHubHeightM <= 0.0 || toHubHeightM <= 0.0) return 1.0;
-
-		return Math.pow(toHubHeightM / fromHubHeightM, SHEAR_EXPONENT);
-	}
+	// The wind profile used to live here, as a fixed 0.14 exponent applied to a single wind
+	// speed quoted at a reference hub height of 80 m. Both have gone: the weather model is
+	// asked for the wind at the height the machine actually stands at, and it works out the
+	// profile from the roughness of the ground under that particular tower and from how the
+	// air is layered at that hour. The exponent is not a constant of nature - it runs from 0.07
+	// over water on a summer afternoon to 0.35 over forest on a still night - and a mod whose
+	// whole premise is that towers are worth what they cost had no business pretending it was.
 }

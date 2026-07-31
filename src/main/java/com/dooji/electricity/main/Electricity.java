@@ -7,6 +7,8 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
 import com.dooji.electricity.block.ElectricLampBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
+import com.dooji.electricity.block.SolarPanelBlock;
+import com.dooji.electricity.block.SolarPanelBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -120,6 +122,17 @@ public class Electricity {
 			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
 	/**
+	 * A block of photovoltaic array: twenty kilowatts of modules over a hundred square metres.
+	 *
+	 * Laid flat and walked over, so a farm of them is a field rather than a wall. Glass, so it
+	 * breaks like glass.
+	 */
+	public static final RegistryObject<Block> SOLAR_PANEL_BLOCK = BLOCKS.register("solar_panel",
+			() -> new SolarPanelBlock(Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion()));
+	public static final RegistryObject<Item> SOLAR_PANEL_ITEM = ITEMS.register("solar_panel",
+			() -> new TooltipBlockItem(SOLAR_PANEL_BLOCK.get(), new Item.Properties(), "tooltip.electricity.solar_panel"));
+
+	/**
 	 * A block for every machine in the catalogue, keyed by spec id.
 	 *
 	 * Registered from the catalogue in a loop rather than declared one by one, so a spec
@@ -185,6 +198,7 @@ public class Electricity {
 				}
 
 				output.accept(TURBINE_TOWER_ITEM.get());
+				output.accept(SOLAR_PANEL_ITEM.get());
 				output.accept(ELECTRIC_LAMP_ITEM.get());
 				output.accept(WORKBENCH_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
@@ -201,6 +215,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<WindTurbineBlockEntity>> WIND_TURBINE_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TurbineTowerBlockEntity>> TURBINE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<ElectricLampBlockEntity>> ELECTRIC_LAMP_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<SolarPanelBlockEntity>> SOLAR_PANEL_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -212,7 +227,13 @@ public class Electricity {
 		CREATIVE_TABS.register(modEventBus);
 		MENUS.register(modEventBus);
 		RECIPE_SERIALIZERS.register(modEventBus);
+		// the type as well as the serializer: it was being created and filled but never handed
+		// over, so the workbench's recipe type was missing from the registry other mods read
+		RECIPE_TYPES.register(modEventBus);
 		ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ElectricityServerConfig.spec(), "Electricity/server.toml");
+		// has to be now, before any level data is read: the rule set is deserialised with the
+		// world, so a rule registered later would be missing from a world that had it set
+		ElectricityGameRules.register();
 
 		UTILITY_POLE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("utility_pole", () -> BlockEntityType.Builder.of(UtilityPoleBlockEntity::new, UTILITY_POLE_BLOCK.get()).build(null));
 
@@ -229,6 +250,8 @@ public class Electricity {
 		TURBINE_TOWER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("turbine_tower", () -> BlockEntityType.Builder.of(TurbineTowerBlockEntity::new, TURBINE_TOWER_BLOCK.get()).build(null));
 
 		ELECTRIC_LAMP_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("electric_lamp", () -> BlockEntityType.Builder.of(ElectricLampBlockEntity::new, ELECTRIC_LAMP_BLOCK.get()).build(null));
+
+		SOLAR_PANEL_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("solar_panel", () -> BlockEntityType.Builder.of(SolarPanelBlockEntity::new, SOLAR_PANEL_BLOCK.get()).build(null));
 
 		BLOCK_ENTITY_TYPES.register(modEventBus);
 		LOGGER.info("Registered {} items, {} blocks, and {} block entity types", ITEMS.getEntries().size(), BLOCKS.getEntries().size(), BLOCK_ENTITY_TYPES.getEntries().size());
@@ -268,6 +291,9 @@ public class Electricity {
 	public void onServerTick(TickEvent.ServerTickEvent event) {
 		if (event.phase == TickEvent.Phase.START) {
 			for (ServerLevel level : event.getServer().getAllLevels()) {
+				// the clock first: everything sampled this tick, weather included, reads the day
+				// time, and it should read this tick's rather than last tick's
+				RealTimeClock.apply(level);
 				GlobalWeatherManager.get(level).tick();
 			}
 			return;
@@ -275,6 +301,12 @@ public class Electricity {
 
 		if (powerNetwork != null) {
 			powerNetwork.updatePowerNetwork();
+		}
+
+		// after the levels have ticked, so this is the last word on the time each client holds:
+		// vanilla broadcasts its own during that tick and would otherwise start their clocks again
+		for (ServerLevel level : event.getServer().getAllLevels()) {
+			RealTimeClock.holdClientClocks(level);
 		}
 
 		TowerCollapse.tickAll();
