@@ -20,9 +20,16 @@ import net.minecraft.resources.ResourceLocation;
  * plateau in less wind and belongs on a quiet site, while the narrower one needs a
  * windy one to be worth its generator.
  *
- * Every power coefficient below was checked against the specific power its real
- * class runs at, 200 to 450 W/m², and the rated wind speeds are derived rather than
- * chosen. The catalogue is a default rather than the whole story: these are ordinary
+ * Every figure below was checked against the machine it is drawn from. The rotor speed
+ * ranges are the published ones - a V52 runs 14.0 to 31.4 rpm, a V80 9 to 19, a V90 9.9 to
+ * 18.4, a V112 6.2 to 17.7 - which is why they are declared rather than derived from one
+ * shared tip speed limit: 80 m/s is right for a V80 and thirty percent short of what a
+ * V112's longer blades are allowed. Cut-in speeds are theirs too, and the C130 cuts out at
+ * 22.5 m/s like the rest of its platform rather than at 25.
+ *
+ * Rated wind speed stays derived, from the curve rather than declared beside it, and now
+ * lands on the published figures: 14.6 to 15.5 m/s across the C line against Vestas figures
+ * of 15 and 16. The catalogue is a default rather than the whole story - these are ordinary
  * data, and a datapack can add machines beside them.
  */
 public final class TurbineCatalog {
@@ -44,6 +51,7 @@ public final class TurbineCatalog {
 			id("sw_10"), "SW-10", "",
 			10.0, 7.0, 0.35,
 			3.0, 25.0, 25.0,
+			60.0, 250.0,
 			2, 4,
 			3.3, TurbineSpec.Nacelle.SMALL_WIND));
 
@@ -52,6 +60,7 @@ public final class TurbineCatalog {
 			id("c52_085"), "C52-0.85", "IA",
 			850.0, 52.0, 0.44,
 			4.0, 25.0, 22.0,
+			14.0, 31.4,
 			4, 7,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -59,13 +68,15 @@ public final class TurbineCatalog {
 			id("c80_20"), "C80-2.0", "IIA",
 			2000.0, 80.0, 0.46,
 			4.0, 25.0, 22.0,
+			9.0, 19.0,
 			6, 10,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
 	public static final TurbineSpec C90_30 = register(new TurbineSpec(
 			id("c90_30"), "C90-3.0", "IIA",
 			3000.0, 90.0, 0.46,
-			4.0, 25.0, 22.0,
+			3.5, 25.0, 22.0,
+			9.9, 18.4,
 			8, 11,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -74,6 +85,7 @@ public final class TurbineCatalog {
 			id("c112_30"), "C112-3.0", "IIIA",
 			3000.0, 112.0, 0.47,
 			3.0, 25.0, 22.0,
+			6.2, 17.7,
 			8, 12,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -85,7 +97,8 @@ public final class TurbineCatalog {
 	public static final TurbineSpec C130_40 = register(new TurbineSpec(
 			id("c130_40"), "C130-4.0", "IIIA",
 			4000.0, 130.0, 0.47,
-			3.0, 25.0, 22.0,
+			3.0, 25.0, 22.5,
+			5.5, 14.0,
 			9, 13,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 

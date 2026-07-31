@@ -317,11 +317,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public float getShearExponent() {
 		return shearExponent;
 	}
-
-	public float getWindDirection() {
-		return windDirection;
-	}
-
 	/**
 	 * What the wire network may carry away this tick: everything generated, minus
 	 * whatever another mod's cables already claimed. The subtraction is what stops
@@ -704,8 +699,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		pollRedstone();
-		updateRotorSpeeds(lastAlignedWindSpeed, isBraked());
+		// power first: the rotor speed reads the setpoint against what the wind was offering, so
+		// working them out in the other order would have it answering last tick's curtailment
 		updateGeneratedPower();
+		updateRotorSpeeds(lastAlignedWindSpeed);
 
 		// push before the wire network runs. Block entities tick inside the level tick,
 		// while PowerNetwork.updatePowerNetwork() runs on ServerTickEvent END, so the
@@ -911,26 +908,76 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * 3 degrees a tick and the small-wind machine near 60, so a big machine reads as
 	 * heavy from the ground and a small one as busy.
 	 */
+	/**
+	 * How fast the rotor should be turning, in degrees a tick.
+	 *
+	 * Three states, and the difference between the last two is the whole point: a machine
+	 * somebody has switched off has its brake on and is genuinely still, while a machine that
+	 * has shut itself down for the weather has feathered its blades and is idling. Turning that
+	 * distinction into one flag is what left a turbine standing frozen in the middle of a gale.
+	 */
 	private float rotorDegreesPerTick(float windSpeed) {
-		return (float) (spec().rotorRpmAt(windSpeed) * 0.3);
+		if (isParked()) return 0.0f;
+
+		TurbineSpec spec = spec();
+		double rpm = isIdling() ? spec.idlingRpmAt(windSpeed) : spec.rotorRpmAt(curtailedWind(windSpeed));
+		return (float) (rpm * TurbineSpec.DEGREES_PER_TICK_PER_RPM);
 	}
 
-	private void updateRotorSpeeds(float effectiveWindSpeed, boolean cutOut) {
-		float targetRotationSpeed = cutOut ? 0.0f : rotorDegreesPerTick(effectiveWindSpeed);
+	/**
+	 * Whether the rotor is being held still on somebody's orders rather than by the weather.
+	 *
+	 * A maintenance stop, a program's stop and a redstone stop all put the brake on. A storm
+	 * shutdown does not - the brake is for emergencies, and holding a rotor against a gale with
+	 * it would be one.
+	 */
+	private boolean isParked() {
+		return stoppedByComputer || stoppedByPlayer || isStoppedByRedstone();
+	}
 
-		float rotationAcceleration = cutOut ? 0.12f : 0.05f;
-		float rotationDiff1 = targetRotationSpeed - rotationSpeed1;
-		float rotationDiff2 = targetRotationSpeed - rotationSpeed2;
+	/**
+	 * Whether the rotor is turning without working: off load, blades feathered, free to spin.
+	 *
+	 * Two ways in, and they are the same state. A storm shutdown is one. A setpoint of zero is
+	 * the other, and that is worth stating because it is not a stop: curtailment is an
+	 * instruction from the grid, so a machine told to export nothing disconnects and idles
+	 * rather than braking, both because it has to be able to come back in seconds and because
+	 * standing still is what harms a main bearing. The brake is what the stop button is for, and
+	 * the two controls stay distinct.
+	 */
+	private boolean isIdling() {
+		return cutOutActive || activePowerLimitKw <= 0.0;
+	}
 
-		if (Math.abs(rotationDiff1) > 0.001f) {
-			rotationSpeed1 += rotationDiff1 * rotationAcceleration;
-		}
+	/**
+	 * The wind the rotor is allowed to answer, which is less than the real one while a setpoint
+	 * is holding the machine down.
+	 *
+	 * Curtailment is done by pitching the blades out, and a rotor with its blades part way out
+	 * of the wind runs slower - so a curtailed machine is visibly lazier than a machine in the
+	 * same wind at full output, which is the whole point of the reading. Power goes with the
+	 * cube of the wind, so the wind that would have made the permitted power is the cube root
+	 * of the ratio: half output is four fifths of the speed, not half.
+	 */
+	private double curtailedWind(double windSpeed) {
+		if (uncappedPower <= 0.0 || activePowerLimitKw >= uncappedPower) return windSpeed;
 
-		if (Math.abs(rotationDiff2) > 0.001f) {
-			rotationSpeed2 += rotationDiff2 * rotationAcceleration;
-		}
+		return windSpeed * Math.cbrt(Math.max(0.0, activePowerLimitKw) / uncappedPower);
+	}
 
-		if (cutOut) {
+	private void updateRotorSpeeds(float effectiveWindSpeed) {
+		float target = rotorDegreesPerTick(effectiveWindSpeed);
+
+		// slowing down is quicker than speeding up, because coming off load the brake or the
+		// feathered blades are working against the rotor rather than the wind working with it
+		float acceleration = target < rotationSpeed1 ? 0.12f : 0.05f;
+		rotationSpeed1 += (target - rotationSpeed1) * acceleration;
+		rotationSpeed2 += (target - rotationSpeed2) * acceleration;
+
+		// a first-order ramp never quite arrives, so a rotor meant to be still would creep for
+		// ever at a millionth of a degree. Only snapped when the target really is zero, or an
+		// idling rotor would be snapped to a stop as well.
+		if (target == 0.0f) {
 			if (Math.abs(rotationSpeed1) < 0.01f) rotationSpeed1 = 0.0f;
 			if (Math.abs(rotationSpeed2) < 0.01f) rotationSpeed2 = 0.0f;
 		}
@@ -966,8 +1013,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// the physics provides - and it put the drawn speed ten percent away from the speed the
 		// machine was reporting.
 		TurbineSpec spec = spec();
-		rotation1 = (float) ((rotation1 + spec.renderedRotation(appliedSpeed1)) % 360.0);
-		rotation2 = (float) ((rotation2 + spec.renderedRotation(appliedSpeed2)) % 360.0);
+		rotation1 = (float) ((rotation1 + spec.drawnRotation(appliedSpeed1)) % 360.0);
+		rotation2 = (float) ((rotation2 + spec.drawnRotation(appliedSpeed2)) % 360.0);
 		if (rotation1 < 0) rotation1 += 360.0f;
 		if (rotation2 < 0) rotation2 += 360.0f;
 	}

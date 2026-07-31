@@ -1,5 +1,6 @@
 package com.dooji.electricity.power;
 
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.api.power.TurbineTelemetry;
 import java.util.HashMap;
 import java.util.Map;
@@ -83,7 +84,7 @@ public final class TurbineTelemetrySimulator {
 		double ambient = s.ambientTempC();
 		boolean spinning = s.rotorDegreesPerTick() > 0.05;
 
-		double rotorRpm = s.rotorDegreesPerTick() * 20.0 * 60.0 / 360.0;
+		double rotorRpm = s.rotorDegreesPerTick() / TurbineSpec.DEGREES_PER_TICK_PER_RPM;
 		double pitch = bladePitch(s);
 		double pitchActivity = s.braked() || pitch > 0.5 ? 1.0 : 0.15;
 
