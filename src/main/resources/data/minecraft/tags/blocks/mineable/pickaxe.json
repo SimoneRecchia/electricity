@@ -12,6 +12,7 @@
     "electricity:c80_20",
     "electricity:c90_30",
     "electricity:c112_30",
-    "electricity:turbine_tower"
+    "electricity:turbine_tower",
+    "electricity:solar_panel"
   ]
 }

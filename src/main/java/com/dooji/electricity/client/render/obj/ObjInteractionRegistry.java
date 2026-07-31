@@ -9,34 +9,23 @@ import net.minecraft.world.level.block.Block;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
+/**
+ * Which named parts of a block's OBJ model a player can click on.
+ *
+ * It used to keep a handler beside each part, but every caller passed null and nothing ever
+ * looked one up - so all it really was, and all it is now, is a set of part names per block.
+ * {@link ObjRaycaster} reads it to decide what a ray is allowed to hit.
+ */
 // OBJ pipeline code will be migrated to Renderix
 @OnlyIn(Dist.CLIENT)
 public class ObjInteractionRegistry {
-	private static final Map<Block, InteractionData> DATA = new HashMap<>();
+	private static final Map<Block, Set<String>> PARTS = new HashMap<>();
 
-	private record InteractionData(Map<String, ObjInteractionHandler> handlers, Set<String> parts) {
-	}
-
-	public static void register(Block block, String partName, ObjInteractionHandler handler) {
-		InteractionData data = DATA.computeIfAbsent(block, key -> new InteractionData(new HashMap<>(), new HashSet<>()));
-		if (handler != null) {
-			data.handlers().put(partName, handler);
-		}
-		data.parts().add(partName);
-	}
-
-	public static ObjInteractionHandler getHandler(Block block, String partName) {
-		InteractionData data = DATA.get(block);
-		return data != null ? data.handlers().get(partName) : null;
+	public static void register(Block block, String partName) {
+		PARTS.computeIfAbsent(block, key -> new HashSet<>()).add(partName);
 	}
 
 	public static Set<String> getInteractiveParts(Block block) {
-		InteractionData data = DATA.get(block);
-		return data != null ? Collections.unmodifiableSet(data.parts()) : Collections.emptySet();
-	}
-
-	public static boolean isInteractivePart(Block block, String partName) {
-		InteractionData data = DATA.get(block);
-		return data != null && data.parts().contains(partName);
+		return Collections.unmodifiableSet(PARTS.getOrDefault(block, Collections.emptySet()));
 	}
 }

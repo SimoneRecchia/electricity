@@ -227,6 +227,9 @@ public class Electricity {
 		CREATIVE_TABS.register(modEventBus);
 		MENUS.register(modEventBus);
 		RECIPE_SERIALIZERS.register(modEventBus);
+		// the type as well as the serializer: it was being created and filled but never handed
+		// over, so the workbench's recipe type was missing from the registry other mods read
+		RECIPE_TYPES.register(modEventBus);
 		ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ElectricityServerConfig.spec(), "Electricity/server.toml");
 		// has to be now, before any level data is read: the rule set is deserialised with the
 		// world, so a rule registered later would be missing from a world that had it set

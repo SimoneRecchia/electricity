@@ -4,7 +4,6 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -121,21 +120,5 @@ public final class InsulatorPartHelper {
 	@FunctionalInterface
 	private interface PositionResolver {
 		Vec3 resolve(int index);
-	}
-
-	public static String[] cabinPartNames() {
-		return Arrays.copyOf(ELECTRIC_CABIN_PARTS, ELECTRIC_CABIN_PARTS.length);
-	}
-
-	public static String[] polePartNames() {
-		return Arrays.copyOf(UTILITY_POLE_PARTS, UTILITY_POLE_PARTS.length);
-	}
-
-	public static String[] powerBoxPartNames() {
-		return Arrays.copyOf(POWER_BOX_PARTS, POWER_BOX_PARTS.length);
-	}
-
-	public static String[] turbinePartNames() {
-		return Arrays.copyOf(WIND_TURBINE_PARTS, WIND_TURBINE_PARTS.length);
 	}
 }

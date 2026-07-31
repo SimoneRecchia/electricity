@@ -157,11 +157,6 @@ public class PowerBoxBlockEntity extends BlockEntity {
 	public int getForgeEnergyStored() {
 		return Math.min(getEnergyStoredInternal(), FE_CAPACITY);
 	}
-
-	public int getForgeEnergyCapacity() {
-		return FE_CAPACITY;
-	}
-
 	public int getForgeTransferRate() {
 		return FE_TRANSFER_PER_TICK;
 	}

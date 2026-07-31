@@ -5,6 +5,12 @@
     "electricity:electric_cabin",
     "electricity:power_box",
     "electricity:wind_turbine",
-    "electricity:electric_lamp"
+    "electricity:electric_lamp",
+    "electricity:sw_10",
+    "electricity:c52_085",
+    "electricity:c80_20",
+    "electricity:c90_30",
+    "electricity:c112_30",
+    "electricity:turbine_tower"
   ]
 }

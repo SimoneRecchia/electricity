@@ -337,12 +337,6 @@ public class PowerNetwork {
 
 		return connections;
 	}
-
-	public double getPowerForInsulator(int insulatorId) {
-		PowerNode node = powerNodes.get(insulatorId);
-		return node != null ? node.getPower() : 0.0;
-	}
-
 	public void syncToClients() {
 		Map<BlockPos, Double> blockPower = new HashMap<>();
 		Map<BlockPos, PowerNode> representatives = new HashMap<>();
@@ -430,10 +424,6 @@ public class PowerNetwork {
 
 		void setPower(double power) {
 			this.power = power;
-		}
-
-		double getPower() {
-			return power;
 		}
 
 		boolean hasLocalSurge() {

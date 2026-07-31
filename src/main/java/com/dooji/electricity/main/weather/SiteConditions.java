@@ -45,10 +45,8 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 	private static final double WATER = Atmosphere.SMOOTHEST_ROUGHNESS;
 	private static final double SNOW_OR_SAND = 0.005;
 	private static final double BARE_GROUND = 0.012;
-	private static final double GRASSLAND = 0.03;
 	private static final double SCRUB = 0.05;
 	private static final double ROCK = 0.06;
-	private static final double WETLAND = 0.2;
 	private static final double FOREST = 0.55;
 	private static final double DENSE_FOREST = 1.0;
 
