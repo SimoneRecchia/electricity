@@ -200,7 +200,23 @@ public record TurbineSpec(
 	 * afternoon.
 	 */
 	public double powerAtKw(double windSpeed, double airDensity) {
-		if (windSpeed < cutInSpeed || windSpeed >= cutOutSpeed) return 0.0;
+		if (windSpeed >= cutOutSpeed) return 0.0;
+
+		return powerWhileRunningKw(windSpeed, airDensity);
+	}
+
+	/**
+	 * The same curve without the shutdown at the top of it, for a machine known to be on load.
+	 *
+	 * The distinction matters once the wind arrives gust by gust rather than as a ten-minute
+	 * average. A gust reaching past the cut-out does not switch a running turbine off - storm
+	 * control just holds it further down - and the decision to come off load belongs to the
+	 * controller, which supervises the mean and the gust separately and applies hysteresis to
+	 * both. So {@link #powerAtKw} stays a power curve, which is zero above the cut-out because
+	 * that is what a power curve says, and the machine asks this one instead.
+	 */
+	public double powerWhileRunningKw(double windSpeed, double airDensity) {
+		if (windSpeed < cutInSpeed) return 0.0;
 
 		double harvested = 0.5 * airDensity * sweptAreaM2() * peakCp * windSpeed * windSpeed * windSpeed / 1000.0;
 		return Math.min(harvested, ratedPowerKw) * stormDerating(windSpeed);
@@ -220,17 +236,6 @@ public record TurbineSpec(
 		if (windSpeed >= cutOutSpeed) return 0.0;
 
 		return Mth.clamp(1.0 - STORM_DERATE_PER_MS * (windSpeed - stormOnsetSpeed + 1.0), 0.0, 1.0);
-	}
-
-	/**
-	 * Air density at a given temperature, from the ideal gas law at constant pressure.
-	 *
-	 * Pressure varies too little across the build height to matter — under four percent
-	 * from bedrock to the height limit — while a swing from a snowy night to a desert
-	 * afternoon moves density by fifteen, so temperature is the term worth carrying.
-	 */
-	public static double airDensityAt(double celsius) {
-		return REFERENCE_AIR_DENSITY * 288.15 / Math.max(1.0, 273.15 + celsius);
 	}
 
 	// ---- drivetrain ----
@@ -282,49 +287,11 @@ public record TurbineSpec(
 		return rotorRpm <= 0.0 ? 1.0 : GENERATOR_SYNCHRONOUS_RPM / rotorRpm;
 	}
 
-	/**
-	 * Hub height the weather model's wind speed is quoted at.
-	 *
-	 * The zone wind is a single figure per area with no height to it, so it has to be
-	 * pinned to one before a tower can be taller or shorter than it. Eighty metres is
-	 * both the standard hub height for the 2 to 3 MW class and, more practically, the
-	 * middle of this catalogue's range: pinning it there leaves the balance the mod
-	 * already had roughly where it was, whereas quoting the same wind at the
-	 * meteorological ten metres would extrapolate it up by nearly half and leave every
-	 * machine pinned to its plateau in ordinary weather, with the power curve doing
-	 * nothing.
-	 */
-	public static final double REFERENCE_HUB_HEIGHT_M = 80.0;
-	/** Power-law shear exponent for open terrain. */
-	private static final double SHEAR_EXPONENT = 0.14;
-
-	/**
-	 * Wind speed at a hub this high, from the speed at {@link #REFERENCE_HUB_HEIGHT_M}.
-	 *
-	 * Wind is slowed by friction with the ground, so a taller tower stands in faster
-	 * air. The exponent is small, but power goes with the cube: across this catalogue's
-	 * range of tower heights the wind varies by a third and the output by more than
-	 * double, which is the whole reason real towers are worth what they cost.
-	 *
-	 * Terrain elevation deliberately does not enter here. The weather model already
-	 * carries it as its own altitude bias, and counting it twice would pay a mountain
-	 * turbine for its mountain in both places.
-	 */
-	public static double windAtHubHeight(double referenceWind, double hubHeightM) {
-		return referenceWind * windRatio(REFERENCE_HUB_HEIGHT_M, hubHeightM);
-	}
-
-	/**
-	 * How much faster the wind is at one hub height than at another.
-	 *
-	 * Separate from {@link #windAtHubHeight} because the interesting question is usually
-	 * comparative - what one more tower segment would be worth - and asking it this way
-	 * needs no detour back through the reference height, which would mean undoing a shear
-	 * only to reapply it.
-	 */
-	public static double windRatio(double fromHubHeightM, double toHubHeightM) {
-		if (fromHubHeightM <= 0.0 || toHubHeightM <= 0.0) return 1.0;
-
-		return Math.pow(toHubHeightM / fromHubHeightM, SHEAR_EXPONENT);
-	}
+	// The wind profile used to live here, as a fixed 0.14 exponent applied to a single wind
+	// speed quoted at a reference hub height of 80 m. Both have gone: the weather model is
+	// asked for the wind at the height the machine actually stands at, and it works out the
+	// profile from the roughness of the ground under that particular tower and from how the
+	// air is layered at that hour. The exponent is not a constant of nature - it runs from 0.07
+	// over water on a summer afternoon to 0.35 over forest on a still night - and a mod whose
+	// whole premise is that towers are worth what they cost had no business pretending it was.
 }

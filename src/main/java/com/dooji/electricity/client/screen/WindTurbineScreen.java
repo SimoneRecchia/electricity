@@ -274,13 +274,16 @@ public class WindTurbineScreen extends Screen {
 
 		// what one more block of tower would be worth, so the climb is a decision rather than
 		// a gamble.
-		// Asked as a ratio between the two hub heights, which needs no detour back to the
-		// reference height and holds whatever the wind happens to be doing right now.
+		//
+		// The exponent comes from the server with the rest of the machine's state, because it is
+		// a property of the ground this tower stands on and the air over it tonight: the same
+		// block is worth two percent on a beach and eight in a forest, and a figure baked in
+		// here would have told every player the same lie.
 		int segments = turbine.getTowerSegments();
 		if (segments < spec.maxTowerSegments()) {
 			double here = turbine.getReportedPowerKw();
-			double tallerWind = turbine.getWindSpeed() * TurbineSpec.windRatio(spec.hubHeightM(segments), spec.hubHeightM(segments + 1));
-			double taller = spec.powerAtKw(tallerWind, turbine.getAirDensity());
+			double ratio = Math.pow(spec.hubHeightM(segments + 1) / spec.hubHeightM(segments), turbine.getShearExponent());
+			double taller = spec.powerWhileRunningKw(turbine.getWindSpeed() * ratio, turbine.getAirDensity());
 			if (here > 0.01 && taller > here) {
 				String gain = fmt("+%.0f%%", (taller / here - 1.0) * 100.0);
 				graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower_gain", gain), leftPos + 8, topPos + 128, FAINT_COLOUR, false);

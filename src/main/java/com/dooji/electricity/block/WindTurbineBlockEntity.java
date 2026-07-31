@@ -14,6 +14,7 @@ import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.TurbineCatalog;
+import com.dooji.electricity.main.weather.Atmosphere;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
@@ -55,10 +56,30 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	private double generatedPower = 0.0;
 	private double currentPower = 0.0;
+	/** What the rotor is in right now: the mean wind plus its turbulence. Drives the power curve. */
 	private float lastEffectiveWindSpeed = 0.0f;
 	private float lastAlignedWindSpeed = 0.0f;
+	/**
+	 * Ten-minute mean and three-second gust at the hub.
+	 *
+	 * The controller supervises on these rather than on the instantaneous wind, exactly as a
+	 * real one does: a machine that tripped every time a gust brushed its cut-out would spend
+	 * a windy afternoon starting and stopping, and one that only watched the mean would ride a
+	 * squall it should have shut down for. So the mean decides the shutdown and the gust
+	 * decides the trip.
+	 */
+	private float meanWindSpeed = 0.0f;
+	private float gustWindSpeed = 0.0f;
 	private float windDirection = 0.0f;
+	/** Turbulence intensity: the standard deviation of the wind over its mean, so 0.13 is ordinary. */
 	private double turbulence = 0.0;
+	/**
+	 * Exponent of the wind profile at this site, synced because the panel quotes what one more
+	 * block of tower is worth and only the server knows the ground the tower stands on.
+	 */
+	private float shearExponent = 0.14f;
+	private double ambientTempC = 15.0;
+	private double airPressureHpa = 1013.25;
 	private boolean cutOutActive = false;
 	private boolean yawInitialized = false;
 	private float yaw = 0.0f;
@@ -74,6 +95,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * so this is the floor that keeps it honest.
 	 */
 	private static final double MINIMUM_CUT_OUT_HYSTERESIS = 3.0;
+	/**
+	 * How far past the cut-out a gust has to reach to trip the machine on its own.
+	 *
+	 * A fifth, so a machine rated to 25 m/s over ten minutes also comes off load for a 30 m/s
+	 * gust, which is the pair of limits real datasheets print.
+	 */
+	private static final double GUST_TRIP_RATIO = 1.2;
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
 
@@ -266,8 +294,36 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return rotation2;
 	}
 
+	/** The wind the rotor is in right now, gusts and lulls included. */
 	public float getWindSpeed() {
 		return lastEffectiveWindSpeed;
+	}
+
+	/** Ten-minute mean at the hub: the figure a wind report would quote and the panel shows. */
+	public float getMeanWindSpeed() {
+		return meanWindSpeed;
+	}
+
+	public float getGustWindSpeed() {
+		return gustWindSpeed;
+	}
+
+	/** Turbulence intensity at the hub, sigma over mean: 0.08 over water, 0.20 over forest. */
+	public double getTurbulenceIntensity() {
+		return turbulence;
+	}
+
+	/** Exponent of the wind profile here, which is what another block of tower is worth. */
+	public float getShearExponent() {
+		return shearExponent;
+	}
+
+	public double getAmbientTempC() {
+		return ambientTempC;
+	}
+
+	public double getAirPressureHpa() {
+		return airPressureHpa;
 	}
 
 	public float getWindDirection() {
@@ -287,8 +343,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	public boolean isSurging() {
 		// still possible right through the storm-control band, since the machine is
-		// running there; only a real shutdown rules a surge out
-		return turbulence >= 0.35 && lastEffectiveWindSpeed < spec().cutOutSpeed() && !isBraked();
+		// running there; only a real shutdown rules a surge out.
+		//
+		// The threshold is on real turbulence intensity now the weather model reports one:
+		// 0.22 is rough air, the sort a forest or a squall makes, and the old 0.35 would
+		// never have been reached again - it belonged to a scale that ran to 1.0
+		return turbulence >= 0.22 && meanWindSpeed < spec().cutOutSpeed() && !isBraked();
 	}
 
 	public double getCurrentPower() {
@@ -306,11 +366,15 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			return;
 		}
 
-		// the cut-in, the plateau, the storm derating and the cut-out all live in the
-		// model's own curve now, so this is the whole generation model. Air density goes
-		// in with it, which is why a turbine on a freezing night out-produces the same
-		// machine on a hot afternoon in identical wind.
-		uncappedPower = spec().powerAtKw(Math.max(0.0, lastAlignedWindSpeed), airDensity);
+		// the cut-in, the plateau and the storm derating all live in the model's own curve, so
+		// this is the whole generation model. Air density goes in with it, which is why a
+		// turbine on a freezing night out-produces the same machine on a hot afternoon in
+		// identical wind.
+		//
+		// The wind going in is the instantaneous one, not the mean, so the output moves the way
+		// a real machine's does. The cut-out is not applied here because the controller above
+		// has already decided that, on the mean and the gust, with hysteresis on both.
+		uncappedPower = spec().powerWhileRunningKw(Math.max(0.0, lastAlignedWindSpeed), airDensity);
 		generatedPower = Math.min(uncappedPower, Math.max(0.0, activePowerLimitKw));
 	}
 
@@ -454,7 +518,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				spec.ratedPowerKw(),
 				activePowerLimitKw,
 				powerLimited,
-				lastEffectiveWindSpeed,
+				meanWindSpeed,
 				lastAlignedWindSpeed,
 				windDirection,
 				getYaw(),
@@ -466,8 +530,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				stoppedByPlayer,
 				isStoppedByRedstone(),
 				yawing,
-				ambientTemperature(precipitating, storming),
-				worldPosition.getY(),
+				ambientTempC,
+				airPressureHpa,
 				precipitating,
 				storming,
 				level.getGameTime(),
@@ -478,52 +542,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				spec.cutOutSpeed(),
 				spec.gearboxRatio()
 		));
-	}
-
-	/** Ambient at the nacelle, sampling the sky for itself. */
-	private double ambientTemperature() {
-		if (level == null) return 15.0;
-
-		boolean precipitating = level.isRainingAt(worldPosition.above());
-		return ambientTemperature(precipitating, level.isThundering() && precipitating);
-	}
-
-	/**
-	 * Air temperature at the nacelle, in Celsius.
-	 *
-	 * Minecraft has no ambient temperature, so this is assembled from the things
-	 * that would actually drive one: the biome's climate, height, the day cycle and
-	 * what the sky is doing. The biome scale runs 0..2, mapped so a snowy biome
-	 * reads about -5C, plains 11C and a desert 35C.
-	 */
-	private double ambientTemperature(boolean precipitating, boolean storming) {
-		double celsius = level.getBiome(worldPosition).value().getBaseTemperature() * 20.0 - 5.0;
-
-		// the same height cooling vanilla applies to biome temperature above y=80,
-		// converted into this scale, so a mountaintop turbine reads colder than one
-		// on the plain below it exactly as the game would have it
-		celsius -= Math.max(0, worldPosition.getY() - 80) * 0.025;
-
-		// diurnal swing, peaking in the early afternoon and bottoming before dawn.
-		// Cloud cover flattens it, which is why an overcast night is milder than a
-		// clear one
-		double swing = 6.0;
-		if (storming) {
-			swing *= 0.25;
-		} else if (precipitating) {
-			swing *= 0.5;
-		}
-
-		double dayPhase = (level.getDayTime() % 24000L) / 24000.0;
-		celsius += Math.sin((dayPhase - 2000.0 / 24000.0) * 2.0 * Math.PI) * swing;
-
-		if (storming) {
-			celsius -= 6.0;
-		} else if (precipitating) {
-			celsius -= 3.0;
-		}
-
-		return celsius;
 	}
 
 	/**
@@ -668,27 +686,35 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		TurbineSpec spec = spec();
-		WeatherSnapshot weather = GlobalWeatherManager.get((ServerLevel) level).sample(worldPosition);
-		double blend = Mth.clamp(weather.turbulence(), 0.0, 1.0);
-		double zoneWind = Mth.lerp(blend, weather.windSpeed(), weather.gustSpeed());
+		// asked for the wind at this machine's own hub over this machine's own ground: the
+		// profile down from the blending height depends on both, so a block of tower is worth
+		// several times as much in a forest as it is on a beach
+		WeatherSnapshot weather = GlobalWeatherManager.get((ServerLevel) level).sample(worldPosition, getTowerSegments());
 
-		// the zone wind is one figure for the whole area with no height to it, so it is
-		// read as the wind at the reference hub height and this machine's own tower moves
-		// it up or down from there. That is the entire payoff of building tall.
-		lastEffectiveWindSpeed = (float) TurbineSpec.windAtHubHeight(zoneWind, spec.hubHeightM(getTowerSegments()));
+		meanWindSpeed = (float) weather.meanWind();
+		gustWindSpeed = (float) weather.gustWind();
+		lastEffectiveWindSpeed = (float) weather.instantWind();
 		windDirection = weather.direction();
 		turbulence = weather.turbulence();
-		airDensity = TurbineSpec.airDensityAt(ambientTemperature());
+		shearExponent = (float) weather.shearExponent();
+		airDensity = weather.airDensity();
+		ambientTempC = weather.temperatureC();
+		airPressureHpa = weather.pressureHpa();
 
 		updateYaw();
 		float alignment = alignmentFactor();
 		lastAlignedWindSpeed = lastEffectiveWindSpeed * alignment;
 
-		// the brake waits for the cut-out: between the storm onset and there the machine
-		// stays on load, just derated
-		if (lastEffectiveWindSpeed >= spec.cutOutSpeed()) {
+		// The brake waits for the cut-out: between the storm onset and there the machine stays
+		// on load, just derated.
+		//
+		// Supervised on the mean and on the gust separately, which is how the real limits are
+		// written - 25 m/s over ten minutes, or a gust a fifth past it. Watching only the
+		// instantaneous wind would trip the machine on the first gust that touched 25 and
+		// release it a second later, which is chatter rather than protection.
+		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * GUST_TRIP_RATIO) {
 			cutOutActive = true;
-		} else if (cutOutActive && lastEffectiveWindSpeed <= cutOutResetSpeed(spec)) {
+		} else if (cutOutActive && meanWindSpeed <= cutOutResetSpeed(spec)) {
 			cutOutActive = false;
 		}
 
@@ -735,6 +761,14 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		currentPower = tag.getDouble("currentPower");
 		lastEffectiveWindSpeed = tag.getFloat("lastEffectiveWindSpeed");
 		lastAlignedWindSpeed = tag.contains("lastAlignedWindSpeed") ? tag.getFloat("lastAlignedWindSpeed") : lastEffectiveWindSpeed;
+		// a turbine saved before the weather model reported a mean and a gust has only the one
+		// wind speed, so both read back off it rather than off zero, which would show a panel
+		// with a full power bar over a dead calm until the next tick corrected it
+		meanWindSpeed = tag.contains("meanWindSpeed") ? tag.getFloat("meanWindSpeed") : lastEffectiveWindSpeed;
+		gustWindSpeed = tag.contains("gustWindSpeed") ? tag.getFloat("gustWindSpeed") : lastEffectiveWindSpeed;
+		shearExponent = tag.contains("shearExponent") ? tag.getFloat("shearExponent") : 0.14f;
+		ambientTempC = tag.contains("ambientTempC") ? tag.getDouble("ambientTempC") : 15.0;
+		airPressureHpa = tag.contains("airPressureHpa") ? tag.getDouble("airPressureHpa") : Atmosphere.SEA_LEVEL_PRESSURE;
 		cutOutActive = tag.contains("cutOutActive") && tag.getBoolean("cutOutActive");
 		yawInitialized = tag.contains("yaw");
 		yaw = yawInitialized ? tag.getFloat("yaw") : yaw;
@@ -810,6 +844,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putDouble("currentPower", currentPower);
 		tag.putFloat("lastEffectiveWindSpeed", lastEffectiveWindSpeed);
 		tag.putFloat("lastAlignedWindSpeed", lastAlignedWindSpeed);
+		tag.putFloat("meanWindSpeed", meanWindSpeed);
+		tag.putFloat("gustWindSpeed", gustWindSpeed);
+		// the panel quotes what one more block of tower would be worth, and that depends on the
+		// ground the tower stands on - which only the server has surveyed
+		tag.putFloat("shearExponent", shearExponent);
+		tag.putDouble("ambientTempC", ambientTempC);
+		tag.putDouble("airPressureHpa", airPressureHpa);
 		tag.putBoolean("cutOutActive", cutOutActive);
 		tag.putFloat("yaw", yaw);
 		tag.putFloat("windDirection", windDirection);
