@@ -300,6 +300,12 @@ public class Electricity {
 			powerNetwork.updatePowerNetwork();
 		}
 
+		// after the levels have ticked, so this is the last word on the time each client holds:
+		// vanilla broadcasts its own during that tick and would otherwise start their clocks again
+		for (ServerLevel level : event.getServer().getAllLevels()) {
+			RealTimeClock.holdClientClocks(level);
+		}
+
 		TowerCollapse.tickAll();
 	}
 

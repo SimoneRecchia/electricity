@@ -2,7 +2,9 @@ package com.dooji.electricity.main;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameRules;
 
 /**
@@ -61,6 +63,40 @@ public final class RealTimeClock {
 		if (!level.getGameRules().getBoolean(ElectricityGameRules.REAL_TIME_CLOCK)) return;
 
 		level.setDayTime(dayTimeFor(LocalDateTime.now(ZoneId.systemDefault())));
+	}
+
+	/**
+	 * Stops each client running a day cycle of its own, so the sky moves at the rate the
+	 * server's clock actually moves at.
+	 *
+	 * Without this the sky crawls forward and jerks back once a second, and the reason is a
+	 * mismatch of rates rather than of values. A client advances its own day clock by a tick
+	 * every tick, which under this rule is seventy-two times too fast; the server broadcasts
+	 * the true time every twenty ticks, and the correction lands as a jump backwards. The
+	 * displacement is small - a third of a degree of sun - but the speed is not, and the speed
+	 * is what the eye catches.
+	 *
+	 * A client only runs that clock while its own copy of {@code doDaylightCycle} is true, and
+	 * the way the protocol says otherwise is by sending the day time negated - the sign is the
+	 * flag. So this sends the time with the flag clear and the client stops counting, leaving
+	 * it showing exactly what the server holds. The sun then steps a tick every 3.6 seconds,
+	 * which is a hundredth of a degree, and steps of a hundredth of a degree are not visible.
+	 *
+	 * Sent every tick, and to be plain about the cost: one seventeen-byte packet per player per
+	 * tick, some 480 bytes a second each. That buys not having to guess when vanilla's own
+	 * broadcast will land and re-enable the client's clock behind us, and unlike forcing the
+	 * vanilla rule off it cannot leave a world with a stopped sun if the server dies.
+	 */
+	public static void holdClientClocks(ServerLevel level) {
+		if (!level.getGameRules().getBoolean(ElectricityGameRules.REAL_TIME_CLOCK)) return;
+		// nothing to correct when the world already says the day does not advance: vanilla's own
+		// broadcast is then carrying the same negated time this would
+		if (!level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) return;
+
+		ClientboundSetTimePacket held = new ClientboundSetTimePacket(level.getGameTime(), level.getDayTime(), false);
+		for (ServerPlayer player : level.players()) {
+			player.connection.send(held);
+		}
 	}
 
 	/** The day-clock reading that matches a wall-clock moment. Separate so it can be reasoned about. */
