@@ -36,9 +36,14 @@ public final class ObjDefinitions {
 				"insulatoroutput_Material.044"
 		)));
 
-		ALL.add(new ObjBlockDefinition(Electricity.WIND_TURBINE_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/wind_turbine/wind_turbine.obj"), List.of(
-				"insulator_Plastic"
-		)));
+		// Every machine in the catalogue draws the same model: the renderer scales it per
+		// spec and stretches its tower to the built height, so the difference between a
+		// C52 and a C130 on screen is a transform rather than a second asset.
+		ResourceLocation turbineModel = new ResourceLocation(Electricity.MOD_ID, "models/wind_turbine/wind_turbine.obj");
+		for (var spec : TurbineCatalog.all()) {
+			Block block = Electricity.TURBINE_BLOCKS.get(spec.id()).get();
+			ALL.add(new ObjBlockDefinition(block, turbineModel, List.of("insulator_Plastic")));
+		}
 	}
 
 	public static ObjBlockDefinition get(Block block) {

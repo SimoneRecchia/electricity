@@ -1,0 +1,15 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "MMM"
+  ],
+  "key": {
+    "M": {
+      "item": "electricity:metal_casing"
+    }
+  },
+  "result": {
+    "item": "electricity:tower_segment",
+    "count": 2
+  }
+}

@@ -1,6 +1,7 @@
 package com.dooji.electricity.main;
 
 import com.dooji.electricity.api.power.ElectricityCapabilities;
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
@@ -17,6 +18,7 @@ import com.dooji.electricity.item.ItemWire;
 import com.dooji.electricity.item.PowerWrenchItem;
 import com.dooji.electricity.item.TooltipBlockItem;
 import com.dooji.electricity.item.TooltipItem;
+import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.menu.WorkbenchMenu;
 import com.dooji.electricity.recipe.WorkbenchRecipe;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -26,7 +28,11 @@ import com.dooji.electricity.main.power.PowerNetwork;
 import com.dooji.electricity.main.wire.WireManager;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -38,6 +44,7 @@ import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.event.TickEvent;
@@ -86,7 +93,7 @@ public class Electricity {
 	public static final RegistryObject<Item> UTILITY_POLE_ITEM = ITEMS.register("utility_pole", () -> new TooltipBlockItem(UTILITY_POLE_BLOCK.get(), new Item.Properties(), "tooltip.electricity.utility_pole"));
 	public static final RegistryObject<Item> ELECTRIC_CABIN_ITEM = ITEMS.register("electric_cabin", () -> new TooltipBlockItem(ELECTRIC_CABIN_BLOCK.get(), new Item.Properties(), "tooltip.electricity.electric_cabin"));
 	public static final RegistryObject<Item> POWER_BOX_ITEM = ITEMS.register("power_box", () -> new TooltipBlockItem(POWER_BOX_BLOCK.get(), new Item.Properties(), "tooltip.electricity.power_box"));
-	public static final RegistryObject<Item> WIND_TURBINE_ITEM = ITEMS.register("wind_turbine", () -> new TooltipBlockItem(WIND_TURBINE_BLOCK.get(), new Item.Properties(), "tooltip.electricity.wind_turbine"));
+	public static final RegistryObject<Item> WIND_TURBINE_ITEM = ITEMS.register("wind_turbine", () -> new TurbineBlockItem(WIND_TURBINE_BLOCK.get(), new Item.Properties(), TurbineCatalog.C130_40));
 	public static final RegistryObject<Item> ELECTRIC_LAMP_ITEM = ITEMS.register("electric_lamp", () -> new TooltipBlockItem(ELECTRIC_LAMP_BLOCK.get(), new Item.Properties(), "tooltip.electricity.electric_lamp"));
 	public static final RegistryObject<Item> WEATHER_TABLET_ITEM = ITEMS.register("weather_tablet", () -> new TooltipItem(new Item.Properties().stacksTo(1), "tooltip.electricity.weather_tablet"));
 	public static final RegistryObject<Item> WORKBENCH_ITEM = ITEMS.register("workbench", () -> new TooltipBlockItem(WORKBENCH_BLOCK.get(), new Item.Properties(), "tooltip.electricity.workbench"));
@@ -96,6 +103,58 @@ public class Electricity {
 	public static final RegistryObject<Item> INSULATOR_ITEM = ITEMS.register("insulator", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.insulator"));
 	public static final RegistryObject<Item> METAL_CASING_ITEM = ITEMS.register("metal_casing", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.metal_casing"));
 	public static final RegistryObject<Item> MOTOR_CORE_ITEM = ITEMS.register("motor_core", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.motor_core"));
+
+	/** One tower segment, the only part of a turbine a player adds after it is standing. */
+	public static final RegistryObject<Item> TOWER_SEGMENT_ITEM = ITEMS.register("tower_segment", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.tower_segment"));
+
+	/**
+	 * A block for every machine in the catalogue, keyed by spec id.
+	 *
+	 * Registered from the catalogue in a loop rather than declared one by one, so a spec
+	 * cannot come to exist without a block that places it. Each is named after its spec's
+	 * own path except the C130, which keeps the original {@code wind_turbine} registry name
+	 * because worlds already contain blocks under it.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Block>> TURBINE_BLOCKS = registerTurbineBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> TURBINE_ITEMS = registerTurbineItems();
+
+	private static BlockBehaviour.Properties turbineProperties() {
+		return Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerTurbineBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			if (spec.id().equals(TurbineCatalog.C130_40.id())) {
+				blocks.put(spec.id(), WIND_TURBINE_BLOCK);
+				continue;
+			}
+
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new WindTurbineBlock(turbineProperties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerTurbineItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			if (spec.id().equals(TurbineCatalog.C130_40.id())) {
+				items.put(spec.id(), WIND_TURBINE_ITEM);
+				continue;
+			}
+
+			RegistryObject<Block> block = TURBINE_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new TurbineBlockItem(block.get(), new Item.Properties(), spec)));
+		}
+
+		return items;
+	}
+
+	/** Every turbine block, so one block entity type can serve the whole catalogue. */
+	private static Block[] turbineBlocks() {
+		return TURBINE_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
 
 	public static final RegistryObject<MenuType<WorkbenchMenu>> WORKBENCH_MENU = MENUS.register("workbench", () -> IForgeMenuType.create(WorkbenchMenu::new));
 	public static final RegistryObject<RecipeSerializer<WorkbenchRecipe>> WORKBENCH_RECIPE_SERIALIZER = RECIPE_SERIALIZERS.register("workbench", WorkbenchRecipe.Serializer::new);
@@ -108,7 +167,12 @@ public class Electricity {
 				output.accept(UTILITY_POLE_ITEM.get());
 				output.accept(ELECTRIC_CABIN_ITEM.get());
 				output.accept(POWER_BOX_ITEM.get());
-				output.accept(WIND_TURBINE_ITEM.get());
+				// in catalogue order, which is the order a player builds them
+				for (TurbineSpec spec : TurbineCatalog.all()) {
+					output.accept(TURBINE_ITEMS.get(spec.id()).get());
+				}
+
+				output.accept(TOWER_SEGMENT_ITEM.get());
 				output.accept(ELECTRIC_LAMP_ITEM.get());
 				output.accept(WORKBENCH_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
@@ -143,7 +207,9 @@ public class Electricity {
 
 		POWER_BOX_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("power_box", () -> BlockEntityType.Builder.of(PowerBoxBlockEntity::new, POWER_BOX_BLOCK.get()).build(null));
 
-		WIND_TURBINE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("wind_turbine", () -> BlockEntityType.Builder.of(WindTurbineBlockEntity::new, WIND_TURBINE_BLOCK.get()).build(null));
+		// one type for the whole catalogue: the machines differ by their spec, which the
+		// block entity reads back off whichever block it is sitting in
+		WIND_TURBINE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("wind_turbine", () -> BlockEntityType.Builder.of(WindTurbineBlockEntity::new, turbineBlocks()).build(null));
 
 		ELECTRIC_LAMP_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("electric_lamp", () -> BlockEntityType.Builder.of(ElectricLampBlockEntity::new, ELECTRIC_LAMP_BLOCK.get()).build(null));
 

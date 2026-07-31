@@ -1,9 +1,9 @@
 {
   "type": "electricity:workbench",
   "pattern": [
-    "PKP",
-    "CTC",
-    "MKM"
+    "CPC",
+    "KTK",
+    "MMM"
   ],
   "key": {
     "C": {
@@ -19,10 +19,10 @@
       "item": "electricity:cpu"
     },
     "T": {
-      "item": "electricity:c112_30"
+      "item": "electricity:c52_085"
     }
   },
   "result": {
-    "item": "electricity:wind_turbine"
+    "item": "electricity:c80_20"
   }
 }
