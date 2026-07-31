@@ -92,8 +92,6 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			if (TurbineTowerBlock.findTurbineAbove(mc.level, pos) != null) continue;
 
 			int height = 1 + TurbineTowerBlock.countAbove(mc.level, pos);
-			// a bare stack carries its own thickness in its state, settled when it was built
-			double radial = TurbineTowerBlock.scaleOf(mc.level.getBlockState(pos).getValue(TurbineTowerBlock.THICKNESS));
 			seen.add(pos);
 			ObjRenderUtil.withAlignedPose(tower, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, null, null,
 					(context, pose, buffers) -> {
@@ -102,7 +100,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 							if (!entry.getKey().startsWith("pole")) continue;
 
 							pose.pushPose();
-							poseTower(pose, height, radial);
+							poseTower(pose, height);
 							poses.put(entry.getKey(), new Matrix4f(pose.last().pose()));
 							pose.popPose();
 						}
@@ -164,9 +162,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			// the model is authored from - so the tube and the wire fitting need nothing, and it
 			// is the nacelle that has to climb back up to the block the machine lives in.
 			if (groupName.startsWith("pole")) {
-				// quantised through the tower block's own ladder, so the tube drawn here and the
-				// octagon collided with come out the same width, not two numbers that nearly agree
-				poseTower(poseStack, towerSegments, TurbineTowerBlock.scaleFor(nacelleScale));
+				poseTower(poseStack, towerSegments);
 			} else if (groupName.startsWith("insulator")) {
 				// nothing: authored at the foot, and drawn unscaled so a wire lands on the same
 				// size fitting whichever turbine it came from
@@ -218,15 +214,14 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	}
 
 	/**
-	 * Stretches the authored tube to a tower this many blocks tall, from its foot, and narrows
-	 * it to the machine it belongs to.
+	 * Stretches the authored tube to a tower this many blocks tall, from its foot.
 	 *
 	 * Shared by both paths that draw a tower - a mounted machine drawing downward and a bare
 	 * stack drawing upward - because the two have to agree exactly or capping a tower would
 	 * make it jump. One formula means they cannot disagree.
 	 */
-	private static void poseTower(PoseStack poseStack, int height, double radial) {
-		poseStack.scale((float) radial, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), (float) radial);
+	private static void poseTower(PoseStack poseStack, int height) {
+		poseStack.scale(1.0f, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
 	}
 
 	private static Vec3 calculateGroupCenter(ObjModel.ObjGroup group) {

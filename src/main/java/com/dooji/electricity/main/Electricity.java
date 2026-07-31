@@ -278,7 +278,6 @@ public class Electricity {
 		}
 
 		TowerCollapse.tickAll();
-		TurbineTowerBlock.runQueuedRefreshes();
 	}
 
 	@SubscribeEvent
@@ -290,7 +289,6 @@ public class Electricity {
 		}
 
 		TowerCollapse.clear();
-		TurbineTowerBlock.clearQueued();
 	}
 
 	@SubscribeEvent

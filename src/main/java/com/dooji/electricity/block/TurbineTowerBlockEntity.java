@@ -80,10 +80,6 @@ public class TurbineTowerBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
-		// a tower that already existed has never had its thickness or taper settled, and nothing
-		// else will ask - every other trigger is a block being placed or broken
-		if (level != null && !level.isClientSide()) TurbineTowerBlock.queueRefresh(level, worldPosition);
-
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
 		}
