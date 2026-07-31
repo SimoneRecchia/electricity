@@ -20,6 +20,7 @@ import com.dooji.electricity.item.TooltipItem;
 import com.dooji.electricity.menu.WorkbenchMenu;
 import com.dooji.electricity.recipe.WorkbenchRecipe;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.power.PowerNetwork;
 import com.dooji.electricity.main.wire.WireManager;
@@ -73,7 +74,10 @@ public class Electricity {
 	public static final RegistryObject<Block> UTILITY_POLE_BLOCK = BLOCKS.register("utility_pole", () -> new UtilityPoleBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Block> ELECTRIC_CABIN_BLOCK = BLOCKS.register("electric_cabin", () -> new ElectricCabinBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Block> POWER_BOX_BLOCK = BLOCKS.register("power_box", () -> new PowerBoxBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
-	public static final RegistryObject<Block> WIND_TURBINE_BLOCK = BLOCKS.register("wind_turbine", () -> new WindTurbineBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
+	// The original block keeps its "wind_turbine" registry name so existing worlds load,
+	// and is bound to the C130: the authored model's rotor measures 13.044 blocks, so
+	// that is which machine it has always been geometrically.
+	public static final RegistryObject<Block> WIND_TURBINE_BLOCK = BLOCKS.register("wind_turbine", () -> new WindTurbineBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion(), TurbineCatalog.C130_40));
 	public static final RegistryObject<Block> ELECTRIC_LAMP_BLOCK = BLOCKS.register("electric_lamp", () -> new ElectricLampBlock(Block.Properties.of().strength(0.3f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Block> WORKBENCH_BLOCK = BLOCKS.register("workbench", () -> new WorkbenchBlock(Block.Properties.of().strength(2.0f).requiresCorrectToolForDrops().noOcclusion()));
 

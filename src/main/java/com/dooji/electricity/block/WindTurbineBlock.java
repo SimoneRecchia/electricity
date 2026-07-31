@@ -1,5 +1,6 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.main.Electricity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -26,9 +27,25 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 	private static final VoxelShape SHAPE = Shapes.block();
 
-	public WindTurbineBlock(Properties properties) {
+	/**
+	 * Which machine this block is.
+	 *
+	 * One block per model rather than one block storing a model id, because the models
+	 * differ by more than numbers: each needs its own recipe, its own item and its own
+	 * entry in a recipe viewer, and a player shopping for a turbine is choosing between
+	 * products rather than configuring one. The block entity reads the spec back off the
+	 * block, so nothing about a placed turbine has to be persisted to know what it is.
+	 */
+	private final TurbineSpec spec;
+
+	public WindTurbineBlock(Properties properties, TurbineSpec spec) {
 		super(properties);
+		this.spec = spec;
 		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+	}
+
+	public TurbineSpec spec() {
+		return spec;
 	}
 
 	@Override
