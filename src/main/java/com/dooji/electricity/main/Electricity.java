@@ -213,6 +213,9 @@ public class Electricity {
 		MENUS.register(modEventBus);
 		RECIPE_SERIALIZERS.register(modEventBus);
 		ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ElectricityServerConfig.spec(), "Electricity/server.toml");
+		// has to be now, before any level data is read: the rule set is deserialised with the
+		// world, so a rule registered later would be missing from a world that had it set
+		ElectricityGameRules.register();
 
 		UTILITY_POLE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("utility_pole", () -> BlockEntityType.Builder.of(UtilityPoleBlockEntity::new, UTILITY_POLE_BLOCK.get()).build(null));
 
@@ -268,6 +271,9 @@ public class Electricity {
 	public void onServerTick(TickEvent.ServerTickEvent event) {
 		if (event.phase == TickEvent.Phase.START) {
 			for (ServerLevel level : event.getServer().getAllLevels()) {
+				// the clock first: everything sampled this tick, weather included, reads the day
+				// time, and it should read this tick's rather than last tick's
+				RealTimeClock.apply(level);
 				GlobalWeatherManager.get(level).tick();
 			}
 			return;
