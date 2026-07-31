@@ -1,17 +1,21 @@
 package com.dooji.electricity.main.network;
 
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.ElectricityClient;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
+import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.network.payloads.UpdateUtilityPoleConfigPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
@@ -21,6 +25,8 @@ public class ElectricityNetworking {
 	private static final String PROTOCOL_VERSION = "1";
 	public static final ResourceLocation NETWORK_CHANNEL = ResourceLocation.tryBuild(Electricity.MOD_ID, "main");
 	public static SimpleChannel INSTANCE;
+	/** Six blocks from the tower, which is where a player stands to work a panel. */
+	private static final double MAX_CONTROL_DISTANCE_SQ = 36.0;
 
 	public static void init() {
 		INSTANCE = NetworkRegistry.ChannelBuilder.named(NETWORK_CHANNEL).networkProtocolVersion(() -> PROTOCOL_VERSION).clientAcceptedVersions(v -> true).serverAcceptedVersions(v -> true)
@@ -83,6 +89,32 @@ public class ElectricityNetworking {
 					context.setPacketHandled(true);
 				}).add();
 
+		INSTANCE.messageBuilder(TurbineControlPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(TurbineControlPayload::write).decoder(TurbineControlPayload::read)
+				.consumerNetworkThread((msg, contextSupplier) -> {
+					var context = contextSupplier.get();
+
+					if (context.getDirection().getReceptionSide().isServer()) {
+						context.enqueueWork(() -> {
+							var player = context.getSender();
+							if (player == null) return;
+
+							var world = player.serverLevel();
+							var pos = msg.blockPos();
+
+							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
+							if (!world.mayInteract(player, pos)) return;
+
+							if (world.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) {
+								if (!withinReach(player, turbine)) return;
+
+								applyTurbineControl(turbine, msg);
+							}
+						});
+					}
+
+					context.setPacketHandled(true);
+				}).add();
+
 		INSTANCE.messageBuilder(WireConnectionPayload.class, id++, NetworkDirection.PLAY_TO_CLIENT).encoder(WireConnectionPayload::write).decoder(WireConnectionPayload::read)
 				.consumerNetworkThread((msg, contextSupplier) -> {
 					var context = contextSupplier.get();
@@ -104,6 +136,44 @@ public class ElectricityNetworking {
 
 					context.setPacketHandled(true);
 				}).add();
+	}
+
+	/**
+	 * Whether the player is close enough to the machine to be working its panel.
+	 *
+	 * Measured to the nearest point of the tower rather than to the machine, because the
+	 * machine is at the top of its tower and the panel is worked from the ground. Measuring
+	 * to the nacelle put a player at the foot of a C130 thirteen blocks away and silently
+	 * discarded every command they gave it.
+	 *
+	 * So the reference point slides up and down the tower to meet the player: it is the
+	 * horizontal distance to the column, plus whatever vertical distance remains once they
+	 * are past either end. Standing anywhere along the structure counts as standing at it,
+	 * which is the whole intent, while still stopping a crafted packet from shutting down
+	 * turbines from across the world.
+	 */
+	private static boolean withinReach(ServerPlayer player, WindTurbineBlockEntity turbine) {
+		BlockPos pos = turbine.getBlockPos();
+		Vec3 axis = Vec3.atCenterOf(pos);
+		double foot = pos.getY() - turbine.getTowerSegments();
+		double nearestY = Mth.clamp(player.getY(), foot, pos.getY() + 1.0);
+
+		return player.distanceToSqr(axis.x, nearestY, axis.z) <= MAX_CONTROL_DISTANCE_SQ;
+	}
+
+	/**
+	 * Applies one panel command.
+	 *
+	 * Nothing here trusts the payload's number: the block entity's own setter clamps the
+	 * curtailment setpoint to the machine's nameplate, so the worst a crafted packet
+	 * achieves is a setting the player could have dialled in by hand anyway.
+	 */
+	private static void applyTurbineControl(WindTurbineBlockEntity turbine, TurbineControlPayload msg) {
+		switch (msg.action()) {
+			case TOGGLE_RUNNING -> turbine.setStoppedByPlayer(!turbine.isStoppedByPlayer());
+			case CYCLE_REDSTONE_MODE -> turbine.setRedstoneMode(turbine.getRedstoneMode().next());
+			case SET_POWER_LIMIT -> turbine.setActivePowerLimit(msg.value());
+		}
 	}
 
 	public static void broadcastToAllClients(ServerLevel world, WireConnectionPayload payload) {

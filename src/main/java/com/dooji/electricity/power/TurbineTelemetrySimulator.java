@@ -1,7 +1,6 @@
 package com.dooji.electricity.power;
 
 import com.dooji.electricity.api.power.TurbineTelemetry;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.util.Mth;
@@ -22,8 +21,6 @@ import net.minecraft.util.Mth;
  * state between ticks.
  */
 public final class TurbineTelemetrySimulator {
-	/** 40 rpm at the rotor becomes 1500 rpm at the generator, synchronous for a 4-pole machine at 50 Hz. */
-	private static final double GEARBOX_RATIO = 37.5;
 	/** Line-to-line volts, the usual LV level for a machine this size. */
 	private static final double NOMINAL_VOLTAGE = 690.0;
 	private static final double NOMINAL_FREQUENCY = 50.0;
@@ -57,6 +54,7 @@ public final class TurbineTelemetrySimulator {
 			boolean braked,
 			boolean windCutOut,
 			boolean stoppedByComputer,
+			boolean stoppedByPlayer,
 			boolean stoppedByRedstone,
 			boolean yawing,
 			double ambientTempC,
@@ -65,7 +63,17 @@ public final class TurbineTelemetrySimulator {
 			boolean thundering,
 			long gameTime,
 			int seed,
-			double yawCableTwist
+			double yawCableTwist,
+			// The machine's own curve thresholds, passed in rather than read off a
+			// constant: the catalogue now runs from a 10 kW rotor to a 4 MW one, and their
+			// rated speeds differ by nearly 2 m/s, so a shared figure would report the
+			// blades pitching out on one machine while another was still at fine pitch in
+			// the same wind.
+			double ratedSpeed,
+			double stormOnsetSpeed,
+			double cutOutSpeed,
+			/** Step-up to synchronous speed, derived per model: a slow wide rotor needs a taller one. */
+			double gearboxRatio
 	) {
 	}
 
@@ -101,10 +109,11 @@ public final class TurbineTelemetrySimulator {
 		out.put(TurbineTelemetry.RUNNING, !s.braked());
 		out.put(TurbineTelemetry.WIND_CUT_OUT, s.windCutOut());
 		out.put(TurbineTelemetry.STOPPED_BY_COMPUTER, s.stoppedByComputer());
+		out.put(TurbineTelemetry.STOPPED_BY_PLAYER, s.stoppedByPlayer());
 		out.put(TurbineTelemetry.STOPPED_BY_REDSTONE, s.stoppedByRedstone());
 
 		// ---- derived ----
-		out.put(TurbineTelemetry.GENERATOR_RPM, rotorRpm * GEARBOX_RATIO);
+		out.put(TurbineTelemetry.GENERATOR_RPM, rotorRpm * s.gearboxRatio());
 
 		// power factor improves as the machine loads up, which is how an induction
 		// generator behaves; below a hair of output there is nothing to have a phase
@@ -229,23 +238,23 @@ public final class TurbineTelemetrySimulator {
 		if (s.braked()) return 90.0;
 
 		double wind = s.alignedWindSpeed();
-		if (wind <= WindTurbineBlockEntity.RATED_SPEED) return 0.0;
+		if (wind <= s.ratedSpeed()) return 0.0;
 
 		// between rated and the storm onset the blades pitch out just enough to hold the
 		// plateau
-		double regulatingSpan = WindTurbineBlockEntity.STORM_ONSET_SPEED - WindTurbineBlockEntity.RATED_SPEED;
-		if (wind < WindTurbineBlockEntity.STORM_ONSET_SPEED) {
+		double regulatingSpan = s.stormOnsetSpeed() - s.ratedSpeed();
+		if (wind < s.stormOnsetSpeed()) {
 			if (regulatingSpan <= 0.0) return 0.0;
 
-			return Mth.clamp((wind - WindTurbineBlockEntity.RATED_SPEED) / regulatingSpan, 0.0, 1.0) * MAX_REGULATING_PITCH;
+			return Mth.clamp((wind - s.ratedSpeed()) / regulatingSpan, 0.0, 1.0) * MAX_REGULATING_PITCH;
 		}
 
 		// past the onset they keep going, well past the regulating range: pitching out is
 		// how storm control sheds the power, so the angle has to track the derating
-		double stormSpan = WindTurbineBlockEntity.SHUTDOWN_SPEED - WindTurbineBlockEntity.STORM_ONSET_SPEED;
+		double stormSpan = s.cutOutSpeed() - s.stormOnsetSpeed();
 		if (stormSpan <= 0.0) return MAX_STORM_PITCH;
 
-		double into = Mth.clamp((wind - WindTurbineBlockEntity.STORM_ONSET_SPEED) / stormSpan, 0.0, 1.0);
+		double into = Mth.clamp((wind - s.stormOnsetSpeed()) / stormSpan, 0.0, 1.0);
 		return MAX_REGULATING_PITCH + into * (MAX_STORM_PITCH - MAX_REGULATING_PITCH);
 	}
 

@@ -54,6 +54,8 @@ public final class TurbineTelemetry {
 	public static final String RUNNING = "running";
 	public static final String WIND_CUT_OUT = "windCutOut";
 	public static final String STOPPED_BY_COMPUTER = "stoppedByComputer";
+	/** A player applied the brake from the machine's own control panel. */
+	public static final String STOPPED_BY_PLAYER = "stoppedByPlayer";
 	public static final String STOPPED_BY_REDSTONE = "stoppedByRedstone";
 
 	// derived
@@ -161,7 +163,7 @@ public final class TurbineTelemetry {
 	private static Map<String, Kind> buildKinds() {
 		Map<String, Kind> kinds = new LinkedHashMap<>();
 		for (String tag : new String[]{WIND_SPEED, WIND_DIR, NACELLE_DIR, ROTOR_RPM, ACTIVE_POWER, ACTIVE_POWER_LIMIT, POWER_LIMITATION_ACTIVE, AMBIENT_TEMP, TURBULENCE, YAW_CABLE_TWIST,
-				RUNNING, WIND_CUT_OUT, STOPPED_BY_COMPUTER, STOPPED_BY_REDSTONE}) {
+				RUNNING, WIND_CUT_OUT, STOPPED_BY_COMPUTER, STOPPED_BY_PLAYER, STOPPED_BY_REDSTONE}) {
 			kinds.put(tag, Kind.MEASURED);
 		}
 

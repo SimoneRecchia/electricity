@@ -1,5 +1,6 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.main.Electricity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -8,7 +9,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -24,11 +28,60 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class WindTurbineBlock extends Block implements EntityBlock {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-	private static final VoxelShape SHAPE = Shapes.block();
 
-	public WindTurbineBlock(Properties properties) {
+	/** Nacelle height in the authored model, in blocks, at the scale the C130 draws it. */
+	private static final double NACELLE_HEIGHT = 0.95;
+	/**
+	 * Distance from the tower axis to the nacelle's farthest corner, in blocks at C130 scale.
+	 *
+	 * The nacelle is nearly two and a half blocks deep and swings with the yaw, so this is the
+	 * radius it sweeps rather than its width. On the larger machines it is wider than the block
+	 * it lives in and gets clipped to it; on the smaller ones it is what makes the shape narrow.
+	 */
+	private static final double NACELLE_REACH = 1.575;
+
+	/**
+	 * Which machine this block is.
+	 *
+	 * One block per model rather than one block storing a model id, because the models
+	 * differ by more than numbers: each needs its own recipe, its own item and its own
+	 * entry in a recipe viewer, and a player shopping for a turbine is choosing between
+	 * products rather than configuring one. The block entity reads the spec back off the
+	 * block, so nothing about a placed turbine has to be persisted to know what it is.
+	 */
+	private final TurbineSpec spec;
+	private final VoxelShape shape;
+
+	public WindTurbineBlock(Properties properties, TurbineSpec spec) {
 		super(properties);
+		this.spec = spec;
+		this.shape = nacelleShape(spec);
 		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+	}
+
+	/**
+	 * The nacelle, rather than the whole block it lives in.
+	 *
+	 * This was a full cube, which is the one collision in the structure that really is the block's
+	 * maximum extent - and on anything but the largest machine that is mostly empty air. An SW-10's
+	 * nacelle is a quarter of a block tall, so a cube left three quarters of a block of invisible
+	 * floor to stand on above it.
+	 *
+	 * Height is the nacelle's own. Width is the radius it sweeps as the machine yaws, not its
+	 * breadth, because it is two and a half blocks deep and turns to face the wind: on the larger
+	 * machines that sweep is wider than the block and clips to it, which is honest, since the
+	 * nacelle genuinely overhangs its own block there.
+	 */
+	private static VoxelShape nacelleShape(TurbineSpec spec) {
+		double scale = spec.nacelleRenderScale();
+		double half = Math.min(0.5, NACELLE_REACH * scale);
+		double height = Math.min(1.0, NACELLE_HEIGHT * scale);
+
+		return Shapes.box(0.5 - half, 0.0, 0.5 - half, 0.5 + half, height, 0.5 + half);
+	}
+
+	public TurbineSpec spec() {
+		return spec;
 	}
 
 	@Override
@@ -43,7 +96,33 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shape;
+	}
+
+	/**
+	 * A machine sits on a tower, at a height that tower is certified for.
+	 *
+	 * Both ends of the range are enforced, and the range is the manufacturer's rather than
+	 * something invented: real turbines are sold on specific tower heights, a V90 on 80,
+	 * 95 or 105 metres and not on whatever is to hand. The low end is also physics - the
+	 * blades would be in the ground - and the published minimum is at or above the tip
+	 * clearance for every machine in the catalogue, so one check covers both.
+	 *
+	 * A small rotor on a tall tower would be merely uneconomic rather than impossible, but
+	 * it is refused too: a 10 kW nacelle a hundred metres up looks wrong, and the certified
+	 * range is the honest reason to say no.
+	 */
+	@Override
+	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+		return spec.acceptsTowerHeight(TurbineTowerBlock.countBelow(level, pos));
+	}
+
+	@Override
+	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
+		// the tower under it went away or grew past what this machine mounts on
+		if (direction == Direction.DOWN && !canSurvive(state, level, pos)) return Blocks.AIR.defaultBlockState();
+
+		return state;
 	}
 
 	@Override
@@ -70,9 +149,38 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 		};
 	}
 
+	/**
+	 * Tells the tower's foot that its machine arrived or left.
+	 *
+	 * The foot answers capability queries on the machine's behalf, and it can be thirteen
+	 * blocks away - far outside the neighbour updates that placing or breaking this block
+	 * sends. Without this a cable already sitting at the tower base would keep the empty
+	 * answer it got before the machine existed.
+	 */
+	private static void refreshTowerFoot(Level level, BlockPos pos) {
+		if (level.isClientSide()) return;
+
+		int height = TurbineTowerBlock.countBelow(level, pos);
+		if (height <= 0) return;
+
+		BlockPos foot = pos.below(height);
+		if (level.getBlockEntity(foot) instanceof TurbineTowerBlockEntity tower) {
+			tower.invalidateCaps();
+			level.updateNeighbourForOutputSignal(foot, level.getBlockState(foot).getBlock());
+		}
+	}
+
+	@Override
+	public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+		super.onPlace(state, level, pos, oldState, movedByPiston);
+		refreshTowerFoot(level, pos);
+	}
+
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock())) {
+			refreshTowerFoot(level, pos);
+
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel) {
 				BlockEntity blockEntity = level.getBlockEntity(pos);
 				if (blockEntity instanceof WindTurbineBlockEntity windTurbine) {

@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.RedstoneMode;
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.api.power.TurbineTelemetry;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
@@ -12,6 +13,7 @@ import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
@@ -57,32 +59,21 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private float lastAlignedWindSpeed = 0.0f;
 	private float windDirection = 0.0f;
 	private double turbulence = 0.0;
-	/**
-	 * Where a storm shutdown releases. Set at the storm onset rather than below it, so
-	 * the machine comes back through the derating ramp at 80% instead of slamming
-	 * straight to full output — the same strain on the drivetrain that derating exists
-	 * to avoid. 3 m/s of hysteresis against the 25 m/s shutdown is still ample.
-	 */
-	private static final float SHUTDOWN_RESET_SPEED = 22.0f;
 	private boolean cutOutActive = false;
 	private boolean yawInitialized = false;
 	private float yaw = 0.0f;
 	private float lastSentYaw = Float.NaN;
 	private long lastSyncTick = 0L;
-	public static final float CUT_IN_SPEED = 3.0f;
-	public static final float RATED_SPEED = 12.0f;
 	/**
-	 * Storm control begins here. Rather than tripping, the machine sheds output as the
-	 * wind keeps rising, which is what a real turbine does: coming off load in one step
-	 * from full power is a shock to the drivetrain and to the grid behind it.
+	 * Smallest gap below the cut-out at which a storm shutdown may release.
+	 *
+	 * Releasing at the storm onset rather than just under the cut-out brings the machine
+	 * back through the derating ramp at 80% instead of slamming straight to full output,
+	 * which is the same strain on the drivetrain that derating exists to avoid. A machine
+	 * with no storm control has its onset sitting on its cut-out and would chatter there,
+	 * so this is the floor that keeps it honest.
 	 */
-	public static final float STORM_ONSET_SPEED = 22.0f;
-	/** Above this the machine gives up and brakes. */
-	public static final float SHUTDOWN_SPEED = 25.0f;
-	/** Fraction of rated output shed per m/s above the storm onset. */
-	private static final double STORM_DERATE_PER_MS = 0.2;
-	/** Output at rated wind speed, derived from the generation curve so the two cannot drift apart. */
-	public static final double RATED_POWER_KW = powerForWindSpeed(RATED_SPEED);
+	private static final double MINIMUM_CUT_OUT_HYSTERESIS = 3.0;
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
 
@@ -105,18 +96,87 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// Control state. Volatile because a ComputerCraft program reads it from the
 	// computer thread; writes come back through the server thread, see the setters.
 	private volatile boolean stoppedByComputer = false;
+	/**
+	 * The brake a player applied from the control panel.
+	 *
+	 * Kept apart from {@link #stoppedByComputer} rather than sharing it, because a program
+	 * asks {@code isStopped()} to find out whether *it* stopped the machine. Folding a
+	 * player's hand-stop into the same flag would answer yes to a program that had issued
+	 * no such command, and a control loop written on that answer would then leave a
+	 * turbine down believing it had put it there.
+	 */
+	private volatile boolean stoppedByPlayer = false;
 	private volatile RedstoneMode redstoneMode = RedstoneMode.DISABLED;
 	private volatile boolean redstonePowered = false;
-	private volatile double activePowerLimitKw = RATED_POWER_KW;
+	private volatile double activePowerLimitKw;
 	/** What the wind alone would have produced, before curtailment. */
 	private double uncappedPower = 0.0;
 
+	/** Air density at the nacelle, from ambient temperature. Cold air is denser and carries more power. */
+	private double airDensity = TurbineSpec.REFERENCE_AIR_DENSITY;
+
 	public WindTurbineBlockEntity(BlockPos pos, BlockState state) {
 		super(getBlockEntityType(), pos, state);
+		this.activePowerLimitKw = spec().ratedPowerKw();
 		ensureArraySizes();
 		initializeWirePositions();
 		generateInsulatorIds();
 	}
+
+	/**
+	 * Which machine this is.
+	 *
+	 * Read back off the block rather than persisted, so a placed turbine cannot disagree
+	 * with the item that placed it and there is no saved model id to migrate. The
+	 * fallback only comes up if a turbine somehow outlives its own block.
+	 */
+	public TurbineSpec spec() {
+		if (getBlockState().getBlock() instanceof WindTurbineBlock turbine) return turbine.spec();
+
+		return TurbineCatalog.fallback();
+	}
+
+	/**
+	 * How many tower segments stand under the machine.
+	 *
+	 * Counted out of the world rather than stored, which is the whole reason the tower is
+	 * real blocks: the height the physics uses and the tower a player can walk up are one
+	 * fact with one source, so they cannot come apart. Cheap enough to ask every tick -
+	 * thirteen block lookups is less than a redstone wire does idling.
+	 *
+	 * Both sides count for themselves, so none of this needs syncing.
+	 */
+	public int getTowerSegments() {
+		if (level == null) return spec().minTowerSegments();
+
+		return spec().clampTowerSegments(TurbineTowerBlock.countBelow(level, worldPosition));
+	}
+
+	public double getHubHeightM() {
+		return spec().hubHeightM(getTowerSegments());
+	}
+
+	public double getAirDensity() {
+		return airDensity;
+	}
+
+	/**
+	 * The output the server last published, in kW, without recomputing it.
+	 *
+	 * {@link #getGeneratedPower()} runs the generation model again, which is what the wire
+	 * network wants but wrong for a readout on the client: the client has no air density of
+	 * its own, so it would recompute a slightly different number than the machine is
+	 * actually making. This returns what was synced.
+	 */
+	public double getReportedPowerKw() {
+		return Math.max(0.0, generatedPower);
+	}
+
+	/** What the wind offered before the curtailment setpoint took anything off it, in kW. */
+	public double getUncappedPower() {
+		return uncappedPower;
+	}
+
 
 	private static BlockEntityType<WindTurbineBlockEntity> getBlockEntityType() {
 		return Electricity.WIND_TURBINE_BLOCK_ENTITY.get();
@@ -228,7 +288,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public boolean isSurging() {
 		// still possible right through the storm-control band, since the machine is
 		// running there; only a real shutdown rules a surge out
-		return turbulence >= 0.35 && lastEffectiveWindSpeed < SHUTDOWN_SPEED && !isBraked();
+		return turbulence >= 0.35 && lastEffectiveWindSpeed < spec().cutOutSpeed() && !isBraked();
 	}
 
 	public double getCurrentPower() {
@@ -240,31 +300,30 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	private void updateGeneratedPower() {
-		float effectiveWindSpeed = Math.max(0.0f, lastAlignedWindSpeed);
-		if (isBraked() || effectiveWindSpeed < CUT_IN_SPEED || effectiveWindSpeed >= SHUTDOWN_SPEED) {
+		if (isBraked()) {
 			uncappedPower = 0.0;
 			generatedPower = 0.0;
 			return;
 		}
 
-		uncappedPower = powerForWindSpeed(effectiveWindSpeed) * stormDerating(effectiveWindSpeed);
+		// the cut-in, the plateau, the storm derating and the cut-out all live in the
+		// model's own curve now, so this is the whole generation model. Air density goes
+		// in with it, which is why a turbine on a freezing night out-produces the same
+		// machine on a hot afternoon in identical wind.
+		uncappedPower = spec().powerAtKw(Math.max(0.0, lastAlignedWindSpeed), airDensity);
 		generatedPower = Math.min(uncappedPower, Math.max(0.0, activePowerLimitKw));
 	}
 
 	/**
-	 * How much of its output the machine keeps in a storm, from 1.0 below the onset
-	 * down to 0 at the shutdown speed.
+	 * Wind speed at which a storm shutdown releases.
 	 *
-	 * A fifth of rated is shed per m/s, so the factor lands on 0.8, 0.6 and 0.4 at 22,
-	 * 23 and 24 m/s. The ramp is continuous rather than stepped at whole m/s: a
-	 * staircase would put three fresh discontinuities in the power curve, which is
-	 * exactly what derating exists to avoid.
+	 * The storm onset, so the machine comes back through the derating ramp at 80% rather
+	 * than slamming straight to full output. A machine with no storm control has its
+	 * onset sitting on its cut-out, where that rule would leave no hysteresis at all and
+	 * the brake would chatter, so the floor applies instead.
 	 */
-	public static double stormDerating(double windSpeed) {
-		if (windSpeed < STORM_ONSET_SPEED) return 1.0;
-		if (windSpeed >= SHUTDOWN_SPEED) return 0.0;
-
-		return Mth.clamp(1.0 - STORM_DERATE_PER_MS * (windSpeed - STORM_ONSET_SPEED + 1.0), 0.0, 1.0);
+	private static double cutOutResetSpeed(TurbineSpec spec) {
+		return Math.min(spec.stormOnsetSpeed(), spec.cutOutSpeed() - MINIMUM_CUT_OUT_HYSTERESIS);
 	}
 
 	// ---- control ----
@@ -276,7 +335,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * wind cut-out alone.
 	 */
 	public boolean isBraked() {
-		return cutOutActive || stoppedByComputer || !redstoneMode.allowsRunning(redstonePowered);
+		return cutOutActive || stoppedByComputer || stoppedByPlayer || !redstoneMode.allowsRunning(redstonePowered);
 	}
 
 	public boolean isRunning() {
@@ -285,6 +344,18 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	public boolean isStoppedByComputer() {
 		return stoppedByComputer;
+	}
+
+	public boolean isStoppedByPlayer() {
+		return stoppedByPlayer;
+	}
+
+	/** Applies or releases the hand brake. Server thread only, like the other controls. */
+	public void setStoppedByPlayer(boolean stopped) {
+		if (stoppedByPlayer == stopped) return;
+
+		stoppedByPlayer = stopped;
+		onControlChanged();
 	}
 
 	public boolean isStoppedByRedstone() {
@@ -324,7 +395,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	/** Curtailment setpoint in kW, clamped to what the machine can actually produce. */
 	public void setActivePowerLimit(double limitKw) {
-		double clamped = Mth.clamp(limitKw, 0.0, RATED_POWER_KW);
+		double clamped = Mth.clamp(limitKw, 0.0, spec().ratedPowerKw());
 		if (activePowerLimitKw == clamped) return;
 
 		activePowerLimitKw = clamped;
@@ -353,17 +424,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 	}
 
-	/**
-	 * The generation curve. Clamping at the rated speed is what gives the turbine
-	 * its power plateau in strong wind, which on a real machine is the blades
-	 * pitching out; the telemetry reports that pitch angle from the same clamp.
-	 */
-	private static double powerForWindSpeed(float windSpeed) {
-		float capped = Math.min(windSpeed, RATED_SPEED);
-		double normalized = Math.min(1.0, capped / 16.0f);
-		return 140.0 * normalized * normalized;
-	}
-
 	/** Gross production before the output cap and before anything claims it, in Joules per tick. */
 	public double getGrossJoulesPerTick() {
 		return Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW;
@@ -384,13 +444,14 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// a roof, and the thermometer should agree with what is actually overhead
 		boolean precipitating = level.isRainingAt(worldPosition.above());
 		boolean storming = level.isThundering() && precipitating;
+		TurbineSpec spec = spec();
 		// the machine is not giving everything it could: braked, pitching out above the
 		// rated wind, or held down by a curtailment setpoint
-		boolean powerLimited = isBraked() || lastAlignedWindSpeed > RATED_SPEED || uncappedPower > generatedPower;
+		boolean powerLimited = isBraked() || lastAlignedWindSpeed > spec.ratedSpeed() || uncappedPower > generatedPower;
 
 		telemetry = telemetrySimulator.sample(new TurbineTelemetrySimulator.Sample(
 				Math.max(0.0, generatedPower),
-				RATED_POWER_KW,
+				spec.ratedPowerKw(),
 				activePowerLimitKw,
 				powerLimited,
 				lastEffectiveWindSpeed,
@@ -402,6 +463,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				isBraked(),
 				cutOutActive,
 				stoppedByComputer,
+				stoppedByPlayer,
 				isStoppedByRedstone(),
 				yawing,
 				ambientTemperature(precipitating, storming),
@@ -410,8 +472,20 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				storming,
 				level.getGameTime(),
 				Math.abs(worldPosition.hashCode() % 1024),
-				yawCableTwist
+				yawCableTwist,
+				spec.ratedSpeed(),
+				spec.stormOnsetSpeed(),
+				spec.cutOutSpeed(),
+				spec.gearboxRatio()
 		));
+	}
+
+	/** Ambient at the nacelle, sampling the sky for itself. */
+	private double ambientTemperature() {
+		if (level == null) return 15.0;
+
+		boolean precipitating = level.isRainingAt(worldPosition.above());
+		return ambientTemperature(precipitating, level.isThundering() && precipitating);
 	}
 
 	/**
@@ -466,6 +540,19 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * Mirrors Mekanism's Wind Generator, which exposes energy on its front and
 	 * bottom rather than on every face: cables belong at the foot of the tower.
 	 */
+	/**
+	 * Where this machine's cables come out: the foot of its tower.
+	 *
+	 * A real turbine gathers its cables at the tower base, and so does Mekanism's Wind
+	 * Generator, whose block sits on the ground with a decorative tower above it. Since this
+	 * machine moved to the top of a tower a player builds, the block that stands where
+	 * Mekanism's does is the foot - so that is where energy has to leave and arrive, not
+	 * thirteen blocks up beside the nacelle.
+	 */
+	public BlockPos energyOrigin() {
+		return worldPosition.below(getTowerSegments());
+	}
+
 	private List<Direction> energyFaces() {
 		return List.of(Direction.DOWN, getBlockState().getValue(WindTurbineBlock.FACING).getOpposite());
 	}
@@ -487,7 +574,11 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public double getMaxJoulesPerTick() {
 		if (level == null || level.isClientSide() || !ElectricityServerConfig.externalEnergyEnabled()) return 0.0;
 
-		return ElectricityServerConfig.turbineMaxJoulesPerTick();
+		// a share of this machine's own nameplate, not one figure for every machine: the
+		// catalogue spans 10 kW to 4 MW, so a fixed number of Joules would strangle the
+		// large models and hand the small ones more than they are able to make
+		double share = spec().ratedPowerKw() * EnergyBridge.JOULES_PER_KW * ElectricityServerConfig.turbineExportFraction();
+		return Math.min(share, ElectricityServerConfig.turbineMaxJoulesPerTick());
 	}
 
 	@Override
@@ -535,7 +626,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
 		Vec3 rotatedCenter = rotateVector(localCenter, facing);
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0, 0.5).add(rotatedCenter);
+		// The machine is the top block of the structure and the wire fitting is at the foot of
+		// the tower, so the connection point drops by the whole tower.
+		//
+		// ObjTransforms.resolve says the same thing for drawing and for hit-testing, and the two
+		// have to agree or a wire attaches somewhere it cannot be seen. They are stated twice
+		// because this runs on the server too and that class is client-only.
+		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
 	private Vec3 rotateVector(Vec3 vector, Direction facing) {
@@ -570,36 +667,40 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			return;
 		}
 
+		TurbineSpec spec = spec();
 		WeatherSnapshot weather = GlobalWeatherManager.get((ServerLevel) level).sample(worldPosition);
-		float sustained = (float) weather.windSpeed();
-		float gust = (float) weather.gustSpeed();
-		float blend = Mth.clamp((float) weather.turbulence(), 0.0f, 1.0f);
+		double blend = Mth.clamp(weather.turbulence(), 0.0, 1.0);
+		double zoneWind = Mth.lerp(blend, weather.windSpeed(), weather.gustSpeed());
 
-		lastEffectiveWindSpeed = Mth.lerp(blend, sustained, gust);
+		// the zone wind is one figure for the whole area with no height to it, so it is
+		// read as the wind at the reference hub height and this machine's own tower moves
+		// it up or down from there. That is the entire payoff of building tall.
+		lastEffectiveWindSpeed = (float) TurbineSpec.windAtHubHeight(zoneWind, spec.hubHeightM(getTowerSegments()));
 		windDirection = weather.direction();
 		turbulence = weather.turbulence();
+		airDensity = TurbineSpec.airDensityAt(ambientTemperature());
 
 		updateYaw();
 		float alignment = alignmentFactor();
 		lastAlignedWindSpeed = lastEffectiveWindSpeed * alignment;
 
-		// the brake now waits for the shutdown speed: between the storm onset and there
-		// the machine stays on load, just derated
-		if (lastEffectiveWindSpeed >= SHUTDOWN_SPEED) {
+		// the brake waits for the cut-out: between the storm onset and there the machine
+		// stays on load, just derated
+		if (lastEffectiveWindSpeed >= spec.cutOutSpeed()) {
 			cutOutActive = true;
-		} else if (cutOutActive && lastEffectiveWindSpeed <= SHUTDOWN_RESET_SPEED) {
+		} else if (cutOutActive && lastEffectiveWindSpeed <= cutOutResetSpeed(spec)) {
 			cutOutActive = false;
 		}
 
 		pollRedstone();
-		updateRotorSpeeds(lastAlignedWindSpeed, turbulence, isBraked());
+		updateRotorSpeeds(lastAlignedWindSpeed, isBraked());
 		updateGeneratedPower();
 
 		// push before the wire network runs. Block entities tick inside the level tick,
 		// while PowerNetwork.updatePowerNetwork() runs on ServerTickEvent END, so the
 		// residual reaches the wires in this same tick instead of a tick late.
 		refreshEnergyBudget();
-		EnergyBridge.emit(this, this, energyFaces());
+		EnergyBridge.emit(this, this, energyOrigin(), energyFaces());
 
 		updateTelemetry();
 		maybeSync();
@@ -629,6 +730,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		rotationSpeed1 = tag.getFloat("rotationSpeed1");
 		rotationSpeed2 = tag.getFloat("rotationSpeed2");
 		generatedPower = tag.getDouble("generatedPower");
+		uncappedPower = tag.getDouble("uncappedPower");
+		airDensity = tag.contains("airDensity") ? tag.getDouble("airDensity") : TurbineSpec.REFERENCE_AIR_DENSITY;
 		currentPower = tag.getDouble("currentPower");
 		lastEffectiveWindSpeed = tag.getFloat("lastEffectiveWindSpeed");
 		lastAlignedWindSpeed = tag.contains("lastAlignedWindSpeed") ? tag.getFloat("lastAlignedWindSpeed") : lastEffectiveWindSpeed;
@@ -641,12 +744,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		yawCableTwist = tag.getDouble("yawCableTwist");
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
+		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
 		redstonePowered = tag.getBoolean("redstonePowered");
 		RedstoneMode savedMode = RedstoneMode.byName(tag.getString("redstoneMode"));
 		redstoneMode = savedMode != null ? savedMode : RedstoneMode.DISABLED;
 		// an older turbine has no setpoint saved, so it defaults to uncurtailed rather
 		// than to a limit of zero, which would silently switch it off on load
-		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : RATED_POWER_KW;
+		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : spec().ratedPowerKw();
 
 		updateWirePositions();
 	}
@@ -698,6 +802,11 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putFloat("rotationSpeed1", rotationSpeed1);
 		tag.putFloat("rotationSpeed2", rotationSpeed2);
 		tag.putDouble("generatedPower", generatedPower);
+		// both exist for the control panel: without them the client would have to redo the
+		// generation calculation, and it cannot - air density comes from the server's own
+		// weather sampling, so the two would quietly disagree by a few percent
+		tag.putDouble("uncappedPower", uncappedPower);
+		tag.putDouble("airDensity", airDensity);
 		tag.putDouble("currentPower", currentPower);
 		tag.putFloat("lastEffectiveWindSpeed", lastEffectiveWindSpeed);
 		tag.putFloat("lastAlignedWindSpeed", lastAlignedWindSpeed);
@@ -710,9 +819,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// they just warm up from ambient again
 		tag.putDouble("yawCableTwist", yawCableTwist);
 
-		// all four are written because getUpdateTag() routes through here: the client
+		// all of these are written because getUpdateTag() routes through here: the client
 		// needs every input to isBraked() to decide whether to animate the rotor
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
+		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
 		tag.putBoolean("redstonePowered", redstonePowered);
 		tag.putString("redstoneMode", redstoneMode.name());
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
@@ -766,10 +876,21 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
 	}
 
-	private void updateRotorSpeeds(float effectiveWindSpeed, double turbulence, boolean cutOut) {
-		float maxRotationSpeed = Math.min(12.0f, 6.0f + effectiveWindSpeed * 0.5f);
-		float rotationScale = Mth.lerp((float) Mth.clamp(turbulence, 0.0, 1.0), 0.45f, 0.8f);
-		float targetRotationSpeed = cutOut ? 0.0f : Math.min(maxRotationSpeed, effectiveWindSpeed * rotationScale);
+	/**
+	 * How far the rotor turns in a tick, in degrees, at this wind.
+	 *
+	 * Straight off the model's own rotor speed rather than a figure tuned to look right:
+	 * 20 ticks a second and 360 degrees a revolution make it rpm times 0.3. The visible
+	 * consequence is that the catalogue no longer spins as one — the C130 comes out near
+	 * 3 degrees a tick and the small-wind machine near 60, so a big machine reads as
+	 * heavy from the ground and a small one as busy.
+	 */
+	private float rotorDegreesPerTick(float windSpeed) {
+		return (float) (spec().rotorRpmAt(windSpeed) * 0.3);
+	}
+
+	private void updateRotorSpeeds(float effectiveWindSpeed, boolean cutOut) {
+		float targetRotationSpeed = cutOut ? 0.0f : rotorDegreesPerTick(effectiveWindSpeed);
 
 		float rotationAcceleration = cutOut ? 0.12f : 0.05f;
 		float rotationDiff1 = targetRotationSpeed - rotationSpeed1;
@@ -796,8 +917,11 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	private void advanceRotations(float currentTime, float effectiveSpeed) {
-		float variation1 = 1.0f + (float) Math.sin(currentTime * 0.05) * 0.1f;
-		float variation2 = 1.0f + (float) Math.cos(currentTime * 0.07) * 0.1f;
+		// One variation for both, because rotate_2 is the spinner cone bolted to the blade
+		// roots: it is the same shaft. Driving the two at separate rates let the cone
+		// creep round relative to the blades it is part of, which no amount of wind does
+		// to a real rotor.
+		float variation = 1.0f + (float) Math.sin(currentTime * 0.05) * 0.1f;
 
 		float appliedSpeed1 = rotationSpeed1;
 		float appliedSpeed2 = rotationSpeed2;
@@ -805,7 +929,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// to isBraked() are synced, so the client reaches the same conclusion.
 		if (!isBraked()) {
 			if (rotationSpeed1 == 0.0f && effectiveSpeed > 0.0f) {
-				appliedSpeed1 = Math.min(12.0f, effectiveSpeed * 0.6f);
+				appliedSpeed1 = rotorDegreesPerTick(effectiveSpeed);
 			}
 
 			if (rotationSpeed2 == 0.0f && effectiveSpeed > 0.0f) {
@@ -813,8 +937,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			}
 		}
 
-		rotation1 = (rotation1 + appliedSpeed1 * variation1) % 360.0f;
-		rotation2 = (rotation2 + appliedSpeed2 * variation2) % 360.0f;
+		rotation1 = (rotation1 + appliedSpeed1 * variation) % 360.0f;
+		rotation2 = (rotation2 + appliedSpeed2 * variation) % 360.0f;
 		if (rotation1 < 0) rotation1 += 360.0f;
 		if (rotation2 < 0) rotation2 += 360.0f;
 	}

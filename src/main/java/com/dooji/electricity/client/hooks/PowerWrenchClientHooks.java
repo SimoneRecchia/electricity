@@ -2,10 +2,13 @@ package com.dooji.electricity.client.hooks;
 
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
+import com.dooji.electricity.client.screen.WindTurbineScreen;
+import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
@@ -45,9 +48,19 @@ public final class PowerWrenchClientHooks {
 		if (mc.level == null) return false;
 
 		BlockPos target = findTargetedElectricBlock(mc, player, reach);
+		if (target == null) target = towerUnderCursor(mc);
 		if (target == null) return false;
 
-		mc.setScreen(new PowerInfoScreen(target));
+		target = resolveTarget(mc, target);
+
+		// a turbine has a control panel of its own; everything else still gets the plain
+		// readout, which is all there is to say about a pole or a junction box
+		if (mc.level.getBlockEntity(target) instanceof WindTurbineBlockEntity) {
+			mc.setScreen(new WindTurbineScreen(target));
+		} else {
+			mc.setScreen(new PowerInfoScreen(target));
+		}
+
 		return true;
 	}
 
@@ -96,6 +109,36 @@ public final class PowerWrenchClientHooks {
 		BlockHitResult hitResult = mc.level.clip(context);
 		if (hitResult.getType() == HitResult.Type.MISS) return true;
 		return hitResult.getBlockPos().equals(targetPos);
+	}
+
+	/**
+	 * A tower block under the crosshair, if that is what the player is looking at.
+	 *
+	 * Uses the vanilla hit result rather than the geometry scan above, because a tower has
+	 * no block entity for that scan to find and, unlike the rest of this mod's blocks, it
+	 * has real collision - so ordinary picking already knows exactly which one was clicked.
+	 */
+	@Nullable
+	private static BlockPos towerUnderCursor(Minecraft mc) {
+		if (mc.level == null || !(mc.hitResult instanceof BlockHitResult hit)) return null;
+		if (!(mc.level.getBlockState(hit.getBlockPos()).getBlock() instanceof TurbineTowerBlock)) return null;
+
+		return hit.getBlockPos();
+	}
+
+	/**
+	 * The block a wrench click should act on.
+	 *
+	 * A tower carries no block entity of its own, and the panel it belongs to is at the top
+	 * of it - often out of reach. Walking up from the hit block means the wrench works
+	 * anywhere on the structure, which is where a player standing at the foot will use it.
+	 */
+	private static BlockPos resolveTarget(Minecraft mc, BlockPos hit) {
+		if (mc.level == null) return hit;
+		if (!(mc.level.getBlockState(hit).getBlock() instanceof TurbineTowerBlock)) return hit;
+
+		BlockPos turbine = TurbineTowerBlock.findTurbineAbove(mc.level, hit);
+		return turbine != null ? turbine : hit;
 	}
 
 	private static boolean isElectricBlock(BlockEntity blockEntity) {

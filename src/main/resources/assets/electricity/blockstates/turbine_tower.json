@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "electricity:block/stone_particle"
+    }
+  }
+}

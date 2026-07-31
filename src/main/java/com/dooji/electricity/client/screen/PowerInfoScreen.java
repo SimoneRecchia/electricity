@@ -1,7 +1,6 @@
 package com.dooji.electricity.client.screen;
 
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,12 +66,7 @@ public class PowerInfoScreen extends Screen {
 			lines.add(Component.translatable("screen.electricity.power_info.no_power_data"));
 		}
 
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			lines.add(Component.translatable("screen.electricity.power_info.wind_speed", formatNumber("%.1f", turbine.getWindSpeed())));
-			lines.add(Component.translatable("screen.electricity.power_info.rotation",
-					formatNumber("%.1f", turbine.getRotation1()),
-					formatNumber("%.1f", turbine.getRotation2())));
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
+		if (blockEntity instanceof UtilityPoleBlockEntity pole) {
 			lines.add(Component.translatable("screen.electricity.power_info.offsets",
 					formatNumber("%.2f", pole.getOffsetX()),
 					formatNumber("%.2f", pole.getOffsetY()),
