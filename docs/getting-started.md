@@ -13,11 +13,13 @@ workbench's own UI.
 | **Electric Workbench** | Crafting table | Crafts every other component |
 | **Wire** | Workbench | Connects two insulators |
 | **Power Wrench** | Workbench | Live diagnostics on any electric block |
-| **Wind Turbine** | Workbench | Generation |
+| **Wind Turbine** | Workbench | Generation. Six models, 10 kW to 4 MW |
+| **Turbine Tower** | Workbench | Stack it; the turbine goes on top |
 | **Electric Cabin** | Workbench | Collects from generators |
 | **Utility Pole** | Workbench | Carries power across distance |
 | **Power Box** | Workbench | Distributes in a radius, bridges to Forge Energy |
 | **Electric Lamp** | Workbench | Example consumer |
+| **Solar Panel** | Workbench | 20 kW of photovoltaic. **Alpha** |
 | **Weather Tablet** | Workbench | Weather map — not functional yet |
 | Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core | Workbench | Components for the above |
 
@@ -110,17 +112,30 @@ A turbine also loses power when it is not pointed into the wind. It yaws to foll
 wind but only corrects past a 7.5° deadband, so it normally sits slightly off and gives
 up about 2.5%.
 
-→ [The full power curve](telemetry.md#power-curve)
+→ [The full power curve](telemetry.md#3-the-catalogue)
 
-## Experimental: wind surges
+## Wind surges
 
-```
-/gamerule electricityWindSurges true
-```
-
-During storms, turbines can produce power surges. Only Electric Lamps react — they go
+In rough air a turbine can put surges down the line. Only Electric Lamps react — they go
 into overdrive and eventually burn out. Other blocks ignore surges, because the surge
 system is not exposed to other mods yet.
+
+There is no game rule for this; it is always on. A `/gamerule electricityWindSurges` was
+documented here for a while and never existed.
+
+## Running on the real clock
+
+```
+/gamerule electricityRealTimeClock true
+```
+
+The sun stands where the real sun stands: six in the evening outside is six in the
+evening in the world, a day takes a day, and a second of play is a second. The weather
+slows with it, so a front takes a couple of real days to pass instead of forty minutes.
+
+It is here because a power system is something you watch over hours. Sleeping still
+heals, still sets a spawn and still clears the weather — it just cannot move the sun any
+more, because there is nowhere for a night to be skipped to.
 
 ## For developers
 
