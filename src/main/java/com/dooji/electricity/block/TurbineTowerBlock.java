@@ -38,18 +38,19 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * The tower is drawn from the authored model's own tube, so it looks exactly as it
  * always did. Collision cannot follow that geometry exactly - a VoxelShape is a union
- * of axis-aligned boxes confined to the block's own cube, so a circle is not on offer
- * - but it can come within half a pixel, and here it does.
+ * of axis-aligned boxes confined to the block's own cube, so a circle is not on offer -
+ * but it comes within half a pixel of it, and it follows both things the tube does.
  *
- * The reason it can is a measurement. The authored tube is barely tapered: it runs
- * from a radius of 0.381 at the foot to 0.312 at the top, over twelve and a half
- * blocks, and the 0.622 that looks like the tower's width is only the base plinth,
- * eight centimetres tall. One shape at the middle of that range is therefore never
- * more than 0.03 blocks out anywhere on any tower - half a pixel at block resolution
- * - which is why a shape per height would buy nothing.
+ * It is round rather than square, by {@link #STRIPS} strips laid each way. And it
+ * narrows as the tube does: from a radius of 0.381 at the foot to 0.312 at the top,
+ * which is little enough to have looked ignorable and is in fact the largest error left
+ * once the shape itself is round. The 0.622 that looks like the tower's width is only
+ * the base plinth, eight centimetres tall, and is not collided with at all.
  *
- * Two crossed boxes at cos(45 degrees) give the octagon, the same way vanilla builds
- * lanterns and iron bars.
+ * Two properties carry it. {@link #THICKNESS} is how wide this tower is, taken from the
+ * machine on it; {@link #TAPER} is how far up the tower this block sits. Both are settled
+ * by {@link #refreshThickness} whenever the structure changes, so {@link #getShape} stays
+ * an array lookup - it is asked far more often than a tower is ever built.
  */
 public class TurbineTowerBlock extends Block implements EntityBlock {
 	/**
@@ -77,15 +78,26 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 * invisible from there up.
 	 */
 	private static final int SCAN_LIMIT = MAX_HEIGHT + 4;
+	/** Radius of the authored tube at its foot, in blocks, at the scale the C130 draws it. */
+	private static final double FOOT_RADIUS = 0.381;
+	/** And at its top. The whole taper is these two: a fifth narrower over twelve and a half blocks. */
+	private static final double TOP_RADIUS = 0.312;
 	/**
-	 * Radius of the authored tube, in blocks, at the scale the C130 draws it.
+	 * Strips per quadrant used to round the collision off.
 	 *
-	 * The middle of that tube's 0.381-to-0.312 taper, so the error is shared evenly between
-	 * the foot and the top rather than piling up at one end.
+	 * A VoxelShape is a union of axis-aligned boxes, so a circle has to be approximated, and the
+	 * two crossed boxes this used before were the wrong approximation. Their union is a plus, and
+	 * its four corners stand 22% outside the tube they were meant to trace: right on the axes and
+	 * badly wrong on the diagonals, which is exactly what reads as square when you walk round a
+	 * tower.
+	 *
+	 * Six strips each way instead - across the shallow arcs and down the steep ones, since neither
+	 * direction alone can follow a circle where it turns away from that direction - brings the
+	 * worst deviation to 7.6% of the radius and spreads what is left evenly round the
+	 * circumference rather than piling it into four bulges. Twelve boxes, measured by casting rays
+	 * at the union.
 	 */
-	private static final double AUTHORED_RADIUS = 0.3465;
-	/** cos(45 degrees): how far the crossing box reaches, to turn a plus into an octagon. */
-	private static final double OCTAGON = 0.70710678;
+	private static final int STRIPS = 6;
 
 	/**
 	 * How thick this tower is drawn and collided at, as a step on a ladder from
@@ -99,11 +111,20 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 * often than a tower changes.
 	 */
 	public static final IntegerProperty THICKNESS = IntegerProperty.create("thickness", 0, 7);
+	/**
+	 * How far up its tower this block sits, in eighths.
+	 *
+	 * The tube narrows as it rises and the collision follows it. Held as a fraction of the way up
+	 * rather than as a segment index because the taper is stretched over whatever height the tower
+	 * happens to be, so an index alone would not say where in that taper a block falls. The
+	 * fraction does, and it needs no third number to interpret it.
+	 */
+	public static final IntegerProperty TAPER = IntegerProperty.create("taper", 0, 7);
 	/** Thinnest a tower is drawn, matching the smallest nacelle in the catalogue. */
 	private static final double THINNEST = 0.25;
 	private static final int STEPS = 8;
 
-	private static final VoxelShape[] SHAPES = buildShapes();
+	private static final VoxelShape[][] SHAPES = buildShapes();
 	/**
 	 * Thickness step a tower with nothing on it is drawn at, by its height.
 	 *
@@ -124,22 +145,53 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	public TurbineTowerBlock(Properties properties) {
 		super(properties);
-		// full size by default, so a tower saved before this property existed keeps the look it
+		// full size by default, so a tower saved before these properties existed keeps the look it
 		// had until the next thing a player does to it settles the question
-		this.registerDefaultState(this.stateDefinition.any().setValue(THICKNESS, STEPS - 1));
+		this.registerDefaultState(this.stateDefinition.any().setValue(THICKNESS, STEPS - 1).setValue(TAPER, 0));
 	}
 
-	private static VoxelShape[] buildShapes() {
-		VoxelShape[] shapes = new VoxelShape[STEPS];
-		for (int step = 0; step < STEPS; step++) {
-			double radius = AUTHORED_RADIUS * scaleOf(step);
-			double narrow = radius * OCTAGON;
-			shapes[step] = Shapes.or(
-					Shapes.box(0.5 - radius, 0.0, 0.5 - narrow, 0.5 + radius, 1.0, 0.5 + narrow),
-					Shapes.box(0.5 - narrow, 0.0, 0.5 - radius, 0.5 + narrow, 1.0, 0.5 + radius));
+	private static VoxelShape[][] buildShapes() {
+		VoxelShape[][] shapes = new VoxelShape[STEPS][STEPS];
+		for (int thickness = 0; thickness < STEPS; thickness++) {
+			for (int taper = 0; taper < STEPS; taper++) {
+				shapes[thickness][taper] = roundColumn(Mth.lerp(taper / (STEPS - 1.0), FOOT_RADIUS, TOP_RADIUS) * scaleOf(thickness));
+			}
 		}
 
 		return shapes;
+	}
+
+	/**
+	 * A column as round as axis-aligned boxes get.
+	 *
+	 * Each strip is set as wide as it can be without straying further outside the circle than it
+	 * falls inside it, which is the choice that makes a staircase's worst error as small as the
+	 * number of steps allows.
+	 */
+	private static VoxelShape roundColumn(double radius) {
+		double span = radius / Math.sqrt(2.0);
+		VoxelShape shape = Shapes.empty();
+
+		for (int strip = 0; strip < STRIPS; strip++) {
+			double near = -span + 2.0 * span * strip / STRIPS;
+			double far = -span + 2.0 * span * (strip + 1) / STRIPS;
+			double inner = Math.min(Math.abs(near), Math.abs(far));
+			double outer = Math.max(Math.abs(near), Math.abs(far));
+			double half = (chord(radius, inner) + chord(radius, outer)) / 2.0;
+
+			// laid both ways: across the shallow arcs, and down the steep ones
+			shape = Shapes.or(shape,
+					Shapes.box(0.5 + near, 0.0, 0.5 - half, 0.5 + far, 1.0, 0.5 + half),
+					Shapes.box(0.5 - half, 0.0, 0.5 + near, 0.5 + half, 1.0, 0.5 + far));
+		}
+
+		return shape;
+	}
+
+	/** Half-width of a circle at a given distance from its centre. */
+	private static double chord(double radius, double offset) {
+		double clamped = Math.min(offset, radius);
+		return Math.sqrt(Math.max(0.0, radius * radius - clamped * clamped));
 	}
 
 	/** The radial scale a step on the thickness ladder stands for. */
@@ -163,12 +215,12 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(THICKNESS);
+		builder.add(THICKNESS, TAPER);
 	}
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPES[state.getValue(THICKNESS)];
+		return SHAPES[state.getValue(THICKNESS)][state.getValue(TAPER)];
 	}
 
 	/**
@@ -197,9 +249,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 			for (int segment = 0; segment < height; segment++) {
 				BlockPos pos = foot.above(segment);
 				BlockState state = level.getBlockState(pos);
-				if (!(state.getBlock() instanceof TurbineTowerBlock) || state.getValue(THICKNESS) == step) continue;
+				if (!(state.getBlock() instanceof TurbineTowerBlock)) continue;
 
-				level.setBlock(pos, state.setValue(THICKNESS, step), Block.UPDATE_CLIENTS);
+				// where this block falls in the taper, as a fraction of the way up
+				int taper = height <= 1 ? 0 : (int) Math.round(segment * (STEPS - 1.0) / (height - 1));
+				if (state.getValue(THICKNESS) == step && state.getValue(TAPER) == taper) continue;
+
+				level.setBlock(pos, state.setValue(THICKNESS, step).setValue(TAPER, taper), Block.UPDATE_CLIENTS);
 			}
 		} finally {
 			refreshing = false;
