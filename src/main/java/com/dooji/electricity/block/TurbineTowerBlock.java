@@ -1,5 +1,10 @@
 package com.dooji.electricity.block;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -169,6 +174,25 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	/** Guards the state writes in {@link #refreshThickness} from re-entering through their own updates. */
 	private static boolean refreshing;
+	/**
+	 * Towers waiting to have their thickness and taper settled, from chunks that have just loaded.
+	 *
+	 * Both properties are written when a tower or a machine is placed or broken, which covers every
+	 * way the answer changes - but not a tower that already existed. One built before these
+	 * properties did keeps its defaults, which are the widest step: too wide against the tube for
+	 * its whole height, and indistinguishable from the tube at the foot where the tube is widest
+	 * too. That is precisely what an F3+B wireframe showed, and no amount of walking round it
+	 * would have fixed itself.
+	 *
+	 * Queued from the block entity's onLoad and drained a tick later rather than settled there and
+	 * then, because onLoad runs while the chunk is still being brought in: writing block states at
+	 * that point means writing them into a level that is not finished assembling, and the walk up
+	 * and down the stack could read neighbours that are not there yet.
+	 */
+	private static final Set<Pending> PENDING = ConcurrentHashMap.newKeySet();
+
+	private record Pending(Level level, BlockPos pos) {
+	}
 
 	public TurbineTowerBlock(Properties properties) {
 		super(properties);
@@ -266,6 +290,41 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 * change. The writes skip neighbour updates and are guarded against re-entry, or setting
 	 * one block's state would send us round again through its own update.
 	 */
+	/** Asks for a tower to be settled on the next server tick. Cheap and idempotent. */
+	public static void queueRefresh(Level level, BlockPos pos) {
+		if (!level.isClientSide()) PENDING.add(new Pending(level, pos.immutable()));
+	}
+
+	/**
+	 * Settles every tower queued by a chunk load. Called once per server tick.
+	 *
+	 * Each stack is reduced to its foot before being touched, so a thirteen-block tower coming into
+	 * view is one pass rather than thirteen.
+	 */
+	public static void runQueuedRefreshes() {
+		if (PENDING.isEmpty()) return;
+
+		List<Pending> due = new ArrayList<>(PENDING);
+		PENDING.clear();
+
+		Set<Pending> feet = new LinkedHashSet<>();
+		for (Pending pending : due) {
+			Level level = pending.level();
+			BlockPos pos = pending.pos();
+			if (!level.isLoaded(pos) || !(level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock)) continue;
+
+			feet.add(new Pending(level, pos.below(countBelow(level, pos))));
+		}
+
+		for (Pending foot : feet) {
+			refreshThickness(foot.level(), foot.pos());
+		}
+	}
+
+	public static void clearQueued() {
+		PENDING.clear();
+	}
+
 	public static void refreshThickness(Level level, BlockPos anywhere) {
 		if (level.isClientSide() || refreshing) return;
 
