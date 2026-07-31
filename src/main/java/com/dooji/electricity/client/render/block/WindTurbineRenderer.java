@@ -46,6 +46,19 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	/** Kept apart from the machines' so a tower and a turbine at one position cannot share entries. */
 	private static final Map<BlockPos, Map<String, GroupBuffer>> TOWER_BUFFER_CACHE = new HashMap<>();
+	/**
+	 * Narrowest a tower is drawn, matching the smallest nacelle in the catalogue.
+	 *
+	 * The authored tube is proportioned for a C130, whose nacelle is nearly a block tall, and is
+	 * close to three times too wide against an SW-10's, which is a quarter of one - a fat post
+	 * with a toy on top. Drawing the tower to its machine puts every model back near the ratio a
+	 * real one has, about 0.7 of nacelle height to tower width.
+	 *
+	 * This is the drawing only. The collision keeps its one fixed width, which is what keeps this
+	 * to a single line rather than the block state, refresh pass and migration it took last time -
+	 * at the price of the two disagreeing on the smaller machines.
+	 */
+	private static final double SMALLEST_TOWER = 0.25;
 	/** Group whose underside has to land on the tower top: the nacelle. */
 	private static final String NACELLE_GROUP = "motor_Plastic";
 
@@ -100,7 +113,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 							if (!entry.getKey().startsWith("pole")) continue;
 
 							pose.pushPose();
-							poseTower(pose, height);
+							poseTower(pose, height, bareTowerScale(height));
 							poses.put(entry.getKey(), new Matrix4f(pose.last().pose()));
 							pose.popPose();
 						}
@@ -162,7 +175,8 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			// the model is authored from - so the tube and the wire fitting need nothing, and it
 			// is the nacelle that has to climb back up to the block the machine lives in.
 			if (groupName.startsWith("pole")) {
-				poseTower(poseStack, towerSegments);
+				// the tower is this machine's tower, so it is drawn to match it
+				poseTower(poseStack, towerSegments, nacelleScale);
 			} else if (groupName.startsWith("insulator")) {
 				// nothing: authored at the foot, and drawn unscaled so a wire lands on the same
 				// size fitting whichever turbine it came from
@@ -220,8 +234,24 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	 * stack drawing upward - because the two have to agree exactly or capping a tower would
 	 * make it jump. One formula means they cannot disagree.
 	 */
-	private static void poseTower(PoseStack poseStack, int height) {
-		poseStack.scale(1.0f, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
+	private static void poseTower(PoseStack poseStack, int height, double radial) {
+		poseStack.scale((float) radial, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), (float) radial);
+	}
+
+	/**
+	 * How wide to draw a tower with nothing on it yet, by its height.
+	 *
+	 * A tower's width belongs to the machine it carries, and a bare one has no machine to ask.
+	 * Its height stands in: every model is sold on a band of heights, so a short stack is a small
+	 * machine's tower and a tall one is not. The bands overlap, so this cannot be right for all of
+	 * them - but it is only what a player sees while stacking, and it settles the moment a machine
+	 * goes on.
+	 *
+	 * Worked out here at draw time rather than kept anywhere. Nothing else needs the answer, and
+	 * the walk up the stack has already happened by the time this is called.
+	 */
+	private static double bareTowerScale(int height) {
+		return Mth.clamp(SMALLEST_TOWER + (height - 2) / 11.0 * (1.0 - SMALLEST_TOWER), SMALLEST_TOWER, 1.0);
 	}
 
 	private static Vec3 calculateGroupCenter(ObjModel.ObjGroup group) {
