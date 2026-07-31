@@ -2,11 +2,9 @@ package com.dooji.electricity.main.registry;
 
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.main.Electricity;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -106,15 +104,6 @@ public final class TurbineCatalog {
 	/** Every known machine, cheapest first. */
 	public static List<TurbineSpec> all() {
 		return List.copyOf(BY_ID.values());
-	}
-
-	public static Map<ResourceLocation, TurbineSpec> byId() {
-		return Collections.unmodifiableMap(BY_ID);
-	}
-
-	@Nullable
-	public static TurbineSpec get(@Nullable ResourceLocation id) {
-		return id == null ? null : BY_ID.get(id);
 	}
 
 	/** Full designation as a nameplate prints it, e.g. {@code Cube C130-4.0}. */

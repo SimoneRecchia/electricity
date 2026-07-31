@@ -177,10 +177,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return uncappedPower;
 	}
 
-	public double getTurbulence() {
-		return turbulence;
-	}
-
 
 	private static BlockEntityType<WindTurbineBlockEntity> getBlockEntityType() {
 		return Electricity.WIND_TURBINE_BLOCK_ENTITY.get();

@@ -100,7 +100,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 							if (!entry.getKey().startsWith("pole")) continue;
 
 							pose.pushPose();
-							pose.scale(1.0f, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
+							poseTower(pose, height);
 							poses.put(entry.getKey(), new Matrix4f(pose.last().pose()));
 							pose.popPose();
 						}
@@ -154,12 +154,9 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			poseStack.pushPose();
 
 			if (groupName.startsWith("pole")) {
-				// The authored tube, stretched to the tower the player built and drawn downward
-				// because the machine is the top of the structure. One continuous piece at any
-				// height, which is what it looked like before the tower became real blocks -
-				// those are invisible and only carry the collision.
+				// drawn downward, because the machine is the top of the structure
 				poseStack.translate(0.0, -towerSegments, 0.0);
-				poseStack.scale(1.0f, (float) (towerSegments / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
+				poseTower(poseStack, towerSegments);
 			} else if (groupName.startsWith("insulator")) {
 				// the wire fitting belongs at the foot of the tower, where a real machine's
 				// cables reach the transformer, and the machine is up at the top - so it drops
@@ -212,6 +209,17 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		}
 
 		return lowest;
+	}
+
+	/**
+	 * Stretches the authored tube to a tower this many blocks tall, from its foot.
+	 *
+	 * Shared by both paths that draw a tower - a mounted machine drawing downward and a bare
+	 * stack drawing upward - because the two have to agree exactly or capping a tower would
+	 * make it jump. One formula means they cannot disagree.
+	 */
+	private static void poseTower(PoseStack poseStack, int height) {
+		poseStack.scale(1.0f, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
 	}
 
 	private static Vec3 calculateGroupCenter(ObjModel.ObjGroup group) {

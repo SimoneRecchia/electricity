@@ -81,8 +81,7 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 	 */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
-		int segments = TurbineTowerBlock.countBelow(level, pos);
-		return segments >= spec.minTowerSegments() && segments <= spec.maxTowerSegments();
+		return spec.acceptsTowerHeight(TurbineTowerBlock.countBelow(level, pos));
 	}
 
 	@Override

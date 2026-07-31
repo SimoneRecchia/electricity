@@ -6,7 +6,6 @@ import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjTransforms.Transform;
 
 import java.util.ArrayList;
@@ -223,19 +222,9 @@ public class ObjRaycaster {
 	}
 
 	public static List<Component> getPowerDisplayText(BlockEntity blockEntity) {
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			double generated = turbine.getGeneratedPower();
-			double current = turbine.getCurrentPower();
-			if (current > generated + 0.1) {
-				return List.of(
-						blockEntity.getBlockState().getBlock().getName(),
-						Component.translatable("tooltip.electricity.power.generated", formatPower(generated)),
-						Component.translatable("tooltip.electricity.power.network", formatPower(current)));
-			}
-			return List.of(
-					blockEntity.getBlockState().getBlock().getName(),
-					Component.translatable("tooltip.electricity.power.generated", formatPower(generated)));
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
+		// no turbine branch: a turbine's readings come from its own control panel, and this
+		// text is only reached through PowerInfoScreen, which the wrench no longer opens for one
+		if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
 			return List.of(
 					blockEntity.getBlockState().getBlock().getName(),
 					Component.translatable("tooltip.electricity.power.amount", formatPower(cabin.getCurrentPower())));

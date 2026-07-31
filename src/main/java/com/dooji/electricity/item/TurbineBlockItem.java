@@ -52,7 +52,7 @@ public class TurbineBlockItem extends BlockItem {
 		BlockPos pos = context.getClickedPos();
 		int segments = TurbineTowerBlock.countBelow(level, pos);
 
-		if (segments < spec.minTowerSegments() || segments > spec.maxTowerSegments()) {
+		if (!spec.acceptsTowerHeight(segments)) {
 			Player player = context.getPlayer();
 			if (player != null) {
 				player.displayClientMessage(Component.translatable("message.electricity.turbine.tower_height",

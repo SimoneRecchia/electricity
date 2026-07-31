@@ -4,7 +4,6 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
@@ -33,17 +32,22 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * The reason it can is a measurement. The authored tube is barely tapered: it runs
  * from a radius of 0.381 at the foot to 0.312 at the top, over twelve and a half
- * blocks. The 0.622 that looks like the tower's width is only the base plinth, eight
- * centimetres tall. So one shape at the middle of that range is never more than 0.03
- * blocks out anywhere on the tower, which is half a pixel at block resolution and not
- * worth sixteen shapes to fix.
+ * blocks, and the 0.622 that looks like the tower's width is only the base plinth,
+ * eight centimetres tall. One shape at the middle of that range is therefore never
+ * more than 0.03 blocks out anywhere on any tower - half a pixel at block resolution
+ * - which is why a shape per height would buy nothing.
  *
  * Two crossed boxes at cos(45 degrees) give the octagon, the same way vanilla builds
  * lanterns and iron bars.
  */
 public class TurbineTowerBlock extends Block implements EntityBlock {
-	/** Tallest tower any machine in the catalogue is certified for. */
-	public static final int MAX_HEIGHT = 16;
+	/**
+	 * Where a walk up or down a tower gives up.
+	 *
+	 * Above the tallest certified tower with room to spare, so it is a guard against an
+	 * unbounded scan rather than a limit a player can reach.
+	 */
+	private static final int SCAN_LIMIT = 16;
 	/**
 	 * Radius the collision octagon is built at, in blocks.
 	 *
@@ -108,7 +112,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	private static int count(BlockGetter level, BlockPos pos, Direction direction) {
 		int found = 0;
 		BlockPos.MutableBlockPos cursor = pos.mutable().move(direction);
-		while (found <= MAX_HEIGHT && level.getBlockState(cursor).getBlock() instanceof TurbineTowerBlock) {
+		while (found <= SCAN_LIMIT && level.getBlockState(cursor).getBlock() instanceof TurbineTowerBlock) {
 			found++;
 			cursor.move(direction);
 		}
@@ -161,7 +165,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	@Nullable
 	public static BlockPos findTurbineAbove(BlockGetter level, BlockPos pos) {
 		BlockPos.MutableBlockPos cursor = pos.mutable().move(Direction.UP);
-		for (int step = 0; step <= MAX_HEIGHT; step++) {
+		for (int step = 0; step <= SCAN_LIMIT; step++) {
 			BlockState state = level.getBlockState(cursor);
 			if (state.getBlock() instanceof WindTurbineBlock) return cursor.immutable();
 			if (!(state.getBlock() instanceof TurbineTowerBlock)) return null;
@@ -172,7 +176,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	}
 
 	/** Whether this block is the foot of its stack, which is the one that draws the tube. */
-	public static boolean isFoot(Level level, BlockPos pos) {
+	public static boolean isFoot(BlockGetter level, BlockPos pos) {
 		return countBelow(level, pos) == 0;
 	}
 }

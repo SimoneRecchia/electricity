@@ -2,7 +2,10 @@ package com.dooji.electricity.compat.computercraft;
 
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TurbineTelemetry;
+import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import dan200.computercraft.api.ForgeComputerCraftAPI;
 import dan200.computercraft.api.lua.ILuaContext;
 import dan200.computercraft.api.lua.IArguments;
@@ -31,13 +34,36 @@ public final class CCTweakedPeripherals {
 
 	public static void register() {
 		ForgeComputerCraftAPI.registerPeripheralProvider((level, pos, side) -> {
-			BlockEntity blockEntity = level.getBlockEntity(pos);
-			if (blockEntity instanceof WindTurbineBlockEntity turbine) {
+			WindTurbineBlockEntity turbine = turbineAt(level, pos);
+			if (turbine != null) {
 				return LazyOptional.of(() -> new WindTurbinePeripheral(turbine));
 			}
 
 			return LazyOptional.empty();
 		});
+	}
+
+	/**
+	 * The turbine a modem at this position should see, or null.
+	 *
+	 * A tower answers on behalf of the machine it carries. The nacelle sits at the top of
+	 * its tower now, up to thirteen blocks off the ground, and requiring the modem up there
+	 * would put every computer on a ladder for no reason - the cables of a real turbine are
+	 * gathered at the foot of the tower, which is exactly where a player will build.
+	 *
+	 * Two modems on the same structure resolve to the same block entity, and the peripheral
+	 * compares by that identity, so ComputerCraft already treats them as one peripheral.
+	 */
+	@Nullable
+	private static WindTurbineBlockEntity turbineAt(Level level, BlockPos pos) {
+		if (level.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) return turbine;
+
+		if (level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock) {
+			BlockPos machine = TurbineTowerBlock.findTurbineAbove(level, pos);
+			if (machine != null && level.getBlockEntity(machine) instanceof WindTurbineBlockEntity turbine) return turbine;
+		}
+
+		return null;
 	}
 
 	/**

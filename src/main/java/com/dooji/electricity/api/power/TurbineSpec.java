@@ -73,10 +73,9 @@ public record TurbineSpec(
 	/**
 	 * Height of the authored tower, in blocks.
 	 *
-	 * A tower of N segments is that tube stretched to N. The taper it stretches is slight -
-	 * radius 0.381 at the foot to 0.312 at the top - so stretching it is invisible, and it
-	 * keeps the tower one continuous piece of geometry at any height instead of a stack of
-	 * separately tapered slices.
+	 * A tower of N segments is that tube stretched to N, which keeps it one continuous
+	 * piece of geometry at any height. The taper being stretched is slight - radius 0.381
+	 * at the foot to 0.312 at the top - so the stretch itself is invisible.
 	 */
 	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 12.43;
 	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
@@ -114,17 +113,6 @@ public record TurbineSpec(
 		return Math.PI * radius * radius;
 	}
 
-	/**
-	 * Nameplate power per square metre of rotor, the ratio that decides what kind of
-	 * site a machine belongs on. Real designs run from about 200 W/m² for a low-wind
-	 * rotor to 450 for a high-wind one; the same generator on a bigger rotor gives a
-	 * lower figure, reaches its plateau in less wind, and is therefore the machine for
-	 * a quiet site.
-	 */
-	public double specificPowerWPerM2() {
-		return ratedPowerKw * 1000.0 / sweptAreaM2();
-	}
-
 	/** On-screen rotor diameter in blocks, exaggeration included. */
 	public double rotorDiameterBlocks() {
 		return rotorDiameterM / METRES_PER_BLOCK * rotorRenderScale;
@@ -153,6 +141,11 @@ public record TurbineSpec(
 		return nacelle == Nacelle.SMALL_WIND ? Math.max(scale, SMALL_WIND_NACELLE_FLOOR) : scale;
 	}
 
+	/** Whether a tower this many segments tall is one this machine is sold on. */
+	public boolean acceptsTowerHeight(int segments) {
+		return segments >= minTowerSegments && segments <= maxTowerSegments;
+	}
+
 	public int clampTowerSegments(int segments) {
 		return Mth.clamp(segments, minTowerSegments, maxTowerSegments);
 	}
@@ -165,18 +158,6 @@ public record TurbineSpec(
 	 */
 	public double hubHeightM(int towerSegments) {
 		return clampTowerSegments(towerSegments) * METRES_PER_BLOCK;
-	}
-
-	/**
-	 * Shortest tower that keeps the blade tips out of the ground, in segments.
-	 *
-	 * A rotor cannot be more than twice its hub height across, and a real machine
-	 * leaves clearance on top of that. Callers get this as a floor on
-	 * {@link #minTowerSegments} rather than a validation error, since it is a
-	 * consequence of the rotor rather than a separate choice.
-	 */
-	public int minimumClearanceSegments() {
-		return (int) Math.ceil(rotorDiameterBlocks() / 2.0 + 0.5);
 	}
 
 	// ---- the power curve ----
@@ -230,22 +211,6 @@ public record TurbineSpec(
 		if (windSpeed >= cutOutSpeed) return 0.0;
 
 		return Mth.clamp(1.0 - STORM_DERATE_PER_MS * (windSpeed - stormOnsetSpeed + 1.0), 0.0, 1.0);
-	}
-
-	/**
-	 * Power coefficient actually being achieved at this wind speed.
-	 *
-	 * Unlike {@link #peakCp} this is a reading, not a property, and it is low at both
-	 * ends: there is nothing to harvest below the cut-in, and above the knee the blades
-	 * are deliberately spilling wind to hold the plateau. It peaks at the knee.
-	 */
-	public double cpAt(double windSpeed) {
-		if (windSpeed <= 0.0) return 0.0;
-
-		double wind = 0.5 * REFERENCE_AIR_DENSITY * sweptAreaM2() * windSpeed * windSpeed * windSpeed / 1000.0;
-		if (wind <= 0.0) return 0.0;
-
-		return Mth.clamp(powerAtKw(windSpeed) / wind, 0.0, BETZ_LIMIT);
 	}
 
 	/**
