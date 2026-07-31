@@ -10,6 +10,7 @@ import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -33,14 +34,17 @@ import net.minecraft.util.Mth;
  */
 public class WindTurbineScreen extends Screen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
-	private static final int IMAGE_WIDTH = 200;
-	private static final int IMAGE_HEIGHT = 186;
+	// 240 wide rather than the vanilla 176: the nameplate lines are the longest thing
+	// here and at 200 the cut-out speed ran off the right edge
+	private static final int IMAGE_WIDTH = 240;
+	private static final int IMAGE_HEIGHT = 190;
+	private static final int MARGIN = 8;
 
 	// mirrors the wells cut into the texture by gen_gui.py
 	private static final int BAR_X = 12;
-	private static final int BAR_WIDTH = 176;
-	private static final int POWER_BAR_Y = 65;
-	private static final int WIND_BAR_Y = 92;
+	private static final int BAR_WIDTH = 216;
+	private static final int POWER_BAR_Y = 69;
+	private static final int WIND_BAR_Y = 97;
 	private static final int BAR_HEIGHT = 10;
 
 	private static final int LABEL_COLOUR = 0x404040;
@@ -74,18 +78,18 @@ public class WindTurbineScreen extends Screen {
 		topPos = (height - IMAGE_HEIGHT) / 2;
 
 		towerDownButton = addRenderableWidget(Button.builder(Component.literal("-"), b -> send(TurbineControlPayload.Action.REMOVE_TOWER_SEGMENT))
-				.bounds(leftPos + 141, topPos + 110, 20, 20).build());
+				.bounds(leftPos + 181, topPos + 113, 20, 20).build());
 		towerUpButton = addRenderableWidget(Button.builder(Component.literal("+"), b -> send(TurbineControlPayload.Action.ADD_TOWER_SEGMENT))
-				.bounds(leftPos + 165, topPos + 110, 20, 20).build());
+				.bounds(leftPos + 205, topPos + 113, 20, 20).build());
 
 		WindTurbineBlockEntity turbine = turbine();
 		double limitFraction = turbine == null ? 1.0 : turbine.getActivePowerLimit() / turbine.spec().ratedPowerKw();
-		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 134, 178, 20, limitFraction));
+		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 139, 218, 20, limitFraction));
 
 		stopButton = addRenderableWidget(Button.builder(Component.empty(), b -> send(TurbineControlPayload.Action.TOGGLE_RUNNING))
-				.bounds(leftPos + 11, topPos + 158, 86, 20).build());
+				.bounds(leftPos + 11, topPos + 163, 105, 20).build());
 		redstoneButton = addRenderableWidget(Button.builder(Component.empty(), b -> send(TurbineControlPayload.Action.CYCLE_REDSTONE_MODE))
-				.bounds(leftPos + 103, topPos + 158, 86, 20).build());
+				.bounds(leftPos + 124, topPos + 163, 105, 20).build());
 
 		refreshWidgets();
 	}
@@ -115,8 +119,12 @@ public class WindTurbineScreen extends Screen {
 
 		TurbineSpec spec = turbine.spec();
 		stopButton.setMessage(Component.translatable(turbine.isStoppedByPlayer() ? "screen.electricity.wind_turbine.start" : "screen.electricity.wind_turbine.stop"));
+		// the label is one word so it fits the button; what the word means goes in the
+		// tooltip rather than being squeezed in beside it
+		String mode = turbine.getRedstoneMode().name().toLowerCase(Locale.ROOT);
 		redstoneButton.setMessage(Component.translatable("screen.electricity.wind_turbine.redstone",
-				Component.translatable("screen.electricity.wind_turbine.redstone." + turbine.getRedstoneMode().name().toLowerCase(Locale.ROOT))));
+				Component.translatable("screen.electricity.wind_turbine.redstone." + mode)));
+		redstoneButton.setTooltip(Tooltip.create(Component.translatable("screen.electricity.wind_turbine.redstone.tip." + mode)));
 
 		towerDownButton.active = turbine.getTowerSegments() > spec.minTowerSegments();
 		towerUpButton.active = turbine.getTowerSegments() < spec.maxTowerSegments();
@@ -151,7 +159,7 @@ public class WindTurbineScreen extends Screen {
 		graphics.drawString(font, TurbineCatalog.fullName(spec), leftPos + 8, topPos + 6, VALUE_COLOUR, false);
 		if (!spec.iecClass().isEmpty()) {
 			String iec = Component.translatable("screen.electricity.wind_turbine.iec", spec.iecClass()).getString();
-			graphics.drawString(font, iec, leftPos + IMAGE_WIDTH - 8 - font.width(iec), topPos + 6, FAINT_COLOUR, false);
+			graphics.drawString(font, iec, leftPos + IMAGE_WIDTH - MARGIN - font.width(iec), topPos + 6, FAINT_COLOUR, false);
 		}
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.geometry",
@@ -159,7 +167,7 @@ public class WindTurbineScreen extends Screen {
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.curve",
 				fmt("%.1f", spec.cutInSpeed()), fmt("%.1f", spec.ratedSpeed()), fmt("%.0f", spec.cutOutSpeed())), leftPos + 8, topPos + 27, LABEL_COLOUR, false);
 
-		separator(graphics, topPos + 38);
+		separator(graphics, topPos + 40);
 	}
 
 	/**
@@ -193,8 +201,8 @@ public class WindTurbineScreen extends Screen {
 			colour = GREEN;
 		}
 
-		graphics.fill(leftPos + 8, topPos + 45, leftPos + 12, topPos + 49, colour);
-		graphics.drawString(font, Component.translatable(key), leftPos + 16, topPos + 44, VALUE_COLOUR, false);
+		graphics.fill(leftPos + 8, topPos + 47, leftPos + 12, topPos + 51, colour);
+		graphics.drawString(font, Component.translatable(key), leftPos + 16, topPos + 46, VALUE_COLOUR, false);
 	}
 
 	/**
@@ -209,9 +217,9 @@ public class WindTurbineScreen extends Screen {
 		double produced = turbine.getReportedPowerKw();
 		double potential = Math.max(produced, turbine.getUncappedPower());
 
-		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.power"), leftPos + 8, topPos + 54, LABEL_COLOUR, false);
+		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.power"), leftPos + 8, topPos + 58, LABEL_COLOUR, false);
 		String value = TurbineBlockItem.formatPower(produced) + " / " + TurbineBlockItem.formatPower(rated);
-		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - 8 - font.width(value), topPos + 54, VALUE_COLOUR, false);
+		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - MARGIN - font.width(value), topPos + 58, VALUE_COLOUR, false);
 
 		int potentialWidth = barWidth(potential / rated);
 		int producedWidth = barWidth(produced / rated);
@@ -240,9 +248,9 @@ public class WindTurbineScreen extends Screen {
 		double scale = spec.cutOutSpeed();
 		double wind = turbine.getWindSpeed();
 
-		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 81, LABEL_COLOUR, false);
+		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 86, LABEL_COLOUR, false);
 		String value = fmt("%.1f m/s", wind);
-		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - 8 - font.width(value), topPos + 81, VALUE_COLOUR, false);
+		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - MARGIN - font.width(value), topPos + 86, VALUE_COLOUR, false);
 
 		int cutIn = barWidth(spec.cutInSpeed() / scale);
 		int rated = barWidth(spec.ratedSpeed() / scale);
@@ -257,7 +265,7 @@ public class WindTurbineScreen extends Screen {
 		graphics.fill(leftPos + BAR_X + Mth.clamp(needle - 1, 0, BAR_WIDTH - 2), topPos + WIND_BAR_Y - 2,
 				leftPos + BAR_X + Mth.clamp(needle + 1, 2, BAR_WIDTH), topPos + WIND_BAR_Y + BAR_HEIGHT + 2, 0xFFF0F0F0);
 
-		separator(graphics, topPos + 106);
+		separator(graphics, topPos + 112);
 	}
 
 	/**
@@ -268,8 +276,10 @@ public class WindTurbineScreen extends Screen {
 	 */
 	private void drawTower(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
+		// the hub height this adds up to is already on the nameplate line, and repeating it
+		// here is what ran the string under the tower buttons
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower",
-				turbine.getTowerSegments(), spec.maxTowerSegments(), fmt("%.0f", turbine.getHubHeightM())), leftPos + 8, topPos + 111, LABEL_COLOUR, false);
+				turbine.getTowerSegments(), spec.maxTowerSegments()), leftPos + 8, topPos + 117, LABEL_COLOUR, false);
 
 		// what one more segment is worth, so the cost is a decision rather than a gamble.
 		// Asked as a ratio between the two hub heights, which needs no detour back to the
@@ -281,7 +291,7 @@ public class WindTurbineScreen extends Screen {
 			double taller = spec.powerAtKw(tallerWind, turbine.getAirDensity());
 			if (here > 0.01 && taller > here) {
 				String gain = fmt("+%.0f%%", (taller / here - 1.0) * 100.0);
-				graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower_gain", gain), leftPos + 8, topPos + 122, FAINT_COLOUR, false);
+				graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower_gain", gain), leftPos + 8, topPos + 128, FAINT_COLOUR, false);
 			}
 		}
 	}
