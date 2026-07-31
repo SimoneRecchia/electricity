@@ -153,17 +153,16 @@ public class WindTurbineRenderer extends ObjRendererBase {
 
 			poseStack.pushPose();
 
+			// ObjTransforms has already put this frame at the foot of the tower, which is where
+			// the model is authored from - so the tube and the wire fitting need nothing, and it
+			// is the nacelle that has to climb back up to the block the machine lives in.
 			if (groupName.startsWith("pole")) {
-				// drawn downward, because the machine is the top of the structure
-				poseStack.translate(0.0, -towerSegments, 0.0);
 				poseTower(poseStack, towerSegments);
 			} else if (groupName.startsWith("insulator")) {
-				// the wire fitting belongs at the foot of the tower, where a real machine's
-				// cables reach the transformer, and the machine is up at the top - so it drops
-				// by the whole tower. Left unscaled, so a wire lands on the same size fitting
-				// whichever turbine it came from.
-				poseStack.translate(0.0, -towerSegments, 0.0);
+				// nothing: authored at the foot, and drawn unscaled so a wire lands on the same
+				// size fitting whichever turbine it came from
 			} else {
+				poseStack.translate(0.0, towerSegments, 0.0);
 				// The blades take the rotor's own scale and the nacelle and hub cone take the
 				// body's. On the C line the two are equal and this is one scale; on the
 				// small-wind machine the rotor is small against a body kept big enough to

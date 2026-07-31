@@ -540,6 +540,19 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * Mirrors Mekanism's Wind Generator, which exposes energy on its front and
 	 * bottom rather than on every face: cables belong at the foot of the tower.
 	 */
+	/**
+	 * Where this machine's cables come out: the foot of its tower.
+	 *
+	 * A real turbine gathers its cables at the tower base, and so does Mekanism's Wind
+	 * Generator, whose block sits on the ground with a decorative tower above it. Since this
+	 * machine moved to the top of a tower a player builds, the block that stands where
+	 * Mekanism's does is the foot - so that is where energy has to leave and arrive, not
+	 * thirteen blocks up beside the nacelle.
+	 */
+	public BlockPos energyOrigin() {
+		return worldPosition.below(getTowerSegments());
+	}
+
 	private List<Direction> energyFaces() {
 		return List.of(Direction.DOWN, getBlockState().getValue(WindTurbineBlock.FACING).getOpposite());
 	}
@@ -613,9 +626,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
 		Vec3 rotatedCenter = rotateVector(localCenter, facing);
-		// the machine is the top block of the structure, and the wire fitting is at the foot
-		// of the tower, so the connection point drops by the whole tower - the same offset the
-		// renderer applies to that group, or a wire would attach to thin air
+		// The machine is the top block of the structure and the wire fitting is at the foot of
+		// the tower, so the connection point drops by the whole tower.
+		//
+		// ObjTransforms.resolve says the same thing for drawing and for hit-testing, and the two
+		// have to agree or a wire attaches somewhere it cannot be seen. They are stated twice
+		// because this runs on the server too and that class is client-only.
 		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
@@ -684,7 +700,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// while PowerNetwork.updatePowerNetwork() runs on ServerTickEvent END, so the
 		// residual reaches the wires in this same tick instead of a tick late.
 		refreshEnergyBudget();
-		EnergyBridge.emit(this, this, energyFaces());
+		EnergyBridge.emit(this, this, energyOrigin(), energyFaces());
 
 		updateTelemetry();
 		maybeSync();

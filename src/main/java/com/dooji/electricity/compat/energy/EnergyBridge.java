@@ -5,6 +5,7 @@ import com.dooji.electricity.compat.mekanism.MekanismEnergyBridge;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -112,14 +113,14 @@ public final class EnergyBridge {
 	 * way a Mekanism generator emits from its energy sides every tick rather than
 	 * waiting to be pulled from.
 	 */
-	public static void emit(BlockEntity source, IEnergyBudget budget, Iterable<Direction> faces) {
+	public static void emit(BlockEntity source, IEnergyBudget budget, BlockPos origin, Iterable<Direction> faces) {
 		Level level = source.getLevel();
 		if (level == null || level.isClientSide()) return;
 		if (budget.getAvailableJoules() <= 0.0) return;
 
 		List<EnergyAcceptor> acceptors = new ArrayList<>();
 		for (Direction face : faces) {
-			BlockEntity neighbour = level.getBlockEntity(source.getBlockPos().relative(face));
+			BlockEntity neighbour = level.getBlockEntity(origin.relative(face));
 			if (neighbour == null || neighbour.isRemoved()) continue;
 
 			EnergyAcceptor acceptor = findAcceptor(neighbour, face.getOpposite());

@@ -116,9 +116,38 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 		};
 	}
 
+	/**
+	 * Tells the tower's foot that its machine arrived or left.
+	 *
+	 * The foot answers capability queries on the machine's behalf, and it can be thirteen
+	 * blocks away - far outside the neighbour updates that placing or breaking this block
+	 * sends. Without this a cable already sitting at the tower base would keep the empty
+	 * answer it got before the machine existed.
+	 */
+	private static void refreshTowerFoot(Level level, BlockPos pos) {
+		if (level.isClientSide()) return;
+
+		int height = TurbineTowerBlock.countBelow(level, pos);
+		if (height <= 0) return;
+
+		BlockPos foot = pos.below(height);
+		if (level.getBlockEntity(foot) instanceof TurbineTowerBlockEntity tower) {
+			tower.invalidateCaps();
+			level.updateNeighbourForOutputSignal(foot, level.getBlockState(foot).getBlock());
+		}
+	}
+
+	@Override
+	public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+		super.onPlace(state, level, pos, oldState, movedByPiston);
+		refreshTowerFoot(level, pos);
+	}
+
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock())) {
+			refreshTowerFoot(level, pos);
+
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel) {
 				BlockEntity blockEntity = level.getBlockEntity(pos);
 				if (blockEntity instanceof WindTurbineBlockEntity windTurbine) {
