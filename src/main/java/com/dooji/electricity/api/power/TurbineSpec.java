@@ -70,6 +70,10 @@ public record TurbineSpec(
 	 * it happens to come out at the C130, which is why that one draws at 1:1.
 	 */
 	public static final double MODEL_ROTOR_DIAMETER_BLOCKS = 13.044;
+	/** Height of the authored tower, in blocks: what a tower of N segments is scaled against. */
+	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 12.43;
+	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
+	private static final double SMALL_WIND_NACELLE_FLOOR = 0.45;
 	/** Fraction of rated output shed per m/s above the storm onset. */
 	private static final double STORM_DERATE_PER_MS = 0.2;
 
@@ -119,9 +123,27 @@ public record TurbineSpec(
 		return rotorDiameterM / METRES_PER_BLOCK * rotorRenderScale;
 	}
 
-	/** Scale to draw the authored nacelle-and-rotor assembly at. */
+	/** Scale to draw the authored rotor at. */
 	public double renderScale() {
 		return rotorDiameterBlocks() / MODEL_ROTOR_DIAMETER_BLOCKS;
+	}
+
+	/**
+	 * Scale for the nacelle and the tower, which is not always the rotor's.
+	 *
+	 * Real machines are not self-similar in this one respect: the smaller the turbine the
+	 * chunkier its nacelle is next to its rotor, because the gearbox and generator inside
+	 * do not shrink as fast as the blades outside. Scaling the authored nacelle straight
+	 * down would go the wrong way and, on the small-wind machine, would put it under a
+	 * fifth of a block, which is geometry too thin to read or to texture.
+	 *
+	 * So the C line takes the rotor's scale unchanged - the authored proportions are a
+	 * utility machine's and stay right across that range - and the small-wind machine gets
+	 * a floor instead, coming out chunkier than its rotor exactly as the real thing is.
+	 */
+	public double nacelleRenderScale() {
+		double scale = renderScale();
+		return nacelle == Nacelle.SMALL_WIND ? Math.max(scale, SMALL_WIND_NACELLE_FLOOR) : scale;
 	}
 
 	public int clampTowerSegments(int segments) {
@@ -308,8 +330,20 @@ public record TurbineSpec(
 	 * turbine for its mountain in both places.
 	 */
 	public static double windAtHubHeight(double referenceWind, double hubHeightM) {
-		if (hubHeightM <= 0.0) return referenceWind;
+		return referenceWind * windRatio(REFERENCE_HUB_HEIGHT_M, hubHeightM);
+	}
 
-		return referenceWind * Math.pow(hubHeightM / REFERENCE_HUB_HEIGHT_M, SHEAR_EXPONENT);
+	/**
+	 * How much faster the wind is at one hub height than at another.
+	 *
+	 * Separate from {@link #windAtHubHeight} because the interesting question is usually
+	 * comparative - what one more tower segment would be worth - and asking it this way
+	 * needs no detour back through the reference height, which would mean undoing a shear
+	 * only to reapply it.
+	 */
+	public static double windRatio(double fromHubHeightM, double toHubHeightM) {
+		if (fromHubHeightM <= 0.0 || toHubHeightM <= 0.0) return 1.0;
+
+		return Math.pow(toHubHeightM / fromHubHeightM, SHEAR_EXPONENT);
 	}
 }

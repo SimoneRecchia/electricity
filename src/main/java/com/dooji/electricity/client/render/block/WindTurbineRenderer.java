@@ -1,5 +1,6 @@
 package com.dooji.electricity.client.render.block;
 
+import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.WindTurbineBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
@@ -13,6 +14,7 @@ import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
@@ -85,6 +87,16 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			hubCenter = new Vec3(0.0, 12.65, 0.95);
 		}
 
+		TurbineSpec spec = blockEntity.spec();
+		double nacelleScale = spec.nacelleRenderScale();
+		// the authored tower is 12.43 blocks; a tower of N segments is that stretched to N,
+		// which keeps the taper continuous and needs no second asset. Stretching rather than
+		// tiling is what makes any height possible: the pole carries vertices at two heights
+		// only, so a segment cut out of it would restart at the wide radius on every copy
+		// and the tower would read as a stack of cones.
+		double towerHeightScale = blockEntity.getTowerSegments() / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS;
+		double towerOffset = blockEntity.getTowerSegments() - TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS;
+
 		poseStack.pushPose();
 		if (yawOffset != 0.0f) {
 			poseStack.mulPose(Axis.YP.rotationDegrees(yawOffset));
@@ -96,14 +108,35 @@ public class WindTurbineRenderer extends ObjRendererBase {
 
 			poseStack.pushPose();
 
-			if (groupName.equals("rotate_1_Plastic")) {
-				poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
-				poseStack.mulPose(Axis.ZP.rotationDegrees(rotation1));
-				poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
-			} else if (groupName.equals("rotate_2_Plastic")) {
-				poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
-				poseStack.mulPose(Axis.ZP.rotationDegrees(rotation2));
-				poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
+			if (groupName.startsWith("pole")) {
+				// radius follows the machine's size, height follows the tower the player built
+				poseStack.scale((float) nacelleScale, (float) towerHeightScale, (float) nacelleScale);
+			} else if (!groupName.startsWith("insulator")) {
+				// the nacelle, the hub cone and the blades ride up with the tower and scale
+				// about where they sit on it, so the assembly always meets the tower top
+				poseStack.translate(0.0, towerOffset, 0.0);
+				poseStack.translate(0.0, TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
+				poseStack.scale((float) nacelleScale, (float) nacelleScale, (float) nacelleScale);
+				poseStack.translate(0.0, -TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
+
+				// the blades are scaled further, to the rotor's own diameter. On the C line
+				// this is the same figure and nothing extra happens; on the small-wind machine
+				// the rotor is small next to a body that has to stay big enough to texture,
+				// which is the proportion a real small turbine has.
+				double rotorScale = spec.renderScale() / nacelleScale;
+				if (groupName.startsWith("rotate_1") && rotorScale != 1.0) {
+					poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
+					poseStack.scale((float) rotorScale, (float) rotorScale, (float) rotorScale);
+					poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
+				}
+
+				if (groupName.startsWith("rotate_1") || groupName.startsWith("rotate_2")) {
+					// one angle for both: the hub cone is bolted to the blade roots
+					float rotation = groupName.startsWith("rotate_1") ? rotation1 : rotation2;
+					poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
+					poseStack.mulPose(Axis.ZP.rotationDegrees(rotation));
+					poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
+				}
 			}
 
 			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
@@ -135,14 +168,20 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		ObjBlockDefinition definition = ObjDefinitions.get(Electricity.WIND_TURBINE_BLOCK.get());
-		if (definition == null) return;
-		ObjBlockRegistry.register(definition.block(), definition.model(), null);
-		for (String insulator : definition.insulators()) {
-			ObjInteractionRegistry.register(definition.block(), insulator, null);
-		}
+		// every machine in the catalogue, not just the original block: each is its own
+		// block and needs its own model registration, interaction groups and insulator
+		// bounding boxes, or a C52 would place fine and then render nothing
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			ObjBlockDefinition definition = ObjDefinitions.get(Electricity.TURBINE_BLOCKS.get(spec.id()).get());
+			if (definition == null) continue;
 
-		calculateAndRegisterBoundingBoxes(definition);
+			ObjBlockRegistry.register(definition.block(), definition.model(), null);
+			for (String insulator : definition.insulators()) {
+				ObjInteractionRegistry.register(definition.block(), insulator, null);
+			}
+
+			calculateAndRegisterBoundingBoxes(definition);
+		}
 	}
 
 	private static void calculateAndRegisterBoundingBoxes(ObjBlockDefinition definition) {
