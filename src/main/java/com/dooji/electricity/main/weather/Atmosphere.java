@@ -359,6 +359,128 @@ public final class Atmosphere {
 		return celsius;
 	}
 
+	// ---- sunlight ----
+
+	/** Total solar irradiance outside the atmosphere, W/m2. */
+	private static final double SOLAR_CONSTANT = 1361.0;
+	/**
+	 * Broadband transmittance of one air mass of clean dry air, from Meinel & Meinel's
+	 * {@code 0.7^(AM^0.678)}. With the exponent below it puts a clear zenith sun at just over
+	 * 1000 W/m2, which is the figure modules are rated at.
+	 */
+	private static final double CLEAR_AIR_TRANSMITTANCE = 0.70;
+	private static final double AIR_MASS_EXPONENT = 0.678;
+	/** Global horizontal over beam horizontal under a clear sky: the tenth the sky itself adds. */
+	private static final double DIFFUSE_FACTOR = 1.10;
+
+	/** Size of a fair weather cumulus, in blocks. Real ones run 0.5 to 2 km, at ten metres a block. */
+	private static final double CUMULUS_BLOCKS = 110.0;
+	private static final double CUMULUS_AMPLITUDE = 0.42;
+	/** Measured spread of the single octave in {@link #cloudCover}. */
+	private static final double CLOUD_NOISE_SD = 0.4040;
+	/** How much of a full sky of lifting a hPa of pressure fall is worth. */
+	private static final double PRESSURE_TO_LIFT = 11.0;
+	private static final double LIFT_AT_MEAN_PRESSURE = 0.45;
+	/**
+	 * How readily a place turns lifting into cloud, from its rainfall.
+	 *
+	 * Cloud is lifting times moisture rather than lifting plus moisture, and that one choice
+	 * is what makes a desert sunny: a deep low over sand brings wind and no cloud, because
+	 * there is nothing there to condense. Calibrated against real cloud modification factors -
+	 * how much of a clear sky's irradiance a place actually receives - which run about 0.92 in
+	 * a desert, 0.65 in temperate country and 0.58 over rainforest.
+	 */
+	private static final double MOISTURE_BASE = 0.50;
+	private static final double MOISTURE_PER_DOWNFALL = 1.30;
+	/** Overcast floors. A shower does not happen under a clear sky, and a thunderstorm even less. */
+	private static final double RAIN_COVER_FLOOR = 0.90;
+	private static final double STORM_COVER_FLOOR = 0.97;
+	/** How long a cumulus field takes to grow and dissolve in place, in day-clock ticks. */
+	private static final double CUMULUS_TICKS = 6000.0;
+
+	/**
+	 * Sine of the sun's elevation, or 0 at night.
+	 *
+	 * Minecraft's sun rises due east, passes through the zenith and sets due west, every day
+	 * of the year: the world has no axial tilt and no latitude, so every day is an equinox at
+	 * the equator. Two things follow that are worth stating rather than discovering. A panel
+	 * wants no tilt at all, because the sun comes overhead - so a block of ground can be
+	 * covered edge to edge, with none of the row spacing a real array needs to keep from
+	 * shading itself. And the yields here are equatorial ones, near 20% of nameplate over the
+	 * year, rather than the 11% a temperate country manages.
+	 */
+	public static double solarElevationSin(double dayPhase) {
+		return dayPhase >= 0.5 ? 0.0 : Math.sin(dayPhase * 2.0 * Math.PI);
+	}
+
+	/**
+	 * Relative optical air mass: how much atmosphere the light has crossed, in zenith paths.
+	 *
+	 * Kasten & Young 1989, which is the standard approximation and unlike a plain
+	 * {@code 1/sin} does not run away as the sun touches the horizon. Scaled by the station
+	 * pressure, which is the accepted correction for altitude: high ground has less air over
+	 * it, so a mountain panel is in stronger light than a valley one.
+	 */
+	public static double airMass(double sinElevation, double pressureHpa) {
+		if (sinElevation <= 0.0) return Double.POSITIVE_INFINITY;
+
+		double elevationDeg = Math.toDegrees(Math.asin(Math.min(1.0, sinElevation)));
+		double am = 1.0 / (sinElevation + 0.50572 * Math.pow(elevationDeg + 6.07995, -1.6364));
+		return am * pressureHpa / SEA_LEVEL_PRESSURE;
+	}
+
+	/** Global horizontal irradiance under a clear sky, W/m2. */
+	public static double clearSkyIrradiance(double sinElevation, double pressureHpa) {
+		if (sinElevation <= 0.0) return 0.0;
+
+		double beam = SOLAR_CONSTANT * Math.pow(CLEAR_AIR_TRANSMITTANCE, Math.pow(airMass(sinElevation, pressureHpa), AIR_MASS_EXPONENT));
+		return DIFFUSE_FACTOR * beam * sinElevation;
+	}
+
+	/**
+	 * Fraction of the sky covered by cloud, 0 to 1.
+	 *
+	 * Two scales, and they are the two you can see. The pressure map decides whether the day
+	 * is a cloudy one at all, which is why calm windless weather and clear skies arrive
+	 * together and why a gale is overcast - a grid built on wind and sun has to contend with
+	 * both failing at once, exactly as a real one does. On top of that sit individual cumulus,
+	 * about a hundred blocks across, drifting downwind at the speed of the air carrying them.
+	 * Those are what make two panels thirty blocks apart disagree: the shadow reaches one
+	 * before the other, and a trend of the pair shows it.
+	 *
+	 * The cells drift on the raw tick counter rather than the day clock, because a cloud
+	 * crossing a field takes a minute whatever the sun is doing.
+	 */
+	public static double cloudCover(long seed, double blockX, double blockZ, long dayTime, long gameTime, double downfall,
+			double windSpeed, float windDirection, boolean raining, boolean thundering) {
+		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, dayTime) - SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
+
+		double drift = windSpeed * gameTime / 20.0 / com.dooji.electricity.api.power.TurbineSpec.METRES_PER_BLOCK;
+		double heading = Math.toRadians(windDirection);
+		double cx = (blockX - Math.cos(heading) * drift) / CUMULUS_BLOCKS;
+		double cz = (blockZ - Math.sin(heading) * drift) / CUMULUS_BLOCKS;
+		lift += CUMULUS_AMPLITUDE * WeatherNoise.sample(seed ^ 0xC10DL, cx, cz, dayTime / CUMULUS_TICKS) / CLOUD_NOISE_SD;
+
+		double cover = (MOISTURE_BASE + MOISTURE_PER_DOWNFALL * Mth.clamp(downfall, 0.0, 1.0)) * lift;
+		if (thundering) return Mth.clamp(cover, STORM_COVER_FLOOR, 1.0);
+		if (raining) return Mth.clamp(cover, RAIN_COVER_FLOOR, 1.0);
+
+		return Mth.clamp(cover, 0.0, 1.0);
+	}
+
+	/**
+	 * What a cloudy sky passes, as a fraction of what the clear one would have.
+	 *
+	 * Kasten & Czeplak 1980, from ten years of hourly records at Hamburg. The cube-and-a-bit
+	 * power is the important part and it is not obvious: a half covered sky still passes nine
+	 * tenths of the light, because the sun spends most of that time in one of the gaps, while
+	 * a fully overcast one passes a quarter. It is why partly cloudy days barely cost anything
+	 * and a front costs almost everything.
+	 */
+	public static double cloudTransmittance(double cover) {
+		return 1.0 - 0.75 * Math.pow(Mth.clamp(cover, 0.0, 1.0), 3.4);
+	}
+
 	public static float wrapDegrees(float degrees) {
 		float wrapped = degrees % 360.0f;
 		return wrapped < 0.0f ? wrapped + 360.0f : wrapped;

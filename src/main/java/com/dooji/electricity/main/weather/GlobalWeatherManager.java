@@ -119,8 +119,14 @@ public final class GlobalWeatherManager {
 		double temperature = Atmosphere.temperatureAt(site.biomeTemperature(), site.downfall(), elevationM, phase, raining, thundering);
 		double pressure = Atmosphere.stationPressure(seaLevelPressure(machinePos), elevationM, temperature);
 
+		// the cloud drifts with the wind that has just been worked out, which is what puts the
+		// same shadow over two panels a few seconds apart instead of at the same instant
+		double cover = Atmosphere.cloudCover(seed, machinePos.getX(), machinePos.getZ(), dayTime, level.getGameTime(), site.downfall(), mean, direction,
+				raining, thundering);
+		double irradiance = Atmosphere.clearSkyIrradiance(Atmosphere.solarElevationSin(phase), pressure) * Atmosphere.cloudTransmittance(cover);
+
 		return new WeatherSnapshot(mean, instant, Atmosphere.gustFrom(mean, turbulence), turbulence, direction, stability, temperature, pressure,
-				Atmosphere.airDensity(temperature, pressure), Atmosphere.profileExponent(site.roughness(), stability));
+				Atmosphere.airDensity(temperature, pressure), Atmosphere.profileExponent(site.roughness(), stability), cover, irradiance);
 	}
 
 	/** Mean sea level pressure over this column, in hPa: the map itself, before any site correction. */

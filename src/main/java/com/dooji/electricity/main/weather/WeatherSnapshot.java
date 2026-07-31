@@ -19,6 +19,8 @@ package com.dooji.electricity.main.weather;
  * @param airDensity    kg/m3, from that temperature and that pressure
  * @param shearExponent exponent of the wind profile here and now, which is how much another
  *                      ten metres of tower would be worth
+ * @param cloudCover    fraction of the sky covered, 0 to 1
+ * @param irradiance    global horizontal irradiance reaching the ground, W/m2
  */
 public record WeatherSnapshot(
 		double meanWind,
@@ -30,6 +32,8 @@ public record WeatherSnapshot(
 		double temperatureC,
 		double pressureHpa,
 		double airDensity,
-		double shearExponent
+		double shearExponent,
+		double cloudCover,
+		double irradiance
 ) {
 }

@@ -1,9 +1,12 @@
 package com.dooji.electricity.compat.computercraft;
 
+import com.dooji.electricity.api.power.PhotovoltaicArray;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TurbineTelemetry;
+import com.dooji.electricity.block.SolarPanelBlockEntity;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.compat.energy.EnergyBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import dan200.computercraft.api.ForgeComputerCraftAPI;
@@ -37,6 +40,10 @@ public final class CCTweakedPeripherals {
 			WindTurbineBlockEntity turbine = turbineAt(level, pos);
 			if (turbine != null) {
 				return LazyOptional.of(() -> new WindTurbinePeripheral(turbine));
+			}
+
+			if (level.getBlockEntity(pos) instanceof SolarPanelBlockEntity panel) {
+				return LazyOptional.of(() -> new SolarPanelPeripheral(panel));
 			}
 
 			return LazyOptional.empty();
@@ -316,6 +323,98 @@ public final class CCTweakedPeripherals {
 			}
 
 			return MethodResult.of(value);
+		}
+	}
+
+	/**
+	 * A block of photovoltaic array as seen from Lua.
+	 *
+	 * Small enough to be written out by hand rather than generated from a tag list, and the
+	 * list is what a real plant's monitoring actually reads: what the inverter is making, how
+	 * much light is falling on the modules, how hot they are, and how much sky is covered.
+	 * {@code getProductionRate} and {@code canSeeSun} carry the names Mekanism's own solar
+	 * generators answer to, so a program written for one reads this unchanged.
+	 *
+	 * Every reading is a plain field the panel wrote during its own tick, so the computer
+	 * thread can have them without waiting for a tick boundary.
+	 */
+	public static final class SolarPanelPeripheral implements IPeripheral {
+		private final SolarPanelBlockEntity panel;
+
+		private SolarPanelPeripheral(SolarPanelBlockEntity panel) {
+			this.panel = panel;
+		}
+
+		@Override
+		public String getType() {
+			return "electricity_solar_panel";
+		}
+
+		@Override
+		public boolean equals(@Nullable IPeripheral other) {
+			return other instanceof SolarPanelPeripheral peripheral && peripheral.panel == panel;
+		}
+
+		@Override
+		public Object getTarget() {
+			return panel;
+		}
+
+		/** Joules produced in the last tick, the unit and the name Mekanism's generators use. */
+		@LuaFunction
+		public final double getProductionRate() {
+			return panel.getGeneratedPowerKw() * EnergyBridge.JOULES_PER_KW;
+		}
+
+		@LuaFunction
+		public final boolean canSeeSun() {
+			return panel.seesSky();
+		}
+
+		/** Output at the inverter's terminals, in kW. */
+		@LuaFunction
+		public final double getActivePower() {
+			return panel.getGeneratedPowerKw();
+		}
+
+		/** Nameplate at standard test conditions, in kW. */
+		@LuaFunction
+		public final double getRatedPower() {
+			return PhotovoltaicArray.RATED_POWER_KW;
+		}
+
+		/** Global horizontal irradiance on the modules, W/m2. A clear zenith sun is just over 1000. */
+		@LuaFunction
+		public final double getIrradiance() {
+			return panel.getIrradiance();
+		}
+
+		@LuaFunction
+		public final double getCellTemperature() {
+			return panel.getCellTemperature();
+		}
+
+		@LuaFunction
+		public final double getAmbientTemperature() {
+			return panel.getAmbientTemperature();
+		}
+
+		/** Fraction of the sky under cloud, 0 to 1. */
+		@LuaFunction
+		public final double getCloudCover() {
+			return panel.getCloudCover();
+		}
+
+		/**
+		 * Output over nameplate, 0 to 1.
+		 *
+		 * The one figure worth logging if only one is: it folds the light, the cell
+		 * temperature, this panel's own modules and the inverter into the number a plant is
+		 * actually judged on.
+		 */
+		@LuaFunction
+		public final double getPerformanceRatio() {
+			return panel.getGeneratedPowerKw() / PhotovoltaicArray.RATED_POWER_KW;
 		}
 	}
 }

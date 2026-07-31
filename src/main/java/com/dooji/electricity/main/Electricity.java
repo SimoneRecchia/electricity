@@ -7,6 +7,8 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
 import com.dooji.electricity.block.ElectricLampBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
+import com.dooji.electricity.block.SolarPanelBlock;
+import com.dooji.electricity.block.SolarPanelBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -120,6 +122,17 @@ public class Electricity {
 			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
 	/**
+	 * A block of photovoltaic array: twenty kilowatts of modules over a hundred square metres.
+	 *
+	 * Laid flat and walked over, so a farm of them is a field rather than a wall. Glass, so it
+	 * breaks like glass.
+	 */
+	public static final RegistryObject<Block> SOLAR_PANEL_BLOCK = BLOCKS.register("solar_panel",
+			() -> new SolarPanelBlock(Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion()));
+	public static final RegistryObject<Item> SOLAR_PANEL_ITEM = ITEMS.register("solar_panel",
+			() -> new TooltipBlockItem(SOLAR_PANEL_BLOCK.get(), new Item.Properties(), "tooltip.electricity.solar_panel"));
+
+	/**
 	 * A block for every machine in the catalogue, keyed by spec id.
 	 *
 	 * Registered from the catalogue in a loop rather than declared one by one, so a spec
@@ -185,6 +198,7 @@ public class Electricity {
 				}
 
 				output.accept(TURBINE_TOWER_ITEM.get());
+				output.accept(SOLAR_PANEL_ITEM.get());
 				output.accept(ELECTRIC_LAMP_ITEM.get());
 				output.accept(WORKBENCH_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
@@ -201,6 +215,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<WindTurbineBlockEntity>> WIND_TURBINE_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TurbineTowerBlockEntity>> TURBINE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<ElectricLampBlockEntity>> ELECTRIC_LAMP_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<SolarPanelBlockEntity>> SOLAR_PANEL_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -232,6 +247,8 @@ public class Electricity {
 		TURBINE_TOWER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("turbine_tower", () -> BlockEntityType.Builder.of(TurbineTowerBlockEntity::new, TURBINE_TOWER_BLOCK.get()).build(null));
 
 		ELECTRIC_LAMP_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("electric_lamp", () -> BlockEntityType.Builder.of(ElectricLampBlockEntity::new, ELECTRIC_LAMP_BLOCK.get()).build(null));
+
+		SOLAR_PANEL_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("solar_panel", () -> BlockEntityType.Builder.of(SolarPanelBlockEntity::new, SOLAR_PANEL_BLOCK.get()).build(null));
 
 		BLOCK_ENTITY_TYPES.register(modEventBus);
 		LOGGER.info("Registered {} items, {} blocks, and {} block entity types", ITEMS.getEntries().size(), BLOCKS.getEntries().size(), BLOCK_ENTITY_TYPES.getEntries().size());
