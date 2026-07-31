@@ -28,7 +28,17 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class WindTurbineBlock extends Block implements EntityBlock {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-	private static final VoxelShape SHAPE = Shapes.block();
+
+	/** Nacelle height in the authored model, in blocks, at the scale the C130 draws it. */
+	private static final double NACELLE_HEIGHT = 0.95;
+	/**
+	 * Distance from the tower axis to the nacelle's farthest corner, in blocks at C130 scale.
+	 *
+	 * The nacelle is nearly two and a half blocks deep and swings with the yaw, so this is the
+	 * radius it sweeps rather than its width. On the larger machines it is wider than the block
+	 * it lives in and gets clipped to it; on the smaller ones it is what makes the shape narrow.
+	 */
+	private static final double NACELLE_REACH = 1.575;
 
 	/**
 	 * Which machine this block is.
@@ -40,11 +50,34 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 	 * block, so nothing about a placed turbine has to be persisted to know what it is.
 	 */
 	private final TurbineSpec spec;
+	private final VoxelShape shape;
 
 	public WindTurbineBlock(Properties properties, TurbineSpec spec) {
 		super(properties);
 		this.spec = spec;
+		this.shape = nacelleShape(spec);
 		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+	}
+
+	/**
+	 * The nacelle, rather than the whole block it lives in.
+	 *
+	 * This was a full cube, which is the one collision in the structure that really is the block's
+	 * maximum extent - and on anything but the largest machine that is mostly empty air. An SW-10's
+	 * nacelle is a quarter of a block tall, so a cube left three quarters of a block of invisible
+	 * floor to stand on above it.
+	 *
+	 * Height is the nacelle's own. Width is the radius it sweeps as the machine yaws, not its
+	 * breadth, because it is two and a half blocks deep and turns to face the wind: on the larger
+	 * machines that sweep is wider than the block and clips to it, which is honest, since the
+	 * nacelle genuinely overhangs its own block there.
+	 */
+	private static VoxelShape nacelleShape(TurbineSpec spec) {
+		double scale = spec.nacelleRenderScale();
+		double half = Math.min(0.5, NACELLE_REACH * scale);
+		double height = Math.min(1.0, NACELLE_HEIGHT * scale);
+
+		return Shapes.box(0.5 - half, 0.0, 0.5 - half, 0.5 + half, height, 0.5 + half);
 	}
 
 	public TurbineSpec spec() {
@@ -63,7 +96,7 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shape;
 	}
 
 	/**
