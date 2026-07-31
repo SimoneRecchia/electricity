@@ -59,8 +59,6 @@
   "block.electricity.c80_20": "Cube C80-2.0",
   "block.electricity.c90_30": "Cube C90-3.0",
   "block.electricity.c112_30": "Cube C112-3.0",
-  "item.electricity.tower_segment": "Tower Segment",
-  "tooltip.electricity.tower_segment": "Stands a turbine one block higher. Faster wind up there, and power goes with its cube.",
   "tooltip.electricity.turbine.class": "IEC class %s",
   "tooltip.electricity.turbine.nameplate": "%s · rotor ⌀ %s m",
   "tooltip.electricity.turbine.wind": "Cut-in %s · rated %s · cut-out %s m/s",
@@ -72,7 +70,6 @@
   "screen.electricity.wind_turbine.power": "Active power",
   "screen.electricity.wind_turbine.wind": "Wind at hub",
   "screen.electricity.wind_turbine.tower": "Tower %s/%s segments",
-  "screen.electricity.wind_turbine.tower_gain": "One more segment: %s output",
   "screen.electricity.wind_turbine.limit": "Limit %s (%s%%)",
   "screen.electricity.wind_turbine.stop": "Stop",
   "screen.electricity.wind_turbine.start": "Start",
@@ -88,5 +85,9 @@
   "screen.electricity.wind_turbine.state.stopped_by_redstone": "Stopped — by redstone",
   "screen.electricity.wind_turbine.redstone.tip.disabled": "Redstone is ignored. The turbine runs whatever the signal does.",
   "screen.electricity.wind_turbine.redstone.tip.high": "Runs only while receiving a redstone signal.",
-  "screen.electricity.wind_turbine.redstone.tip.low": "Runs only while not receiving a redstone signal."
+  "screen.electricity.wind_turbine.redstone.tip.low": "Runs only while not receiving a redstone signal.",
+  "block.electricity.turbine_tower": "Turbine Tower",
+  "tooltip.electricity.turbine_tower": "Stack it to the height you want, then mount a turbine on top.",
+  "message.electricity.turbine.tower_height": "%s mounts on %s-%s tower segments, not %s.",
+  "screen.electricity.wind_turbine.tower_gain": "One block taller: %s output"
 }

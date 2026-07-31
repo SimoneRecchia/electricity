@@ -14,7 +14,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
@@ -108,7 +107,7 @@ public class ElectricityNetworking {
 							if (player.distanceToSqr(Vec3.atCenterOf(pos)) > MAX_CONTROL_DISTANCE_SQ) return;
 
 							if (world.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) {
-								applyTurbineControl(player, turbine, msg);
+								applyTurbineControl(turbine, msg);
 							}
 						});
 					}
@@ -147,52 +146,12 @@ public class ElectricityNetworking {
 	 * is sold on, so the worst a crafted packet achieves is a setting the player could
 	 * have dialled in by hand anyway.
 	 */
-	private static void applyTurbineControl(ServerPlayer player, WindTurbineBlockEntity turbine, TurbineControlPayload msg) {
+	private static void applyTurbineControl(WindTurbineBlockEntity turbine, TurbineControlPayload msg) {
 		switch (msg.action()) {
 			case TOGGLE_RUNNING -> turbine.setStoppedByPlayer(!turbine.isStoppedByPlayer());
 			case CYCLE_REDSTONE_MODE -> turbine.setRedstoneMode(turbine.getRedstoneMode().next());
 			case SET_POWER_LIMIT -> turbine.setActivePowerLimit(msg.value());
-			case ADD_TOWER_SEGMENT -> raiseTower(player, turbine);
-			case REMOVE_TOWER_SEGMENT -> lowerTower(player, turbine);
 		}
-	}
-
-	/**
-	 * Spends a tower segment to stand the nacelle one block higher.
-	 *
-	 * The segment comes out of the inventory before the tower goes up, and only if the
-	 * tower can actually go up: taking the item first and then finding the machine already
-	 * at its tallest would charge the player for nothing.
-	 */
-	private static void raiseTower(ServerPlayer player, WindTurbineBlockEntity turbine) {
-		if (turbine.getTowerSegments() >= turbine.spec().maxTowerSegments()) return;
-
-		boolean free = player.isCreative();
-		int slot = free ? -1 : findTowerSegment(player);
-		if (!free && slot < 0) return;
-
-		if (!turbine.setTowerSegments(turbine.getTowerSegments() + 1)) return;
-		if (!free) player.getInventory().removeItem(slot, 1);
-	}
-
-	/** Takes a segment back down and hands the item back, so height stays a reversible choice. */
-	private static void lowerTower(ServerPlayer player, WindTurbineBlockEntity turbine) {
-		if (turbine.getTowerSegments() <= turbine.spec().minTowerSegments()) return;
-		if (!turbine.setTowerSegments(turbine.getTowerSegments() - 1)) return;
-
-		if (!player.isCreative()) {
-			ItemStack returned = new ItemStack(Electricity.TOWER_SEGMENT_ITEM.get());
-			if (!player.getInventory().add(returned)) player.drop(returned, false);
-		}
-	}
-
-	private static int findTowerSegment(ServerPlayer player) {
-		var inventory = player.getInventory();
-		for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
-			if (inventory.getItem(slot).is(Electricity.TOWER_SEGMENT_ITEM.get())) return slot;
-		}
-
-		return -1;
 	}
 
 	public static void broadcastToAllClients(ServerLevel world, WireConnectionPayload payload) {

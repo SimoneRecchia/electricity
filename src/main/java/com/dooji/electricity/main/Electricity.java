@@ -10,6 +10,7 @@ import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.WindTurbineBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.block.WorkbenchBlock;
@@ -104,8 +105,17 @@ public class Electricity {
 	public static final RegistryObject<Item> METAL_CASING_ITEM = ITEMS.register("metal_casing", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.metal_casing"));
 	public static final RegistryObject<Item> MOTOR_CORE_ITEM = ITEMS.register("motor_core", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.motor_core"));
 
-	/** One tower segment, the only part of a turbine a player adds after it is standing. */
-	public static final RegistryObject<Item> TOWER_SEGMENT_ITEM = ITEMS.register("tower_segment", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.tower_segment"));
+	/**
+	 * One block of turbine tower.
+	 *
+	 * Stacked by hand, which is what makes hub height something a player builds rather than
+	 * a number they set. The machine then goes on top and refuses to mount outside the range
+	 * of tower heights it is certified for.
+	 */
+	public static final RegistryObject<Block> TURBINE_TOWER_BLOCK = BLOCKS.register("turbine_tower",
+			() -> new TurbineTowerBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
+	public static final RegistryObject<Item> TURBINE_TOWER_ITEM = ITEMS.register("turbine_tower",
+			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
 	/**
 	 * A block for every machine in the catalogue, keyed by spec id.
@@ -172,7 +182,7 @@ public class Electricity {
 					output.accept(TURBINE_ITEMS.get(spec.id()).get());
 				}
 
-				output.accept(TOWER_SEGMENT_ITEM.get());
+				output.accept(TURBINE_TOWER_ITEM.get());
 				output.accept(ELECTRIC_LAMP_ITEM.get());
 				output.accept(WORKBENCH_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());

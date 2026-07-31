@@ -1,0 +1,73 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "tower": "electricity:block/turbine_tower",
+    "particle": "electricity:block/turbine_tower"
+  },
+  "elements": [
+    {
+      "from": [
+        2.12,
+        0,
+        3.84
+      ],
+      "to": [
+        13.88,
+        16,
+        12.16
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tower"
+        },
+        "south": {
+          "texture": "#tower"
+        },
+        "east": {
+          "texture": "#tower"
+        },
+        "west": {
+          "texture": "#tower"
+        },
+        "up": {
+          "texture": "#tower"
+        },
+        "down": {
+          "texture": "#tower"
+        }
+      }
+    },
+    {
+      "from": [
+        3.84,
+        0,
+        2.12
+      ],
+      "to": [
+        12.16,
+        16,
+        13.88
+      ],
+      "faces": {
+        "north": {
+          "texture": "#tower"
+        },
+        "south": {
+          "texture": "#tower"
+        },
+        "east": {
+          "texture": "#tower"
+        },
+        "west": {
+          "texture": "#tower"
+        },
+        "up": {
+          "texture": "#tower"
+        },
+        "down": {
+          "texture": "#tower"
+        }
+      }
+    }
+  ]
+}

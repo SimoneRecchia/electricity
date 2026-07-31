@@ -21,11 +21,7 @@ public record TurbineControlPayload(BlockPos blockPos, Action action, double val
 		/** Step through disabled, high and low. */
 		CYCLE_REDSTONE_MODE,
 		/** Curtailment setpoint, in kW, in {@link #value}. */
-		SET_POWER_LIMIT,
-		/** Spend one tower segment to stand the nacelle a block higher. */
-		ADD_TOWER_SEGMENT,
-		/** Take a segment back down, and get the item back. */
-		REMOVE_TOWER_SEGMENT;
+		SET_POWER_LIMIT;
 
 		private static final Action[] VALUES = values();
 

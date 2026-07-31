@@ -26,11 +26,12 @@ import net.minecraft.util.Mth;
  * more. The gearbox oil temperature is a question for a monitor watching a whole
  * site, not for the panel on the tower.
  *
- * There is no menu behind it and no slots, because nothing goes inside a turbine -
- * the one thing a player adds is tower segments, and those are spent straight out
- * of the inventory. Everything shown is read from the client's copy of the block
- * entity, all of which arrives in its update tag already, so the panel needs no
- * traffic of its own in that direction. It only sends commands.
+ * There is no menu behind it and no slots, because nothing goes inside a turbine.
+ * Nor does it change the tower: height is built by hand, block by block, so the panel
+ * only reports it - and prices the next block, which is the one thing about the tower
+ * worth knowing while standing at it. Everything shown is read from the client's copy
+ * of the block entity, all of which arrives in its update tag already, so the panel
+ * needs no traffic of its own in that direction. It only sends the three commands.
  */
 public class WindTurbineScreen extends Screen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
@@ -63,8 +64,6 @@ public class WindTurbineScreen extends Screen {
 	private int topPos;
 	private Button stopButton;
 	private Button redstoneButton;
-	private Button towerDownButton;
-	private Button towerUpButton;
 	private LimitSlider limitSlider;
 
 	public WindTurbineScreen(BlockPos targetPos) {
@@ -76,11 +75,6 @@ public class WindTurbineScreen extends Screen {
 	protected void init() {
 		leftPos = (width - IMAGE_WIDTH) / 2;
 		topPos = (height - IMAGE_HEIGHT) / 2;
-
-		towerDownButton = addRenderableWidget(Button.builder(Component.literal("-"), b -> send(TurbineControlPayload.Action.REMOVE_TOWER_SEGMENT))
-				.bounds(leftPos + 181, topPos + 113, 20, 20).build());
-		towerUpButton = addRenderableWidget(Button.builder(Component.literal("+"), b -> send(TurbineControlPayload.Action.ADD_TOWER_SEGMENT))
-				.bounds(leftPos + 205, topPos + 113, 20, 20).build());
 
 		WindTurbineBlockEntity turbine = turbine();
 		double limitFraction = turbine == null ? 1.0 : turbine.getActivePowerLimit() / turbine.spec().ratedPowerKw();
@@ -125,9 +119,6 @@ public class WindTurbineScreen extends Screen {
 		redstoneButton.setMessage(Component.translatable("screen.electricity.wind_turbine.redstone",
 				Component.translatable("screen.electricity.wind_turbine.redstone." + mode)));
 		redstoneButton.setTooltip(Tooltip.create(Component.translatable("screen.electricity.wind_turbine.redstone.tip." + mode)));
-
-		towerDownButton.active = turbine.getTowerSegments() > spec.minTowerSegments();
-		towerUpButton.active = turbine.getTowerSegments() < spec.maxTowerSegments();
 
 		// while a drag is in progress the handle is the player's, not the machine's:
 		// overwriting it from the synced setpoint would fight the mouse
@@ -281,7 +272,8 @@ public class WindTurbineScreen extends Screen {
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower",
 				turbine.getTowerSegments(), spec.maxTowerSegments()), leftPos + 8, topPos + 117, LABEL_COLOUR, false);
 
-		// what one more segment is worth, so the cost is a decision rather than a gamble.
+		// what one more block of tower would be worth, so the climb is a decision rather than
+		// a gamble.
 		// Asked as a ratio between the two hub heights, which needs no detour back to the
 		// reference height and holds whatever the wind happens to be doing right now.
 		int segments = turbine.getTowerSegments();

@@ -112,24 +112,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	/** What the wind alone would have produced, before curtailment. */
 	private double uncappedPower = 0.0;
 
-	/**
-	 * One-block tower segments standing under the nacelle.
-	 *
-	 * The only thing about a placed turbine the player chooses, and the reason it matters
-	 * is {@link TurbineSpec#windAtHubHeight}: wind is faster away from the ground, and
-	 * because power goes with its cube a taller tower is worth far more than the height
-	 * suggests. It cuts both ways, which is what makes it a decision — in a storm the
-	 * tallest tower is the first one shear pushes past the derating threshold.
-	 */
-	private int towerSegments;
 	/** Air density at the nacelle, from ambient temperature. Cold air is denser and carries more power. */
 	private double airDensity = TurbineSpec.REFERENCE_AIR_DENSITY;
 
 	public WindTurbineBlockEntity(BlockPos pos, BlockState state) {
 		super(getBlockEntityType(), pos, state);
-		TurbineSpec spec = spec();
-		this.activePowerLimitKw = spec.ratedPowerKw();
-		this.towerSegments = spec.minTowerSegments();
+		this.activePowerLimitKw = spec().ratedPowerKw();
 		ensureArraySizes();
 		initializeWirePositions();
 		generateInsulatorIds();
@@ -148,8 +136,20 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return TurbineCatalog.fallback();
 	}
 
+	/**
+	 * How many tower segments stand under the machine.
+	 *
+	 * Counted out of the world rather than stored, which is the whole reason the tower is
+	 * real blocks: the height the physics uses and the tower a player can walk up are one
+	 * fact with one source, so they cannot come apart. Cheap enough to ask every tick -
+	 * thirteen block lookups is less than a redstone wire does idling.
+	 *
+	 * Both sides count for themselves, so none of this needs syncing.
+	 */
 	public int getTowerSegments() {
-		return spec().clampTowerSegments(towerSegments);
+		if (level == null) return spec().minTowerSegments();
+
+		return spec().clampTowerSegments(TurbineTowerBlock.countBelow(level, worldPosition));
 	}
 
 	public double getHubHeightM() {
@@ -181,20 +181,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return turbulence;
 	}
 
-	/**
-	 * Sets the tower height, in segments, clamped to what this model is sold on.
-	 *
-	 * Server-side only: it changes the power the machine makes and how tall it draws, so
-	 * both sides have to be told.
-	 */
-	public boolean setTowerSegments(int segments) {
-		int clamped = spec().clampTowerSegments(segments);
-		if (clamped == towerSegments) return false;
-
-		towerSegments = clamped;
-		onControlChanged();
-		return true;
-	}
 
 	private static BlockEntityType<WindTurbineBlockEntity> getBlockEntityType() {
 		return Electricity.WIND_TURBINE_BLOCK_ENTITY.get();
@@ -631,7 +617,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
 		Vec3 rotatedCenter = rotateVector(localCenter, facing);
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0, 0.5).add(rotatedCenter);
+		// the machine is the top block of the structure, and the wire fitting is at the foot
+		// of the tower, so the connection point drops by the whole tower - the same offset the
+		// renderer applies to that group, or a wire would attach to thin air
+		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
 	private Vec3 rotateVector(Vec3 vector, Direction facing) {
@@ -750,9 +739,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// an older turbine has no setpoint saved, so it defaults to uncurtailed rather
 		// than to a limit of zero, which would silently switch it off on load
 		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : spec().ratedPowerKw();
-		// a turbine saved before towers were adjustable stands at the shortest its model is
-		// sold on, which is also what a freshly placed one gets
-		towerSegments = spec().clampTowerSegments(tag.contains("towerSegments") ? tag.getInt("towerSegments") : spec().minTowerSegments());
 
 		updateWirePositions();
 	}
@@ -828,8 +814,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putBoolean("redstonePowered", redstonePowered);
 		tag.putString("redstoneMode", redstoneMode.name());
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
-		// the client draws the tower this tall and the GUI reports the hub height it implies
-		tag.putInt("towerSegments", getTowerSegments());
 	}
 
 	@Override

@@ -9,7 +9,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -61,6 +64,33 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
 		return SHAPE;
+	}
+
+	/**
+	 * A machine sits on a tower, at a height that tower is certified for.
+	 *
+	 * Both ends of the range are enforced, and the range is the manufacturer's rather than
+	 * something invented: real turbines are sold on specific tower heights, a V90 on 80,
+	 * 95 or 105 metres and not on whatever is to hand. The low end is also physics - the
+	 * blades would be in the ground - and the published minimum is at or above the tip
+	 * clearance for every machine in the catalogue, so one check covers both.
+	 *
+	 * A small rotor on a tall tower would be merely uneconomic rather than impossible, but
+	 * it is refused too: a 10 kW nacelle a hundred metres up looks wrong, and the certified
+	 * range is the honest reason to say no.
+	 */
+	@Override
+	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+		int segments = TurbineTowerBlock.countBelow(level, pos);
+		return segments >= spec.minTowerSegments() && segments <= spec.maxTowerSegments();
+	}
+
+	@Override
+	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
+		// the tower under it went away or grew past what this machine mounts on
+		if (direction == Direction.DOWN && !canSurvive(state, level, pos)) return Blocks.AIR.defaultBlockState();
+
+		return state;
 	}
 
 	@Override

@@ -9,7 +9,7 @@
     }
   },
   "result": {
-    "item": "electricity:tower_segment",
+    "item": "electricity:turbine_tower",
     "count": 2
   }
 }

@@ -1,15 +1,20 @@
 package com.dooji.electricity.item;
 
 import com.dooji.electricity.api.power.TurbineSpec;
+import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import java.util.List;
 import java.util.Locale;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
@@ -31,6 +36,33 @@ public class TurbineBlockItem extends BlockItem {
 
 	public TurbineSpec spec() {
 		return spec;
+	}
+
+	/**
+	 * Refuses to mount, and says why.
+	 *
+	 * {@code canSurvive} on the block already stops a turbine landing on a tower it is not
+	 * certified for, but silently: the player sees the block simply not appear, which reads
+	 * as a bug. The check is repeated here only to be able to name the number, which is the
+	 * one thing that turns the refusal into instructions.
+	 */
+	@Override
+	public InteractionResult place(BlockPlaceContext context) {
+		Level level = context.getLevel();
+		BlockPos pos = context.getClickedPos();
+		int segments = TurbineTowerBlock.countBelow(level, pos);
+
+		if (segments < spec.minTowerSegments() || segments > spec.maxTowerSegments()) {
+			Player player = context.getPlayer();
+			if (player != null) {
+				player.displayClientMessage(Component.translatable("message.electricity.turbine.tower_height",
+						spec.displayName(), spec.minTowerSegments(), spec.maxTowerSegments(), segments).withStyle(ChatFormatting.RED), true);
+			}
+
+			return InteractionResult.FAIL;
+		}
+
+		return super.place(context);
 	}
 
 	@Override

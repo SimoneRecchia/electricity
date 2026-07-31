@@ -42,6 +42,8 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Electricity.MOD_ID);
 	private static final Map<BlockPos, Float> YAW_CACHE = new HashMap<>();
 	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
+	/** Group whose underside has to land on the tower top: the nacelle. */
+	private static final String NACELLE_GROUP = "motor_Plastic";
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -88,14 +90,14 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		}
 
 		TurbineSpec spec = blockEntity.spec();
+		int towerSegments = blockEntity.getTowerSegments();
+
+		// Where the hub goes, measured from the turbine block's floor - which is also the top
+		// of the tower it stands on. Derived from the scale rather than fixed at mid-block,
+		// because the nacelle shrinks about the hub: at a fixed height the C130 would sit
+		// flush and every smaller machine would float, the C52 by a third of a block.
 		double nacelleScale = spec.nacelleRenderScale();
-		// the authored tower is 12.43 blocks; a tower of N segments is that stretched to N,
-		// which keeps the taper continuous and needs no second asset. Stretching rather than
-		// tiling is what makes any height possible: the pole carries vertices at two heights
-		// only, so a segment cut out of it would restart at the wide radius on every copy
-		// and the tower would read as a stack of cones.
-		double towerHeightScale = blockEntity.getTowerSegments() / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS;
-		double towerOffset = blockEntity.getTowerSegments() - TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS;
+		double hubMount = nacelleScale * (hubCenter.y - nacelleBottom(model, hubCenter.y));
 
 		poseStack.pushPose();
 		if (yawOffset != 0.0f) {
@@ -106,37 +108,37 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		for (Map.Entry<String, ObjModel.ObjGroup> entry : model.groups.entrySet()) {
 			String groupName = entry.getKey();
 
+			// The authored pole is never drawn any more. The tower is real blocks the player
+			// stacked, and each one draws its own slice, so drawing it here too would put a
+			// second tower inside the first.
+			if (groupName.startsWith("pole")) continue;
+
 			poseStack.pushPose();
 
-			if (groupName.startsWith("pole")) {
-				// radius follows the machine's size, height follows the tower the player built
-				poseStack.scale((float) nacelleScale, (float) towerHeightScale, (float) nacelleScale);
-			} else if (!groupName.startsWith("insulator")) {
-				// the nacelle, the hub cone and the blades ride up with the tower and scale
-				// about where they sit on it, so the assembly always meets the tower top
-				poseStack.translate(0.0, towerOffset, 0.0);
-				poseStack.translate(0.0, TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
-				poseStack.scale((float) nacelleScale, (float) nacelleScale, (float) nacelleScale);
-				poseStack.translate(0.0, -TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
+			if (groupName.startsWith("insulator")) {
+				// the wire fitting belongs at the foot of the tower, where a real machine's
+				// cables reach the transformer, and the machine is up at the top - so it drops
+				// by the whole tower. Left unscaled, so a wire lands on the same size fitting
+				// whichever turbine it came from.
+				poseStack.translate(0.0, -towerSegments, 0.0);
+			} else {
+				// The blades take the rotor's own scale and the nacelle and hub cone take the
+				// body's. On the C line the two are equal and this is one scale; on the
+				// small-wind machine the rotor is small against a body kept big enough to
+				// texture, which is the proportion the real thing has.
+				double scale = groupName.startsWith("rotate_1") ? spec.renderScale() : spec.nacelleRenderScale();
 
-				// the blades are scaled further, to the rotor's own diameter. On the C line
-				// this is the same figure and nothing extra happens; on the small-wind machine
-				// the rotor is small next to a body that has to stay big enough to texture,
-				// which is the proportion a real small turbine has.
-				double rotorScale = spec.renderScale() / nacelleScale;
-				if (groupName.startsWith("rotate_1") && rotorScale != 1.0) {
-					poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
-					poseStack.scale((float) rotorScale, (float) rotorScale, (float) rotorScale);
-					poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
-				}
+				// hub to its mounting height, scale about the hub, spin about the hub. Reading
+				// the transforms right to left is reading them in the order they apply.
+				poseStack.translate(hubCenter.x, hubMount, hubCenter.z);
+				poseStack.scale((float) scale, (float) scale, (float) scale);
 
 				if (groupName.startsWith("rotate_1") || groupName.startsWith("rotate_2")) {
 					// one angle for both: the hub cone is bolted to the blade roots
-					float rotation = groupName.startsWith("rotate_1") ? rotation1 : rotation2;
-					poseStack.translate(hubCenter.x, hubCenter.y, hubCenter.z);
-					poseStack.mulPose(Axis.ZP.rotationDegrees(rotation));
-					poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
+					poseStack.mulPose(Axis.ZP.rotationDegrees(groupName.startsWith("rotate_1") ? rotation1 : rotation2));
 				}
+
+				poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
 			}
 
 			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
@@ -146,6 +148,25 @@ public class WindTurbineRenderer extends ObjRendererBase {
 
 		renderGrouped(model, poses, projectionMatrix, textureLocation, packedLight, blockEntity.getBlockPos(), BUFFER_CACHE);
 		poseStack.popPose();
+	}
+
+	/**
+	 * Underside of the nacelle in the authored model, which is what has to meet the tower.
+	 *
+	 * Measured rather than written down, so the mounting still lands correctly if the model
+	 * is ever rebuilt. Falls back to the hub's own height, which puts the nacelle centred on
+	 * the tower top - wrong by half a nacelle, but visible rather than catastrophic.
+	 */
+	private static double nacelleBottom(ObjModel model, double fallback) {
+		ObjModel.ObjGroup nacelle = model.groups.get(NACELLE_GROUP);
+		if (nacelle == null || nacelle.vertices.isEmpty()) return fallback;
+
+		double lowest = Double.MAX_VALUE;
+		for (Vector3f vertex : nacelle.vertices) {
+			lowest = Math.min(lowest, vertex.y);
+		}
+
+		return lowest;
 	}
 
 	private static Vec3 calculateGroupCenter(ObjModel.ObjGroup group) {
