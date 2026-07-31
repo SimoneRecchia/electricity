@@ -1,6 +1,13 @@
 package com.dooji.electricity.block;
 
 import javax.annotation.Nullable;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
@@ -42,12 +49,30 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  */
 public class TurbineTowerBlock extends Block implements EntityBlock {
 	/**
+	 * Blocks a tower carries without complaint.
+	 *
+	 * Sixteen is 160 m at this mod's ten-metres-a-block scale, which is about the tallest
+	 * unguyed tube tower ever raised onshore, and comfortably above the 130 m the tallest
+	 * machine in the catalogue is certified for. Anything past it is a pillar rather than a
+	 * turbine tower.
+	 */
+	public static final int SAFE_HEIGHT = 16;
+	/**
+	 * Blocks a tower cannot hold up at all, even undisturbed.
+	 *
+	 * 200 m, past anything ever built. Between here and {@link #SAFE_HEIGHT} a tower stands
+	 * but carries nothing: step on it and the excess comes down.
+	 */
+	public static final int MAX_HEIGHT = 20;
+	/**
 	 * Where a walk up or down a tower gives up.
 	 *
-	 * Above the tallest certified tower with room to spare, so it is a guard against an
-	 * unbounded scan rather than a limit a player can reach.
+	 * Clear of {@link #MAX_HEIGHT} rather than level with it, because this is a guard against
+	 * an unbounded scan and not a limit anything should reach. When it was set at the height a
+	 * player could actually build to, the renderer stopped drawing tube past it and towers went
+	 * invisible from there up.
 	 */
-	private static final int SCAN_LIMIT = 16;
+	private static final int SCAN_LIMIT = MAX_HEIGHT + 4;
 	/**
 	 * Radius the collision octagon is built at, in blocks.
 	 *
@@ -141,6 +166,63 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		if (!canSurvive(state, level, pos)) return Blocks.AIR.defaultBlockState();
 
 		return state;
+	}
+
+	/**
+	 * Weight on top of an over-tall tower brings the excess down.
+	 *
+	 * Only the top block of a stack carries anything, and one lookup rules everything else
+	 * out, so this stays cheap despite being called on every movement tick of whatever is
+	 * standing there. Any entity will do it - a wandering mob is weight too.
+	 */
+	@Override
+	public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
+		super.stepOn(level, pos, state, entity);
+		if (level.isClientSide() || countAbove(level, pos) > 0) return;
+
+		collapseExcess(level, pos, entity);
+	}
+
+	/**
+	 * A tower stacked past what it can hold up comes down as it is built.
+	 *
+	 * Placement rather than support, so it catches every way of reaching up there - flying,
+	 * a scaffold beside it, a pillar - without needing to know which was used.
+	 */
+	@Override
+	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+		super.setPlacedBy(level, pos, state, placer, stack);
+		if (level.isClientSide() || countBelow(level, pos) + 1 <= MAX_HEIGHT) return;
+
+		collapseExcess(level, pos, placer);
+	}
+
+	/**
+	 * Drops everything a tower is carrying above {@link #SAFE_HEIGHT}, leaving a sound tower
+	 * standing under it.
+	 *
+	 * Taking only the excess rather than the whole stack is what makes the limit legible: the
+	 * player is left looking at exactly the tower that holds, instead of at rubble. Dropped as
+	 * items, the same way a tower comes apart when its support goes, so a collapse always
+	 * looks and costs the same however it was caused.
+	 */
+	private static void collapseExcess(Level level, BlockPos anywhere, @Nullable Entity cause) {
+		int below = countBelow(level, anywhere);
+		BlockPos foot = anywhere.below(below);
+		int height = below + 1 + countAbove(level, anywhere);
+		if (height <= SAFE_HEIGHT) return;
+
+		// downward, so the machine on top loses its support first and rides down with it
+		for (int segment = height - 1; segment >= SAFE_HEIGHT; segment--) {
+			BlockPos doomed = foot.above(segment);
+			if (level.getBlockState(doomed).getBlock() instanceof TurbineTowerBlock) {
+				level.destroyBlock(doomed, true);
+			}
+		}
+
+		if (cause instanceof Player player) {
+			player.displayClientMessage(Component.translatable("message.electricity.tower.collapsed", SAFE_HEIGHT).withStyle(ChatFormatting.RED), true);
+		}
 	}
 
 	/** A tube is mostly air, so it neither blocks light nor stops the sky. */
