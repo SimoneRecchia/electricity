@@ -70,6 +70,15 @@ public record TurbineSpec(
 	 * it happens to come out at the C130, which is why that one draws at 1:1.
 	 */
 	public static final double MODEL_ROTOR_DIAMETER_BLOCKS = 13.044;
+	/**
+	 * Height of the authored tower, in blocks.
+	 *
+	 * A tower of N segments is that tube stretched to N. The taper it stretches is slight -
+	 * radius 0.381 at the foot to 0.312 at the top - so stretching it is invisible, and it
+	 * keeps the tower one continuous piece of geometry at any height instead of a stack of
+	 * separately tapered slices.
+	 */
+	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 12.43;
 	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
 	private static final double SMALL_WIND_NACELLE_FLOOR = 0.45;
 	/** Fraction of rated output shed per m/s above the storm onset. */

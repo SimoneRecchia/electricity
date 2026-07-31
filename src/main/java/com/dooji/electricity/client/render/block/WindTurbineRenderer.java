@@ -1,6 +1,8 @@
 package com.dooji.electricity.client.render.block;
 
 import com.dooji.electricity.api.power.TurbineSpec;
+import com.dooji.electricity.block.TurbineTowerBlock;
+import com.dooji.electricity.block.TurbineTowerBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
@@ -42,6 +44,8 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Electricity.MOD_ID);
 	private static final Map<BlockPos, Float> YAW_CACHE = new HashMap<>();
 	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
+	/** Kept apart from the machines' so a tower and a turbine at one position cannot share entries. */
+	private static final Map<BlockPos, Map<String, GroupBuffer>> TOWER_BUFFER_CACHE = new HashMap<>();
 	/** Group whose underside has to land on the tower top: the nacelle. */
 	private static final String NACELLE_GROUP = "motor_Plastic";
 
@@ -67,6 +71,45 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		}
 
 		cleanupCache(BUFFER_CACHE, seen);
+		renderBareTowers(mc, event, cameraPos);
+	}
+
+	/**
+	 * Draws towers that have no machine on them yet.
+	 *
+	 * Only from the foot of each stack, and only when nothing is mounted: a capped tower is
+	 * drawn by its machine instead, in one pass over the same stretched tube, so the two
+	 * paths produce identical geometry and capping a tower changes nothing on screen.
+	 *
+	 * A stack therefore costs one draw call however tall it is, not one per block.
+	 */
+	private static void renderBareTowers(Minecraft mc, RenderLevelStageEvent event, Vec3 cameraPos) {
+		HashSet<BlockPos> seen = new HashSet<>();
+
+		for (TurbineTowerBlockEntity tower : TrackedBlockEntities.ofType(TurbineTowerBlockEntity.class)) {
+			BlockPos pos = tower.getBlockPos();
+			if (mc.level == null || !TurbineTowerBlock.isFoot(mc.level, pos)) continue;
+			if (TurbineTowerBlock.findTurbineAbove(mc.level, pos) != null) continue;
+
+			int height = 1 + TurbineTowerBlock.countAbove(mc.level, pos);
+			seen.add(pos);
+			ObjRenderUtil.withAlignedPose(tower, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, null, null,
+					(context, pose, buffers) -> {
+						Map<String, Matrix4f> poses = new HashMap<>();
+						for (Map.Entry<String, ObjModel.ObjGroup> entry : context.model().groups.entrySet()) {
+							if (!entry.getKey().startsWith("pole")) continue;
+
+							pose.pushPose();
+							pose.scale(1.0f, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
+							poses.put(entry.getKey(), new Matrix4f(pose.last().pose()));
+							pose.popPose();
+						}
+
+						renderGrouped(context.model(), poses, event.getProjectionMatrix(), context.texture(), context.packedLight(), pos, TOWER_BUFFER_CACHE);
+					});
+		}
+
+		cleanupCache(TOWER_BUFFER_CACHE, seen);
 	}
 
 	private static void renderWindTurbineWithAnimation(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation textureLocation, int packedLight,
@@ -108,14 +151,16 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		for (Map.Entry<String, ObjModel.ObjGroup> entry : model.groups.entrySet()) {
 			String groupName = entry.getKey();
 
-			// The authored pole is never drawn any more. The tower is real blocks the player
-			// stacked, and each one draws its own slice, so drawing it here too would put a
-			// second tower inside the first.
-			if (groupName.startsWith("pole")) continue;
-
 			poseStack.pushPose();
 
-			if (groupName.startsWith("insulator")) {
+			if (groupName.startsWith("pole")) {
+				// The authored tube, stretched to the tower the player built and drawn downward
+				// because the machine is the top of the structure. One continuous piece at any
+				// height, which is what it looked like before the tower became real blocks -
+				// those are invisible and only carry the collision.
+				poseStack.translate(0.0, -towerSegments, 0.0);
+				poseStack.scale(1.0f, (float) (towerSegments / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), 1.0f);
+			} else if (groupName.startsWith("insulator")) {
 				// the wire fitting belongs at the foot of the tower, where a real machine's
 				// cables reach the transformer, and the machine is up at the top - so it drops
 				// by the whole tower. Left unscaled, so a wire lands on the same size fitting
@@ -202,6 +247,13 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			}
 
 			calculateAndRegisterBoundingBoxes(definition);
+		}
+
+		// the tower draws the same asset's pole group, so it needs the model registered against
+		// its own block too - withAlignedPose looks the model up by block and refuses otherwise
+		ObjBlockDefinition turbine = ObjDefinitions.get(Electricity.WIND_TURBINE_BLOCK.get());
+		if (turbine != null) {
+			ObjBlockRegistry.register(Electricity.TURBINE_TOWER_BLOCK.get(), turbine.model(), null);
 		}
 	}
 

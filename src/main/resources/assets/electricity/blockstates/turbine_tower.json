@@ -1,52 +1,7 @@
 {
   "variants": {
-    "segment=0": {
-      "model": "electricity:block/turbine_tower_0"
-    },
-    "segment=1": {
-      "model": "electricity:block/turbine_tower_1"
-    },
-    "segment=2": {
-      "model": "electricity:block/turbine_tower_2"
-    },
-    "segment=3": {
-      "model": "electricity:block/turbine_tower_3"
-    },
-    "segment=4": {
-      "model": "electricity:block/turbine_tower_4"
-    },
-    "segment=5": {
-      "model": "electricity:block/turbine_tower_5"
-    },
-    "segment=6": {
-      "model": "electricity:block/turbine_tower_6"
-    },
-    "segment=7": {
-      "model": "electricity:block/turbine_tower_7"
-    },
-    "segment=8": {
-      "model": "electricity:block/turbine_tower_8"
-    },
-    "segment=9": {
-      "model": "electricity:block/turbine_tower_9"
-    },
-    "segment=10": {
-      "model": "electricity:block/turbine_tower_10"
-    },
-    "segment=11": {
-      "model": "electricity:block/turbine_tower_11"
-    },
-    "segment=12": {
-      "model": "electricity:block/turbine_tower_12"
-    },
-    "segment=13": {
-      "model": "electricity:block/turbine_tower_13"
-    },
-    "segment=14": {
-      "model": "electricity:block/turbine_tower_14"
-    },
-    "segment=15": {
-      "model": "electricity:block/turbine_tower_15"
+    "": {
+      "model": "electricity:block/stone_particle"
     }
   }
 }
