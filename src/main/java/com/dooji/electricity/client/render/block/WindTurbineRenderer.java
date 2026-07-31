@@ -135,12 +135,17 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		TurbineSpec spec = blockEntity.spec();
 		int towerSegments = blockEntity.getTowerSegments();
 
-		// Where the hub goes, measured from the turbine block's floor - which is also the top
-		// of the tower it stands on. Derived from the scale rather than fixed at mid-block,
-		// because the nacelle shrinks about the hub: at a fixed height the C130 would sit
-		// flush and every smaller machine would float, the C52 by a third of a block.
+		// The nacelle is bolted to the top of the tower, so that is what it shrinks towards -
+		// not the hub. Scaling it about the hub instead slid it forward as the machine got
+		// smaller: a C130 straddles the tower axis from -1.49 to +0.93, while a C52 came out at
+		// -0.03 to +0.94, hanging off the front of its own tower.
+		//
+		// So the pivot is the tower's own axis at its top, and the hub then travels with the
+		// nacelle it is mounted on - closer to the tower on a smaller machine, exactly as a real
+		// one is.
 		double nacelleScale = spec.nacelleRenderScale();
-		double hubMount = nacelleScale * (hubCenter.y - nacelleBottom(model, hubCenter.y));
+		double nacelleBottom = nacelleBottom(model, hubCenter.y);
+		Vec3 hub = new Vec3(hubCenter.x * nacelleScale, towerSegments + nacelleScale * (hubCenter.y - nacelleBottom), hubCenter.z * nacelleScale);
 
 		poseStack.pushPose();
 		if (yawOffset != 0.0f) {
@@ -161,25 +166,23 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			} else if (groupName.startsWith("insulator")) {
 				// nothing: authored at the foot, and drawn unscaled so a wire lands on the same
 				// size fitting whichever turbine it came from
-			} else {
-				poseStack.translate(0.0, towerSegments, 0.0);
-				// The blades take the rotor's own scale and the nacelle and hub cone take the
-				// body's. On the C line the two are equal and this is one scale; on the
-				// small-wind machine the rotor is small against a body kept big enough to
-				// texture, which is the proportion the real thing has.
-				double scale = groupName.startsWith("rotate_1") ? spec.renderScale() : spec.nacelleRenderScale();
+			} else if (groupName.startsWith("rotate_1") || groupName.startsWith("rotate_2")) {
+				// Both spin about the hub, which has already moved with the nacelle. The blades
+				// take the rotor's own scale and the hub cone takes the body's: on the C line the
+				// two are equal, and on the small-wind machine the rotor is small against a body
+				// kept big enough to texture, which is the proportion the real thing has.
+				double scale = groupName.startsWith("rotate_1") ? spec.renderScale() : nacelleScale;
 
-				// hub to its mounting height, scale about the hub, spin about the hub. Reading
-				// the transforms right to left is reading them in the order they apply.
-				poseStack.translate(hubCenter.x, hubMount, hubCenter.z);
+				poseStack.translate(hub.x, hub.y, hub.z);
 				poseStack.scale((float) scale, (float) scale, (float) scale);
-
-				if (groupName.startsWith("rotate_1") || groupName.startsWith("rotate_2")) {
-					// one angle for both: the hub cone is bolted to the blade roots
-					poseStack.mulPose(Axis.ZP.rotationDegrees(groupName.startsWith("rotate_1") ? rotation1 : rotation2));
-				}
-
+				// one angle for both: the hub cone is bolted to the blade roots
+				poseStack.mulPose(Axis.ZP.rotationDegrees(groupName.startsWith("rotate_1") ? rotation1 : rotation2));
 				poseStack.translate(-hubCenter.x, -hubCenter.y, -hubCenter.z);
+			} else {
+				// the nacelle, scaled about the tower axis at the tower top
+				poseStack.translate(0.0, towerSegments, 0.0);
+				poseStack.scale((float) nacelleScale, (float) nacelleScale, (float) nacelleScale);
+				poseStack.translate(0.0, -nacelleBottom, 0.0);
 			}
 
 			poses.put(groupName, new Matrix4f(poseStack.last().pose()));

@@ -78,8 +78,17 @@ public record TurbineSpec(
 	 * at the foot to 0.312 at the top - so the stretch itself is invisible.
 	 */
 	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 12.43;
-	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
-	private static final double SMALL_WIND_NACELLE_FLOOR = 0.45;
+	/**
+	 * Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth
+	 * texturing.
+	 *
+	 * A real small turbine does carry a chunkier body next to its rotor than a utility machine
+	 * does, but not by much: at 0.45 this drew one two and a half times the authored
+	 * proportion, which read as a barrel with a propeller taped to it. A quarter keeps the
+	 * nacelle about four pixels tall - thin, but present - and lands within half again of the
+	 * proportion the model was built at.
+	 */
+	private static final double SMALL_WIND_NACELLE_FLOOR = 0.25;
 	/** Fraction of rated output shed per m/s above the storm onset. */
 	private static final double STORM_DERATE_PER_MS = 0.2;
 
