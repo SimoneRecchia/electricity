@@ -135,6 +135,9 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 			tower.invalidateCaps();
 			level.updateNeighbourForOutputSignal(foot, level.getBlockState(foot).getBlock());
 		}
+
+		// the tower narrows to whichever machine stands on it, so gaining or losing one changes it
+		TurbineTowerBlock.refreshThickness(level, foot);
 	}
 
 	@Override

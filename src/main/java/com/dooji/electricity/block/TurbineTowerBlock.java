@@ -19,7 +19,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -75,26 +78,141 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 */
 	private static final int SCAN_LIMIT = MAX_HEIGHT + 4;
 	/**
-	 * Radius the collision octagon is built at, in blocks.
+	 * Radius of the authored tube, in blocks, at the scale the C130 draws it.
 	 *
-	 * The middle of the authored tube's 0.381-to-0.312 taper, so the error is shared
-	 * evenly between the foot and the top rather than piling up at one end.
+	 * The middle of that tube's 0.381-to-0.312 taper, so the error is shared evenly between
+	 * the foot and the top rather than piling up at one end.
 	 */
-	private static final double COLLISION_RADIUS = 0.3465;
+	private static final double AUTHORED_RADIUS = 0.3465;
 	/** cos(45 degrees): how far the crossing box reaches, to turn a plus into an octagon. */
 	private static final double OCTAGON = 0.70710678;
 
-	private static final VoxelShape SHAPE = Shapes.or(
-			Shapes.box(0.5 - COLLISION_RADIUS, 0.0, 0.5 - COLLISION_RADIUS * OCTAGON, 0.5 + COLLISION_RADIUS, 1.0, 0.5 + COLLISION_RADIUS * OCTAGON),
-			Shapes.box(0.5 - COLLISION_RADIUS * OCTAGON, 0.0, 0.5 - COLLISION_RADIUS, 0.5 + COLLISION_RADIUS * OCTAGON, 1.0, 0.5 + COLLISION_RADIUS));
+	/**
+	 * How thick this tower is drawn and collided at, as a step on a ladder from
+	 * {@link #THINNEST} to full size.
+	 *
+	 * A tower has to narrow with its machine or the proportions come apart: the authored tube
+	 * is right for a C130, whose nacelle is nearly a block tall, and nearly three times too
+	 * wide for an SW-10, whose nacelle is a quarter of one. Since the blocks are generic there
+	 * is nothing on them to say which machine they belong to, so the answer is held in the
+	 * state - which also keeps {@link #getShape} an array lookup, and it is asked far more
+	 * often than a tower changes.
+	 */
+	public static final IntegerProperty THICKNESS = IntegerProperty.create("thickness", 0, 7);
+	/** Thinnest a tower is drawn, matching the smallest nacelle in the catalogue. */
+	private static final double THINNEST = 0.25;
+	private static final int STEPS = 8;
+
+	private static final VoxelShape[] SHAPES = buildShapes();
+	/**
+	 * Thickness step a tower with nothing on it is drawn at, by its height.
+	 *
+	 * A bare tower has no machine to take its proportion from, and its height cannot supply one
+	 * either: the certified bands overlap so heavily that at nine or ten blocks a C80, C90, C112
+	 * and C130 could all be coming, wanting steps 3, 4, 6 and 7. A spread of four means no
+	 * function of height can land within better than two steps of every machine, whatever shape
+	 * it takes.
+	 *
+	 * So this is not a curve but the midpoint of that ambiguity at each height, which reaches
+	 * that floor of two. A tower therefore changes by at most two steps when its machine finally
+	 * goes on - and a short tower, where the ambiguity is small, barely changes at all.
+	 */
+	private static final int[] BARE_STEP_BY_HEIGHT = {0, 0, 0, 0, 1, 1, 2, 2, 4, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7};
+
+	/** Guards the state writes in {@link #refreshThickness} from re-entering through their own updates. */
+	private static boolean refreshing;
 
 	public TurbineTowerBlock(Properties properties) {
 		super(properties);
+		// full size by default, so a tower saved before this property existed keeps the look it
+		// had until the next thing a player does to it settles the question
+		this.registerDefaultState(this.stateDefinition.any().setValue(THICKNESS, STEPS - 1));
+	}
+
+	private static VoxelShape[] buildShapes() {
+		VoxelShape[] shapes = new VoxelShape[STEPS];
+		for (int step = 0; step < STEPS; step++) {
+			double radius = AUTHORED_RADIUS * scaleOf(step);
+			double narrow = radius * OCTAGON;
+			shapes[step] = Shapes.or(
+					Shapes.box(0.5 - radius, 0.0, 0.5 - narrow, 0.5 + radius, 1.0, 0.5 + narrow),
+					Shapes.box(0.5 - narrow, 0.0, 0.5 - radius, 0.5 + narrow, 1.0, 0.5 + radius));
+		}
+
+		return shapes;
+	}
+
+	/** The radial scale a step on the thickness ladder stands for. */
+	public static double scaleOf(int step) {
+		return THINNEST + (1.0 - THINNEST) * Mth.clamp(step, 0, STEPS - 1) / (STEPS - 1.0);
+	}
+
+	/**
+	 * The nearest step to a machine's own nacelle scale.
+	 *
+	 * The renderer quantises through here too, so what is drawn and what is collided with come
+	 * off the same ladder rather than off two numbers that agree to within a rounding.
+	 */
+	public static int stepFor(double scale) {
+		return Mth.clamp((int) Math.round((scale - THINNEST) / (1.0 - THINNEST) * (STEPS - 1)), 0, STEPS - 1);
+	}
+
+	public static double scaleFor(double scale) {
+		return scaleOf(stepFor(scale));
+	}
+
+	@Override
+	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+		builder.add(THICKNESS);
 	}
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return SHAPES[state.getValue(THICKNESS)];
+	}
+
+	/**
+	 * Settles how thick a whole tower is, and writes it to every block in it.
+	 *
+	 * Driven from the machine when there is one, since that is the proportion the thickness
+	 * exists to match. A bare stack has no machine to ask, so its height stands in for one:
+	 * every model is sold on a band of heights, so a short tower is a small machine's tower
+	 * and a tall one is not. The two agree closely enough that capping a tower barely changes
+	 * it - which is the point of deriving the bare case from height rather than defaulting it.
+	 *
+	 * Called when a tower or a machine is placed or broken, which is every way the answer can
+	 * change. The writes skip neighbour updates and are guarded against re-entry, or setting
+	 * one block's state would send us round again through its own update.
+	 */
+	public static void refreshThickness(Level level, BlockPos anywhere) {
+		if (level.isClientSide() || refreshing) return;
+
+		int below = countBelow(level, anywhere);
+		BlockPos foot = anywhere.below(below);
+		int height = below + 1 + countAbove(level, anywhere);
+		int step = stepFor(targetScale(level, foot, height));
+
+		refreshing = true;
+		try {
+			for (int segment = 0; segment < height; segment++) {
+				BlockPos pos = foot.above(segment);
+				BlockState state = level.getBlockState(pos);
+				if (!(state.getBlock() instanceof TurbineTowerBlock) || state.getValue(THICKNESS) == step) continue;
+
+				level.setBlock(pos, state.setValue(THICKNESS, step), Block.UPDATE_CLIENTS);
+			}
+		} finally {
+			refreshing = false;
+		}
+	}
+
+	private static double targetScale(Level level, BlockPos foot, int height) {
+		BlockPos machine = findTurbineAbove(level, foot);
+		if (machine != null && level.getBlockState(machine).getBlock() instanceof WindTurbineBlock turbine) {
+			return turbine.spec().nacelleRenderScale();
+		}
+
+		return scaleOf(BARE_STEP_BY_HEIGHT[Mth.clamp(height, 0, BARE_STEP_BY_HEIGHT.length - 1)]);
 	}
 
 	/**
@@ -201,9 +319,21 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	@Override
 	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, placer, stack);
-		if (level.isClientSide() || countBelow(level, pos) + 1 <= MAX_HEIGHT) return;
+		if (level.isClientSide()) return;
 
-		collapse(level, pos, placer);
+		if (countBelow(level, pos) + 1 > MAX_HEIGHT) {
+			collapse(level, pos, placer);
+			return;
+		}
+
+		refreshThickness(level, pos);
+	}
+
+	@Override
+	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+		super.onRemove(state, level, pos, newState, movedByPiston);
+		// the stack left underneath is shorter than it was, so its thickness may have changed
+		if (!state.is(newState.getBlock()) && !level.isClientSide()) refreshThickness(level, pos.below());
 	}
 
 	/**
