@@ -83,8 +83,8 @@
   "screen.electricity.wind_turbine.redstone.tip.high": "Runs only while receiving a redstone signal.",
   "screen.electricity.wind_turbine.redstone.tip.low": "Runs only while not receiving a redstone signal.",
   "block.electricity.turbine_tower": "Turbine Tower",
-  "tooltip.electricity.turbine_tower": "Stack it to the height you want, then mount a turbine on top. Stands 16 blocks; taller will not hold.",
-  "message.electricity.turbine.tower_height": "%s mounts on %s-%s tower segments, not %s.",
+  "tooltip.electricity.turbine_tower": "Stack it to the height you want, then seat a turbine on top. Nothing stands above 16 blocks.",
+  "message.electricity.turbine.tower_height": "%s is built for %s to %s blocks of tower. This one stands %s.",
   "screen.electricity.wind_turbine.tower_gain": "One block taller: %s output",
-  "message.electricity.tower.collapsed": "The tower cannot carry anything above %s blocks."
+  "message.electricity.tower.collapsed": "The steel groans, and the tower folds under its own weight."
 }

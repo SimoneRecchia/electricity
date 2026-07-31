@@ -7,6 +7,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -180,7 +181,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		super.stepOn(level, pos, state, entity);
 		if (level.isClientSide() || countAbove(level, pos) > 0) return;
 
-		collapseExcess(level, pos, entity);
+		collapse(level, pos, entity);
 	}
 
 	/**
@@ -194,34 +195,28 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		super.setPlacedBy(level, pos, state, placer, stack);
 		if (level.isClientSide() || countBelow(level, pos) + 1 <= MAX_HEIGHT) return;
 
-		collapseExcess(level, pos, placer);
+		collapse(level, pos, placer);
 	}
 
 	/**
-	 * Drops everything a tower is carrying above {@link #SAFE_HEIGHT}, leaving a sound tower
-	 * standing under it.
+	 * Starts the whole tower failing, if it has been built past what it can hold.
 	 *
-	 * Taking only the excess rather than the whole stack is what makes the limit legible: the
-	 * player is left looking at exactly the tower that holds, instead of at rubble. Dropped as
-	 * items, the same way a tower comes apart when its support goes, so a collapse always
-	 * looks and costs the same however it was caused.
+	 * All of it, not only the part above the safe height: a tower that buckles does not shed
+	 * its top few blocks and stand there, it comes down. {@link TowerCollapse} draws the
+	 * fracture running from the top to the foot over about a second and a half, and the
+	 * machine up there loses its support along with everything else.
 	 */
-	private static void collapseExcess(Level level, BlockPos anywhere, @Nullable Entity cause) {
+	private static void collapse(Level level, BlockPos anywhere, @Nullable Entity cause) {
+		if (!(level instanceof ServerLevel serverLevel)) return;
+
 		int below = countBelow(level, anywhere);
-		BlockPos foot = anywhere.below(below);
 		int height = below + 1 + countAbove(level, anywhere);
 		if (height <= SAFE_HEIGHT) return;
 
-		// downward, so the machine on top loses its support first and rides down with it
-		for (int segment = height - 1; segment >= SAFE_HEIGHT; segment--) {
-			BlockPos doomed = foot.above(segment);
-			if (level.getBlockState(doomed).getBlock() instanceof TurbineTowerBlock) {
-				level.destroyBlock(doomed, true);
-			}
-		}
+		TowerCollapse.begin(serverLevel, anywhere.below(below), height);
 
 		if (cause instanceof Player player) {
-			player.displayClientMessage(Component.translatable("message.electricity.tower.collapsed", SAFE_HEIGHT).withStyle(ChatFormatting.RED), true);
+			player.displayClientMessage(Component.translatable("message.electricity.tower.collapsed").withStyle(ChatFormatting.RED), true);
 		}
 	}
 

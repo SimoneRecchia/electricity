@@ -10,6 +10,7 @@ import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.block.TowerCollapse;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.TurbineTowerBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlock;
@@ -275,6 +276,8 @@ public class Electricity {
 		if (powerNetwork != null) {
 			powerNetwork.updatePowerNetwork();
 		}
+
+		TowerCollapse.tickAll();
 	}
 
 	@SubscribeEvent
@@ -284,6 +287,8 @@ public class Electricity {
 		for (ServerLevel level : event.getServer().getAllLevels()) {
 			GlobalWeatherManager.clear(level);
 		}
+
+		TowerCollapse.clear();
 	}
 
 	@SubscribeEvent
