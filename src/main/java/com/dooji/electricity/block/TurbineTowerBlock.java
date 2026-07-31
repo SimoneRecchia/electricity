@@ -147,11 +147,19 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	}
 
 	/**
-	 * A tower needs a tower under it, or ground.
+	 * A tower needs a tower under it, or something with substance to it.
 	 *
-	 * One rule, and the collapse comes out of it for free: knock out the bottom and every
-	 * block above fails the same check in turn and drops. That is the behaviour ladders and
-	 * torches already have, so nobody has to be told, and it matches how a real tower fails.
+	 * Anything with a collision shape counts, rather than a sturdy face. A sturdy face means
+	 * a full square block underneath - the rule vanilla uses for doors and rails - and it
+	 * refused the machines and pipes of other mods, whose shapes have cutouts in them.
+	 * Those are precisely what a turbine gets built next to, so a tower would not seat on an
+	 * energy cube or a length of transmitter. A foot rests on what is under it; it does not
+	 * ask for a flat square.
+	 *
+	 * Still a support rule, though, and the collapse comes out of it for free: take away
+	 * what a tower stands on and every block above fails this same check in turn. That is
+	 * how ladders and torches already behave, so nobody has to be told, and it is how a real
+	 * tower fails too.
 	 */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
@@ -159,7 +167,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		BlockState support = level.getBlockState(below);
 		if (support.getBlock() instanceof TurbineTowerBlock) return true;
 
-		return support.isFaceSturdy(level, below, Direction.UP);
+		return !support.getCollisionShape(level, below).isEmpty();
 	}
 
 	@Override
