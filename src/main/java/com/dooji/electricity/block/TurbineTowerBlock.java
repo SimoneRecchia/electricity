@@ -42,22 +42,24 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * on offer - and where it cannot, it errs inwards. Everything you can walk into is inside
  * something you can see.
  *
- * It is round rather than square, by {@link #STRIPS} strips laid each way. It does not
- * follow the tube's taper, and that is deliberate: one radius the whole way up is the only
- * profile with no outward-facing horizontal surface anywhere on it, and any such surface is
- * a step a player can stand on. There is no third option here - a tapering collision is a
- * staircase however finely it is cut, and cutting it finer makes it worse rather than
- * better, since a step under 0.6 blocks is one Minecraft walks up without even a jump.
+ * It is round rather than square, by {@link #STRIPS} strips laid each way, and it narrows
+ * with the tube: each block takes the radius at its own top, the narrowest the tube gets
+ * within it, so the collision is inside the steel over that block's whole height.
  *
- * That one radius is therefore the narrowest the tube reaches, at its top, which leaves the
- * collision about 1.8 pixels inside the flare at the foot and never outside the steel
- * anywhere. The 0.622 that looks like the tower's width is only the base plinth, eight
- * centimetres tall, and is not collided with at all.
+ * That taper carries a cost worth naming. A collision that narrows leaves an outward-facing
+ * ledge at every block boundary, and in Minecraft a ledge of any width supports a player, so
+ * a tapered tower can be climbed. The ledges are a block's worth of taper each - 0.085 pixels
+ * on a thirteen-block tower, 0.28 on a four-block one - and nothing made of axis-aligned
+ * boxes can taper and be unclimbable at once. One radius for the whole tower is the only
+ * profile without a ledge, and it is 1.1 pixels out at the foot instead.
  *
- * {@link #THICKNESS} carries how wide this tower is, taken from the machine standing on
- * it, and {@link #refreshThickness} settles it whenever the structure changes - so
- * {@link #getShape} stays an array lookup, being asked far more often than a tower is
- * ever built.
+ * The 0.622 that looks like the tower's width is only the base plinth, eight centimetres
+ * tall, and is not collided with at all.
+ *
+ * {@link #THICKNESS} carries how wide this tower is, from the machine standing on it, and
+ * {@link #TAPER} where in the tube each block falls. {@link #refreshThickness} settles both
+ * whenever the structure changes, so {@link #getShape} stays an array lookup - it is asked
+ * far more often than a tower is ever built.
  */
 public class TurbineTowerBlock extends Block implements EntityBlock {
 	/**
@@ -86,20 +88,15 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 */
 	private static final int SCAN_LIMIT = MAX_HEIGHT + 4;
 	/**
-	 * Radius the column is collided at, in blocks, at the scale the C130 draws it.
+	 * The authored tube's radius where it leaves the base plinth, in blocks, at C130 scale.
 	 *
-	 * The narrowest the authored tube ever gets, which is at its top - not the middle of its
-	 * 0.381-to-0.312 taper. Taking the middle left the collision standing 18% outside the tube
-	 * up there, and an F3+B wireframe showed it plainly as a cage of empty air around the
-	 * steel. Since the collision has to be one radius the whole way up, the only one that is
-	 * never outside what you can see is the smallest one the tube reaches.
-	 *
-	 * The cost is at the foot, where the tube flares to 0.381 and the collision does not follow:
-	 * you can press about 1.8 pixels into the surface down there. That is the better error of
-	 * the two - clipping slightly into steel reads as nothing, while bumping into thin air reads
-	 * as a bug.
+	 * The plinth itself is wider than anything else on the tower - 0.622, twice the tube - but it
+	 * is only eight centimetres tall and nothing collides with it. The tube proper is one cone
+	 * from here to {@link #TOP_RADIUS}, and it is the tube that the collision traces.
 	 */
-	private static final double COLLISION_RADIUS = 0.312;
+	private static final double FOOT_RADIUS = 0.381;
+	/** And at the top, which is the narrowest the tube ever gets. */
+	private static final double TOP_RADIUS = 0.312;
 	/**
 	 * Strips per quadrant used to round the collision off.
 	 *
@@ -111,8 +108,8 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 *
 	 * Six strips each way instead - across the shallow arcs and down the steep ones, since neither
 	 * direction alone can follow a circle where it turns away from that direction. Twelve boxes,
-	 * and each one is cut to the chord at its far edge so that no box anywhere reaches past
-	 * {@link #COLLISION_RADIUS}. That is by construction rather than by measurement, which is
+	 * and each one is cut to the chord at its far edge so that no box anywhere reaches past the
+	 * radius it was built for. That is by construction rather than by measurement, which is
 	 * what makes it safe to say the collision never stands outside the tube: a balanced fit
 	 * looks tighter on paper but its boxes' corners do reach past the circle, and past the tube
 	 * with them.
@@ -131,11 +128,30 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 * often than a tower changes.
 	 */
 	public static final IntegerProperty THICKNESS = IntegerProperty.create("thickness", 0, 7);
+	/**
+	 * How far up its tower this block sits, in sixteenths.
+	 *
+	 * One radius for a whole tower left the collision hidden well inside the flare at the foot -
+	 * 1.1 pixels of it - while sitting flush at the top, which is visible the moment an F3+B
+	 * wireframe goes on. Each block now traces the tube over its own span instead.
+	 *
+	 * Held as a fraction of the way up rather than as a segment index because the tube is
+	 * stretched over whatever height the tower is, so an index alone would not say where in the
+	 * taper a block falls; the fraction does, and needs no third number to read it.
+	 *
+	 * This is the trade that comes with it: a collision that narrows has an outward-facing ledge
+	 * at every block boundary, and in Minecraft a ledge of any width supports a player. They are
+	 * small - a block's worth of taper is 0.085 pixels on a thirteen-block tower and 0.28 on a
+	 * four-block one, against the 0.32 to 0.47 that were noticed before - but they are there.
+	 * Nothing made of axis-aligned boxes can taper and be unclimbable at once.
+	 */
+	public static final IntegerProperty TAPER = IntegerProperty.create("taper", 0, 15);
+	private static final int TAPER_STEPS = 16;
 	/** Thinnest a tower is drawn, matching the smallest nacelle in the catalogue. */
 	private static final double THINNEST = 0.25;
 	private static final int STEPS = 8;
 
-	private static final VoxelShape[] SHAPES = buildShapes();
+	private static final VoxelShape[][] SHAPES = buildShapes();
 	/**
 	 * Thickness step a tower with nothing on it is drawn at, by its height.
 	 *
@@ -158,16 +174,23 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		super(properties);
 		// full size by default, so a tower saved before this property existed keeps the look it
 		// had until the next thing a player does to it settles the question
-		this.registerDefaultState(this.stateDefinition.any().setValue(THICKNESS, STEPS - 1));
+		this.registerDefaultState(this.stateDefinition.any().setValue(THICKNESS, STEPS - 1).setValue(TAPER, 0));
 	}
 
-	private static VoxelShape[] buildShapes() {
-		VoxelShape[] shapes = new VoxelShape[STEPS];
+	private static VoxelShape[][] buildShapes() {
+		VoxelShape[][] shapes = new VoxelShape[STEPS][TAPER_STEPS];
 		for (int thickness = 0; thickness < STEPS; thickness++) {
-			shapes[thickness] = roundColumn(COLLISION_RADIUS * scaleOf(thickness));
+			for (int taper = 0; taper < TAPER_STEPS; taper++) {
+				shapes[thickness][taper] = roundColumn(radiusAt(thickness, taper));
+			}
 		}
 
 		return shapes;
+	}
+
+	/** Tube radius for a tower this thick, at this fraction of the way up it. */
+	private static double radiusAt(int thickness, int taper) {
+		return Mth.lerp(taper / (TAPER_STEPS - 1.0), FOOT_RADIUS, TOP_RADIUS) * scaleOf(thickness);
 	}
 
 	/**
@@ -222,12 +245,12 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(THICKNESS);
+		builder.add(THICKNESS, TAPER);
 	}
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPES[state.getValue(THICKNESS)];
+		return SHAPES[state.getValue(THICKNESS)][state.getValue(TAPER)];
 	}
 
 	/**
@@ -256,9 +279,17 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 			for (int segment = 0; segment < height; segment++) {
 				BlockPos pos = foot.above(segment);
 				BlockState state = level.getBlockState(pos);
-				if (!(state.getBlock() instanceof TurbineTowerBlock) || state.getValue(THICKNESS) == step) continue;
+				if (!(state.getBlock() instanceof TurbineTowerBlock)) continue;
 
-				level.setBlock(pos, state.setValue(THICKNESS, step), Block.UPDATE_CLIENTS);
+				// The top of this block, which is the narrowest the tube gets within it, so the
+				// collision stays inside the steel over the block's whole height. Rounded up rather
+				// than to nearest, because a higher step is a smaller radius: rounding to nearest let
+				// it out past the tube by a hundredth of a pixel, and never-outside is worth more as
+				// something true by construction than as something true by a rounding.
+				int taper = Math.min((int) Math.ceil((segment + 1.0) / height * (TAPER_STEPS - 1)), TAPER_STEPS - 1);
+				if (state.getValue(THICKNESS) == step && state.getValue(TAPER) == taper) continue;
+
+				level.setBlock(pos, state.setValue(THICKNESS, step).setValue(TAPER, taper), Block.UPDATE_CLIENTS);
 			}
 		} finally {
 			refreshing = false;
