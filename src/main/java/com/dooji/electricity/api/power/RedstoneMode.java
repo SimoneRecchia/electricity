@@ -35,6 +35,17 @@ public enum RedstoneMode {
 	}
 
 	/**
+	 * The next mode round, for a control panel with one button for all three.
+	 *
+	 * Wraps, so a player who overshoots comes back round rather than having to find a
+	 * second control to go the other way.
+	 */
+	public RedstoneMode next() {
+		RedstoneMode[] modes = values();
+		return modes[(ordinal() + 1) % modes.length];
+	}
+
+	/**
 	 * @param powered whether a redstone signal is present
 	 * @return whether the turbine may run under this mode
 	 */

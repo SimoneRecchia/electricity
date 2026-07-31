@@ -6,6 +6,7 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
+import com.dooji.electricity.client.screen.WindTurbineScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
@@ -47,7 +48,14 @@ public final class PowerWrenchClientHooks {
 		BlockPos target = findTargetedElectricBlock(mc, player, reach);
 		if (target == null) return false;
 
-		mc.setScreen(new PowerInfoScreen(target));
+		// a turbine has a control panel of its own; everything else still gets the plain
+		// readout, which is all there is to say about a pole or a junction box
+		if (mc.level.getBlockEntity(target) instanceof WindTurbineBlockEntity) {
+			mc.setScreen(new WindTurbineScreen(target));
+		} else {
+			mc.setScreen(new PowerInfoScreen(target));
+		}
+
 		return true;
 	}
 

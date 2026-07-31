@@ -54,6 +54,7 @@ public final class TurbineTelemetrySimulator {
 			boolean braked,
 			boolean windCutOut,
 			boolean stoppedByComputer,
+			boolean stoppedByPlayer,
 			boolean stoppedByRedstone,
 			boolean yawing,
 			double ambientTempC,
@@ -108,6 +109,7 @@ public final class TurbineTelemetrySimulator {
 		out.put(TurbineTelemetry.RUNNING, !s.braked());
 		out.put(TurbineTelemetry.WIND_CUT_OUT, s.windCutOut());
 		out.put(TurbineTelemetry.STOPPED_BY_COMPUTER, s.stoppedByComputer());
+		out.put(TurbineTelemetry.STOPPED_BY_PLAYER, s.stoppedByPlayer());
 		out.put(TurbineTelemetry.STOPPED_BY_REDSTONE, s.stoppedByRedstone());
 
 		// ---- derived ----

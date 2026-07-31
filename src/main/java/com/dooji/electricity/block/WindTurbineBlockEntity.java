@@ -96,6 +96,16 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// Control state. Volatile because a ComputerCraft program reads it from the
 	// computer thread; writes come back through the server thread, see the setters.
 	private volatile boolean stoppedByComputer = false;
+	/**
+	 * The brake a player applied from the control panel.
+	 *
+	 * Kept apart from {@link #stoppedByComputer} rather than sharing it, because a program
+	 * asks {@code isStopped()} to find out whether *it* stopped the machine. Folding a
+	 * player's hand-stop into the same flag would answer yes to a program that had issued
+	 * no such command, and a control loop written on that answer would then leave a
+	 * turbine down believing it had put it there.
+	 */
+	private volatile boolean stoppedByPlayer = false;
 	private volatile RedstoneMode redstoneMode = RedstoneMode.DISABLED;
 	private volatile boolean redstonePowered = false;
 	private volatile double activePowerLimitKw;
@@ -148,6 +158,18 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	public double getAirDensity() {
 		return airDensity;
+	}
+
+	/**
+	 * The output the server last published, in kW, without recomputing it.
+	 *
+	 * {@link #getGeneratedPower()} runs the generation model again, which is what the wire
+	 * network wants but wrong for a readout on the client: the client has no air density of
+	 * its own, so it would recompute a slightly different number than the machine is
+	 * actually making. This returns what was synced.
+	 */
+	public double getReportedPowerKw() {
+		return Math.max(0.0, generatedPower);
 	}
 
 	/** What the wind offered before the curtailment setpoint took anything off it, in kW. */
@@ -331,7 +353,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * wind cut-out alone.
 	 */
 	public boolean isBraked() {
-		return cutOutActive || stoppedByComputer || !redstoneMode.allowsRunning(redstonePowered);
+		return cutOutActive || stoppedByComputer || stoppedByPlayer || !redstoneMode.allowsRunning(redstonePowered);
 	}
 
 	public boolean isRunning() {
@@ -340,6 +362,18 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	public boolean isStoppedByComputer() {
 		return stoppedByComputer;
+	}
+
+	public boolean isStoppedByPlayer() {
+		return stoppedByPlayer;
+	}
+
+	/** Applies or releases the hand brake. Server thread only, like the other controls. */
+	public void setStoppedByPlayer(boolean stopped) {
+		if (stoppedByPlayer == stopped) return;
+
+		stoppedByPlayer = stopped;
+		onControlChanged();
 	}
 
 	public boolean isStoppedByRedstone() {
@@ -447,6 +481,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 				isBraked(),
 				cutOutActive,
 				stoppedByComputer,
+				stoppedByPlayer,
 				isStoppedByRedstone(),
 				yawing,
 				ambientTemperature(precipitating, storming),
@@ -694,6 +729,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		rotationSpeed1 = tag.getFloat("rotationSpeed1");
 		rotationSpeed2 = tag.getFloat("rotationSpeed2");
 		generatedPower = tag.getDouble("generatedPower");
+		uncappedPower = tag.getDouble("uncappedPower");
+		airDensity = tag.contains("airDensity") ? tag.getDouble("airDensity") : TurbineSpec.REFERENCE_AIR_DENSITY;
 		currentPower = tag.getDouble("currentPower");
 		lastEffectiveWindSpeed = tag.getFloat("lastEffectiveWindSpeed");
 		lastAlignedWindSpeed = tag.contains("lastAlignedWindSpeed") ? tag.getFloat("lastAlignedWindSpeed") : lastEffectiveWindSpeed;
@@ -706,6 +743,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		yawCableTwist = tag.getDouble("yawCableTwist");
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
+		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
 		redstonePowered = tag.getBoolean("redstonePowered");
 		RedstoneMode savedMode = RedstoneMode.byName(tag.getString("redstoneMode"));
 		redstoneMode = savedMode != null ? savedMode : RedstoneMode.DISABLED;
@@ -766,6 +804,11 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putFloat("rotationSpeed1", rotationSpeed1);
 		tag.putFloat("rotationSpeed2", rotationSpeed2);
 		tag.putDouble("generatedPower", generatedPower);
+		// both exist for the control panel: without them the client would have to redo the
+		// generation calculation, and it cannot - air density comes from the server's own
+		// weather sampling, so the two would quietly disagree by a few percent
+		tag.putDouble("uncappedPower", uncappedPower);
+		tag.putDouble("airDensity", airDensity);
 		tag.putDouble("currentPower", currentPower);
 		tag.putFloat("lastEffectiveWindSpeed", lastEffectiveWindSpeed);
 		tag.putFloat("lastAlignedWindSpeed", lastAlignedWindSpeed);
@@ -778,9 +821,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// they just warm up from ambient again
 		tag.putDouble("yawCableTwist", yawCableTwist);
 
-		// all four are written because getUpdateTag() routes through here: the client
+		// all of these are written because getUpdateTag() routes through here: the client
 		// needs every input to isBraked() to decide whether to animate the rotor
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
+		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
 		tag.putBoolean("redstonePowered", redstonePowered);
 		tag.putString("redstoneMode", redstoneMode.name());
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
