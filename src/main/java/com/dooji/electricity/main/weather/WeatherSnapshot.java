@@ -13,7 +13,6 @@ package com.dooji.electricity.main.weather;
  * @param gustWind      three-second gust the mean and its turbulence imply
  * @param turbulence    turbulence intensity, the standard deviation of the wind over its mean
  * @param direction     heading the air travels towards, 0..360, friction turning included
- * @param stability     -1 a convective afternoon, 0 neutral, +1 a clear calm night
  * @param temperatureC  air temperature at the site
  * @param pressureHpa   air pressure at the site, reduced from the map's sea level value
  * @param airDensity    kg/m3, from that temperature and that pressure
@@ -28,7 +27,6 @@ public record WeatherSnapshot(
 		double gustWind,
 		double turbulence,
 		float direction,
-		double stability,
 		double temperatureC,
 		double pressureHpa,
 		double airDensity,

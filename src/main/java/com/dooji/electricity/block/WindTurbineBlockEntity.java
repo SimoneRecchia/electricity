@@ -1,7 +1,9 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.WorldConditions;
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.RedstoneMode;
+import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.api.power.TurbineTelemetry;
 import com.dooji.electricity.client.TrackedBlockEntities;
@@ -14,7 +16,6 @@ import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.TurbineCatalog;
-import com.dooji.electricity.main.weather.Atmosphere;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
@@ -79,7 +80,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 */
 	private float shearExponent = 0.14f;
 	private double ambientTempC = 15.0;
-	private double airPressureHpa = 1013.25;
+	private double airPressureHpa = WorldConditions.SEA_LEVEL_PRESSURE;
 	private boolean cutOutActive = false;
 	private boolean yawInitialized = false;
 	private float yaw = 0.0f;
@@ -105,10 +106,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
 
-	// this tick's offer to other mods' energy systems, and how much of it they took.
-	// Nothing carries over between ticks, so neither value is persisted.
-	private double tickBudgetJoules = 0.0;
-	private double claimedJoules = 0.0;
+	// this tick's offer to other mods' energy systems, and how much of it they took
+	private final TickBudget budget = new TickBudget();
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
@@ -141,7 +140,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private double uncappedPower = 0.0;
 
 	/** Air density at the nacelle, from ambient temperature. Cold air is denser and carries more power. */
-	private double airDensity = TurbineSpec.REFERENCE_AIR_DENSITY;
+	private double airDensity = WorldConditions.REFERENCE_AIR_DENSITY;
 
 	public WindTurbineBlockEntity(BlockPos pos, BlockState state) {
 		super(getBlockEntityType(), pos, state);
@@ -304,6 +303,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return meanWindSpeed;
 	}
 
+	/** Three-second gust at the hub, which is the second limit a shutdown is judged against. */
 	public float getGustWindSpeed() {
 		return gustWindSpeed;
 	}
@@ -318,14 +318,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return shearExponent;
 	}
 
-	public double getAmbientTempC() {
-		return ambientTempC;
-	}
-
-	public double getAirPressureHpa() {
-		return airPressureHpa;
-	}
-
 	public float getWindDirection() {
 		return windDirection;
 	}
@@ -338,7 +330,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 */
 	public double getGeneratedPower() {
 		updateGeneratedPower();
-		return Math.max(0.0, generatedPower - claimedJoules / EnergyBridge.JOULES_PER_KW);
+		return Math.max(0.0, generatedPower - budget.claimed() / EnergyBridge.JOULES_PER_KW);
 	}
 
 	public boolean isSurging() {
@@ -549,9 +541,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * can draw; the wire network still receives everything left over.
 	 */
 	private void refreshEnergyBudget() {
-		claimedJoules = 0.0;
 		double cap = getMaxJoulesPerTick();
-		tickBudgetJoules = cap <= 0.0 ? 0.0 : Math.min(Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW, cap);
+		budget.open(cap <= 0.0 ? 0.0 : Math.min(Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW, cap));
 	}
 
 	/**
@@ -585,7 +576,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public double getAvailableJoules() {
 		if (level == null || level.isClientSide() || !ElectricityServerConfig.externalEnergyEnabled()) return 0.0;
 
-		return Math.max(0.0, tickBudgetJoules - claimedJoules);
+		return budget.available();
 	}
 
 	@Override
@@ -601,13 +592,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	@Override
 	public double claimJoules(double joules, boolean simulate) {
-		if (!(joules > 0.0)) return 0.0;
-
-		double claimable = Math.min(joules, getAvailableJoules());
-		if (claimable <= 0.0) return 0.0;
-		if (!simulate) claimedJoules += claimable;
-
-		return claimable;
+		return budget.claim(joules, simulate);
 	}
 
 	@Nonnull
@@ -757,7 +742,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		rotationSpeed2 = tag.getFloat("rotationSpeed2");
 		generatedPower = tag.getDouble("generatedPower");
 		uncappedPower = tag.getDouble("uncappedPower");
-		airDensity = tag.contains("airDensity") ? tag.getDouble("airDensity") : TurbineSpec.REFERENCE_AIR_DENSITY;
+		airDensity = tag.contains("airDensity") ? tag.getDouble("airDensity") : WorldConditions.REFERENCE_AIR_DENSITY;
 		currentPower = tag.getDouble("currentPower");
 		lastEffectiveWindSpeed = tag.getFloat("lastEffectiveWindSpeed");
 		lastAlignedWindSpeed = tag.contains("lastAlignedWindSpeed") ? tag.getFloat("lastAlignedWindSpeed") : lastEffectiveWindSpeed;
@@ -768,7 +753,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		gustWindSpeed = tag.contains("gustWindSpeed") ? tag.getFloat("gustWindSpeed") : lastEffectiveWindSpeed;
 		shearExponent = tag.contains("shearExponent") ? tag.getFloat("shearExponent") : 0.14f;
 		ambientTempC = tag.contains("ambientTempC") ? tag.getDouble("ambientTempC") : 15.0;
-		airPressureHpa = tag.contains("airPressureHpa") ? tag.getDouble("airPressureHpa") : Atmosphere.SEA_LEVEL_PRESSURE;
+		airPressureHpa = tag.contains("airPressureHpa") ? tag.getDouble("airPressureHpa") : WorldConditions.SEA_LEVEL_PRESSURE;
 		cutOutActive = tag.contains("cutOutActive") && tag.getBoolean("cutOutActive");
 		yawInitialized = tag.contains("yaw");
 		yaw = yawInitialized ? tag.getFloat("yaw") : yaw;

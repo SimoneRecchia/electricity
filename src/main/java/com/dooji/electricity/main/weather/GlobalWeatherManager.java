@@ -1,6 +1,6 @@
 package com.dooji.electricity.main.weather;
 
-import com.dooji.electricity.api.power.TurbineSpec;
+import com.dooji.electricity.api.WorldConditions;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
@@ -69,11 +69,6 @@ public final class GlobalWeatherManager {
 		sites.values().removeIf(survey -> now - survey.takenAt() > SITE_TTL);
 	}
 
-	/** The world's prevailing wind direction. Fixed by the seed, which is what gives a wind rose its shape. */
-	public float prevailingDirection() {
-		return Atmosphere.prevailingDirection(seed);
-	}
-
 	/**
 	 * Weather at the standard meteorological height: ten metres over the ground the given
 	 * block sits on, which is what a mast at that spot would report.
@@ -103,7 +98,7 @@ public final class GlobalWeatherManager {
 		boolean thundering = level.isThundering() && raining;
 
 		double stability = Atmosphere.stability(phase, raining, thundering);
-		double heightM = Math.max(1, towerBlocks) * TurbineSpec.METRES_PER_BLOCK;
+		double heightM = Math.max(1, towerBlocks) * WorldConditions.METRES_PER_BLOCK;
 		double elevationM = elevationOf(groundPos);
 
 		Atmosphere.Flow aloft = Atmosphere.geostrophicWind(seed, machinePos.getX(), machinePos.getZ(), dayTime);
@@ -125,7 +120,7 @@ public final class GlobalWeatherManager {
 				raining, thundering);
 		double irradiance = Atmosphere.clearSkyIrradiance(Atmosphere.solarElevationSin(phase), pressure) * Atmosphere.cloudTransmittance(cover);
 
-		return new WeatherSnapshot(mean, instant, Atmosphere.gustFrom(mean, turbulence), turbulence, direction, stability, temperature, pressure,
+		return new WeatherSnapshot(mean, instant, Atmosphere.gustFrom(mean, turbulence), turbulence, direction, temperature, pressure,
 				Atmosphere.airDensity(temperature, pressure), Atmosphere.profileExponent(site.roughness(), stability), cover, irradiance);
 	}
 
@@ -136,7 +131,7 @@ public final class GlobalWeatherManager {
 
 	/** Metres the ground here stands above sea level, on the mod's ten metres to the block. */
 	public double elevationOf(BlockPos groundPos) {
-		return (groundPos.getY() - level.getSeaLevel()) * TurbineSpec.METRES_PER_BLOCK;
+		return (groundPos.getY() - level.getSeaLevel()) * WorldConditions.METRES_PER_BLOCK;
 	}
 
 	/**

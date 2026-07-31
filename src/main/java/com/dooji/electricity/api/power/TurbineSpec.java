@@ -1,5 +1,6 @@
 package com.dooji.electricity.api.power;
 
+import com.dooji.electricity.api.WorldConditions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
@@ -18,7 +19,7 @@ import net.minecraft.util.Mth;
  *
  * The dimensions here are the real machine's, in metres, and they are what the
  * physics and the telemetry work on. The world renders them at
- * {@link #METRES_PER_BLOCK}, because a 130 m rotor drawn at one block per metre
+ * {@link WorldScale#METRES_PER_BLOCK}, because a 130 m rotor drawn at one block per metre
  * would not fit under the build height together with its tower. So a C130 has a
  * 130 m rotor that occupies thirteen blocks, and the GUI reports the 130.
  *
@@ -47,7 +48,7 @@ public record TurbineSpec(
 		int minTowerSegments,
 		int maxTowerSegments,
 		/**
-		 * Visual exaggeration of the rotor, on top of {@link #METRES_PER_BLOCK}.
+		 * Visual exaggeration of the rotor, on top of {@link WorldScale#METRES_PER_BLOCK}.
 		 *
 		 * 1.0 for the whole C line, which is what keeps the convention legible: a C90
 		 * really is nine blocks across. The small-wind machine is the one exception,
@@ -57,10 +58,6 @@ public record TurbineSpec(
 		double rotorRenderScale,
 		Nacelle nacelle
 ) {
-	/** How many metres of real machine one block of world represents. */
-	public static final double METRES_PER_BLOCK = 10.0;
-	/** Air density at sea level and 15 C, the reference every power curve is quoted at. */
-	public static final double REFERENCE_AIR_DENSITY = 1.225;
 	/** 16/27: no rotor of any design extracts more than this fraction of the wind's power. */
 	public static final double BETZ_LIMIT = 16.0 / 27.0;
 	/**
@@ -124,7 +121,7 @@ public record TurbineSpec(
 
 	/** On-screen rotor diameter in blocks, exaggeration included. */
 	public double rotorDiameterBlocks() {
-		return rotorDiameterM / METRES_PER_BLOCK * rotorRenderScale;
+		return rotorDiameterM / WorldConditions.METRES_PER_BLOCK * rotorRenderScale;
 	}
 
 	/** Scale to draw the authored rotor at. */
@@ -166,7 +163,7 @@ public record TurbineSpec(
 	 * height above the ground and the block grid is ten times too short to show it.
 	 */
 	public double hubHeightM(int towerSegments) {
-		return clampTowerSegments(towerSegments) * METRES_PER_BLOCK;
+		return clampTowerSegments(towerSegments) * WorldConditions.METRES_PER_BLOCK;
 	}
 
 	// ---- the power curve ----
@@ -182,12 +179,8 @@ public record TurbineSpec(
 	 * between the two knees.
 	 */
 	public double ratedSpeed() {
-		double available = 0.5 * REFERENCE_AIR_DENSITY * sweptAreaM2() * peakCp;
+		double available = 0.5 * WorldConditions.REFERENCE_AIR_DENSITY * sweptAreaM2() * peakCp;
 		return Math.cbrt(ratedPowerKw * 1000.0 / available);
-	}
-
-	public double powerAtKw(double windSpeed) {
-		return powerAtKw(windSpeed, REFERENCE_AIR_DENSITY);
 	}
 
 	/**
@@ -199,21 +192,18 @@ public record TurbineSpec(
 	 * the same wind on a winter night carries appreciably more power than on a summer
 	 * afternoon.
 	 */
-	public double powerAtKw(double windSpeed, double airDensity) {
-		if (windSpeed >= cutOutSpeed) return 0.0;
-
-		return powerWhileRunningKw(windSpeed, airDensity);
-	}
-
 	/**
-	 * The same curve without the shutdown at the top of it, for a machine known to be on load.
+	 * Output at a given wind speed and air density, in kW, for a machine known to be on load.
 	 *
-	 * The distinction matters once the wind arrives gust by gust rather than as a ten-minute
-	 * average. A gust reaching past the cut-out does not switch a running turbine off - storm
-	 * control just holds it further down - and the decision to come off load belongs to the
-	 * controller, which supervises the mean and the gust separately and applies hysteresis to
-	 * both. So {@link #powerAtKw} stays a power curve, which is zero above the cut-out because
-	 * that is what a power curve says, and the machine asks this one instead.
+	 * Density enters the cubic directly, which is the same correction IEC 61400-12 applies to
+	 * the wind speed by a factor of (rho/rho0)^(1/3) - cubing that factor puts it back exactly
+	 * here. It matters more than it looks: cold air is denser, so the same wind on a winter
+	 * night carries appreciably more power than on a summer afternoon.
+	 *
+	 * The cut-out is deliberately not applied. Once the wind arrives gust by gust rather than
+	 * as a ten-minute average, a gust past the cut-out must not switch a running turbine off -
+	 * storm control just holds it further down - and the decision to come off load belongs to
+	 * the controller, which supervises the mean and the gust separately with hysteresis on both.
 	 */
 	public double powerWhileRunningKw(double windSpeed, double airDensity) {
 		if (windSpeed < cutInSpeed) return 0.0;

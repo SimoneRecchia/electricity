@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.weather;
 
+import com.dooji.electricity.api.WorldConditions;
 import net.minecraft.util.Mth;
 
 /**
@@ -43,9 +44,9 @@ import net.minecraft.util.Mth;
  */
 public final class Atmosphere {
 	/** Seconds of atmosphere one tick of the day clock stands for: 86400 s over a 24000 tick day. */
-	public static final double SECONDS_PER_DAY_TICK = 3.6;
+	private static final double SECONDS_PER_DAY_TICK = 3.6;
 	/** Horizontal scale of the pressure map. Only the pressure map: heights are in the mod's own metres. */
-	public static final double MAP_METRES_PER_BLOCK = 400.0;
+	private static final double MAP_METRES_PER_BLOCK = 400.0;
 	/** One high-and-low pair across, in blocks. 2400 km at the scale above. */
 	private static final double SYSTEM_BLOCKS = 6000.0;
 	/** How long a system takes to deepen and fill, in day-clock ticks. Four days. */
@@ -55,7 +56,6 @@ public final class Atmosphere {
 	/** Distance the gradient is measured over. Small against a system, large against the noise. */
 	private static final double GRADIENT_STEP_BLOCKS = 75.0;
 
-	public static final double SEA_LEVEL_PRESSURE = 1013.25;
 	/** Spread of mean sea level pressure in the mid-latitudes. Puts the field in 990..1036 hPa. */
 	private static final double PRESSURE_SD = 8.0;
 	/** Measured spread of the three octaves in {@link #pressureAt}, so the line above means what it says. */
@@ -63,7 +63,6 @@ public final class Atmosphere {
 
 	/** Coriolis parameter at 45 degrees latitude. */
 	private static final double CORIOLIS = 1.0e-4;
-	public static final double REFERENCE_AIR_DENSITY = 1.225;
 	/** Specific gas constant for dry air, J/(kg K). */
 	private static final double GAS_CONSTANT_DRY = 287.05;
 	private static final double GRAVITY = 9.80665;
@@ -139,7 +138,7 @@ public final class Atmosphere {
 		n += 0.42 * WeatherNoise.sample(seed ^ 0x51EDL, u * 2.3, v * 2.3, w * 1.7);
 		n += 0.16 * WeatherNoise.sample(seed ^ 0xA713L, u * 5.1, v * 5.1, w * 2.6);
 
-		return SEA_LEVEL_PRESSURE + PRESSURE_SD * n / PRESSURE_NOISE_SD;
+		return WorldConditions.SEA_LEVEL_PRESSURE + PRESSURE_SD * n / PRESSURE_NOISE_SD;
 	}
 
 	/** The world's prevailing wind direction, fixed by its seed. */
@@ -168,7 +167,7 @@ public final class Atmosphere {
 		double north = pressureAt(seed, blockX, blockZ - step, dayTime);
 
 		// hPa per block into Pa per metre, then divided by rho*f to give metres per second
-		double scale = 100.0 / MAP_METRES_PER_BLOCK / (REFERENCE_AIR_DENSITY * CORIOLIS);
+		double scale = 100.0 / MAP_METRES_PER_BLOCK / (WorldConditions.REFERENCE_AIR_DENSITY * CORIOLIS);
 		double gradientX = (east - west) / (2.0 * step) * scale;
 		double gradientZ = (south - north) / (2.0 * step) * scale;
 
@@ -426,7 +425,7 @@ public final class Atmosphere {
 
 		double elevationDeg = Math.toDegrees(Math.asin(Math.min(1.0, sinElevation)));
 		double am = 1.0 / (sinElevation + 0.50572 * Math.pow(elevationDeg + 6.07995, -1.6364));
-		return am * pressureHpa / SEA_LEVEL_PRESSURE;
+		return am * pressureHpa / WorldConditions.SEA_LEVEL_PRESSURE;
 	}
 
 	/** Global horizontal irradiance under a clear sky, W/m2. */
@@ -453,9 +452,9 @@ public final class Atmosphere {
 	 */
 	public static double cloudCover(long seed, double blockX, double blockZ, long dayTime, long gameTime, double downfall,
 			double windSpeed, float windDirection, boolean raining, boolean thundering) {
-		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, dayTime) - SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
+		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, dayTime) - WorldConditions.SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
 
-		double drift = windSpeed * gameTime / 20.0 / com.dooji.electricity.api.power.TurbineSpec.METRES_PER_BLOCK;
+		double drift = windSpeed * gameTime / 20.0 / WorldConditions.METRES_PER_BLOCK;
 		double heading = Math.toRadians(windDirection);
 		double cx = (blockX - Math.cos(heading) * drift) / CUMULUS_BLOCKS;
 		double cz = (blockZ - Math.sin(heading) * drift) / CUMULUS_BLOCKS;

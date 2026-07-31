@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.PhotovoltaicArray;
+import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.compat.energy.EnergyBridge;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
@@ -71,9 +72,7 @@ public class SolarPanelBlockEntity extends BlockEntity implements IEnergyBudget 
 	private double cloudCover = 0.0;
 	private boolean seesSky = true;
 
-	// this tick's offer to other mods' energy systems, and how much of it they took
-	private double tickBudgetJoules = 0.0;
-	private double claimedJoules = 0.0;
+	private final TickBudget budget = new TickBudget();
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
@@ -95,8 +94,7 @@ public class SolarPanelBlockEntity extends BlockEntity implements IEnergyBudget 
 		cellTemperature = PhotovoltaicArray.cellTemperature(ambientTemperature, irradiance);
 		generatedPower = PhotovoltaicArray.acPowerKw(irradiance, ambientTemperature);
 
-		claimedJoules = 0.0;
-		tickBudgetJoules = generatedPower * EnergyBridge.JOULES_PER_KW;
+		budget.open(generatedPower * EnergyBridge.JOULES_PER_KW);
 		EnergyBridge.emit(this, this, worldPosition, CABLE_FACES);
 	}
 
@@ -146,7 +144,7 @@ public class SolarPanelBlockEntity extends BlockEntity implements IEnergyBudget 
 	public double getAvailableJoules() {
 		if (level == null || level.isClientSide() || !ElectricityServerConfig.externalEnergyEnabled()) return 0.0;
 
-		return Math.max(0.0, tickBudgetJoules - claimedJoules);
+		return budget.available();
 	}
 
 	@Override
@@ -160,13 +158,7 @@ public class SolarPanelBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	@Override
 	public double claimJoules(double joules, boolean simulate) {
-		if (!(joules > 0.0)) return 0.0;
-
-		double claimable = Math.min(joules, getAvailableJoules());
-		if (claimable <= 0.0) return 0.0;
-		if (!simulate) claimedJoules += claimable;
-
-		return claimable;
+		return budget.claim(joules, simulate);
 	}
 
 	@Nonnull

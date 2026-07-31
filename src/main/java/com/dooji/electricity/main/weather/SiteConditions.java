@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.weather;
 
+import com.dooji.electricity.api.WorldConditions;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
@@ -41,7 +42,7 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 	 * wind speed at a hub - the log profile is generous that way, and it is also why a short
 	 * tower in a forest is such a poor idea.
 	 */
-	private static final double WATER = 0.0002;
+	private static final double WATER = Atmosphere.SMOOTHEST_ROUGHNESS;
 	private static final double SNOW_OR_SAND = 0.005;
 	private static final double BARE_GROUND = 0.012;
 	private static final double GRASSLAND = 0.03;
@@ -68,21 +69,8 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 	public double exposure(double groundY) {
 		if (Double.isNaN(surroundingGroundY)) return 0.0;
 
-		double relativeM = (groundY - surroundingGroundY) * com.dooji.electricity.api.power.TurbineSpec.METRES_PER_BLOCK;
+		double relativeM = (groundY - surroundingGroundY) * WorldConditions.METRES_PER_BLOCK;
 		return Mth.clamp(relativeM / EXPOSURE_SCALE, MAX_SHELTER, MAX_SPEED_UP);
-	}
-
-	/**
-	 * How cloudy this place is beyond what the pressure pattern says, from -0.35 for a
-	 * desert to +0.2 for a rainforest.
-	 *
-	 * Rainfall is the honest proxy: somewhere it rains is somewhere there is cloud to rain
-	 * out of. It matters more to a solar panel than anything else about the site, and it is
-	 * the term that decides the question Mekanism's own panels get backwards - they charge a
-	 * desert for its heat without ever crediting it for its sky.
-	 */
-	public double cloudBias() {
-		return (Mth.clamp(downfall, 0.0, 1.0) - 0.45) * 0.62;
 	}
 
 	/**
