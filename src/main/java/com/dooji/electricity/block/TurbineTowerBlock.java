@@ -36,23 +36,23 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * <h2>What you see and what you walk into</h2>
  *
- * The tower is drawn from the authored model's own tube, so it looks exactly as it
- * always did. Collision cannot follow that geometry exactly - a VoxelShape is a union
- * of axis-aligned boxes confined to the block's own cube, so a circle is not on offer -
- * but it comes within half a pixel of it.
+ * The tower is drawn from the authored model's own tube, so it looks exactly as it always
+ * did. Collision cannot follow that geometry exactly - a VoxelShape is a union of
+ * axis-aligned boxes confined to the block's own cube, so neither a circle nor a cone is
+ * on offer - and where it cannot, it errs inwards. Everything you can walk into is inside
+ * something you can see.
  *
  * It is round rather than square, by {@link #STRIPS} strips laid each way. It does not
- * follow the tube's taper, though, and that is deliberate: one radius the whole way up is
- * the only profile with no outward-facing horizontal surface anywhere on it, and anything
- * that has one is a step a player can stand on. Made of axis-aligned boxes there is no
- * third option - a tapering collision is a staircase however finely it is cut, and cutting
- * it finer makes it worse rather than better, because a step under 0.6 blocks is one
- * Minecraft walks up without even a jump.
+ * follow the tube's taper, and that is deliberate: one radius the whole way up is the only
+ * profile with no outward-facing horizontal surface anywhere on it, and any such surface is
+ * a step a player can stand on. There is no third option here - a tapering collision is a
+ * staircase however finely it is cut, and cutting it finer makes it worse rather than
+ * better, since a step under 0.6 blocks is one Minecraft walks up without even a jump.
  *
- * So the radius is the middle of the tube's 0.381-at-the-foot to 0.312-at-the-top, which
- * is half a pixel out at either end and smooth in between. The 0.622 that looks like the
- * tower's width is only the base plinth, eight centimetres tall, and is not collided with
- * at all.
+ * That one radius is therefore the narrowest the tube reaches, at its top, which leaves the
+ * collision about 1.8 pixels inside the flare at the foot and never outside the steel
+ * anywhere. The 0.622 that looks like the tower's width is only the base plinth, eight
+ * centimetres tall, and is not collided with at all.
  *
  * {@link #THICKNESS} carries how wide this tower is, taken from the machine standing on
  * it, and {@link #refreshThickness} settles it whenever the structure changes - so
@@ -88,10 +88,18 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	/**
 	 * Radius the column is collided at, in blocks, at the scale the C130 draws it.
 	 *
-	 * The middle of the authored tube's 0.381-at-the-foot to 0.312-at-the-top, so the error is
-	 * shared evenly between the two ends rather than piling up at one.
+	 * The narrowest the authored tube ever gets, which is at its top - not the middle of its
+	 * 0.381-to-0.312 taper. Taking the middle left the collision standing 18% outside the tube
+	 * up there, and an F3+B wireframe showed it plainly as a cage of empty air around the
+	 * steel. Since the collision has to be one radius the whole way up, the only one that is
+	 * never outside what you can see is the smallest one the tube reaches.
+	 *
+	 * The cost is at the foot, where the tube flares to 0.381 and the collision does not follow:
+	 * you can press about 1.8 pixels into the surface down there. That is the better error of
+	 * the two - clipping slightly into steel reads as nothing, while bumping into thin air reads
+	 * as a bug.
 	 */
-	private static final double COLLISION_RADIUS = (0.381 + 0.312) / 2.0;
+	private static final double COLLISION_RADIUS = 0.312;
 	/**
 	 * Strips per quadrant used to round the collision off.
 	 *
@@ -102,10 +110,12 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 * tower.
 	 *
 	 * Six strips each way instead - across the shallow arcs and down the steep ones, since neither
-	 * direction alone can follow a circle where it turns away from that direction - brings the
-	 * worst deviation to 7.6% of the radius and spreads what is left evenly round the
-	 * circumference rather than piling it into four bulges. Twelve boxes, measured by casting rays
-	 * at the union.
+	 * direction alone can follow a circle where it turns away from that direction. Twelve boxes,
+	 * and each one is cut to the chord at its far edge so that no box anywhere reaches past
+	 * {@link #COLLISION_RADIUS}. That is by construction rather than by measurement, which is
+	 * what makes it safe to say the collision never stands outside the tube: a balanced fit
+	 * looks tighter on paper but its boxes' corners do reach past the circle, and past the tube
+	 * with them.
 	 */
 	private static final int STRIPS = 6;
 
@@ -163,9 +173,9 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	/**
 	 * A column as round as axis-aligned boxes get.
 	 *
-	 * Each strip is set as wide as it can be without straying further outside the circle than it
-	 * falls inside it, which is the choice that makes a staircase's worst error as small as the
-	 * number of steps allows.
+	 * Each strip is cut to the chord at its far edge, so the column is inscribed: it falls short
+	 * of the circle between the strips and never reaches past it. Being inside is the whole point
+	 * here, since anything outside is collision a player meets where there is nothing drawn.
 	 */
 	private static VoxelShape roundColumn(double radius) {
 		double span = radius / Math.sqrt(2.0);
@@ -174,9 +184,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		for (int strip = 0; strip < STRIPS; strip++) {
 			double near = -span + 2.0 * span * strip / STRIPS;
 			double far = -span + 2.0 * span * (strip + 1) / STRIPS;
-			double inner = Math.min(Math.abs(near), Math.abs(far));
-			double outer = Math.max(Math.abs(near), Math.abs(far));
-			double half = (chord(radius, inner) + chord(radius, outer)) / 2.0;
+			double half = chord(radius, Math.max(Math.abs(near), Math.abs(far)));
 
 			// laid both ways: across the shallow arcs, and down the steep ones
 			shape = Shapes.or(shape,
