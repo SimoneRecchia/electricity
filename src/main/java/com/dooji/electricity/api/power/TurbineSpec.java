@@ -240,20 +240,46 @@ public record TurbineSpec(
 	public static final double MAX_TIP_SPEED = 80.0;
 	/** Synchronous speed of a 4-pole generator at 50 Hz: what every gearbox here is sized to reach. */
 	public static final double GENERATOR_SYNCHRONOUS_RPM = 1500.0;
+	/**
+	 * Slowest the rotor turns while it is on load, as a fraction of its rated speed.
+	 *
+	 * A variable-speed machine has a speed range rather than a single speed, and the bottom of
+	 * that range is not zero: below about half nominal there is not enough in the generator to
+	 * stay on load, so the controller holds the speed there and lets the tip speed ratio drift
+	 * off its optimum instead. Real datasheets bear it out - a V136 is quoted 5.9 to 14 rpm,
+	 * which is 42% to 100%.
+	 *
+	 * It matters to the look as well as to the physics: without it a big rotor in light wind
+	 * crawls round in half a minute, which reads as broken rather than as slow.
+	 */
+	private static final double MINIMUM_SPEED_FRACTION = 0.5;
 
 	/**
 	 * Rotor speed in rpm at a given wind.
 	 *
-	 * Holding the tip speed ratio is what makes a big rotor turn visibly slower than a
-	 * small one in the same wind: the tips have further to travel for each revolution. So
-	 * the whole catalogue does not spin at one rate — the C130 comes out near 10 rpm and
-	 * the small-wind machine near 200, which is the difference between the two that is
-	 * most obvious from the ground.
+	 * <h2>What the speed follows</h2>
 	 *
-	 * Above the rated wind the speed stops climbing, because that is what pitching the
-	 * blades out is for: the machine holds both its speed and its power there.
+	 * The wind, not the load. A variable-speed pitch-regulated machine holds its tip speed
+	 * ratio below the rated wind, so the rotor speed rises in proportion to the wind; above
+	 * rated it stops rising, because holding both speed and power there is what pitching the
+	 * blades out is for. Power meanwhile goes with the cube of the wind, so the two are only
+	 * loosely related: the speed varies by two over the whole partial-load range while the
+	 * output varies by eight. Watching a real rotor tells you the wind, not the megawatts.
+	 *
+	 * Holding the tip speed ratio is also what makes a big rotor turn visibly slower than a
+	 * small one in the same wind: the tips have further to travel for each revolution. So the
+	 * catalogue does not spin at one rate - the C130 comes out near 10 rpm and the small-wind
+	 * machine near 200, which is the most obvious difference between the two from the ground.
 	 */
 	public double rotorRpmAt(double windSpeed) {
+		double rpm = freewheelingRpmAt(windSpeed);
+		// below the cut-in the rotor is freewheeling and holds no particular speed; from there up
+		// it is on load and cannot run below the bottom of its own speed range
+		return windSpeed < cutInSpeed ? rpm : Math.max(rpm, ratedRotorRpm() * MINIMUM_SPEED_FRACTION);
+	}
+
+	/** The tip-speed-ratio speed with no floor under it, which is what the rated speed is. */
+	private double freewheelingRpmAt(double windSpeed) {
 		if (windSpeed <= 0.0) return 0.0;
 
 		double regulated = Math.min(windSpeed, ratedSpeed());
@@ -262,7 +288,26 @@ public record TurbineSpec(
 	}
 
 	public double ratedRotorRpm() {
-		return rotorRpmAt(ratedSpeed());
+		return freewheelingRpmAt(ratedSpeed());
+	}
+
+	/**
+	 * The rotation to draw, from the rotation the machine is actually doing.
+	 *
+	 * A rotor drawn larger than its scale says has to be drawn turning slower by the same
+	 * factor, or its blade tips travel faster than any real blade tip does. The small-wind
+	 * machine is the case: its 7 m rotor is drawn at {@link #rotorRenderScale} because seven
+	 * metres over ten is smaller than its own nacelle, and at its true 200 rpm that inflated
+	 * circle swept its tips three times faster than a C130's. Dividing by the same
+	 * exaggeration puts every machine in the catalogue at about the same apparent tip speed,
+	 * which is the right target because real machines of every size run at about the same tip
+	 * speed too - 70 to 85 m/s, held down by noise rather than by strength.
+	 *
+	 * Only the drawing is scaled. The speed the machine reports, and the generator speed
+	 * derived from it, stay the real ones.
+	 */
+	public double renderedRotation(double realRotation) {
+		return realRotation / rotorRenderScale;
 	}
 
 	/**

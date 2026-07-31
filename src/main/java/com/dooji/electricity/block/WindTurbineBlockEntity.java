@@ -937,18 +937,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	private void clientVisualTick() {
-		float effectiveSpeed = lastAlignedWindSpeed;
-		float currentTime = level.getGameTime() + level.getGameTime() * 0.05f;
-		advanceRotations(currentTime, effectiveSpeed);
+		advanceRotations(lastAlignedWindSpeed);
 	}
 
-	private void advanceRotations(float currentTime, float effectiveSpeed) {
-		// One variation for both, because rotate_2 is the spinner cone bolted to the blade
-		// roots: it is the same shaft. Driving the two at separate rates let the cone
-		// creep round relative to the blades it is part of, which no amount of wind does
-		// to a real rotor.
-		float variation = 1.0f + (float) Math.sin(currentTime * 0.05) * 0.1f;
-
+	private void advanceRotations(float effectiveSpeed) {
 		float appliedSpeed1 = rotationSpeed1;
 		float appliedSpeed2 = rotationSpeed2;
 		// a braked rotor must not be spun up by the client's own guess. All the inputs
@@ -963,8 +955,19 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			}
 		}
 
-		rotation1 = (rotation1 + appliedSpeed1 * variation) % 360.0f;
-		rotation2 = (rotation2 + appliedSpeed2 * variation) % 360.0f;
+		// scaled for drawing only, and the same scale for both: rotate_2 is the spinner cone
+		// bolted to the blade roots, so it is the same shaft. Driving the two at different rates
+		// let the cone creep round relative to the blades it is part of, which no amount of wind
+		// does to a real rotor.
+		//
+		// There used to be a ten percent sine wobble on top of this to keep the rotor from
+		// looking mechanical. The wind is genuinely gusty now and the rotor already breathes
+		// with it through its own inertia, so the wobble was a second, fake copy of an effect
+		// the physics provides - and it put the drawn speed ten percent away from the speed the
+		// machine was reporting.
+		TurbineSpec spec = spec();
+		rotation1 = (float) ((rotation1 + spec.renderedRotation(appliedSpeed1)) % 360.0);
+		rotation2 = (float) ((rotation2 + spec.renderedRotation(appliedSpeed2)) % 360.0);
 		if (rotation1 < 0) rotation1 += 360.0f;
 		if (rotation2 < 0) rotation2 += 360.0f;
 	}
