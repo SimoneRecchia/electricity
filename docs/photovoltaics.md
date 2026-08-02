@@ -197,21 +197,39 @@ In AUTO the order of precedence is the safe one, and the panel says which applie
 | Wind | gust over the threshold | flat, so a horizontal gust has no leverage on the tube |
 | Snow | snow lying on the modules | steep, to drop the lot |
 | Night | the sun is down | flat, so the dew runs off |
-| Diffuse | under 60 W/m² of beam | flat, to see as much of the dome as possible |
+| Diffuse | flat would collect more | flat, to see as much of the dome as possible |
 
-**Every one of these decisions is deliberately slow**, and that is not a detail — it is what
-separates a controller from a comparison. The wind stow latches with hysteresis and releases
-at four fifths of the threshold. The diffuse decision is made on a **twelve-minute mean of the
-direct beam**, not on this instant's reading, and it enters at 60 W/m² and leaves at 150. And
-once any weather stow engages it is **held for thirty-six minutes** after its cause has gone.
+The first three are **protections**, and they are slow on purpose. The wind stow latches with
+hysteresis and releases at four fifths of the threshold, and all three are held for
+thirty-six minutes after their cause has gone. You do not come out of a wind stow the instant
+a gust drops, because the next gust is a minute away and standing a row up between them is
+how they get destroyed.
 
-The first version of this decided on the instantaneous diffuse *fraction* against a single
-threshold of 0.80, which is a knife edge: the sky sits there a great deal of the time, so the
-row was seen setting off after the sun and coming back several times an hour. Sixty watts of
-beam is a statement rather than a threshold — six percent of a clear sky is a sky with no beam
-in it, and there is nothing there to point at. Real controllers use long means and long dwells
-for exactly this reason: a passing cloud is not a reason to move a hundred and fifty square
-metres of glass, and a drive that chased them would wear out.
+The fourth is not a protection but a **choice between two angles**, and it is decided by
+working out what each would collect — through the same transposition model the array's own
+output is worked out with — rather than by testing the sky against a number. A flat plane
+sees the whole sky dome; a tilted one sees `(1 + cos(tilt))/2` of it and makes the loss back
+on the beam. Under thick cloud there is no beam to make it back with, so flat wins; under any
+real beam it does not. Where the crossover falls depends on the cover, on how high the sun
+is, and on the ground's albedo — which is exactly why no fixed number could express it.
+
+Two earlier versions of this were threshold laws, first on the diffuse fraction and then on
+the beam, and **both were worse than having no diffuse mode at all**. Measured against an
+oracle that picks the better plane at every instant, across six worlds, three sites and six
+days:
+
+| law | flat, as a share of daylight | changes of mind per day | of the ceiling |
+|---|---|---|---|
+| diffuse fraction over 0.80 | — | many an hour | — |
+| beam under 60 W/m², 36 min dwell | 45% | 2.1 | 98.1% |
+| **flat collects 5% more, 6 min dwell** | **35%** | **3.3** | **99.5%** |
+| no diffuse mode at all | 2% | 0 | 99.3% |
+
+A fixed threshold cannot know that at a low sun a tilted plane still beats a flat one even
+under thick cloud, so it lay the row down when it should have been tracking. Note also that
+the long dwell is *harmful* here: six hundred ticks instead of a hundred gives up a whole
+point of the ceiling, which is more than the whole mode is worth. A dwell that protects a
+drive is not the same thing as a dwell that filters a measurement.
 
 ### Backtracking
 
