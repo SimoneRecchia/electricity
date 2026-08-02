@@ -402,6 +402,12 @@ the next row's face; feeding the first into the second gives zero at every sun e
   the snow block above it and carried on.
 * An array with no inverter in range: `mpptFraction` 0, `availableDcPower` 10.29 — reporting
   what it could have made and delivering none of it.
+* After the cleanup pass: the central inverter claimed twenty-five strings, tracked a 1166 V
+  bus inside its 875–1325 V window, and turned 16.3 kW of DC into 10.1 kW of AC — a third of
+  it lost, because 16 kW on a 2500 kW machine is two thirds of a percent of load. Which is the
+  string-against-central argument arriving as a number.
+* The same array in front of the 10 kW machine: `stringsOutOfWindow` true, DC zero, AC at
+  minus one watt of night draw. Its panel names the voltage and the window.
 
 The one bug this found is commit 11: the sky-view survey was cached for a minute, so roofing
 an array took away the beam at once and the diffuse a minute later.
