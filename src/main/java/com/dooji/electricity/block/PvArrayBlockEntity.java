@@ -105,11 +105,28 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 * cannot know that at a low sun a tilted plane still beats a flat one even under thick cloud. This
 	 * collects 99.5%.
 	 *
-	 * Five percent rather than nothing, because a decision made on a difference of one percent is a
-	 * decision made on noise: it costs three hundredths of a percent of the energy and takes a quarter
-	 * off the number of times the drive changes its mind.
+	 * A quarter, and the size of it is the interesting part. The margin trades how much of the daylight
+	 * the row spends flat against how much it collects, and the trade is not linear - measured across six
+	 * worlds and two climates:
+	 *
+	 * <pre>
+	 *   margin   flat, of daylight   moves/day   of the ceiling
+	 *      5%          33-42%           3.3        99.52 / 99.36
+	 *     15%          29-39%           2.0        99.47 / 99.33
+	 *     25%          26-31%           1.2        99.42 / 99.36
+	 *     40%             2%            0.0        99.33 / 99.02   (never fires)
+	 * </pre>
+	 *
+	 * Going from five percent to twenty-five costs a tenth of a point in one climate and nothing at all
+	 * in the other, and buys back a fifth of the flat hours and two thirds of the drive's movements. Five
+	 * was the wrong end of that curve, and for a reason beyond the numbers: the difference being weighed
+	 * is *modelled*, not measured, and acting on a five percent model difference is acting on noise.
+	 *
+	 * Past forty percent the mode stops firing at all, which is the useful bound on the whole idea: in a
+	 * world whose sun passes through the zenith a flat plane is already nearly optimal, so the entire
+	 * value of diffuse mode here is two tenths of one percent.
 	 */
-	private static final double DIFFUSE_MARGIN = 1.05;
+	private static final double DIFFUSE_MARGIN = 1.25;
 	/**
 	 * How long the diffuse decision is held after it has reversed, in ticks.
 	 *

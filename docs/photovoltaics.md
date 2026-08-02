@@ -254,8 +254,20 @@ days:
 |---|---|---|---|
 | diffuse fraction over 0.80 | — | many an hour | — |
 | beam under 60 W/m², 36 min dwell | 45% | 2.1 | 98.1% |
-| **flat collects 5% more, 6 min dwell** | **35%** | **3.3** | **99.5%** |
+| flat collects 5% more | 33% | 3.3 | 99.5% |
+| **flat collects 25% more** | **26%** | **1.2** | **99.4%** |
+| flat collects 40% more | 2% | 0 | 99.3% (never fires) |
 | no diffuse mode at all | 2% | 0 | 99.3% |
+
+The margin is set at a quarter, and where on that curve to sit is a real decision rather than a
+detail. Going from five percent to twenty-five costs a tenth of a point and buys back a fifth
+of the flat hours and two thirds of the drive's movements — and the difference being weighed is
+*modelled*, not measured, so acting on five percent of it is acting on noise.
+
+Past forty percent the mode stops firing at all, and that is the useful bound on the whole
+idea: in a world whose sun passes through the zenith a flat plane is already nearly optimal,
+so **the entire value of diffuse mode here is two tenths of one percent.** It is in because it
+is what the machines do, not because it earns its keep.
 
 A fixed threshold cannot know that at a low sun a tilted plane still beats a flat one even
 under thick cloud, so it lay the row down when it should have been tracking. Note also that
