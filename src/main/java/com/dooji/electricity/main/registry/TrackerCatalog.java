@@ -50,7 +50,7 @@ public final class TrackerCatalog {
 	public static final TrackerSpec HORIZON_R = new TrackerSpec(
 			id("tracker_horizon_r"), "Horizon R", 1,
 			60.0, 0.0,
-			4.4,
+			4.4, 2.0,
 			0.0, 0.0, 60.0,
 			20.0, 0.04,
 			true, 120.0);
@@ -66,7 +66,7 @@ public final class TrackerCatalog {
 	public static final TrackerSpec ZENITH_AE = new TrackerSpec(
 			id("tracker_zenith_ae"), "Zenith AE", 2,
 			80.0, 10.0,
-			3.0,
+			3.0, 1.0,
 			0.0, 0.0, 70.0,
 			18.0, 0.04,
 			true, 250.0);

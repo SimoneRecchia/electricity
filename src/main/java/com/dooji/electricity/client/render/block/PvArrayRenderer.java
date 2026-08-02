@@ -20,6 +20,7 @@ import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -80,7 +81,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		for (PvArrayBlockEntity array : TrackedBlockEntities.ofType(PvArrayBlockEntity.class)) {
 			seen.add(array.getBlockPos());
 			ObjRenderUtil.withAlignedPose(array, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(PvArrayBlock.FACING), PvArrayRenderer::rotationForFacing,
+					PvArrayRenderer::drawnFacing, PvArrayRenderer::rotationForFacing,
 					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), array));
 		}
 
@@ -204,6 +205,22 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * {@link PvArrayBlock#planeAzimuthDeg} reads the plane's bearing off the same facing - so north
 	 * needs no rotation and the rest follow round.
 	 */
+	/**
+	 * Which way the model is turned before the tracker's own rotation is applied.
+	 *
+	 * North for anything tracked, whatever the block state says, because a tracker's tube runs
+	 * north-south or it cannot follow a sun that travels east to west - and turning the model would turn
+	 * the tube with it, leaving a row that sweeps beautifully and never points at anything. Placement
+	 * already forces north, so this only matters for a block put down by a command or moved by
+	 * something; the physics ignores the facing for a tracker in exactly the same way, and the two have
+	 * to agree about that or the array would collect on a plane it is not drawn on.
+	 */
+	private static Direction drawnFacing(BlockState state) {
+		if (state.getBlock() instanceof PvArrayBlock array && array.spec().tracked()) return Direction.NORTH;
+
+		return state.getValue(PvArrayBlock.FACING);
+	}
+
 	private static float rotationForFacing(Direction facing) {
 		return switch (facing) {
 			case WEST -> 90.0f;

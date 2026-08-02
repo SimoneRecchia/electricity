@@ -173,10 +173,10 @@ cured by a bigger inverter and derating is cured by shade.
 
 ## 4. The trackers
 
-| Tracker | Axes | Range | Slew | Wind stow | Snow stow | Fitted to |
-|---|---|---|---|---|---|---|
-| Meridian Horizon R | 1, independent row, self-powered | ±60° | 4.4 °/min | 20 m/s | 60° | HX-700 |
-| Meridian Zenith AE | 2, azimuth-elevation pedestal | ±80° | 3.0 °/min | 18 m/s | 70° | AE-440 |
+| Tracker | Axes | Range | Slew | Deadband | Wind stow | Snow stow | Fitted to |
+|---|---|---|---|---|---|---|---|
+| Meridian Horizon R | 1, independent row, self-powered | ±60° | 4.4 °/min | 2.0° | 20 m/s | 60° | HX-700 |
+| Meridian Zenith AE | 2, azimuth-elevation pedestal | ±80° | 3.0 °/min | 1.0° | 18 m/s | 70° | AE-440 |
 
 Two, and the table says which array carries each — because a datasheet nothing can be built
 with is a datasheet that is wrong. A third was written for a linked-row drive and then had no
@@ -184,8 +184,26 @@ product to go in, so it went.
 
 The slew rate is against the **sky**, not the tick counter. One tick of Minecraft's day clock
 stands for 3.6 seconds of real weather, so 4.4 degrees a minute converts to about seventeen
-times the fifteen degrees an hour the sun moves — which is the ratio the real pair have. A row
-catches up in steps and a full stow takes a couple of hundred ticks.
+times the fifteen degrees an hour the sun moves — which is the ratio the real pair have.
+
+### The deadband, which is why a row stands still and then jerks
+
+**A controller does not follow the sun.** It works out where the sun is, compares that with an
+inclinometer, and starts the motor only when the error passes the deadband. Three reasons, all
+of them binding: a slew drive cannot be run at the sun's own quarter of a degree a minute, a
+motor's starting current is paid per start so you want few and decisive ones, and being two
+degrees off costs `cos(2°)` — six hundredths of one percent.
+
+So a row holds still for seconds at a time and then snaps two degrees in half a second. That
+is not a concession to the eye; it is what the datasheet describes, and it is why a real solar
+farm looks like a photograph until you watch one row for a minute. Trying to spend the drive's
+capability smoothly instead gives a row turning at a fifth of a degree a second — real,
+correct, and completely invisible, so the machine reads as broken and the only motion anybody
+ever sees is a stow.
+
+The band is a **tracking** tolerance, so it applies only while the row is following the sun. A
+stow and a hand position are commanded positions and are driven home exactly: the point of
+going flat for the night is to be flat, not to be within two degrees of it.
 
 ### Modes
 
@@ -197,16 +215,27 @@ In AUTO the order of precedence is the safe one, and the panel says which applie
 
 | Stow | When | Where it goes |
 |---|---|---|
-| Wind | gust over the threshold | flat, so a horizontal gust has no leverage on the tube |
+| Wind | mean over the threshold, or a gust a fifth past it | flat, so a horizontal gust has no leverage on the tube |
 | Snow | snow lying on the modules | steep, to drop the lot |
 | Night | the sun is down | flat, so the dew runs off |
 | Diffuse | flat would collect more | flat, to see as much of the dome as possible |
 
-The first three are **protections**, and they are slow on purpose. The wind stow latches with
-hysteresis and releases at four fifths of the threshold, and all three are held for
-thirty-six minutes after their cause has gone. You do not come out of a wind stow the instant
-a gust drops, because the next gust is a minute away and standing a row up between them is
-how they get destroyed.
+**Wind and snow are protections**, and they are slow on purpose: the wind stow latches with
+hysteresis, releases at four fifths of the threshold, and is held for thirty-six minutes after
+its cause has gone. You do not come out of a wind stow the instant a gust drops, because the
+next gust is a minute away and standing a row up between them is how they get destroyed.
+
+**The wind is supervised on the mean and on the gust separately**, against their own limits,
+which is how the real pair are written and what the turbines here are already held to. A stow
+wind of 20 m/s on a datasheet is a sustained figure; the gust limit that goes with it is about
+a fifth higher. Watching a three-second gust against the *mean's* number is a real mistake and
+this had it: a gust runs about 1.4 times the mean, so the row went flat whenever the mean
+passed fourteen. Measured over six worlds and three kinds of ground, that is **six to thirteen
+percent of all daylight spent stowed**, in rare episodes lasting minutes — a tracker lying down
+for no reason a player could see. Against the right pair it is one to four percent.
+
+**Night is not held**, because its release is the one condition here that cannot chatter: the
+sun comes up once and stays up. Dwelling on it only delayed every dawn by half a minute.
 
 The fourth is not a protection but a **choice between two angles**, and it is decided by
 working out what each would collect — through the same transposition model the array's own

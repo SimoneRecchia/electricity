@@ -57,6 +57,21 @@ public record TrackerSpec(
 		 * catches up in steps.
 		 */
 		double slewDegPerMinute,
+		/**
+		 * How far the row is allowed to drift off the sun before the drive runs, in degrees.
+		 *
+		 * The single most misunderstood number on a tracker's datasheet, and the reason a real solar farm
+		 * looks like a photograph rather than a machine. A controller does not follow the sun: it computes
+		 * where the sun is, compares that with an inclinometer, and starts the motor only when the error
+		 * exceeds this. Three reasons, all of them binding - a slew drive cannot be run at the sun's own
+		 * speed of a quarter of a degree a minute, a motor's starting current is paid per start so you want
+		 * few and decisive ones, and being two degrees off costs cos(2 degrees), which is six hundredths of
+		 * one percent.
+		 *
+		 * So the row holds still for minutes and then snaps. Published tracking accuracies are around two
+		 * degrees for a single axis and half of that for a pedestal, which is what these are.
+		 */
+		double trackingDeadbandDeg,
 		/** Where the row parks overnight. Flat on the real machines, which is also where the dew runs off. */
 		double nightStowDeg,
 		/**
@@ -178,6 +193,28 @@ public record TrackerSpec(
 	 */
 	public double slewPerTick() {
 		return slewDegPerMinute / 60.0 * WorldConditions.SECONDS_PER_DAY_TICK;
+	}
+
+	/**
+	 * Whether an error of this many degrees is worth starting the motor for.
+	 *
+	 * Hysteretic by the caller rather than here: once the drive is running it goes all the way to the
+	 * target, because a real one does not stop half way and because stopping inside the band would leave
+	 * it starting again on the next tick.
+	 */
+	/**
+	 * Gust at which the controller stows even though the mean is still under the limit, m/s.
+	 *
+	 * Derived rather than declared, because it is not an independent figure: a datasheet's stow wind is
+	 * quoted against a sustained mean and the gust limit that goes with it is about a fifth higher. The
+	 * same pair the turbines are supervised on.
+	 */
+	public double gustStowSpeed() {
+		return windStowSpeed * WorldConditions.GUST_TRIP_RATIO;
+	}
+
+	public boolean worthMoving(double errorDeg) {
+		return Math.abs(errorDeg) >= trackingDeadbandDeg;
 	}
 
 }

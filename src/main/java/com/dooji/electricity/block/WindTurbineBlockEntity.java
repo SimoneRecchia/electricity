@@ -96,13 +96,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * so this is the floor that keeps it honest.
 	 */
 	private static final double MINIMUM_CUT_OUT_HYSTERESIS = 3.0;
-	/**
-	 * How far past the cut-out a gust has to reach to trip the machine on its own.
-	 *
-	 * A fifth, so a machine rated to 25 m/s over ten minutes also comes off load for a 30 m/s
-	 * gust, which is the pair of limits real datasheets print.
-	 */
-	private static final double GUST_TRIP_RATIO = 1.2;
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
 
@@ -663,7 +656,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// written - 25 m/s over ten minutes, or a gust a fifth past it. Watching only the
 		// instantaneous wind would trip the machine on the first gust that touched 25 and
 		// release it a second later, which is chatter rather than protection.
-		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * GUST_TRIP_RATIO) {
+		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * WorldConditions.GUST_TRIP_RATIO) {
 			cutOutActive = true;
 		} else if (cutOutActive && meanWindSpeed <= cutOutResetSpeed(spec)) {
 			cutOutActive = false;

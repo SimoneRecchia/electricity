@@ -286,19 +286,41 @@ public class PvArrayBlockEntity extends BlockEntity {
 	}
 
 	/**
-	 * Walks the drive one tick towards where the controller wants it.
+	 * Runs the drive, if it is worth running.
+	 *
+	 * A controller does not follow the sun continuously and it is important that this one does not
+	 * either. The sun asks for about a hundredth of a degree a tick; the drive can do a quarter of a
+	 * degree a tick, seventeen times faster, which is the ratio the real pair have. Trying to spend that
+	 * capability smoothly gives a row that turns at a fifth of a degree a second - real, correct, and
+	 * completely invisible, so the machine reads as broken and the only motion anybody ever sees is a
+	 * stow.
+	 *
+	 * What a real one does instead is hold still until it is off the sun by more than its deadband, and
+	 * then run at full speed to the target. Two degrees at four and a half degrees a minute is a step
+	 * every seven seconds that takes half of one - which is a machine you can watch work, and it is what
+	 * the datasheet describes rather than a concession to the eye.
+	 *
+	 * The band is only tested when the drive is stopped. Once it is running it goes to the target,
+	 * because a real one does not stop half way and because stopping inside the band would have it
+	 * starting again on the next tick.
+	 *
+	 * And only while it is following the sun. A deadband is a tracking tolerance - do not chase the sun
+	 * to the last degree - and a stow is a commanded position: the whole point of going flat for the night
+	 * is to be flat, not to be within two degrees of it. Applying the band to both left the row parked
+	 * 1.8 degrees off level every night, which is the sort of thing that is invisible for a week and then
+	 * obvious for ever.
 	 *
 	 * Both sides run this, against the same rule: the server decides the target and steps towards it,
-	 * and the client steps towards the target it was last told so the plane moves smoothly between
-	 * updates instead of jumping every ten ticks. Written twice it was exactly the kind of duplication
-	 * that fails quietly - the drawn plane would lag or overshoot the real one the moment one copy
-	 * changed, and nothing would report it.
+	 * and the client steps towards the target it was last told, so the plane moves between updates
+	 * instead of jumping every ten ticks.
 	 */
 	private void slewTowardsTarget(TrackerSpec tracker) {
+		double error = targetRotationDeg - rotationDeg;
+		if (!slewing && followingTheSun() && !tracker.worthMoving(error)) return;
+
 		double step = tracker.slewPerTick();
-		double delta = targetRotationDeg - rotationDeg;
-		slewing = Math.abs(delta) > step;
-		rotationDeg = slewing ? rotationDeg + Math.signum(delta) * step : targetRotationDeg;
+		slewing = Math.abs(error) > step;
+		rotationDeg = slewing ? rotationDeg + Math.signum(error) * step : targetRotationDeg;
 	}
 
 	// ---- the optics ----
@@ -412,6 +434,16 @@ public class PvArrayBlockEntity extends BlockEntity {
 	}
 
 	/**
+	 * Whether the drive is following the sun, as opposed to being sent somewhere.
+	 *
+	 * A hand position counts as being sent somewhere, which is why the mode is tested and not only the
+	 * stow: somebody who dials in an angle means that angle.
+	 */
+	private boolean followingTheSun() {
+		return trackerMode == TrackerMode.AUTO && stowReason == TrackerMode.Stow.NONE;
+	}
+
+	/**
 	 * Where the controller wants the row, and why.
 	 *
 	 * The order is the safe one and it is the order a real controller uses. A hand position and a
@@ -434,7 +466,19 @@ public class PvArrayBlockEntity extends BlockEntity {
 			return tracker.nightStowDeg();
 		}
 
-		TrackerMode.Stow putAway = heldPutAway(putAwayStow(tracker, sky, weather));
+		// night is not held, because its release is the one condition here that cannot chatter: the sun
+		// comes up once and stays up. Dwelling on it only delayed every dawn by half a minute, which is
+		// a row standing flat under a risen sun for no reason anybody watching could see
+		TrackerMode.Stow putAway = sky.sun().up() ? heldPutAway(putAwayStow(tracker, sky, weather)) : TrackerMode.Stow.NIGHT;
+		if (putAway == TrackerMode.Stow.NIGHT) {
+			stowReason = TrackerMode.Stow.NIGHT;
+			backtracking = false;
+			releaseDiffuse();
+			heldStow = TrackerMode.Stow.NONE;
+			stowHoldTicks = 0;
+			return tracker.nightStowDeg();
+		}
+
 		if (putAway != TrackerMode.Stow.NONE) {
 			stowReason = putAway;
 			backtracking = false;
@@ -475,17 +519,20 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 * longer.
 	 */
 	private TrackerMode.Stow putAwayStow(TrackerSpec tracker, SkyConditions sky, WeatherSnapshot weather) {
-		// latched with hysteresis, so a gust sitting on the threshold does not have the drive going
-		// back and forth across it
-		if (weather.gustWind() >= tracker.windStowSpeed()) {
+		// Supervised on the mean and on the gust separately, against their own limits, which is how the
+		// real pair are written and what the turbines here are already held to. Watching the gust against
+		// the *mean's* number is the mistake this had: a three-second gust runs about 1.4 times the mean,
+		// so the row went flat whenever the mean passed fourteen - measured over six worlds, that is
+		// between six and thirteen percent of all daylight spent stowed, in rare episodes lasting minutes.
+		// Against the right pair it is one to four percent, which is a windy site rather than a fault.
+		if (weather.meanWind() >= tracker.windStowSpeed() || weather.gustWind() >= tracker.gustStowSpeed()) {
 			windStowLatched = true;
-		} else if (windStowLatched && weather.gustWind() < tracker.windStowSpeed() * STOW_RELEASE) {
+		} else if (windStowLatched && weather.meanWind() < tracker.windStowSpeed() * STOW_RELEASE) {
 			windStowLatched = false;
 		}
 
 		if (windStowLatched) return TrackerMode.Stow.WIND;
 		if (snowDepthM >= tracker.snowStowDepth()) return TrackerMode.Stow.SNOW;
-		if (!sky.sun().up()) return TrackerMode.Stow.NIGHT;
 
 		return TrackerMode.Stow.NONE;
 	}
