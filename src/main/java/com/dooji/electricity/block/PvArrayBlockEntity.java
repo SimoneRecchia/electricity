@@ -82,11 +82,15 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/**
 	 * How often the sky view is surveyed again, in ticks.
 	 *
-	 * A minute. What it measures is geometry - walls, roofs, trees - which changes when somebody
-	 * builds rather than when the sun moves, and surveying it costs nine ray marches. The beam is
-	 * traced every tick instead, because that one follows the sun.
+	 * Ten seconds. What it measures is geometry - walls, roofs, trees - which changes when somebody
+	 * builds rather than when the sun moves, so it does not need to be recomputed every tick like the
+	 * beam does. It cannot be cached for much longer than this either: a player who roofs over an array
+	 * should see the diffuse drop while they are still standing there, not a minute later.
+	 *
+	 * Nine ray marches of at most twenty-four steps, once every two hundred ticks, is about one block
+	 * lookup a tick - which is less than a redstone wire does idling.
 	 */
-	private static final int SKY_VIEW_TTL = 1200;
+	private static final int SKY_VIEW_TTL = 200;
 	/** Flash-test binning, peak to peak: real datasheets print plus or minus three percent. */
 	private static final double MODULE_TOLERANCE = 0.03;
 	/**
