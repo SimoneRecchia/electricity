@@ -2,6 +2,8 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.InverterSpec;
+import com.dooji.electricity.api.power.PvArraySpec;
+import com.dooji.electricity.api.power.PvModuleSpec;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TickBudget;
@@ -113,6 +115,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	 */
 	private boolean stringsOutOfWindow = false;
 	private int stringsConnected = 0;
+	/**
+	 * Direct-current input the machine has left, in amps.
+	 *
+	 * Published because it is the number that explains a refusal. An array that will not come online
+	 * when there are terminals free is an array whose current would not fit, and without this the panel
+	 * can only say "not wired in" and leave the player counting holes.
+	 */
+	private double stringCurrentHeadroom = 0.0;
 
 	private double energyTodayKwh = 0.0;
 	private double energyLifetimeKwh = 0.0;
@@ -417,15 +427,32 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		candidates.sort(Comparator.comparingDouble(array -> array.getBlockPos().distSqr(worldPosition)));
 
-		int stringCapacity = spec.stringInputs();
+		// two limits, and which one binds depends on what the modules are. The terminal count is the
+		// holes in the machine; the current limit is the copper behind them, and a designer usually
+		// meets that one first - eighteen strings of a 210 mm cell module carry three hundred amps into
+		// a machine whose nine trackers will take two hundred and thirty-four between them
+		double currentCeiling = spec.mpptCount() * spec.maxCurrentPerMppt();
+		double currentConnected = 0.0;
+		double dcConnected = 0.0;
+
 		for (PvArrayBlockEntity array : candidates) {
-			int strings = array.spec().strings();
-			if (stringsConnected + strings > stringCapacity) continue;
+			PvArraySpec wanted = array.spec();
+			int strings = wanted.strings();
+			double current = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * strings;
+
+			// three limits off the same datasheet, and any of them can be the one that bites
+			if (stringsConnected + strings > spec.stringInputs()) continue;
+			if (currentConnected + current > currentCeiling) continue;
+			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;
 			if (!array.claim(worldPosition)) continue;
 
 			arrays.add(array.getBlockPos().immutable());
 			stringsConnected += strings;
+			currentConnected += current;
+			dcConnected += wanted.dcPowerKw();
 		}
+
+		stringCurrentHeadroom = currentCeiling - currentConnected;
 	}
 
 	/**
@@ -466,7 +493,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				ambientTempC, referenceModuleTempC, referenceIrradiance, energyTodayKwh, energyLifetimeKwh,
 				activePowerLimitKw, powerFactorSetpoint, isRunning(), clipping, derating,
 				stoppedByComputer, stoppedByPlayer, isStoppedByRedstone(), arrays.size(), stringsConnected,
-				stringCapacity(), dcAcRatio(), serverLevel.isRainingAt(worldPosition.above())));
+				stringCapacity(), stringCurrentHeadroom, dcAcRatio(), serverLevel.isRainingAt(worldPosition.above())));
 	}
 
 	// ---- readings ----
@@ -513,6 +540,11 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	}
 
 	/** Whether the arrays are producing at a voltage this machine cannot track. */
+	/** Direct-current input still free, in amps. */
+	public double stringCurrentHeadroom() {
+		return stringCurrentHeadroom;
+	}
+
 	public boolean stringsOutOfWindow() {
 		return stringsOutOfWindow;
 	}

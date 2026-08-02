@@ -55,6 +55,14 @@ public final class SolarTelemetry {
 	public static final String STRINGS_CONNECTED = "stringsConnected";
 	/** String terminals the machine has. Arrays past this are not wired in, however much capacity is left. */
 	public static final String STRING_CAPACITY = "stringCapacity";
+	/**
+	 * Direct-current input the machine has left, in amps.
+	 *
+	 * The tag that explains a refusal. An array standing beside an inverter with terminals to spare and
+	 * still not wired in is an array whose current would not fit, and a plant's own SCADA reports its
+	 * spare input capacity for exactly that reason.
+	 */
+	public static final String DC_CURRENT_HEADROOM = "dcCurrentHeadroom";
 
 	// ---- the inverter: derived ----
 
@@ -168,7 +176,7 @@ public final class SolarTelemetry {
 	private static final Map<String, Telemetry.Kind> INVERTER = Telemetry.tags()
 			.measured(ACTIVE_POWER, PV_ACTIVE_POWER, AVAILABLE_DC_POWER, ACTIVE_ENERGY, ACTIVE_ENERGY_TODAY, AMBIENT_TEMP, CABINET_TEMP, MODULE_TEMP,
 					IRRADIATION, ACTIVE_POWER_LIMIT, POWER_LIMITATION_ACTIVE, RUNNING, CLIPPING, DERATING, STOPPED_BY_COMPUTER, STOPPED_BY_PLAYER,
-					STOPPED_BY_REDSTONE, ARRAYS_CONNECTED, STRINGS_CONNECTED, STRING_CAPACITY)
+					STOPPED_BY_REDSTONE, ARRAYS_CONNECTED, STRINGS_CONNECTED, STRING_CAPACITY, DC_CURRENT_HEADROOM)
 			.derived(APPARENT_POWER, REACTIVE_POWER, POWER_FACTOR, FREQUENCY, GRID_VOLTAGE, GRID_CURRENT, V1, V2, V3, V12, V23, V31, I1, I2, I3,
 					DC_VOLTAGE, DC_CURRENT, EFFICIENCY, PERFORMANCE_RATIO, DC_AC_RATIO)
 			.simulated(HEAT_SINK_TEMP, INTERNAL_AIR_TEMP, INSULATION_RESISTANCE, DC_BUS_VOLTAGE, FAN_SPEED)

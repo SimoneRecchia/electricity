@@ -123,15 +123,51 @@ so it cannot disagree with either.
 
 ## 3. The inverters
 
-| Block | Product | AC | MPPT | Strings | Window | Max DC | ηpeak | ηeuro | Night |
-|---|---|---|---|---|---|---|---|---|---|
-| `inverter_10` | Volterra VX-10K | 10 kW | 2 | 4 | 140–980 V | 15 kW | 98.6% | 98.2% | 1 W |
-| `inverter_110` | Volterra VX-110K | 110 kW | 9 | 18 | 200–1000 V | 165 kW | 98.7% | 98.3% | 2 W |
-| `inverter_350` | Volterra VX-350K | 352 kW | 16 | 32 | 500–1500 V | 528 kW | 99.0% | 98.7% | 3 W |
-| `inverter_2500` | Volterra VC-2500K | 2500 kW | 1 | 288 | 875–1325 V | 3125 kW | 98.9% | 98.5% | 100 W |
+| Block | Product | AC | MPPT | Strings | A/MPPT | Window | Max DC | ηpeak | ηeuro | Night |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `inverter_10` | Volterra VX-10K | 10 kW | 2 | 4 | 26 A | 140–980 V | 15 kW | 98.6% | 98.2% | 1 W |
+| `inverter_110` | Volterra VX-110K | 110 kW | 9 | 18 | 26 A | 200–1000 V | 165 kW | 98.7% | 98.3% | 2 W |
+| `inverter_350` | Volterra VX-350K | 352 kW | 16 | 32 | 30 A | 500–1500 V | 528 kW | 99.0% | 98.7% | 3 W |
+| `inverter_2500` | Volterra VC-2500K | 2500 kW | 1 | 288 | 2500 A | 875–1325 V | 3125 kW | 98.9% | 98.5% | 100 W |
 
 The European efficiency is not a declared figure — it is the load curve averaged at the six
 standard load points, which is what it means.
+
+### What decides whether an array fits an inverter
+
+**Four figures, and any of them can be the one that refuses.** Two are hard refusals — the array
+does not come online at all — and two are capacity limits that stop the *next* array.
+
+| Test | The figure | What happens when it fails |
+|---|---|---|
+| Tracking window | string Vmp at operating temperature against 140–980 V etc. | refused, and the panel names the window |
+| Input rating | string Voc at −10 °C against Max DC volts | refused: a cold morning would exceed the input |
+| Terminals | one per string, 4 / 18 / 32 / 288 | the array is not wired in |
+| **Input current** | the strings' amps against MPPT count × A/MPPT | the array is not wired in, with terminals still free |
+
+The current limit is the one people are surprised by, and it is the one that binds most often.
+Worked out across the whole catalogue, arrays each inverter will actually take:
+
+| | VX-10K | VX-110K | VX-350K | VC-2500K |
+|---|---|---|---|---|
+| FT-415 flat table | 0, power | **8, current** | 16, terminals | window |
+| FT-430 flat table | 0, power | **8, current** | 16, terminals | window |
+| TR-580 fixed tilt | 1, power | 15, power | 32, terminals | window |
+| TR-530 thin film | window | window | 10, terminals | **96, terminals** |
+| HX-700 tracker | 1, power | **13, current** | **27, current** | window |
+| AE-440 dual axis | input rating | input rating | 32, terminals | window |
+
+Read the HX-700 row: eighteen terminals free on a VX-110K and only **thirteen** arrays fit,
+because a 210 mm cell module's string carries 17.7 A and nine trackers at 26 A will take 234 A
+between them. That is the constraint a real designer meets before running out of holes, and it is
+why a high-current module ends up on fewer strings per tracker than a narrow one.
+
+And the smallest machine takes **no flat table at all**: one block of flat table is 18.3 kW and a
+10 kW residential inverter's input is rated to 15. A residential machine is for a residential
+array, which here means a fixed rack or a single tracker.
+
+The spare input is published as `dcCurrentHeadroom`, because an array standing beside an inverter
+with terminals to spare and still not wired in has no other way of telling you why.
 
 ### Not every array goes in front of every inverter
 

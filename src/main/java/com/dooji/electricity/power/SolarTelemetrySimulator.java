@@ -92,6 +92,7 @@ public final class SolarTelemetrySimulator {
 			int arraysConnected,
 			int stringsConnected,
 			int stringCapacity,
+			double dcCurrentHeadroom,
 			double dcAcRatio,
 			boolean raining
 	) {
@@ -131,6 +132,7 @@ public final class SolarTelemetrySimulator {
 		out.put(SolarTelemetry.ARRAYS_CONNECTED, s.arraysConnected());
 		out.put(SolarTelemetry.STRINGS_CONNECTED, s.stringsConnected());
 		out.put(SolarTelemetry.STRING_CAPACITY, s.stringCapacity());
+		out.put(SolarTelemetry.DC_CURRENT_HEADROOM, s.dcCurrentHeadroom());
 
 		// ---- derived ----
 		out.put(SolarTelemetry.APPARENT_POWER, apparent);

@@ -63,6 +63,21 @@ public record InverterSpec(
 		 * thing a derived figure got wrong.
 		 */
 		int stringInputs,
+		/**
+		 * Most direct current one tracker's terminals will carry together, in amps.
+		 *
+		 * The figure that actually decides how many strings an inverter can take, and the one a
+		 * datasheet prints beside the terminal count rather than instead of it. Twenty-six amps is the
+		 * common number on a string machine, thirty on the big ones, and a central inverter's input is
+		 * measured in thousands because its strings arrive already paralleled through combiner boxes.
+		 *
+		 * It is a separate constraint from the terminal count and it can be the binding one: two strings
+		 * of a 210 mm cell module carry about thirty-four amps together, which is more than a
+		 * twenty-six amp tracker will take however many holes there are to plug them into. Real
+		 * designers hit this before they run out of terminals, and it is why a high-current module ends
+		 * up on fewer strings per tracker than a narrow one.
+		 */
+		double maxCurrentPerMppt,
 		double mpptMinVolts,
 		double mpptMaxVolts,
 		double maxDcVolts,
@@ -150,6 +165,7 @@ public record InverterSpec(
 		if (maxDcPowerKw < acPowerKw) throw new IllegalArgumentException(id + ": an inverter accepts at least its own nameplate in DC");
 		if (mpptCount < 1) throw new IllegalArgumentException(id + ": an inverter has at least one maximum power point tracker");
 		if (stringInputs < mpptCount) throw new IllegalArgumentException(id + ": every tracker needs at least one string terminal");
+		if (maxCurrentPerMppt <= 0.0) throw new IllegalArgumentException(id + ": a tracker's terminals carry some current");
 		if (mpptMaxVolts <= mpptMinVolts) throw new IllegalArgumentException(id + ": invalid MPPT window");
 		if (maxDcVolts < mpptMaxVolts) throw new IllegalArgumentException(id + ": the MPPT window has to fit inside the input rating");
 		if (peakEfficiency <= 0.0 || peakEfficiency >= 1.0) throw new IllegalArgumentException(id + ": efficiency is a fraction under one");
@@ -315,6 +331,30 @@ public record InverterSpec(
 	}
 
 	/** Whether a string at this voltage is one the machine can actually track. */
+	/** String terminals on one tracker: the terminal count shared out, at least one each. */
+	public int inputsPerMppt() {
+		return Math.max(1, stringInputs / mpptCount);
+	}
+
+	/**
+	 * How many strings of a given current one tracker will actually take.
+	 *
+	 * The lower of two limits, which is the whole point of carrying both: the holes in the machine and
+	 * the copper behind them. A twenty-six amp tracker with two terminals takes two strings of a
+	 * thirteen amp module and only one of a seventeen amp one, and no amount of terminal counting says
+	 * so.
+	 */
+	public int stringsPerMppt(double stringCurrentAmps) {
+		if (stringCurrentAmps <= 0.0) return inputsPerMppt();
+
+		return Math.max(1, Math.min(inputsPerMppt(), (int) Math.floor(maxCurrentPerMppt / stringCurrentAmps)));
+	}
+
+	/** Strings of a given current the whole machine will take, across all its trackers. */
+	public int stringCapacity(double stringCurrentAmps) {
+		return mpptCount * stringsPerMppt(stringCurrentAmps);
+	}
+
 	public boolean withinMpptWindow(double volts) {
 		return volts >= mpptMinVolts && volts <= mpptMaxVolts;
 	}
