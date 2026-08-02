@@ -74,11 +74,12 @@ the riser up a combiner's post. One number, so nothing swells at a join. At a bl
 real cable would not be a pixel wide, so all of it is symbolic anyway, and a symbol that shouts is
 worse than one you have to look for.
 
-The *leads* are centred on the block's axis because that is where a laid run is, but the junction
-**box** goes where a junction box belongs on that mounting — bolted to the front edge of a table,
-under the high edge of a tilted rack, strapped to the pier inside a tracker's drive bay, on a
-dual-axis pedestal. Putting the box in the middle to match the leads stood it up through the glass in
-the centre of the panel, which looked like damage.
+What each mounting shows beyond that is deliberately small. A **table** and a **rack** get a lead out
+of one edge and a socket on the other at the same offset, so a line of them reads as one string wired
+through rather than as a grid of separate things — on top for the table, along the ground for the rack,
+because a cable lying across a cell is a cell out of the string. A **tracked row** gets the drag loop
+sixty degrees of rotation twice a day demands, and a **dual-axis frame** the service coil an azimuth
+drive is given. Anything more than that reads as a plant wrapped in wire.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

@@ -528,9 +528,15 @@ def steel_end():
         for x in range(size):
             c.set(x, y, shade(base, int(noise(x, y, 59) * 18) - 9))
 
-    c.outline(0, 0, size, size, shade(base, -40))
-    c.outline(1, 1, size - 1, size - 1, shade(base, 24))
-    c.disc(size // 2, size // 2, 1, shade(base, -50))
+    # Weld beads on a repeating grid rather than a rim round the edge and a boss in the middle.  A cap is
+    # mapped onto faces of every size here - the end of a mast, of a torque tube, of a pier - and several
+    # of them take a fraction of the texture rather than all of it, so a rim shown three tenths of the way
+    # along is a rim down two edges and nothing on the other two.  That is what looked cut.
+    for y in range(0, size, 8):
+        for x in range(0, size, 8):
+            c.rect(x + 1, y + 3, x + 7, y + 5, shade(base, -34))
+            c.rect(x + 1, y + 3, x + 7, y + 4, shade(base, 22))
+            c.set(x + 4, y + 1, shade(base, -50))
     return c
 
 
