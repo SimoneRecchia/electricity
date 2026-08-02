@@ -35,12 +35,25 @@ OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models'
 # textures/block/ to whatever map_Kd names, so these are bare file names.
 MATERIALS = {
     'module': 'pv_module.png',
+    'module_back': 'pv_module_back.png',
+    'module_edge': 'pv_module_edge.png',
     'frame': 'pv_frame.png',
     'steel': 'pv_steel.png',
+    'steel_end': 'pv_steel_end.png',
     'cabinet': 'pv_cabinet.png',
+    'cabinet_door': 'pv_cabinet_door.png',
+    'cabinet_top': 'pv_cabinet_top.png',
+    'vent': 'pv_vent.png',
     'display': 'pv_display.png',
     'instrument': 'pv_instrument.png',
+    'dome': 'pv_dome.png',
 }
+
+# Which material each face of a laminate carries.  A module is not one material: the sun
+# side is cells, the back is a backsheet with a junction box on it, and the four edges are
+# the aluminium frame that clamps the glass.  Giving all six the cell texture is what made
+# a panel look like it was cells all the way through when you stood beside it.
+LAMINATE = {'up': 'module', 'down': 'module_back', '*': 'module_edge'}
 
 # The tilt a fixed rack is built at, in degrees.  The same figure PvMounting
 # declares, restated here rather than imported because a Python script cannot read
@@ -84,6 +97,21 @@ class Mesh:
     def add_object(self, name, material):
         self.objects.append((name, material, []))
         return self.objects[-1][2]
+
+    def faces(self, name, material):
+        """The face list for one object under one material, created once and reused.
+
+        A part whose faces are not all the same material has to be written as one section
+        per material.  That is safe because the renderer keys groups by object *and*
+        material and poses them by the object's name prefix, so every material of
+        ``rotate_modules`` gets the same rotation - and it is why the same object name may
+        appear more than once in the file.
+        """
+        for existing_name, existing_material, faces in self.objects:
+            if existing_name == name and existing_material == material:
+                return faces
+
+        return self.add_object(name, material)
 
     def quad(self, faces, corners, normal, uvs):
         indices = []
@@ -156,11 +184,25 @@ def pivot(mesh, name, point):
     box(mesh, faces, point, point)
 
 
-def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None):
+def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
+    """A box whose six faces are not all the same material.
+
+    ``sides`` maps face names - down, up, north, south, west, east - to materials, with
+    ``'*'`` standing for the rest.  Each face is written into its own material's section,
+    which is how a module can be cells on top, a backsheet underneath and frame all round
+    while still being one part as far as the renderer is concerned.
+    """
+    for face in ('down', 'up', 'north', 'south', 'west', 'east'):
+        material = sides.get(face, sides['*'])
+        box(mesh, mesh.faces(name, material), lo, hi, uv_scale=uv_scale, rot=rot, only=face)
+
+
+def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None):
     """Six quads, outward normals, each face mapped across the whole texture.
 
     uv_scale under one insets the mapping, which is how a long rail gets a strip of
-    its texture rather than the whole thing stretched along it.
+    its texture rather than the whole thing stretched along it.  ``only`` emits a single
+    named face, which is what lets clad_box split a box across materials.
     """
     x0, y0, z0 = lo
     x1, y1, z1 = hi
@@ -181,6 +223,9 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None):
     uvs = [(0.0, 0.0), (u1, 0.0), (u1, u1), (0.0, u1)]
 
     for face, pts in corners.items():
+        if only is not None and face != only:
+            continue
+
         normal = normals[face]
         if rot is not None:
             pivot, axis, degrees = rot
@@ -189,8 +234,14 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None):
         mesh.quad(faces, pts, normal, uvs)
 
 
-def cylinder(mesh, faces, centre, axis, radius, half_length, sides=8, uv_scale=1.0):
-    """A prism standing in for a tube: eight sides reads as round at this scale."""
+def cylinder(mesh, faces, centre, axis, radius, half_length, sides=8, uv_scale=1.0, caps=None):
+    """A prism standing in for a tube: eight sides reads as round at this scale.
+
+    ``caps`` closes both ends into that face list, which is not decoration: without them a
+    mast is a hole when you look down it, and a radiometer has no dome to catch the light.
+    Fanned into quads rather than left as one polygon, because the render type consumes
+    quads and a stray triangle would shear the whole buffer after it.
+    """
     cx, cy, cz = centre
     ring = []
     for i in range(sides):
@@ -223,6 +274,24 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=8, uv_scale=1
         mesh.quad(faces, [a, b, c, d], (nx / length, ny / length, nz / length),
                   [(u, 0.0), (u2, 0.0), (u2, uv_scale), (u, uv_scale)])
 
+    if caps is None:
+        return
+
+    normal = {'x': (1.0, 0.0, 0.0), 'y': (0.0, 1.0, 0.0), 'z': (0.0, 0.0, 1.0)}[axis]
+    for end in (-1, 1):
+        outward = tuple(component * end for component in normal)
+        # the ring's own coordinates carried into the texture, so a drawn rim lands on the rim
+        def uv(i):
+            p, q = ring[i]
+            centre_p, centre_q = (cx, cz) if axis == 'y' else (cx, cy) if axis == 'z' else (cy, cz)
+            return (0.5 + (p - centre_p) / (2.0 * radius), 0.5 + (q - centre_q) / (2.0 * radius))
+
+        order = range(sides) if end > 0 else range(sides - 1, -1, -1)
+        indices = list(order)
+        for i in range(1, sides - 2, 2):
+            corners = [indices[0], indices[i], indices[i + 1], indices[i + 2]]
+            mesh.quad(caps, [point(k, end) for k in corners], outward, [uv(k) for k in corners])
+
 
 # ---------------------------------------------------------------- flat table
 
@@ -245,10 +314,9 @@ def flat_table():
     box(mesh, frame, (-0.46, 0.035, -0.40), (-0.40, 0.075, 0.40), uv_scale=0.4)
     box(mesh, frame, (0.40, 0.035, -0.40), (0.46, 0.075, 0.40), uv_scale=0.4)
 
-    modules = mesh.add_object('modules', 'module')
     # two modules with a gap between them, which is where a real table's rails run
-    box(mesh, modules, (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46))
-    box(mesh, modules, (0.02, 0.075, -0.46), (0.46, 0.11, 0.46))
+    clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
+    clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
     return mesh
 
 
@@ -307,10 +375,9 @@ def tilted_rack():
     box(mesh, frame, (-0.46, pivot_y - frame_half, -depth), (0.46, pivot_y + frame_half, depth),
         uv_scale=0.5, rot=(pivot, 'x', -tilt))
 
-    modules = mesh.add_object('modules', 'module')
     top = pivot_y + frame_half + module_thickness
-    box(mesh, modules, (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), rot=(pivot, 'x', -tilt))
-    box(mesh, modules, (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), rot=(pivot, 'x', -tilt))
+    clad_box(mesh, 'modules', (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
+    clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
     return mesh
 
 
@@ -350,22 +417,23 @@ def single_axis():
     # stand in the swept disc: within one block a real row has a pier every six metres
     box(mesh, pier, (-0.055, 0.05, -0.075), (0.055, axis_y, 0.075), uv_scale=0.3)
 
-    motor = mesh.add_object('motor', 'cabinet')
-    # the slew drive: a housing round the tube, wholly inside the bay
-    box(mesh, motor, (-0.13, axis_y - 0.13, -0.085), (0.13, axis_y + 0.13, 0.085), uv_scale=0.6)
+    # the slew drive: a housing round the tube, wholly inside the bay. Its lid is a lid and
+    # its two ends are where the tube comes out, so neither is the painted side sheet
+    clad_box(mesh, 'motor', (-0.13, axis_y - 0.13, -0.085), (0.13, axis_y + 0.13, 0.085),
+             {'up': 'cabinet_top', 'north': 'steel_end', 'south': 'steel_end', '*': 'cabinet'}, uv_scale=0.6)
 
     pivot(mesh, 'tube', (0.0, axis_y, 0.0))
 
     tube = mesh.add_object('rotate_tube', 'steel')
-    cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, uv_scale=0.5)
+    cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, uv_scale=0.5,
+             caps=mesh.faces('rotate_tube', 'steel_end'))
 
     # two bays of modules, two rows deep, which is the 2-up portrait layout a real
     # horizontal single axis carries
-    modules = mesh.add_object('rotate_modules', 'module')
     rails = mesh.add_object('rotate_rails', 'frame')
     for z0, z1 in ((-0.48, -bay), (bay, 0.48)):
-        box(mesh, modules, (-0.44, axis_y + 0.045, z0), (-0.02, axis_y + 0.075, z1))
-        box(mesh, modules, (0.02, axis_y + 0.045, z0), (0.44, axis_y + 0.075, z1))
+        clad_box(mesh, 'rotate_modules', (-0.44, axis_y + 0.045, z0), (-0.02, axis_y + 0.075, z1), LAMINATE)
+        clad_box(mesh, 'rotate_modules', (0.02, axis_y + 0.045, z0), (0.44, axis_y + 0.075, z1), LAMINATE)
         # purlins along the tube rather than across it: a rail spanning the full width
         # would pass through the tube it is supposed to be clamped to
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
@@ -405,13 +473,15 @@ def dual_axis():
 
     pedestal = mesh.add_object('pedestal', 'steel')
     box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.06, 0.20), uv_scale=0.5)
-    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.03, 0.0), 'y', 0.085, top / 2.0 - 0.03, uv_scale=0.4)
+    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.03, 0.0), 'y', 0.085, top / 2.0 - 0.03, uv_scale=0.4,
+             caps=mesh.faces('pedestal', 'steel_end'))
 
     pivot(mesh, 'azimuth', (0.0, top + 0.05, 0.0))
     pivot(mesh, 'elevation', (0.0, pivot_y, 0.0))
 
     azimuth = mesh.add_object('rotate_azimuth', 'cabinet')
-    cylinder(mesh, azimuth, (0.0, top + 0.05, 0.0), 'y', 0.10, 0.05, uv_scale=0.5)
+    cylinder(mesh, azimuth, (0.0, top + 0.05, 0.0), 'y', 0.10, 0.05, uv_scale=0.5,
+             caps=mesh.faces('rotate_azimuth', 'cabinet_top'))
     # the yoke arms, separated along the elevation axis rather than across it, so the
     # frame's own torque tube runs between them and the modules clear them entirely. Kept
     # narrow so the bay - and therefore the gap down the middle of the plane - can be too
@@ -420,7 +490,8 @@ def dual_axis():
 
     elevation = mesh.add_object('rotate_elevation', 'frame')
     # the frame's torque tube, through the yoke bearings and out to both module bays
-    cylinder(mesh, elevation, (0.0, pivot_y, 0.0), 'z', 0.03, 0.42, uv_scale=0.4)
+    cylinder(mesh, elevation, (0.0, pivot_y, 0.0), 'z', 0.03, 0.42, uv_scale=0.4,
+             caps=mesh.faces('rotate_elevation', 'steel_end'))
     for z0, z1 in ((-0.46, -bay), (bay, 0.46)):
         # a cross member at the bay's *inner* edge, tying the purlins back to the tube
         inner = (z1 - 0.06, z1) if z1 < 0.0 else (z0, z0 + 0.06)
@@ -428,10 +499,9 @@ def dual_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, elevation, (x0, pivot_y - 0.0275, z0), (x1, pivot_y - 0.0025, z1), uv_scale=0.3)
 
-    modules = mesh.add_object('rotate_elevation_modules', 'module')
     for z0, z1 in ((-0.46, -bay), (bay, 0.46)):
-        box(mesh, modules, (-0.44, pivot_y - 0.0025, z0), (-0.02, pivot_y + 0.0275, z1))
-        box(mesh, modules, (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1))
+        clad_box(mesh, 'rotate_elevation_modules', (-0.44, pivot_y - 0.0025, z0), (-0.02, pivot_y + 0.0275, z1), LAMINATE)
+        clad_box(mesh, 'rotate_elevation_modules', (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1), LAMINATE)
 
     return mesh
 
@@ -448,18 +518,24 @@ def inverter():
     """
     mesh = Mesh()
 
-    cabinet = mesh.add_object('cabinet', 'cabinet')
-    box(mesh, cabinet, (-0.44, 0.0, -0.30), (0.44, 0.98, 0.28), uv_scale=0.9)
+    # the lid is a rain hood and the rest is side sheet, which is the whole difference
+    # between a cabinet and a box with the same picture on all six faces
+    clad_box(mesh, 'cabinet', (-0.44, 0.0, -0.30), (0.44, 0.98, 0.28),
+             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.9)
     # a plinth, because a cabinet standing straight on the ground rusts
-    box(mesh, cabinet, (-0.46, 0.0, -0.32), (0.46, 0.05, 0.30), uv_scale=0.5)
+    box(mesh, mesh.faces('cabinet', 'cabinet'), (-0.46, 0.0, -0.32), (0.46, 0.05, 0.30), uv_scale=0.5)
 
-    door = mesh.add_object('door', 'frame')
-    box(mesh, door, (-0.40, 0.10, -0.335), (0.40, 0.90, -0.30), uv_scale=0.9)
+    # the door: louvres, handle and rating plate on the one face anybody stands in front of,
+    # and plain aluminium on the five they do not
+    clad_box(mesh, 'door', (-0.40, 0.10, -0.335), (0.40, 0.90, -0.30),
+             {'north': 'cabinet_door', '*': 'frame'}, uv_scale=0.9)
     # the hinge side and the handle, which is what makes it read as a door
-    box(mesh, door, (0.34, 0.42, -0.36), (0.40, 0.58, -0.335), uv_scale=0.2)
+    box(mesh, mesh.faces('door', 'frame'), (0.34, 0.42, -0.36), (0.40, 0.58, -0.335), uv_scale=0.2)
 
-    display = mesh.add_object('display', 'display')
-    box(mesh, display, (-0.28, 0.62, -0.345), (0.06, 0.80, -0.335))
+    # the screen on the front of its bezel and nowhere else: it used to be lit on all six
+    # faces, so the machine appeared to have four displays and a lit underside
+    clad_box(mesh, 'display', (-0.28, 0.62, -0.345), (0.06, 0.80, -0.335),
+             {'north': 'display', '*': 'cabinet'})
 
     pivot(mesh, 'fan', (0.46, 0.68, 0.0))
 
@@ -470,11 +546,13 @@ def inverter():
         box(mesh, fan, (0.455, 0.68 - 0.015, -0.015), (0.47, 0.68 + 0.015, 0.15),
             uv_scale=0.2, rot=((0.46, 0.68, 0.0), 'x', angle))
 
-    grille = mesh.add_object('grille', 'steel')
-    box(mesh, grille, (0.44, 0.52, -0.16), (0.455, 0.84, 0.16), uv_scale=0.4)
+    # the grille's slats face outwards, so only the outward face carries them
+    clad_box(mesh, 'grille', (0.44, 0.52, -0.16), (0.455, 0.84, 0.16),
+             {'east': 'vent', '*': 'cabinet'}, uv_scale=0.4)
 
     insulator = mesh.add_object('insulator', 'instrument')
-    cylinder(mesh, insulator, (0.30, 1.03, 0.0), 'y', 0.045, 0.05, uv_scale=0.3)
+    cylinder(mesh, insulator, (0.30, 1.03, 0.0), 'y', 0.045, 0.05, uv_scale=0.3,
+             caps=mesh.faces('insulator', 'instrument'))
     return mesh
 
 
@@ -505,8 +583,11 @@ def met_mast():
     snow_y = 0.20
 
     mast = mesh.add_object('mast', 'steel')
-    cylinder(mesh, mast, (0.0, 0.48, 0.0), 'y', 0.035, 0.48, uv_scale=0.3)
-    box(mesh, mast, (-0.12, 0.0, -0.12), (0.12, 0.04, 0.12), uv_scale=0.4)
+    cylinder(mesh, mast, (0.0, 0.48, 0.0), 'y', 0.035, 0.48, uv_scale=0.3,
+             caps=mesh.faces('mast', 'steel_end'))
+    # the base plate: seen from above far more than from any side, so it gets the lid
+    clad_box(mesh, 'mast', (-0.12, 0.0, -0.12), (0.12, 0.04, 0.12),
+             {'up': 'steel_end', '*': 'steel'}, uv_scale=0.4)
 
     boom = mesh.add_object('boom', 'steel')
     box(mesh, boom, (-0.02, radiometer_y - 0.02, 0.03), (0.02, radiometer_y + 0.02, 0.42), uv_scale=0.3)
@@ -515,20 +596,28 @@ def met_mast():
     # the three radiometers: global, diffuse under its shadow ring, and the
     # albedometer, which is two of them back to back
     pyranometer = mesh.add_object('pyranometer', 'instrument')
-    cylinder(mesh, pyranometer, (0.0, radiometer_y + 0.035, 0.16), 'y', 0.05, 0.02, uv_scale=0.4)
-    cylinder(mesh, pyranometer, (0.0, radiometer_y + 0.065, 0.16), 'y', 0.028, 0.015, uv_scale=0.3)
+    cylinder(mesh, pyranometer, (0.0, radiometer_y + 0.035, 0.16), 'y', 0.05, 0.02, uv_scale=0.4,
+             caps=mesh.faces('pyranometer', 'instrument'))
+    # the dome is glass and is looked down on, so it is glass and it is capped
+    cylinder(mesh, mesh.faces('pyranometer', 'dome'), (0.0, radiometer_y + 0.065, 0.16), 'y', 0.028, 0.015,
+             uv_scale=0.3, caps=mesh.faces('pyranometer', 'dome'))
 
     diffuse = mesh.add_object('diffuse', 'instrument')
-    cylinder(mesh, diffuse, (0.0, radiometer_y + 0.035, 0.30), 'y', 0.05, 0.02, uv_scale=0.4)
-    cylinder(mesh, diffuse, (0.0, radiometer_y + 0.065, 0.30), 'y', 0.026, 0.014, uv_scale=0.3)
+    cylinder(mesh, diffuse, (0.0, radiometer_y + 0.035, 0.30), 'y', 0.05, 0.02, uv_scale=0.4,
+             caps=mesh.faces('diffuse', 'instrument'))
+    cylinder(mesh, mesh.faces('diffuse', 'dome'), (0.0, radiometer_y + 0.065, 0.30), 'y', 0.026, 0.014,
+             uv_scale=0.3, caps=mesh.faces('diffuse', 'dome'))
     # the shadow ring, which is what makes it a diffuse instrument at all
     box(mesh, diffuse, (-0.075, radiometer_y + 0.06, 0.295), (0.075, radiometer_y + 0.075, 0.305), uv_scale=0.2)
 
     albedometer = mesh.add_object('albedometer', 'instrument')
-    cylinder(mesh, albedometer, (0.0, radiometer_y + 0.035, 0.40), 'y', 0.045, 0.018, uv_scale=0.4)
-    cylinder(mesh, albedometer, (0.0, radiometer_y + 0.065, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
+    cylinder(mesh, albedometer, (0.0, radiometer_y + 0.035, 0.40), 'y', 0.045, 0.018, uv_scale=0.4,
+             caps=mesh.faces('albedometer', 'instrument'))
+    cylinder(mesh, mesh.faces('albedometer', 'dome'), (0.0, radiometer_y + 0.065, 0.40), 'y', 0.024, 0.013,
+             uv_scale=0.3, caps=mesh.faces('albedometer', 'dome'))
     # the downward-looking half: an albedometer is two pyranometers, one of them upside down
-    cylinder(mesh, albedometer, (0.0, radiometer_y - 0.005, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
+    cylinder(mesh, mesh.faces('albedometer', 'dome'), (0.0, radiometer_y - 0.005, 0.40), 'y', 0.024, 0.013,
+             uv_scale=0.3, caps=mesh.faces('albedometer', 'dome'))
 
     shield = mesh.add_object('shield', 'instrument')
     # a naturally aspirated radiation shield: a stack of plates with air between them
@@ -536,19 +625,24 @@ def met_mast():
         y = screen_y + i * 0.022
         box(mesh, shield, (-0.055, y, 0.245), (0.055, y + 0.012, 0.355), uv_scale=0.4)
 
-    snow = mesh.add_object('snow', 'cabinet')
-    box(mesh, snow, (-0.03, snow_y, -0.34), (0.03, snow_y + 0.06, -0.28), uv_scale=0.3)
+    # the snow gauge looks straight down, so its underside is the transducer and not paint
+    clad_box(mesh, 'snow', (-0.03, snow_y, -0.34), (0.03, snow_y + 0.06, -0.28),
+             {'down': 'dome', 'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.3)
+    snow = mesh.faces('snow', 'cabinet')
     box(mesh, snow, (-0.02, snow_y + 0.02, -0.28), (0.02, snow_y + 0.04, 0.0), uv_scale=0.3)
 
     pivot(mesh, 'cups', (0.0, 1.0, 0.0))
     pivot(mesh, 'vane', (0.0, 0.885, 0.0))
 
     cups = mesh.add_object('rotate_cups', 'instrument')
-    cylinder(mesh, cups, (0.0, 0.99, 0.0), 'y', 0.018, 0.03, uv_scale=0.2)
+    cylinder(mesh, cups, (0.0, 0.99, 0.0), 'y', 0.018, 0.03, uv_scale=0.2,
+             caps=mesh.faces('rotate_cups', 'instrument'))
     for i in range(3):
         angle = i * 120.0
-        box(mesh, cups, (0.10, 0.985, -0.035), (0.17, 1.03, 0.035),
-            uv_scale=0.3, rot=((0.0, 1.0, 0.0), 'y', angle))
+        # a cup is open at the top and shaded inside it, which is the one face of the whole
+        # mast a player looks straight down into
+        clad_box(mesh, 'rotate_cups', (0.10, 0.985, -0.035), (0.17, 1.03, 0.035),
+                 {'up': 'dome', '*': 'instrument'}, uv_scale=0.3, rot=((0.0, 1.0, 0.0), 'y', angle))
         box(mesh, cups, (0.02, 0.995, -0.008), (0.11, 1.01, 0.008),
             uv_scale=0.2, rot=((0.0, 1.0, 0.0), 'y', angle))
 
@@ -559,13 +653,15 @@ def met_mast():
     return mesh
 
 
+LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
+
 MODELS = [
-    ('pv_flat', flat_table, ('steel', 'frame', 'module')),
-    ('pv_tilt', tilted_rack, ('steel', 'frame', 'module')),
-    ('pv_track', single_axis, ('steel', 'cabinet', 'module', 'frame')),
-    ('pv_dual', dual_axis, ('steel', 'cabinet', 'frame', 'module')),
-    ('pv_inverter', inverter, ('cabinet', 'frame', 'display', 'steel', 'instrument')),
-    ('met_mast', met_mast, ('steel', 'instrument', 'cabinet', 'frame')),
+    ('pv_flat', flat_table, ('steel', 'frame') + LAMINATE_MATERIALS),
+    ('pv_tilt', tilted_rack, ('steel', 'frame') + LAMINATE_MATERIALS),
+    ('pv_track', single_axis, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'frame') + LAMINATE_MATERIALS),
+    ('pv_dual', dual_axis, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'frame') + LAMINATE_MATERIALS),
+    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument')),
+    ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
 
 

@@ -149,6 +149,87 @@ def module():
     return c
 
 
+def module_back():
+    """The rear of a glass-glass laminate: cells showing through, ribbons, a junction box.
+
+    Not the front texture again, which is what the underside of every module used to be.
+    A bifacial module's back is mostly pale - the encapsulant between the cells is clear
+    and the ground shows through it - with the cells themselves reading as grey-blue
+    squares and the interconnect ribbons bright across them.  And one junction box, which
+    is the feature that says at a glance which side you are looking at.
+    """
+    size = 64
+    c = Canvas(size, size)
+    pale = (206, 209, 214, 255)
+    frame = (172, 176, 182, 255)
+
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(pale, int(noise(x, y, 41) * 8) - 4))
+
+    cells_x, cells_y = 4, 8
+    inset = 4
+    cell_w = (size - 2 * inset) // cells_x
+    cell_h = (size - 2 * inset) // cells_y
+
+    for cy in range(cells_y):
+        for cx in range(cells_x):
+            x0 = inset + cx * cell_w
+            y0 = inset + cy * cell_h
+            tint = int(noise(cx, cy, 43) * 10) - 5
+            base = shade((132, 140, 156, 255), tint)
+            c.rect(x0 + 1, y0 + 1, x0 + cell_w - 2, y0 + cell_h - 2, base)
+            # the rear busbars, which on a back are wider and brighter than the front fingers
+            for bx in (cell_w // 3, 2 * cell_w // 3):
+                for y in range(y0 + 1, y0 + cell_h - 2):
+                    c.set(x0 + bx, y, shade(base, 46))
+
+    # the string ribbons running across the cell rows, and the half-cut split bus
+    for y in (inset + 2 * cell_h, inset + 6 * cell_h):
+        c.rect(inset, y - 1, size - inset, y + 1, shade(pale, 26))
+    mid = size // 2
+    c.rect(inset, mid - 2, size - inset, mid + 1, shade(pale, -18))
+
+    # the junction box: one per module, off centre where a real one sits
+    c.rect(24, 46, 40, 58, (44, 46, 50, 255))
+    c.outline(24, 46, 40, 58, (26, 28, 30, 255))
+    c.rect(27, 58, 30, 62, (30, 32, 34, 255))
+    c.rect(34, 58, 37, 62, (30, 32, 34, 255))
+
+    c.outline(0, 0, size, size, frame)
+    c.outline(1, 1, size - 1, size - 1, shade(frame, -22))
+    return c
+
+
+def module_edge():
+    """A module frame seen edge on: the aluminium channel, not the cells.
+
+    This is the texture that used to be the cell grid, which is why a panel looked like it
+    was made of cells all the way through when you stood beside it.  A frame in profile is
+    an extrusion: a lip at the glass, a web, and a return at the bottom that the clamp
+    grips.  Banded across the short axis, and symmetric about the middle so it reads the
+    same whichever way up the face is mapped.
+    """
+    size = 32
+    c = Canvas(size, size)
+    base = (170, 174, 180, 255)
+
+    for y in range(size):
+        for x in range(size):
+            grain = int(noise(x, 0, 3) * 14) - 7 + int(noise(x, y, 13) * 5) - 2
+            c.set(x, y, shade(base, grain))
+
+    # the two grooves of the extrusion, and the bright rib between them
+    for y in (size // 4, 3 * size // 4):
+        c.rect(0, y - 1, size, y + 1, shade(base, -52))
+        c.rect(0, y + 1, size, y + 2, shade(base, 20))
+    c.rect(0, size // 2 - 1, size, size // 2 + 1, shade(base, 16))
+    # and the dark line of the laminate itself, just inside each lip
+    c.rect(0, 0, size, 2, shade(base, -70))
+    c.rect(0, size - 2, size, size, shade(base, -70))
+    return c
+
+
 def anodised():
     """Anodised aluminium: light, slightly cool, with a faint drawn grain."""
     size = 32
@@ -198,6 +279,138 @@ def cabinet():
     for y in range(3, size, 8):
         c.set(2, y, shade(base, -46))
         c.set(size - 3, y, shade(base, -46))
+    return c
+
+
+def cabinet_door():
+    """The one face of an inverter a technician ever opens: louvres, handle, rating plate.
+
+    Every other face of the cabinet is plain sheet, and giving them all the door was what
+    made the machine look the same from behind as from in front.
+    """
+    size = 32
+    c = Canvas(size, size)
+    base = (194, 197, 201, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(base, int(noise(x, y, 31) * 8) - 4))
+
+    # the intake louvres: slots with a lit lower lip, which is what a pressed louvre does
+    for i in range(5):
+        y = 6 + i * 4
+        c.rect(5, y, 21, y + 2, shade(base, -74))
+        c.rect(5, y + 2, 21, y + 3, shade(base, 18))
+
+    # the rating plate, and the handle recess with its bar
+    c.rect(5, 26, 17, 30, shade(base, 26))
+    c.outline(5, 26, 17, 30, shade(base, -40))
+    for x in range(6, 16, 2):
+        c.set(x, 28, shade(base, -30))
+
+    c.rect(24, 11, 29, 21, shade(base, -34))
+    c.outline(24, 11, 29, 21, shade(base, -58))
+    c.rect(25, 13, 28, 19, shade(base, 22))
+
+    # the hinges down the far edge
+    for y in (7, 24):
+        c.rect(0, y, 3, y + 3, shade(base, -50))
+    return c
+
+
+def cabinet_top():
+    """The lid: a rain hood, fastened round its rim, with a lifting eye at each end.
+
+    Seen from above and from nowhere else, which is exactly why it was worth its own
+    texture - a swage line meant for a vertical panel reads as a dent on a roof.
+    """
+    size = 32
+    c = Canvas(size, size)
+    base = (188, 191, 195, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(base, int(noise(x, y, 47) * 8) - 4))
+
+    # the drip edge, and the gutter inside it that takes the water to the ends
+    c.outline(0, 0, size, size, shade(base, -46))
+    c.outline(1, 1, size - 1, size - 1, shade(base, 16))
+    c.outline(4, 4, size - 4, size - 4, shade(base, -26))
+
+    # fasteners round the rim
+    for i in range(6, size - 4, 6):
+        for x, y in ((i, 2), (i, size - 3), (2, i), (size - 3, i)):
+            c.set(x, y, shade(base, -70))
+
+    # two lifting eyes, which is how a cabinet this size arrives on site
+    for cx in (10, 21):
+        c.disc(cx, 16, 3, shade(base, -34))
+        c.disc(cx, 16, 1, shade(base, -80))
+    return c
+
+
+def vent():
+    """A cooling grille: dark behind, with the slats catching the light.
+
+    The fan is drawn behind this, so what the eye needs is depth - the gaps have to be
+    darker than anything else on the machine, or the grille reads as a painted panel.
+    """
+    size = 32
+    c = Canvas(size, size, (22, 24, 26, 255))
+    slat = (150, 154, 158, 255)
+
+    for i in range(8):
+        y = 2 + i * 4
+        for x in range(2, size - 2):
+            c.set(x, y, shade(slat, int(noise(x, i, 53) * 12) - 6))
+            c.set(x, y + 1, shade(slat, -44))
+
+    # the pressed frame round it
+    c.outline(0, 0, size, size, (176, 180, 184, 255))
+    c.outline(1, 1, size - 1, size - 1, (138, 142, 146, 255))
+    return c
+
+
+def steel_end():
+    """A welded end cap: a disc with the bead round its rim.
+
+    The tubes used to be open at both ends, which from above is a hole through the mast.
+    """
+    size = 16
+    c = Canvas(size, size)
+    base = (146, 150, 154, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(base, int(noise(x, y, 59) * 18) - 9))
+
+    c.outline(0, 0, size, size, shade(base, -40))
+    c.outline(1, 1, size - 1, size - 1, shade(base, 24))
+    c.disc(size // 2, size // 2, 1, shade(base, -50))
+    return c
+
+
+def dome():
+    """A radiometer's glass dome from above: dark glass, one highlight, the white body round it.
+
+    The only angle it is ever seen from, so it is drawn for that angle and no other.
+    """
+    size = 16
+    c = Canvas(size, size)
+    body = (230, 232, 236, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(body, int(noise(x, y, 61) * 6) - 3))
+
+    centre = (size - 1) / 2.0
+    for y in range(size):
+        for x in range(size):
+            r = ((x - centre) ** 2 + (y - centre) ** 2) ** 0.5
+            if r > 6.4:
+                continue
+            # the dome: darker towards its rim, because that is where the glass is thickest
+            depth = int(38 * (r / 6.4) ** 2)
+            c.set(x, y, shade((78, 104, 140, 255), -depth))
+
+    c.disc(centre - 1.6, centre - 1.8, 1.4, (188, 206, 226, 255))
+    c.set(int(centre - 2), int(centre - 2), (232, 240, 248, 255))
     return c
 
 
@@ -364,11 +577,18 @@ def panel(spec):
 
 BLOCK_TEXTURES = {
     'pv_module': module,
+    'pv_module_back': module_back,
+    'pv_module_edge': module_edge,
     'pv_frame': anodised,
     'pv_steel': galvanised,
+    'pv_steel_end': steel_end,
     'pv_cabinet': cabinet,
+    'pv_cabinet_door': cabinet_door,
+    'pv_cabinet_top': cabinet_top,
+    'pv_vent': vent,
     'pv_display': display,
     'pv_instrument': instrument,
+    'pv_dome': dome,
 }
 
 ITEM_TEXTURES = {

@@ -55,8 +55,11 @@ def read_faces(path):
         if line.startswith('v '):
             verts.append(tuple(float(v) for v in line.split()[1:4]))
         elif line.startswith('o '):
+            # accumulated rather than assigned: a part whose faces are not all the same
+            # material is written as one section per material under the same name, so the
+            # same 'o' line appears more than once and assigning would test only the last
             current = line.split(None, 1)[1].strip()
-            objects[current] = []
+            objects.setdefault(current, [])
         elif line.startswith('f ') and current is not None:
             objects[current].append([verts[int(t.split('/')[0]) - 1] for t in line.split()[1:]])
 
