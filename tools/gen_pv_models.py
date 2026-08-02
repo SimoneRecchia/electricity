@@ -48,6 +48,7 @@ MATERIALS = {
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
     'dc_cable': 'dc_harness.png',
+    'dc_jacket': 'dc_jacket.png',
     'combiner_door': 'pv_combiner_door.png',
     'switch': 'pv_switch.png',
 }
@@ -210,8 +211,8 @@ def stubs(mesh, name='stub'):
     """
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
         spin = ((0.0, 0.0, 0.0), 'y', turn)
-        box(mesh, mesh.faces('%s_%s' % (name, side), 'dc_cable'),
-            (-0.0625, 0.0, -0.5), (0.0625, 0.0625, 0.0), rot=spin)
+        clad_box(mesh, '%s_%s' % (name, side), (-0.0625, 0.0, -0.5), (0.0625, 0.0625, 0.0),
+                 {'up': 'dc_cable', '*': 'dc_jacket'}, rot=spin)
         # the saddle clipping it down a hand's width out from the machine, which is where a real one is
         box(mesh, mesh.faces('%s_%s' % (name, side), 'steel'),
             (-0.09, 0.0, -0.425), (0.09, 0.085, -0.40), uv_scale=0.3, rot=spin)
@@ -232,7 +233,7 @@ def harness(mesh, enclosure, run):
     has room under its high edge, and a tracked row has only the bay at the centre where no module goes.
     """
     stubs(mesh, 'harness')
-    box(mesh, mesh.faces('harness', 'dc_cable'), run[0], run[1])
+    clad_box(mesh, 'harness', run[0], run[1], {'up': 'dc_cable', '*': 'dc_jacket'})
     clad_box(mesh, 'harness', enclosure[0], enclosure[1],
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.5)
 
@@ -719,7 +720,10 @@ def combiner():
     stubs(mesh, 'entry')
     # the riser up the post, at exactly the cross-section of the run it continues - a join that changes
     # thickness halfway is the one thing a player's eye lands on
-    box(mesh, mesh.faces('post', 'dc_cable'), (-0.0625, 0.02, 0.032), (0.0625, box_y0 + 0.01, 0.0945))
+    # flush with the outer face of the run it continues rather than half a pixel proud of it, which is
+    # small and is exactly the sort of small a player's eye finds
+    clad_box(mesh, 'post', (-0.0625, 0.02, 0.0), (0.0625, box_y0 + 0.01, 0.0625),
+             {'south': 'dc_cable', '*': 'dc_jacket'})
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
     handle = mesh.add_object('rotate_handle', 'switch')
@@ -827,15 +831,15 @@ def met_mast():
 
 
 LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
-HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'dc_cable')
+HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'dc_cable', 'dc_jacket')
 
 MODELS = [
     ('pv_flat', flat_table, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_tilt', tilted_rack, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable', 'combiner_door')),
-    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'switch', 'dc_cable')),
+    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable', 'dc_jacket', 'combiner_door')),
+    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'switch', 'dc_cable', 'dc_jacket')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
 

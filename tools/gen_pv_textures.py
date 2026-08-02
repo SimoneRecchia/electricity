@@ -573,7 +573,7 @@ CABLE_RED = ((74, 22, 22, 255), (132, 40, 36, 255), (176, 66, 58, 255))
 CLIP = (138, 142, 150, 255)
 
 
-def cable_line(half, thick, armoured=False):
+def cable_line(half, thick, armoured=False, flat=False):
     """A pair running the length of the tile, with the clip that holds it down across the middle.
 
     One texture serves the whole run.  The conductors sit at fixed columns, so a corner piece and
@@ -593,9 +593,12 @@ def cable_line(half, thick, armoured=False):
             # lit on the side the light comes from and shaded away from it, by position rather than by
             # a pixel count - a conductor only two pixels wide has no room for a count to work with,
             # and that is the width they are drawn at now
-            if width < 2:
+            if width < 2 or flat:
                 # one pixel to a conductor, which is the width they are drawn at: there is no room for
-                # a lit side and a shaded one, so it gets the body colour and the jacket reads by hue
+                # a lit side and a shaded one, so it gets the body colour and the jacket reads by hue.
+                # ``flat`` asks for the same treatment at any width, which is what the stub on a machine
+                # needs: the pipeline maps a whole texture across a face, so a gradient drawn over eight
+                # columns would come out as a gradient where the run beside it is two flat colours
                 colour = palette[1]
             else:
                 across = (x - x0) / (width - 1.0)
@@ -611,6 +614,23 @@ def cable_line(half, thick, armoured=False):
         c.rect(left, y, left + 2 * width, y + 1, shade(CLIP, 34))
         c.rect(left + width - 1, y, left + width + 1, y + 2, shade(CLIP, -46))
 
+    return c
+
+
+def cable_jacket():
+    """A cable seen from the side: jacket, and nothing else.
+
+    The OBJ pipeline maps a whole texture across every face of a box, so a stub given the pair texture
+    showed the pair on its sides as well - two conductors squeezed into a face one pixel tall, which is
+    not what the side of a cable looks like.  This is what it looks like.
+    """
+    c = Canvas(16, 16, CABLE_BLACK[0])
+    for y in range(16):
+        for x in range(16):
+            c.set(x, y, shade(CABLE_BLACK[0], int(noise(x, y, 61) * 12) - 4))
+
+    # the sheen a round jacket has along its length
+    c.rect(0, 5, 16, 7, CABLE_BLACK[1])
     return c
 
 
@@ -990,8 +1010,9 @@ BLOCK_TEXTURES = {
     # the same pair filling the whole tile, for the stub on an array: the OBJ pipeline maps a face
     # across a whole texture, so a pair drawn six columns wide would come out six columns wide on a
     # stub that has to match a laid run exactly
-    'dc_harness': lambda: cable_line(8.0, 3),
+    'dc_harness': lambda: cable_line(8.0, 1, flat=True),
     'dc_trench': trench,
+    'dc_jacket': cable_jacket,
     'pv_combiner_door': combiner_door,
     'pv_switch': switch_handle,
     'pv_module': module,
