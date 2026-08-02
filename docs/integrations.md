@@ -1,6 +1,6 @@
 # Integrations
 
-← [Back to the README](../README.md) · [ComputerCraft API reference](telemetry.md)
+← [Back to the README](../README.md) · [ComputerCraft API reference](telemetry.md) · [Photovoltaics](photovoltaics.md)
 
 Everything on this page is what the fork adds. Both integrations are optional: Mekanism
 and CC:Tweaked are compile-time only dependencies, so the mod builds and runs without

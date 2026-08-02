@@ -2,9 +2,9 @@
 
 # ⚡ Electricity
 
-**Real electrical grids for Minecraft.** Utility poles, wind turbines driven by a live
-weather model, wires that lose power over distance — and now a turbine that talks to
-Mekanism and answers to ComputerCraft.
+**Real electrical grids for Minecraft.** Utility poles, wind turbines and photovoltaic
+plants driven by a live weather model, wires that lose power over distance — and machines
+that talk to Mekanism and answer to ComputerCraft.
 
 ![Minecraft 1.20.1](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen?style=flat-square)
 ![Forge 47.4.0](https://img.shields.io/badge/Forge-47.4.0-1f425f?style=flat-square)
@@ -18,7 +18,8 @@ Mekanism and answers to ComputerCraft.
 > The grid simulation, the weather model, the blocks and the art are all dooji's work.
 > What this fork adds is everything under [Integrations](#integrations): the turbine
 > now feeds other mods' energy networks, reports itself as a ComputerCraft peripheral
-> with 63 plant signals, and can be stopped and curtailed.
+> with 63 plant signals, and can be stopped and curtailed — and the placeholder solar
+> panel has become a photovoltaic plant with arrays, inverters, trackers and a met mast.
 
 ---
 
@@ -70,8 +71,9 @@ it, and the wire network receives only what is left.
 
 ### 💻 ComputerCraft
 
-A peripheral of type `electricity_wind_turbine`, readable directly or over a wired
-modem on network cable.
+Four peripherals — `electricity_wind_turbine`, `electricity_pv_inverter`,
+`electricity_pv_array` and `electricity_met_station` — readable directly or over a
+wired modem on network cable.
 
 ```lua
 local t = peripheral.find("electricity_wind_turbine")
@@ -79,10 +81,14 @@ print(t.getActivePower() .. " kW")
 print(t.getGearBoxOilTemp() .. " C")
 t.setActivePowerLimit(40)   -- curtail
 t.stop()                    -- brake
+
+local i = peripheral.find("electricity_pv_inverter")
+print(i.isClipping() and "clipping" or "tracking")
 ```
 
-63 signals modelled on real turbine SCADA tags, and method names shared with Mekanism's
-generators so existing programs work unchanged.
+160 signals modelled on real turbine and plant SCADA tags, each marked measured, derived
+or simulated so a program knows what it is allowed to trust — and method names shared with
+Mekanism's generators so existing programs work unchanged.
 
 → [Full API reference](docs/telemetry.md)
 
@@ -106,6 +112,23 @@ step is a shock to the drivetrain, and no real turbine does it.
 
 → [Power curve, thresholds and all the numbers](docs/telemetry.md#3-the-catalogue)
 
+## ☀️ Sunlight, split three ways
+
+The light arrives as a **beam**, as **diffuse sky** and as **ground reflection**, and keeping
+them apart is what makes a shadow behave. Block the beam under a clear sky and an array loses
+91% of what was on its plane; block it under a full overcast and it loses nothing at all,
+because there was no beam left to block.
+
+At half cloud cover the total on the ground has barely moved and the split has gone from a
+tenth diffuse to a half — which is why a broken sky costs a fixed array almost nothing and
+costs a tracker a great deal. A tracker's whole advantage is in the beam.
+
+Glass over a panel passes 88%, leaves 25%, water 50%. Snow buries it, and only an array
+tilted past 30° with warm modules can shed it. Dust builds up faster where it never rains,
+and rain washes a tilted array clean and a flat one only partly.
+
+→ [All of it, with the numbers](docs/photovoltaics.md#5-where-the-light-comes-from)
+
 ## Blocks and items
 
 | | Name | What it does |
@@ -119,7 +142,9 @@ step is a shock to the drivetrain, and no real turbine does it.
 | 🔧 | **Power Wrench** | Opens a live diagnostics panel on any electric block. |
 | 🧵 | **Wire** | Right-click one insulator, then another. |
 | 🛠️ | **Electric Workbench** | Crafts every component below. |
-| ☀️ | **Solar Panel** | 20 kW of modules. **Alpha** — it works and it is honest about the physics, but it is not finished. |
+| ☀️ | **Photovoltaic Arrays** | Six products from a flat 18 kW table to a dual-axis tracker, on four mountings, built from six real module datasheets. Produce nothing without an inverter, because an open-circuit string does not. |
+| 🔌 | **Inverters** | Four machines from 10 kW to 2.5 MW. Clip when the array offers too much, derate when the air is hot, hold a power factor, and draw a watt overnight like the real ones. |
+| 📡 | **Meteorological Mast** | Nine instruments: global, diffuse and plane-of-array irradiance, albedo, air and module temperature, wind, and snow. Each answers at its own instrument's speed. |
 | 📡 | **Weather Tablet** | Weather intensity map. Not functional yet. |
 
 Components — Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core — are all
@@ -140,6 +165,20 @@ made at the Electric Workbench. Recipes are visible in-game; use JEI or the work
 
 → [Step-by-step guide](docs/getting-started.md)
 
+### ☀️ Or build a solar plant
+
+Place an **inverter**, put **arrays** within twelve blocks of it, and run a wire from the
+fitting on top of the cabinet to an **Electric Cabin**. An array with no inverter in range
+makes nothing at all — an open-circuit string sits at its open-circuit voltage and passes no
+current, which is why a plant is an inverter with modules attached rather than the reverse.
+
+Put more glass in front of it than it can pass, because that is what real plant does: the top
+of the best few hours gets clipped and in exchange the inverter is loaded properly for the
+rest of the year. Tilt or track it if it snows where you are building. A **mast** measures the
+sky and tells you which of the six reasons the plant is not making more.
+
+→ [The plant, the physics and the catalogue](docs/photovoltaics.md)
+
 ## Configuration
 
 `<world>/serverconfig/Electricity/server.toml` — server configs live inside the world
@@ -149,13 +188,24 @@ folder, not in `config/`.
 |---|---|---|
 | `powerBoxRadius` | 5 | Radius of the Power Box's field, in blocks |
 | `externalEnergyEnabled` | true | Let generators feed other mods' energy systems |
-| `turbineMaxJoulesPerTick` | 2000.0 | Cap on what a turbine hands to foreign cables |
+| `turbineExportFraction` | 0.2 | Share of its nameplate a turbine offers to foreign cables |
+| `turbineMaxJoulesPerTick` | 0 | Optional hard ceiling on that, in J/t. 0 disables it |
+| `pvExportFraction` | 0.2 | The same dial for a photovoltaic inverter |
+| `pvMaxJoulesPerTick` | 0 | The same optional ceiling |
+| `arraySearchRadius` | 12 | How far an inverter looks for arrays to wire up, in blocks |
 
-The 2000 J/t default is about 4× Mekanism's own Wind Generator, which suits a machine
-costing a workbench, circuit boards, a CPU and a motor core against a single block. It
-gives Mekanism **16 kW** and leaves 62.75 kW on the wires at peak wind, and stays under
-the 5000 J/t the Power Box can already push, so the Power Box remains the primary bridge.
-Uncapped a turbine would reach 9844 J/t, roughly 20× that Generator.
+The export share is a fraction rather than a fixed number of Joules because the catalogue
+spans 10 kW to 4 MW: any absolute cap would either strangle the large machines or hand the
+small ones more than they can make. A fifth keeps the ratio the mod shipped with — the
+original single turbine made 9844 J/t and was allowed to export 2000 — so an upgrade ladder
+still means something across the bridge without a 4 MW machine flattening a modpack's
+economy. Whatever is not taken stays on the wire network either way. Raise it to 1.0 to
+make generators full-output exporters.
+
+`arraySearchRadius` is 120 metres of DC cable at the mod's ten metres to the block, about
+as far as a real plant runs a string before the voltage drop stops being worth it. Raising
+it lets a plant spread out; it does **not** let one inverter swallow more arrays, because
+each one still refuses them past the number of string terminals it has.
 
 ## Building from source
 

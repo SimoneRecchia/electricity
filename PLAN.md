@@ -217,49 +217,49 @@ cold. All four fall out of the model above rather than needing to be drawn.
 
 ## 3. The datasheet layer (`api/power/`) — commit 2
 
-- [ ] `PvModuleSpec` — record: id, designation, technology, cell count, width/height/depth m,
+- [x] `PvModuleSpec` — record: id, designation, technology, cell count, width/height/depth m,
       Pmax, Vmp/Imp/Voc/Isc, γPmax/βVoc/αIsc, NOCT, bifaciality, max system volts, fuse.
       Derived: `areaM2`, `efficiency`, `powerAt(poa, cellTemp)` with the low-light term,
       `vocAt(cellTemp)`, `maxSeriesModules(coldestC)`.
-- [ ] `PvMounting` enum — `FLAT`, `FIXED_TILT`, `SINGLE_AXIS`, `DUAL_AXIS`, each carrying
+- [x] `PvMounting` enum — `FLAT`, `FIXED_TILT`, `SINGLE_AXIS`, `DUAL_AXIS`, each carrying
       whether it tracks, its default GCR band and its snow-shed behaviour.
-- [ ] `PvArraySpec` — record: id, designation, module, modules per string, strings, mounting,
+- [x] `PvArraySpec` — record: id, designation, module, modules per string, strings, mounting,
       GCR, fixed tilt, tracker (nullable). Derived: module count, module area, DC nameplate,
       land coverage, string voltage and current, `poaTilt(sunElevation, …)`.
-- [ ] `InverterSpec` — record: id, designation, AC kW, MPPT count, MPPT window, max DC volts
+- [x] `InverterSpec` — record: id, designation, AC kW, MPPT count, MPPT window, max DC volts
       and power, startup volts, ηmax, ηeuro, night watts, nominal AC volts, frequency, PF
       range, apparent ceiling, derate-onset ambient, max ambient. Derived: efficiency at load
       (a real curve, calibrated so it passes through ηmax and ηeuro), clipping, `maxDcKw`.
-- [ ] `TrackerSpec` — record: id, designation, axes, rotation limit, elevation range, slew
+- [x] `TrackerSpec` — record: id, designation, axes, rotation limit, elevation range, slew
       °/min, stow angles (night/wind/snow), wind stow threshold, backtracking flag, motor W.
       Derived: `trueAngle`, `backtrackAngle(gcr, elevation)`, `targetAngle(conditions)`.
-- [ ] `SensorSpec` + `SensorCatalog` — the seven instruments with their real classes,
+- [x] `SensorSpec` + `SensorCatalog` — the seven instruments with their real classes,
       spectral ranges, response times and accuracies.
-- [ ] `PvCatalog`, `InverterCatalog`, `TrackerCatalog`.
-- [ ] `SolarTelemetry` — the screenshot's tag set with kinds, same shape as `TurbineTelemetry`.
+- [x] `PvCatalog`, `InverterCatalog`, `TrackerCatalog`.
+- [x] `SolarTelemetry` — the screenshot's tag set with kinds, same shape as `TurbineTelemetry`.
 
 ## 4. Solar physics in the weather model (`main/weather/`) — commits 3 and 4
 
-- [ ] **Sun as a direction.** `SunPosition` record: elevation sine, azimuth degrees. Minecraft's
+- [x] **Sun as a direction.** `SunPosition` record: elevation sine, azimuth degrees. Minecraft's
       sun is due east before noon and due west after, so the azimuth is honest about being a
       two-valued thing rather than pretending to sweep.
-- [ ] **Three components.** `SkyConditions` record: DNI, DHI, GHI, extraterrestrial normal, air
+- [x] **Three components.** `SkyConditions` record: DNI, DHI, GHI, extraterrestrial normal, air
       mass, albedo, cloud cover. Split as in R.6 — physical, not Erbs.
-- [ ] **Transposition.** `Atmosphere.planeOfArray(...)` → beam / sky-diffuse / ground-reflected,
+- [x] **Transposition.** `Atmosphere.planeOfArray(...)` → beam / sky-diffuse / ground-reflected,
       Hay-Davies + Reindl + albedo view factor, with the Martin & Ruiz IAM on the beam.
-- [ ] **Albedo from the biome.** In `SiteConditions`, from the same tags the roughness uses,
+- [x] **Albedo from the biome.** In `SiteConditions`, from the same tags the roughness uses,
       plus snow cover: snow 0.85, sand/beach 0.35, badlands 0.30, grass 0.22, water 0.07.
-- [ ] **Snow on modules.** Depth from the world's snow layers over the array, shed above a tilt
+- [x] **Snow on modules.** Depth from the world's snow layers over the array, shed above a tilt
       and module temperature threshold.
-- [ ] **Soiling.** Kimber: accumulate per day from the biome's dryness, reset on rain.
-- [ ] **Shading** (commit 4):
-  - [ ] Blocks above: opaque ⇒ the whole beam goes and the diffuse is cut by the fraction of the
+- [x] **Soiling.** Kimber: accumulate per day from the biome's dryness, reset on rain.
+- [x] **Shading** (commit 4):
+  - [x] Blocks above: opaque ⇒ the whole beam goes and the diffuse is cut by the fraction of the
         dome hidden; translucent ⇒ attenuated by that block's own light-blocking value.
-  - [ ] Entities over the array cast a moving shadow.
-  - [ ] Row-to-row shading between adjacent array blocks at low sun, which is what backtracking
+  - [x] Entities over the array cast a moving shadow.
+  - [x] Row-to-row shading between adjacent array blocks at low sun, which is what backtracking
         exists to avoid and which therefore has to be modelled for backtracking to mean anything.
-  - [ ] Nearby arrays stay correlated: only the cumulus field separates them.
-- [ ] **`SolarConditions`** — one record with everything, so an array asks once.
+  - [x] Nearby arrays stay correlated: only the cumulus field separates them.
+- [x] **`SolarConditions`** — one record with everything, so an array asks once.
 
 ## 5. The blocks — commit 5
 
@@ -281,13 +281,13 @@ on the 19.7 kW the placeholder asserted, and why the trackers carry less namepla
 and earn it back in daily energy and in a flat output curve. The trade is real and gets said
 out loud in the docs.
 
-- [ ] **DC coupling.** An array produces nothing without an inverter in range: the inverter
+- [x] **DC coupling.** An array produces nothing without an inverter in range: the inverter
       scans a configurable radius (default 16 blocks) on a cached interval and claims arrays,
       first come first served up to its own max DC power. Over-subscription is not an error, it
       is **clipping**, which is what an ILR over 1.0 buys and what the trend screenshots show.
-- [ ] **Inverter → cabin** over the existing wire system: the inverter carries one insulator, is
+- [x] **Inverter → cabin** over the existing wire system: the inverter carries one insulator, is
       a generator node in `PowerNetwork`, and `canTransfer` lets it reach a cabin.
-- [ ] Met mast: standalone, publishes instrument readings, needs no power.
+- [x] Met mast: standalone, publishes instrument readings, needs no power.
 
 ## 6. Models and textures — commit 6
 
@@ -295,71 +295,113 @@ Generated, not authored by hand: `tools/gen_pv_models.py` and `tools/gen_pv_text
 stdlib only (no PIL and no numpy here, so PNGs go out through `zlib` by hand), committed beside
 the assets so the geometry is reproducible and reviewable.
 
-- [ ] Groups, with every moving part separate so the renderer can drive it by matrix:
+- [x] Groups, with every moving part separate so the renderer can drive it by matrix:
   * flat / fixed tilt: `frame`, `modules`, `legs`, `insulator`
   * single axis: `pier`, `rotate_tube`, `rotate_modules`, `motor`, `insulator`
   * dual axis: `pedestal`, `rotate_azimuth`, `rotate_elevation`, `insulator`
   * inverter: `cabinet`, `door`, `display`, `rotate_fan`, `insulator`
   * met mast: `mast`, `boom`, `pyranometer`, `albedometer`, `diffuse`, `snow`, `shield`,
     `rotate_cups`, `rotate_vane`, `insulator`
-- [ ] Textures: cell grid with busbars and the half-cut split, anodised frame, galvanised steel,
+- [x] Textures: cell grid with busbars and the half-cut split, anodised frame, galvanised steel,
       painted cabinet, white instrument domes, item icons, three GUI backgrounds.
-- [ ] Blockstates, block models, item models, loot tables, `mineable/pickaxe`, lang.
+- [x] Blockstates, block models, item models, loot tables, `mineable/pickaxe`, lang.
 
 ## 7. Renderers — commits 6 and 7
 
-- [ ] `PvArrayRenderer` — per-group matrices; the tracked groups rotate about the torque-tube
+- [x] `PvArrayRenderer` — per-group matrices; the tracked groups rotate about the torque-tube
       axis (one axis) or the pedestal axis then the elevation pivot (two axes).
-- [ ] Client-side smoothing of the tracker angle towards the server's target, the way
+- [x] Client-side smoothing of the tracker angle towards the server's target, the way
       `smoothYaw` does for a nacelle. Per-frame motion lives in the matrix and never in the
       vertices, because the buffer cache is keyed by `BlockPos` and only rebuilt on light or
       texture change.
-- [ ] `InverterRenderer` — fan speed from cabinet temperature, display lit when producing.
-- [ ] `MetStationRenderer` — cups spinning with wind speed, vane pointing downwind.
+- [x] `InverterRenderer` — fan speed from cabinet temperature, display lit when producing.
+- [x] `MetStationRenderer` — cups spinning with wind speed, vane pointing downwind.
 
 ## 8. GUIs — commit 9
 
-- [ ] **Inverter screen** — the plant dashboard: AC and DC power with the clipping gap visible,
+- [x] **Inverter screen** — the plant dashboard: AC and DC power with the clipping gap visible,
       today's and lifetime energy, per-MPPT string voltage and current, grid V/I/f/PF, cabinet
       temperature against the derate onset, efficiency, state (night / starting / MPPT /
       clipping / derating / curtailed / stopped / fault), curtailment slider, power-factor
       setpoint, redstone mode, stop.
-- [ ] **Array screen** — the datasheet: module designation and count, string layout, DC
+- [x] **Array screen** — the datasheet: module designation and count, string layout, DC
       nameplate, POA broken into beam / diffuse / ground, cell temperature, tracker angle and
       mode, soiling, snow, shading, performance ratio; tracker controls auto / manual / stow.
-- [ ] **Met station screen** — the seven instruments laid out like a met display.
-- [ ] Power Wrench opens all three; `SolarControlPayload` validated and distance-checked.
+- [x] **Met station screen** — the seven instruments laid out like a met display.
+- [x] Power Wrench opens all three; `SolarControlPayload` validated and distance-checked.
 
 ## 9. Peripherals — commit 8
 
-- [ ] `electricity_pv_inverter` — the full tag set generated from `SolarTelemetry.kinds()`, the
+- [x] `electricity_pv_inverter` — the full tag set generated from `SolarTelemetry.kinds()`, the
       Mekanism-compatible names, and the controls.
-- [ ] `electricity_pv_array` — module, string and tracker readings plus tracker control.
-- [ ] `electricity_met_station` — the instrument tags.
-- [ ] `electricity_solar_panel` keeps answering so existing programs still work.
+- [x] `electricity_pv_array` — module, string and tracker readings plus tracker control.
+- [x] `electricity_met_station` — the instrument tags.
+- [x] `electricity_solar_panel` keeps answering so existing programs still work.
 
 ## 10. Grid integration — commit 10
 
-- [ ] Inverter is a generator node in `PowerNetwork`; distance losses, the surge model and
+- [x] Inverter is a generator node in `PowerNetwork`; distance losses, the surge model and
       Forge/Mekanism export all apply.
-- [ ] `ElectricityServerConfig` — PV export fraction and ceiling, and the DC search radius.
+- [x] `ElectricityServerConfig` — PV export fraction and ceiling, and the DC search radius.
 
 ## 11. Docs — commit 11
 
-- [ ] `docs/photovoltaics.md`, `docs/telemetry.md`, `README.md`.
+- [x] `docs/photovoltaics.md`, `docs/telemetry.md`, `README.md`.
 
-## 12. Commits
+## 12. Commits — all landed
 
 1. `docs: plan the photovoltaic plant` ✔
-2. `feat: a datasheet for modules, inverters, trackers and instruments` (§3)
-3. `feat: split the sunlight into beam, diffuse and ground-reflected` (§4)
-4. `feat: shade a panel with whatever stands over it` (§4 shading)
-5. `feat: build the array out of modules on a mounting` (§5)
-6. `feat: draw the arrays, the inverter and the met mast` (§6, §7)
-7. `feat: turn the tracker to the sun` (§7 animation, tracker control)
-8. `feat: an inverter that publishes what a plant's SCADA does` (§9)
-9. `feat: control panels for the array, the inverter and the mast` (§8)
-10. `feat: put a photovoltaic plant on the same grid as the turbines` (§10)
-11. `docs: write down the photovoltaic plant` (§11)
+2. `docs: revise the plan against the research` ✔
+3. `feat: a datasheet for modules, inverters, trackers and instruments` ✔ (§3)
+4. `feat: split the sunlight into beam, diffuse and ground-reflected` ✔ (§4)
+5. `feat: shade a panel with whatever stands over it` ✔ (§4 shading)
+6. `feat: build the array out of modules on a mounting` ✔ (§5)
+7. `feat: draw the arrays, the inverter and the met mast` ✔ (§6, §7 — the planned
+   separate tracker-animation commit folded in here, because the pivots, the moving
+   groups and the client interpolation are one piece of work and splitting them would
+   have left a commit that drew a tracker unable to turn)
+8. `feat: an inverter that publishes what a plant's SCADA does` ✔ (§9)
+9. `feat: control panels for the array, the inverter and the mast` ✔ (§8)
+10. `feat: put a photovoltaic plant on the same grid as the turbines` ✔ (§10)
+11. `fix: darken a roofed array while the player is still standing there` ✔ (found in testing)
+12. `docs: write down the photovoltaic plant` ✔ (§11)
 
-Verification after each: `./gradlew compileJava`, and `./gradlew build` at the end.
+## 13. What was verified, and how
+
+`./gradlew build` after every commit. Beyond that, two harnesses and one live server.
+
+**Offline, against the classes themselves.** Every module's derived efficiency lands on its
+datasheet's published figure; every inverter's derived European efficiency lands within a
+tenth of a percent of its published one; every array's string layout fits its module's system
+voltage limit at −10 °C; the Faiman coefficient derived from a 45 °C NOCT comes out at 25.16
+against Faiman's own measured 25.0; a pyranometer's step response reaches 95% at exactly its
+datasheet's five seconds; the tracker's slew is 17.6× the sun's own rate, matching the real
+4.4 against 0.25 °/min.
+
+**The two backtracking derivations agree to machine precision.** `TrackerSpec` derives the
+angle from shadow widths on the ground and `Shading` derives the shaded fraction from a ray to
+the next row's face; feeding the first into the second gives zero at every sun elevation.
+
+**On a dedicated server**, via RCON, reading block entities back with `/data get block`:
+
+* A 110 kW inverter with fifteen arrays in range claimed twelve of them and stopped at
+  eighteen strings — its string-terminal limit, reached before its DC capacity.
+* Under a fully overcast taiga sky: `poaBeam` 0, `poaDiffuse` 262, and the trackers reporting
+  `stowReason: DIFFUSE` — flat, because there was no beam to point at.
+* In a desert at 43.7 °C with 14 m/s of wind: module temperature 51.95 °C, which is Faiman to
+  two decimals; `stowReason: WIND` with the stow latched; cabinet at 63.8 °C.
+* Stone over an array took `obstruction` to 0 and left the diffuse. Glass took it to exactly
+  0.88 and the beam with it.
+* A fixed 25° rack at 15° of sun reported `rowShaded: 0.134`, matching the analytic formula.
+* Tracking: target −60° at 30° of sun (the rotation limit), −45° at 45° of sun (exactly
+  90 − α), and the row slewing 21.12° in four seconds — which is 0.264 °/tick, exactly
+  `slewPerTick()`.
+* A 10 kW inverter with 20.7 kW of DC on offer: `clipping: 1`, AC pinned at 10.0, and DC
+  pulled back to 10.19 — the maximum power point tracker stepping off the peak.
+* Snow: a flat table buried under eight layers produced nothing; a tracker at −45° cleared
+  the snow block above it and carried on.
+* An array with no inverter in range: `mpptFraction` 0, `availableDcPower` 10.29 — reporting
+  what it could have made and delivering none of it.
+
+The one bug this found is commit 11: the sky-view survey was cached for a minute, so roofing
+an array took away the beam at once and the diffuse a minute later.
