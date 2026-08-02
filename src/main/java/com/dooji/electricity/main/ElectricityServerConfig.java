@@ -8,6 +8,9 @@ public final class ElectricityServerConfig {
 	private static final ForgeConfigSpec.BooleanValue EXTERNAL_ENERGY_ENABLED;
 	private static final ForgeConfigSpec.DoubleValue TURBINE_EXPORT_FRACTION;
 	private static final ForgeConfigSpec.DoubleValue TURBINE_MAX_JOULES_PER_TICK;
+	private static final ForgeConfigSpec.DoubleValue PV_EXPORT_FRACTION;
+	private static final ForgeConfigSpec.DoubleValue PV_MAX_JOULES_PER_TICK;
+	private static final ForgeConfigSpec.IntValue PV_ARRAY_RADIUS;
 
 	static {
 		ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -33,6 +36,23 @@ public final class ElectricityServerConfig {
 				"for packs that need a hard number regardless of which machines are installed.",
 				"For reference, at 125 J per kW a 4 MW turbine makes 500000 J/t before either limit."
 		).defineInRange("turbineMaxJoulesPerTick", 0.0, 0.0, 1.0e9);
+		PV_EXPORT_FRACTION = builder.comment(
+				"Share of its nameplate power a photovoltaic inverter will offer to another mod's cables, 0 to 1.",
+				"The same dial as turbineExportFraction and set to the same default, so a plant of either kind",
+				"bridges into a modpack's economy on the same terms. Whatever is not taken stays on the wire network."
+		).defineInRange("pvExportFraction", 0.2, 0.0, 1.0);
+		PV_MAX_JOULES_PER_TICK = builder.comment(
+				"Optional absolute ceiling, in Joules per tick, applied after pvExportFraction. 0 disables it."
+		).defineInRange("pvMaxJoulesPerTick", 0.0, 0.0, 1.0e9);
+		builder.pop();
+		builder.push("photovoltaics");
+		PV_ARRAY_RADIUS = builder.comment(
+				"How far an inverter looks for arrays to wire up, in blocks.",
+				"Twelve is a hundred and twenty metres of DC cable at the mod's ten metres to the block, which is",
+				"about as far as a real plant will run a string before the voltage drop stops being worth it.",
+				"An inverter still refuses arrays past the number of string terminals it actually has, so raising",
+				"this lets a plant spread out rather than letting one cabinet swallow more of them."
+		).defineInRange("arraySearchRadius", 12, 2, 48);
 		builder.pop();
 		SERVER_SPEC_INTERNAL = builder.build();
 	}
@@ -60,5 +80,19 @@ public final class ElectricityServerConfig {
 	public static double turbineMaxJoulesPerTick() {
 		double configured = TURBINE_MAX_JOULES_PER_TICK.get();
 		return configured <= 0.0 ? Double.MAX_VALUE : configured;
+	}
+
+	public static double pvExportFraction() {
+		return PV_EXPORT_FRACTION.get();
+	}
+
+	public static double pvMaxJoulesPerTick() {
+		double configured = PV_MAX_JOULES_PER_TICK.get();
+		return configured <= 0.0 ? Double.MAX_VALUE : configured;
+	}
+
+	/** How far an inverter looks for arrays, in blocks. */
+	public static int pvArrayRadius() {
+		return PV_ARRAY_RADIUS.get();
 	}
 }

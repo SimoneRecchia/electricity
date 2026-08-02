@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "electricity:block/inverter_110"
+    },
+    "facing=south": {
+      "model": "electricity:block/inverter_110",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "electricity:block/inverter_110",
+      "y": 270
+    },
+    "facing=east": {
+      "model": "electricity:block/inverter_110",
+      "y": 90
+    }
+  }
+}

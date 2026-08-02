@@ -1,10 +1,9 @@
 {
   "parent": "block/block",
   "textures": {
-    "top": "electricity:block/solar_panel_top",
-    "side": "electricity:block/solar_panel_side",
-    "bottom": "electricity:block/solar_panel_bottom",
-    "particle": "electricity:block/solar_panel_top"
+    "side": "electricity:block/plastic",
+    "front": "electricity:block/textures",
+    "particle": "electricity:block/plastic"
   },
   "elements": [
     {
@@ -15,19 +14,18 @@
       ],
       "to": [
         16,
-        3,
+        16,
         16
       ],
       "faces": {
         "down": {
-          "texture": "#bottom",
-          "cullface": "down"
+          "texture": "#side"
         },
         "up": {
-          "texture": "#top"
+          "texture": "#side"
         },
         "north": {
-          "texture": "#side"
+          "texture": "#front"
         },
         "south": {
           "texture": "#side"

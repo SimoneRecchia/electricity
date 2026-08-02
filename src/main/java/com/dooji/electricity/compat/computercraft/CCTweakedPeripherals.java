@@ -1,9 +1,8 @@
 package com.dooji.electricity.compat.computercraft;
 
-import com.dooji.electricity.api.power.PhotovoltaicArray;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TurbineTelemetry;
-import com.dooji.electricity.block.SolarPanelBlockEntity;
+import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.compat.energy.EnergyBridge;
@@ -42,8 +41,8 @@ public final class CCTweakedPeripherals {
 				return LazyOptional.of(() -> new WindTurbinePeripheral(turbine));
 			}
 
-			if (level.getBlockEntity(pos) instanceof SolarPanelBlockEntity panel) {
-				return LazyOptional.of(() -> new SolarPanelPeripheral(panel));
+			if (level.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
+				return LazyOptional.of(() -> new SolarPanelPeripheral(array));
 			}
 
 			return LazyOptional.empty();
@@ -329,20 +328,25 @@ public final class CCTweakedPeripherals {
 	/**
 	 * A block of photovoltaic array as seen from Lua.
 	 *
-	 * Small enough to be written out by hand rather than generated from a tag list, and the
-	 * list is what a real plant's monitoring actually reads: what the inverter is making, how
-	 * much light is falling on the modules, how hot they are, and how much sky is covered.
-	 * {@code getProductionRate} and {@code canSeeSun} carry the names Mekanism's own solar
-	 * generators answer to, so a program written for one reads this unchanged.
+	 * Deliberately still called {@code electricity_solar_panel} and deliberately still answering the
+	 * same nine methods, because programs written against the placeholder exist and there is no reason
+	 * to break them: every one of those questions still has an answer, it is just a better answer now.
+	 * {@code getProductionRate} and {@code canSeeSun} carry the names Mekanism's own solar generators
+	 * use, so a program written for one of those reads this unchanged too.
 	 *
-	 * Every reading is a plain field the panel wrote during its own tick, so the computer
-	 * thread can have them without waiting for a tick boundary.
+	 * Two of the answers changed meaning slightly and honestly. Irradiance is now the plane-of-array
+	 * figure rather than the global horizontal one, which is what the modules actually respond to and
+	 * what a real plant reports; on a flat table they are the same number anyway. And the rated power
+	 * is this product's own DC nameplate rather than a constant, because there are six products now.
+	 *
+	 * Every reading is a plain field the array wrote during its own tick, so the computer thread can
+	 * have them without waiting for a tick boundary.
 	 */
 	public static final class SolarPanelPeripheral implements IPeripheral {
-		private final SolarPanelBlockEntity panel;
+		private final PvArrayBlockEntity array;
 
-		private SolarPanelPeripheral(SolarPanelBlockEntity panel) {
-			this.panel = panel;
+		private SolarPanelPeripheral(PvArrayBlockEntity array) {
+			this.array = array;
 		}
 
 		@Override
@@ -352,69 +356,77 @@ public final class CCTweakedPeripherals {
 
 		@Override
 		public boolean equals(@Nullable IPeripheral other) {
-			return other instanceof SolarPanelPeripheral peripheral && peripheral.panel == panel;
+			return other instanceof SolarPanelPeripheral peripheral && peripheral.array == array;
 		}
 
 		@Override
 		public Object getTarget() {
-			return panel;
+			return array;
 		}
 
-		/** Joules produced in the last tick, the unit and the name Mekanism's generators use. */
+		/** Joules delivered in the last tick, the unit and the name Mekanism's generators use. */
 		@LuaFunction
 		public final double getProductionRate() {
-			return panel.getGeneratedPowerKw() * EnergyBridge.JOULES_PER_KW;
+			return array.deliveredDcKw() * EnergyBridge.JOULES_PER_KW;
 		}
 
+		/**
+		 * Whether the array has a clear enough view of the sun to be worth anything.
+		 *
+		 * Not a yes or no about the sky any more but a threshold on how much of the beam is actually
+		 * arriving, because the answer stopped being binary: an array under glass can see the sun
+		 * perfectly well and an array under a passing player only partly.
+		 */
 		@LuaFunction
 		public final boolean canSeeSun() {
-			return panel.seesSky();
+			return array.obstructionFraction() > 0.5;
 		}
 
-		/** Output at the inverter's terminals, in kW. */
+		/** What the modules are delivering, in kW. Zero with no inverter in range, as an open circuit is. */
 		@LuaFunction
 		public final double getActivePower() {
-			return panel.getGeneratedPowerKw();
+			return array.deliveredDcKw();
 		}
 
-		/** Nameplate at standard test conditions, in kW. */
+		/** This product's DC nameplate at standard test conditions, in kW. */
 		@LuaFunction
 		public final double getRatedPower() {
-			return PhotovoltaicArray.RATED_POWER_KW;
+			return array.spec().dcPowerKw();
 		}
 
-		/** Global horizontal irradiance on the modules, W/m2. A clear zenith sun is just over 1000. */
+		/** Irradiance in the plane of the modules, W/m2. A clear zenith sun on the flat is just over 1000. */
 		@LuaFunction
 		public final double getIrradiance() {
-			return panel.getIrradiance();
+			return array.poaFront();
 		}
 
 		@LuaFunction
 		public final double getCellTemperature() {
-			return panel.getCellTemperature();
+			return array.moduleTempC();
 		}
 
 		@LuaFunction
 		public final double getAmbientTemperature() {
-			return panel.getAmbientTemperature();
+			return array.ambientTempC();
 		}
 
-		/** Fraction of the sky under cloud, 0 to 1. */
+		/** Fraction of the sky under cloud, 0 to 1, as the diffuse share of the light reaching the plane. */
 		@LuaFunction
 		public final double getCloudCover() {
-			return panel.getCloudCover();
+			double front = array.poaFront();
+			return front <= 0.0 ? 1.0 : 1.0 - array.poaBeam() / front;
 		}
 
 		/**
-		 * Output over nameplate, 0 to 1.
+		 * Output over what the nameplate would make in this light, 0 to 1.
 		 *
-		 * The one figure worth logging if only one is: it folds the light, the cell
-		 * temperature, this panel's own modules and the inverter into the number a plant is
+		 * The one figure worth logging if only one is: it folds the temperature, the soiling, the snow,
+		 * the shading, the spectrum and this array's own module binning into the number a plant is
 		 * actually judged on.
 		 */
 		@LuaFunction
 		public final double getPerformanceRatio() {
-			return panel.getGeneratedPowerKw() / PhotovoltaicArray.RATED_POWER_KW;
+			return array.performanceRatio();
 		}
 	}
 }

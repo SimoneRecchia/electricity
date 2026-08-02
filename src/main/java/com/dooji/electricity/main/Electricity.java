@@ -1,14 +1,20 @@
 package com.dooji.electricity.main;
 
 import com.dooji.electricity.api.power.ElectricityCapabilities;
+import com.dooji.electricity.api.power.InverterSpec;
+import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
 import com.dooji.electricity.block.ElectricLampBlockEntity;
+import com.dooji.electricity.block.MetStationBlock;
+import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
-import com.dooji.electricity.block.SolarPanelBlock;
-import com.dooji.electricity.block.SolarPanelBlockEntity;
+import com.dooji.electricity.block.PvArrayBlock;
+import com.dooji.electricity.block.PvArrayBlockEntity;
+import com.dooji.electricity.block.PvInverterBlock;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -21,12 +27,16 @@ import com.dooji.electricity.block.WorkbenchBlock;
 import com.dooji.electricity.compat.computercraft.ComputerCraftBridge;
 import com.dooji.electricity.item.ItemWire;
 import com.dooji.electricity.item.PowerWrenchItem;
+import com.dooji.electricity.item.PvArrayBlockItem;
+import com.dooji.electricity.item.PvInverterBlockItem;
 import com.dooji.electricity.item.TooltipBlockItem;
 import com.dooji.electricity.item.TooltipItem;
 import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.menu.WorkbenchMenu;
 import com.dooji.electricity.recipe.WorkbenchRecipe;
+import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.power.PowerNetwork;
@@ -122,15 +132,86 @@ public class Electricity {
 			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
 	/**
-	 * A block of photovoltaic array: twenty kilowatts of modules over a hundred square metres.
+	 * A block for every array product, keyed by spec id.
 	 *
-	 * Laid flat and walked over, so a farm of them is a field rather than a wall. Glass, so it
-	 * breaks like glass.
+	 * Registered from the catalogue in a loop, the same way the turbines are, so a product cannot come
+	 * to exist without a block that places it. The flat PERC table keeps the {@code solar_panel}
+	 * registry name because worlds already contain blocks under it - and that is the right one to keep
+	 * it, because a flat table of cheap modules is exactly what the placeholder always was.
 	 */
-	public static final RegistryObject<Block> SOLAR_PANEL_BLOCK = BLOCKS.register("solar_panel",
-			() -> new SolarPanelBlock(Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion()));
-	public static final RegistryObject<Item> SOLAR_PANEL_ITEM = ITEMS.register("solar_panel",
-			() -> new TooltipBlockItem(SOLAR_PANEL_BLOCK.get(), new Item.Properties(), "tooltip.electricity.solar_panel"));
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_ARRAY_BLOCKS = registerPvArrayBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_ARRAY_ITEMS = registerPvArrayItems();
+
+	/** One block per inverter in the catalogue. The generator, as far as the rest of the mod is concerned. */
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_INVERTER_BLOCKS = registerInverterBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_INVERTER_ITEMS = registerInverterItems();
+
+	/**
+	 * A meteorological mast: the seven instruments a plant measures the sky with.
+	 *
+	 * One block rather than one per instrument, because a real plant has one or two masts for the whole
+	 * site - the sky is the same across it. The two instruments that belong on the modules rather than
+	 * on the mast are read through the nearest array, which is how they are cabled in reality.
+	 */
+	public static final RegistryObject<Block> MET_STATION_BLOCK = BLOCKS.register("met_station",
+			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
+	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
+			() -> new TooltipBlockItem(MET_STATION_BLOCK.get(), new Item.Properties(), "tooltip.electricity.met_station"));
+
+	private static BlockBehaviour.Properties arrayProperties() {
+		return Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	private static BlockBehaviour.Properties inverterProperties() {
+		return Block.Properties.of().strength(2.5f, 10.0f).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerPvArrayBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (PvArraySpec spec : PvCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvArrayBlock(arrayProperties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerPvArrayItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (PvArraySpec spec : PvCatalog.all()) {
+			RegistryObject<Block> block = PV_ARRAY_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new PvArrayBlockItem(block.get(), new Item.Properties(), spec)));
+		}
+
+		return items;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerInverterBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (InverterSpec spec : InverterCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvInverterBlock(inverterProperties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerInverterItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (InverterSpec spec : InverterCatalog.all()) {
+			RegistryObject<Block> block = PV_INVERTER_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new PvInverterBlockItem(block.get(), new Item.Properties(), spec)));
+		}
+
+		return items;
+	}
+
+	/** Every array block, so one block entity type serves the whole catalogue. */
+	private static Block[] pvArrayBlocks() {
+		return PV_ARRAY_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
+
+	private static Block[] pvInverterBlocks() {
+		return PV_INVERTER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
 
 	/**
 	 * A block for every machine in the catalogue, keyed by spec id.
@@ -198,7 +279,17 @@ public class Electricity {
 				}
 
 				output.accept(TURBINE_TOWER_ITEM.get());
-				output.accept(SOLAR_PANEL_ITEM.get());
+				// the arrays, then the inverters they need, then the mast that watches them: the
+				// order a plant is actually built in
+				for (PvArraySpec spec : PvCatalog.all()) {
+					output.accept(PV_ARRAY_ITEMS.get(spec.id()).get());
+				}
+
+				for (InverterSpec spec : InverterCatalog.all()) {
+					output.accept(PV_INVERTER_ITEMS.get(spec.id()).get());
+				}
+
+				output.accept(MET_STATION_ITEM.get());
 				output.accept(ELECTRIC_LAMP_ITEM.get());
 				output.accept(WORKBENCH_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
@@ -215,7 +306,9 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<WindTurbineBlockEntity>> WIND_TURBINE_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TurbineTowerBlockEntity>> TURBINE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<ElectricLampBlockEntity>> ELECTRIC_LAMP_BLOCK_ENTITY;
-	public static RegistryObject<BlockEntityType<SolarPanelBlockEntity>> SOLAR_PANEL_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<PvArrayBlockEntity>> PV_ARRAY_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<PvInverterBlockEntity>> PV_INVERTER_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<MetStationBlockEntity>> MET_STATION_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -251,7 +344,13 @@ public class Electricity {
 
 		ELECTRIC_LAMP_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("electric_lamp", () -> BlockEntityType.Builder.of(ElectricLampBlockEntity::new, ELECTRIC_LAMP_BLOCK.get()).build(null));
 
-		SOLAR_PANEL_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("solar_panel", () -> BlockEntityType.Builder.of(SolarPanelBlockEntity::new, SOLAR_PANEL_BLOCK.get()).build(null));
+		// one type for the whole array catalogue, and one for the whole inverter catalogue: the
+		// products differ by their spec, which each block entity reads back off the block it sits in
+		PV_ARRAY_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_array", () -> BlockEntityType.Builder.of(PvArrayBlockEntity::new, pvArrayBlocks()).build(null));
+
+		PV_INVERTER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_inverter", () -> BlockEntityType.Builder.of(PvInverterBlockEntity::new, pvInverterBlocks()).build(null));
+
+		MET_STATION_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("met_station", () -> BlockEntityType.Builder.of(MetStationBlockEntity::new, MET_STATION_BLOCK.get()).build(null));
 
 		BLOCK_ENTITY_TYPES.register(modEventBus);
 		LOGGER.info("Registered {} items, {} blocks, and {} block entity types", ITEMS.getEntries().size(), BLOCKS.getEntries().size(), BLOCK_ENTITY_TYPES.getEntries().size());

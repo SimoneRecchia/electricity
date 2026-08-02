@@ -1,5 +1,19 @@
 {
   "variants": {
-    "": { "model": "electricity:block/solar_panel" }
+    "facing=north": {
+      "model": "electricity:block/solar_panel"
+    },
+    "facing=south": {
+      "model": "electricity:block/solar_panel",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "electricity:block/solar_panel",
+      "y": 270
+    },
+    "facing=east": {
+      "model": "electricity:block/solar_panel",
+      "y": 90
+    }
   }
 }

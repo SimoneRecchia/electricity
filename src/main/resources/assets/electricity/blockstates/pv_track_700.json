@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "electricity:block/pv_track_700"
+    },
+    "facing=south": {
+      "model": "electricity:block/pv_track_700",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "electricity:block/pv_track_700",
+      "y": 270
+    },
+    "facing=east": {
+      "model": "electricity:block/pv_track_700",
+      "y": 90
+    }
+  }
+}
