@@ -4,8 +4,8 @@ import com.dooji.electricity.api.WorldConditions;
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TickBudget;
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TurbineSpec;
-import com.dooji.electricity.api.power.TurbineTelemetry;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
@@ -116,7 +116,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// reader would otherwise race the server thread and could mix values from two
 	// different ticks. Volatile makes the completed snapshot visible atomically.
 	private final TurbineTelemetrySimulator telemetrySimulator = new TurbineTelemetrySimulator();
-	private volatile TurbineTelemetry telemetry = TurbineTelemetry.EMPTY;
+	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
 	private double yawCableTwist = 0.0;
 	private boolean yawing = false;
 
@@ -483,7 +483,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	/**
 	 * The latest published snapshot. Safe to read from any thread; never null.
 	 */
-	public TurbineTelemetry getTelemetry() {
+	public Telemetry.Snapshot getTelemetry() {
 		return telemetry;
 	}
 

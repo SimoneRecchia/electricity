@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.PvMounting;
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TrackerMode;
 import com.dooji.electricity.api.power.TrackerSpec;
 import com.dooji.electricity.client.TrackedBlockEntities;
@@ -14,6 +15,7 @@ import com.dooji.electricity.main.weather.Shading;
 import com.dooji.electricity.main.weather.SkyConditions;
 import com.dooji.electricity.main.weather.WeatherNoise;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
+import com.dooji.electricity.power.SolarTelemetrySimulator;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -148,6 +150,14 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 	private long lastSyncTick = 0L;
 
+	/**
+	 * The latest published snapshot, safe to read from any thread.
+	 *
+	 * Volatile and replaced whole rather than mutated, so a ComputerCraft program calling in from the
+	 * computer thread gets one self-consistent tick's readings instead of a mixture of two.
+	 */
+	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
+
 	public PvArrayBlockEntity(BlockPos pos, BlockState state) {
 		super(Electricity.PV_ARRAY_BLOCK_ENTITY.get(), pos, state);
 	}
@@ -193,6 +203,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		updateTracker(spec, sky, weather);
 		updatePlane(serverLevel, spec, sky);
 		shedSnow(serverLevel, spec);
+		updateTelemetry(spec);
 
 		maybeSync(serverLevel);
 	}
@@ -586,6 +597,21 @@ public class PvArrayBlockEntity extends BlockEntity {
 	public double trackerMotorKw() {
 		TrackerSpec tracker = tracker();
 		return tracker != null && slewing ? tracker.motorW() / 1000.0 : 0.0;
+	}
+
+	/** The latest published snapshot. Safe to read from any thread; never null. */
+	public Telemetry.Snapshot getTelemetry() {
+		return telemetry;
+	}
+
+	private void updateTelemetry(PvArraySpec spec) {
+		telemetry = SolarTelemetrySimulator.sampleArray(new SolarTelemetrySimulator.ArraySample(
+				spec, poaBeam, poaDiffuse, poaGround, poaRear, effectiveIrradiance, incidenceDeg,
+				moduleTempC, ambientTempC, windSpeed, spectralFactor, soiling, snowDepthM,
+				rowShadedFraction, obstructionFraction, skyViewFactor, stringVoltage, stringCurrent,
+				availableDcKw, deliveredDcKw(), performanceRatio(), rotationDeg, targetRotationDeg,
+				tiltDeg(), planeAzimuthDeg(), trackerMode.name(), stowReason.name(), slewing, backtracking,
+				hasInverter(), trackerMotorKw()));
 	}
 
 	// ---- control ----

@@ -3,6 +3,7 @@ package com.dooji.electricity.block;
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.RedstoneMode;
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.compat.energy.EnergyBridge;
@@ -10,6 +11,7 @@ import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
+import com.dooji.electricity.power.SolarTelemetrySimulator;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -120,6 +122,12 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private long lastSyncTick = 0L;
 
+	private final SolarTelemetrySimulator telemetrySimulator = new SolarTelemetrySimulator();
+	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
+	/** The reference array's readings, which are the plant's as far as its SCADA is concerned. */
+	private double referenceIrradiance = 0.0;
+	private double referenceModuleTempC = 15.0;
+
 	public PvInverterBlockEntity(BlockPos pos, BlockState state) {
 		super(Electricity.PV_INVERTER_BLOCK_ENTITY.get(), pos, state);
 		this.activePowerLimitKw = spec().acPowerKw();
@@ -148,6 +156,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		gatherAndConvert(serverLevel, spec);
 		accumulateEnergy(serverLevel);
+		updateTelemetry(serverLevel, spec);
 
 		budget.open(Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW);
 		EnergyBridge.emit(this, this, worldPosition, energyFaces());
@@ -178,6 +187,13 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			live.add(array);
 			availableDcKw += array.availableDcKw();
 			highestStringVoltage = Math.max(highestStringVoltage, array.stringVoltage());
+		}
+
+		// the first array in the list is the nearest, because that is the order the scan claimed them
+		// in - which makes it the one a real plant would have bolted its reference instruments to
+		if (!live.isEmpty()) {
+			referenceIrradiance = live.get(0).poaFront();
+			referenceModuleTempC = live.get(0).moduleTempC();
 		}
 
 		boolean allowed = isRunning();
@@ -324,7 +340,30 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 	}
 
+	/** The latest published snapshot. Safe to read from any thread; never null. */
+	public Telemetry.Snapshot getTelemetry() {
+		return telemetry;
+	}
+
+	private void updateTelemetry(ServerLevel serverLevel, InverterSpec spec) {
+		telemetry = telemetrySimulator.sampleInverter(new SolarTelemetrySimulator.InverterSample(
+				spec, acPowerKw, dcPowerKw, availableDcKw, dcVoltage, dcCurrent, efficiency, cabinetTempC,
+				ambientTempC, referenceModuleTempC, referenceIrradiance, energyTodayKwh, energyLifetimeKwh,
+				activePowerLimitKw, powerFactorSetpoint, isRunning(), clipping, derating,
+				stoppedByComputer, stoppedByPlayer, isStoppedByRedstone(), arrays.size(), stringsConnected,
+				stringCapacity(), dcAcRatio(), serverLevel.isRainingAt(worldPosition.above())));
+	}
+
 	// ---- readings ----
+
+	/** Irradiance in the plane of the reference array, W/m2: what the plant reports as its own. */
+	public double referenceIrradiance() {
+		return referenceIrradiance;
+	}
+
+	public double referenceModuleTempC() {
+		return referenceModuleTempC;
+	}
 
 	public double availableDcKw() {
 		return availableDcKw;
@@ -369,6 +408,11 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	public int arraysConnected() {
 		return arrays.size();
+	}
+
+	/** Where the arrays this inverter is wired to are. A copy, because callers arrive off other threads. */
+	public List<BlockPos> arrayPositions() {
+		return List.copyOf(arrays);
 	}
 
 	public int stringsConnected() {

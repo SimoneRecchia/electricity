@@ -1,5 +1,6 @@
 package com.dooji.electricity.power;
 
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.api.power.TurbineTelemetry;
 import java.util.HashMap;
@@ -78,7 +79,7 @@ public final class TurbineTelemetrySimulator {
 	) {
 	}
 
-	public TurbineTelemetry sample(Sample s) {
+	public Telemetry.Snapshot sample(Sample s) {
 		double rated = s.ratedPowerKw() > 0.0 ? s.ratedPowerKw() : 1.0;
 		double load = Mth.clamp(s.activePowerKw() / rated, 0.0, 1.0);
 		double ambient = s.ambientTempC();
@@ -88,7 +89,7 @@ public final class TurbineTelemetrySimulator {
 		double pitch = bladePitch(s);
 		double pitchActivity = s.braked() || pitch > 0.5 ? 1.0 : 0.15;
 
-		TurbineTelemetry.Builder out = TurbineTelemetry.builder();
+		Telemetry.Builder out = Telemetry.builder();
 
 		// ---- measured ----
 		out.put(TurbineTelemetry.WIND_SPEED, s.windSpeed());

@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.PvModuleSpec;
 import com.dooji.electricity.api.power.SensorSpec;
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
@@ -12,6 +13,7 @@ import com.dooji.electricity.main.weather.PlaneIrradiance;
 import com.dooji.electricity.main.weather.Shading;
 import com.dooji.electricity.main.weather.SkyConditions;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
+import com.dooji.electricity.power.SolarTelemetrySimulator;
 import java.util.Comparator;
 import java.util.List;
 import java.util.ArrayList;
@@ -85,6 +87,8 @@ public class MetStationBlockEntity extends BlockEntity {
 
 	private long lastSyncTick = 0L;
 
+	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
+
 	public MetStationBlockEntity(BlockPos pos, BlockState state) {
 		super(Electricity.MET_STATION_BLOCK_ENTITY.get(), pos, state);
 	}
@@ -127,6 +131,11 @@ public class MetStationBlockEntity extends BlockEntity {
 		double snowOnGround = Shading.snowDepthOver(serverLevel, worldPosition.below());
 		snowDistanceM = SensorCatalog.SN_50.reading(snowDistanceM, SNOW_SENSOR_HEIGHT_M - snowOnGround, 1);
 		snowHeightM = Math.max(0.0, SNOW_SENSOR_HEIGHT_M - snowDistanceM);
+
+		telemetry = SolarTelemetrySimulator.sampleStation(new SolarTelemetrySimulator.StationSample(
+				globalIrradiance, diffuseIrradiance, planeIrradiance, referenceCell, albedo, ambientTempC,
+				moduleTempC, windSpeed, windDirection, snowDistanceM, snowHeightM, diffuseFraction(),
+				sky.clearnessIndex(), sky.sun().elevationDeg(), sky.sun().azimuthDeg()));
 
 		maybeSync(serverLevel);
 	}
@@ -171,6 +180,11 @@ public class MetStationBlockEntity extends BlockEntity {
 		double delta = ((target - previous + 540.0) % 360.0) - 180.0;
 		double stepped = previous + delta * 0.15;
 		return (stepped % 360.0 + 360.0) % 360.0;
+	}
+
+	/** The latest published snapshot. Safe to read from any thread; never null. */
+	public Telemetry.Snapshot getTelemetry() {
+		return telemetry;
 	}
 
 	// ---- readings ----
