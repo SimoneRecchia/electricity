@@ -31,6 +31,18 @@ public final class WorldConditions {
 	/** Standard mean sea level pressure, hPa. */
 	public static final double SEA_LEVEL_PRESSURE = 1013.25;
 
+	/**
+	 * Seconds of real sky one tick of Minecraft's day clock stands for: 86400 over a 24000 tick day.
+	 *
+	 * Time is the one scale the mod does not choose - Minecraft already runs a day in twenty
+	 * minutes, so this is a conversion rather than a decision. It is here because two subsystems
+	 * need it and would otherwise each write their own: the weather quotes every timescale in
+	 * real terms and converts through this, and a tracker drive quoted in degrees a minute has to
+	 * come through it as well or a row would chase the sun seventy times faster than the machine
+	 * it is drawn from.
+	 */
+	public static final double SECONDS_PER_DAY_TICK = 3.6;
+
 	private WorldConditions() {
 	}
 }

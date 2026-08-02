@@ -43,8 +43,8 @@ import net.minecraft.util.Mth;
  * mean the same thing to the wind profile as it does to the rotor bolted on top of it.
  */
 public final class Atmosphere {
-	/** Seconds of atmosphere one tick of the day clock stands for: 86400 s over a 24000 tick day. */
-	private static final double SECONDS_PER_DAY_TICK = 3.6;
+	/** Seconds of atmosphere one tick of the day clock stands for. Shared, because a tracker drive needs it too. */
+	private static final double SECONDS_PER_DAY_TICK = WorldConditions.SECONDS_PER_DAY_TICK;
 	/** Horizontal scale of the pressure map. Only the pressure map: heights are in the mod's own metres. */
 	private static final double MAP_METRES_PER_BLOCK = 400.0;
 	/** One high-and-low pair across, in blocks. 2400 km at the scale above. */
