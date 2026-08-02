@@ -94,10 +94,12 @@ public class PvInverterRenderer extends ObjRendererBase {
 		float scale = (float) renderScale(spec);
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
 
-		Vec3 hub = groupCentre(model, "rotate_fan", new Vec3(0.46, 0.68, 0.0));
+		Vec3 hub = pivot(model, "fan", new Vec3(0.46, 0.68, 0.0));
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("pivot_")) continue;
+
 			poseStack.pushPose();
 			// the whole machine scales about the middle of its own footprint, so a small one sits on
 			// the ground rather than hovering over it

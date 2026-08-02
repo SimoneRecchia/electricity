@@ -139,6 +139,23 @@ def rotate(point, pivot, axis, degrees):
     return (x + pivot[0], y + pivot[1], z + pivot[2])
 
 
+def pivot(mesh, name, point):
+    """Marks where a moving part turns, as a group of its own.
+
+    The renderer used to find a pivot by taking the centre of the rotating group's
+    bounding box, which is exact for anything symmetric about its own axis - a torque
+    tube, an elevation frame - and wrong for everything else.  Three anemometer cups at
+    120 degrees have a bounding box whose centre is nowhere near the mast, so they turned
+    about a point beside it and wobbled; a wind vane's box centre sits out by its tail.
+
+    So the pivot is emitted here, where the design decides it, as a zero-size object.  Six
+    degenerate quads draw nothing, the bounding box is the point exactly, and the renderer
+    reads it instead of inferring it.
+    """
+    faces = mesh.add_object('pivot_' + name, 'steel')
+    box(mesh, faces, point, point)
+
+
 def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None):
     """Six quads, outward normals, each face mapped across the whole texture.
 
@@ -243,24 +260,57 @@ def tilted_rack():
     Towards -z because the block's default facing is north and PvArrayBlock reads
     the plane's bearing off that facing, so the geometry and the physics have to
     agree about which way is downhill.
+
+    Where the pivot goes
+    --------------------
+    Not where it is convenient - where it has to be for the tilted plane to fit inside
+    the block.  Tipping a plane 0.94 deep by 25 degrees moves its two edges 0.199 up and
+    down, so a pivot chosen by eye put the low edge below the block's floor, where it sank
+    into the ground, and left the rear legs standing 0.07 taller than the plane they were
+    holding - which is the grey posts poking through the panel.
+
+    So the pivot is solved for instead: high enough that the low edge clears the floor,
+    low enough that the modules stay under the collision box, and the legs are cut to
+    where the frame's underside actually is at each end rather than to a guessed height.
     """
     mesh = Mesh()
     tilt = FIXED_TILT_DEG
-    pivot = (0.0, 0.10, 0.0)
+    sin_tilt = math.sin(math.radians(tilt))
+    cos_tilt = math.cos(math.radians(tilt))
+
+    depth = 0.47
+    frame_half = 0.02
+    module_thickness = 0.035
+    # the lowest corner is the frame's far underside, so the pivot is that clearance plus
+    # however far the tilt drops it
+    pivot_y = 0.03 + frame_half * cos_tilt + depth * sin_tilt
+    pivot = (0.0, pivot_y, 0.0)
+
+    def underside_at(world_z):
+        """Height of the frame's underside where it crosses a given z, once tilted.
+
+        The tilt moves z as well as y, so the local coordinate has to be recovered before
+        the height can be read off: taking the height at the *local* z instead is what left
+        the legs standing a couple of centimetres proud of the frame they hold.
+        """
+        local_z = (world_z - frame_half * sin_tilt) / cos_tilt
+        return pivot_y - frame_half * cos_tilt + local_z * sin_tilt
 
     legs = mesh.add_object('legs', 'steel')
-    # the low pair at the front, the tall pair behind: what makes the plane tilt
+    # the low pair at the front, the tall pair behind: what makes the plane tilt, each cut
+    # to meet the frame rather than pass through it
     for x in (-0.40, 0.32):
-        box(mesh, legs, (x, 0.0, -0.44), (x + 0.08, 0.11, -0.36), uv_scale=0.3)
-        box(mesh, legs, (x, 0.0, 0.36), (x + 0.08, 0.47, 0.44), uv_scale=0.3)
+        box(mesh, legs, (x, 0.0, -0.44), (x + 0.08, underside_at(-0.40) + 0.005, -0.36), uv_scale=0.3)
+        box(mesh, legs, (x, 0.0, 0.36), (x + 0.08, underside_at(0.40) + 0.005, 0.44), uv_scale=0.3)
 
     frame = mesh.add_object('frame', 'frame')
-    box(mesh, frame, (-0.46, 0.055, -0.47), (0.46, 0.095, 0.47), uv_scale=0.5,
-        rot=(pivot, 'x', -tilt))
+    box(mesh, frame, (-0.46, pivot_y - frame_half, -depth), (0.46, pivot_y + frame_half, depth),
+        uv_scale=0.5, rot=(pivot, 'x', -tilt))
 
     modules = mesh.add_object('modules', 'module')
-    box(mesh, modules, (-0.46, 0.095, -0.47), (-0.02, 0.13, 0.47), rot=(pivot, 'x', -tilt))
-    box(mesh, modules, (0.02, 0.095, -0.47), (0.46, 0.13, 0.47), rot=(pivot, 'x', -tilt))
+    top = pivot_y + frame_half + module_thickness
+    box(mesh, modules, (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), rot=(pivot, 'x', -tilt))
+    box(mesh, modules, (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), rot=(pivot, 'x', -tilt))
     return mesh
 
 
@@ -303,6 +353,8 @@ def single_axis():
     motor = mesh.add_object('motor', 'cabinet')
     # the slew drive: a housing round the tube, wholly inside the bay
     box(mesh, motor, (-0.13, axis_y - 0.13, -0.085), (0.13, axis_y + 0.13, 0.085), uv_scale=0.6)
+
+    pivot(mesh, 'tube', (0.0, axis_y, 0.0))
 
     tube = mesh.add_object('rotate_tube', 'steel')
     cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, uv_scale=0.5)
@@ -355,6 +407,9 @@ def dual_axis():
     box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.06, 0.20), uv_scale=0.5)
     cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.03, 0.0), 'y', 0.085, top / 2.0 - 0.03, uv_scale=0.4)
 
+    pivot(mesh, 'azimuth', (0.0, top + 0.05, 0.0))
+    pivot(mesh, 'elevation', (0.0, pivot_y, 0.0))
+
     azimuth = mesh.add_object('rotate_azimuth', 'cabinet')
     cylinder(mesh, azimuth, (0.0, top + 0.05, 0.0), 'y', 0.10, 0.05, uv_scale=0.5)
     # the yoke arms, separated along the elevation axis rather than across it, so the
@@ -406,6 +461,8 @@ def inverter():
     display = mesh.add_object('display', 'display')
     box(mesh, display, (-0.28, 0.62, -0.345), (0.06, 0.80, -0.335))
 
+    pivot(mesh, 'fan', (0.46, 0.68, 0.0))
+
     fan = mesh.add_object('rotate_fan', 'steel')
     # a five-bladed impeller behind a grille on the right-hand side
     for i in range(5):
@@ -424,50 +481,67 @@ def inverter():
 # --------------------------------------------------------- the met station
 
 def met_mast():
-    """A mast with seven instruments on a boom, an anemometer and a vane.
+    """A mast with seven instruments, each at the height its own standard puts it.
 
-    Laid out the way a real one is: the radiometers on a boom pointing away from the
-    mast so its shadow cannot fall on them, the radiation shield below them, the
-    snow gauge on its own arm looking straight down at clear ground, and the wind
-    sensors at the top clear of everything else.
+    A block is ten metres throughout this mod, so a one-block mast is a ten-metre one -
+    which is exactly where the world's weather services measure wind, and where the
+    anemometer goes.  Everything else belongs much lower and used to be drawn near the
+    top with it, which is why the mast read as an instrument tree rather than a station:
+
+      * radiometers on a boom at 3.5 m, pointing away from the mast so its shadow cannot
+        fall on them
+      * the radiation shield at 2 m, which is the standard screen height for air temperature
+      * the snow gauge on its own arm at 2 m looking down at clear ground - the same two
+        metres MetStationBlockEntity works its depth out from, so the picture and the
+        arithmetic now agree
+      * wind at the top, clear of all of it
     """
     mesh = Mesh()
+
+    # heights in blocks, which is metres over ten
+    wind_y = 1.0
+    radiometer_y = 0.35
+    screen_y = 0.20
+    snow_y = 0.20
 
     mast = mesh.add_object('mast', 'steel')
     cylinder(mesh, mast, (0.0, 0.48, 0.0), 'y', 0.035, 0.48, uv_scale=0.3)
     box(mesh, mast, (-0.12, 0.0, -0.12), (0.12, 0.04, 0.12), uv_scale=0.4)
 
     boom = mesh.add_object('boom', 'steel')
-    box(mesh, boom, (-0.02, 0.70, 0.03), (0.02, 0.74, 0.42), uv_scale=0.3)
-    box(mesh, boom, (-0.02, 0.44, 0.03), (0.02, 0.48, 0.30), uv_scale=0.3)
+    box(mesh, boom, (-0.02, radiometer_y - 0.02, 0.03), (0.02, radiometer_y + 0.02, 0.42), uv_scale=0.3)
+    box(mesh, boom, (-0.02, screen_y - 0.02, 0.03), (0.02, screen_y + 0.02, 0.30), uv_scale=0.3)
 
     # the three radiometers: global, diffuse under its shadow ring, and the
     # albedometer, which is two of them back to back
     pyranometer = mesh.add_object('pyranometer', 'instrument')
-    cylinder(mesh, pyranometer, (0.0, 0.755, 0.16), 'y', 0.05, 0.02, uv_scale=0.4)
-    cylinder(mesh, pyranometer, (0.0, 0.785, 0.16), 'y', 0.028, 0.015, uv_scale=0.3)
+    cylinder(mesh, pyranometer, (0.0, radiometer_y + 0.035, 0.16), 'y', 0.05, 0.02, uv_scale=0.4)
+    cylinder(mesh, pyranometer, (0.0, radiometer_y + 0.065, 0.16), 'y', 0.028, 0.015, uv_scale=0.3)
 
     diffuse = mesh.add_object('diffuse', 'instrument')
-    cylinder(mesh, diffuse, (0.0, 0.755, 0.30), 'y', 0.05, 0.02, uv_scale=0.4)
-    cylinder(mesh, diffuse, (0.0, 0.785, 0.30), 'y', 0.026, 0.014, uv_scale=0.3)
+    cylinder(mesh, diffuse, (0.0, radiometer_y + 0.035, 0.30), 'y', 0.05, 0.02, uv_scale=0.4)
+    cylinder(mesh, diffuse, (0.0, radiometer_y + 0.065, 0.30), 'y', 0.026, 0.014, uv_scale=0.3)
     # the shadow ring, which is what makes it a diffuse instrument at all
-    box(mesh, diffuse, (-0.075, 0.78, 0.295), (0.075, 0.795, 0.305), uv_scale=0.2)
+    box(mesh, diffuse, (-0.075, radiometer_y + 0.06, 0.295), (0.075, radiometer_y + 0.075, 0.305), uv_scale=0.2)
 
     albedometer = mesh.add_object('albedometer', 'instrument')
-    cylinder(mesh, albedometer, (0.0, 0.755, 0.40), 'y', 0.045, 0.018, uv_scale=0.4)
-    cylinder(mesh, albedometer, (0.0, 0.785, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
+    cylinder(mesh, albedometer, (0.0, radiometer_y + 0.035, 0.40), 'y', 0.045, 0.018, uv_scale=0.4)
+    cylinder(mesh, albedometer, (0.0, radiometer_y + 0.065, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
     # the downward-looking half: an albedometer is two pyranometers, one of them upside down
-    cylinder(mesh, albedometer, (0.0, 0.715, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
+    cylinder(mesh, albedometer, (0.0, radiometer_y - 0.005, 0.40), 'y', 0.024, 0.013, uv_scale=0.3)
 
     shield = mesh.add_object('shield', 'instrument')
     # a naturally aspirated radiation shield: a stack of plates with air between them
     for i in range(4):
-        y = 0.40 + i * 0.022
+        y = screen_y + i * 0.022
         box(mesh, shield, (-0.055, y, 0.245), (0.055, y + 0.012, 0.355), uv_scale=0.4)
 
     snow = mesh.add_object('snow', 'cabinet')
-    box(mesh, snow, (-0.03, 0.30, -0.34), (0.03, 0.36, -0.28), uv_scale=0.3)
-    box(mesh, snow, (-0.02, 0.32, -0.28), (0.02, 0.34, 0.0), uv_scale=0.3)
+    box(mesh, snow, (-0.03, snow_y, -0.34), (0.03, snow_y + 0.06, -0.28), uv_scale=0.3)
+    box(mesh, snow, (-0.02, snow_y + 0.02, -0.28), (0.02, snow_y + 0.04, 0.0), uv_scale=0.3)
+
+    pivot(mesh, 'cups', (0.0, 1.0, 0.0))
+    pivot(mesh, 'vane', (0.0, 0.885, 0.0))
 
     cups = mesh.add_object('rotate_cups', 'instrument')
     cylinder(mesh, cups, (0.0, 0.99, 0.0), 'y', 0.018, 0.03, uv_scale=0.2)

@@ -120,9 +120,11 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * two have to agree or the array would report facing one way and be drawn facing the other.
 	 */
 	private static void poseSingleAxis(ObjModel model, PoseStack poseStack, Map<String, Matrix4f> poses, double rotation) {
-		Vec3 axis = groupCentre(model, "rotate_tube", new Vec3(0.0, 0.62, 0.0));
+		Vec3 axis = pivot(model, "tube", new Vec3(0.0, 0.62, 0.0));
 
 		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("pivot_")) continue;
+
 			poseStack.pushPose();
 			if (groupName.startsWith("rotate_")) {
 				poseStack.translate(0.0, axis.y, 0.0);
@@ -143,11 +145,16 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * prefix of the azimuth ones rather than being a separate family.
 	 */
 	private static void poseDualAxis(ObjModel model, PoseStack poseStack, Map<String, Matrix4f> poses, PvArrayBlockEntity array, double rotation) {
-		Vec3 collar = groupCentre(model, "rotate_azimuth", new Vec3(0.0, 0.65, 0.0));
-		Vec3 elevation = groupCentre(model, "rotate_elevation_", new Vec3(0.0, 0.7475, 0.0));
-		float azimuth = smoothAzimuth(array.getBlockPos(), rotation >= 0.0 ? 0.0f : 180.0f);
+		Vec3 collar = pivot(model, "azimuth", new Vec3(0.0, 0.60, 0.0));
+		Vec3 elevation = pivot(model, "elevation", new Vec3(0.0, 0.7475, 0.0));
+		// off the *target* rather than the current angle, because the target's sign comes from which
+		// half of the sky the sun is in and flips once at noon, while the drive's own angle hovers
+		// either side of zero as it crosses - and chasing that had the frame swinging back and forth
+		float azimuth = smoothAzimuth(array.getBlockPos(), array.targetRotationDeg() >= 0.0 ? 0.0f : 180.0f);
 
 		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("pivot_")) continue;
+
 			poseStack.pushPose();
 			if (groupName.startsWith("rotate_")) {
 				poseStack.translate(0.0, collar.y, 0.0);

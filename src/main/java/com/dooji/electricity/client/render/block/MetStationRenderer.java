@@ -90,11 +90,13 @@ public class MetStationRenderer extends ObjRendererBase {
 		float cups = advanceCups(station.getBlockPos(), station.windSpeed());
 		float vane = smoothVane(station.getBlockPos(), (float) station.windDirection(), station.getBlockState().getValue(MetStationBlock.FACING));
 
-		Vec3 cupHub = groupCentre(model, "rotate_cups", new Vec3(0.0, 1.0, 0.0));
-		Vec3 vaneHub = groupCentre(model, "rotate_vane", new Vec3(0.0, 0.885, 0.0));
+		Vec3 cupHub = pivot(model, "cups", new Vec3(0.0, 1.0, 0.0));
+		Vec3 vaneHub = pivot(model, "vane", new Vec3(0.0, 0.885, 0.0));
 
 		Map<String, Matrix4f> poses = new HashMap<>();
 		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("pivot_")) continue;
+
 			poseStack.pushPose();
 			if (groupName.startsWith("rotate_cups")) {
 				poseStack.translate(cupHub.x, cupHub.y, cupHub.z);

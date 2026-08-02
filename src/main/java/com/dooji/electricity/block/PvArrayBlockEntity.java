@@ -94,14 +94,28 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/** Flash-test binning, peak to peak: real datasheets print plus or minus three percent. */
 	private static final double MODULE_TOLERANCE = 0.03;
 	/**
-	 * Diffuse fraction above which a tracker gives up on the beam and lies flat.
+	 * Direct normal irradiance below which a tracker gives up and lies flat, and the one it comes back
+	 * out at, in W/m2.
 	 *
-	 * Four fifths, which is a heavy overcast. Past it there is no beam left worth pointing at, and a
-	 * flat plane sees more of the dome than a tilted one - so going flat is worth a few percent. It is
-	 * a real strategy on real controllers and it is why an overcast day is slightly less bad for a
-	 * tracker than the loss of tracking would suggest.
+	 * Decided on the beam itself rather than on the diffuse fraction, and the difference is not
+	 * cosmetic. A ratio of four fifths is a knife edge: it sits where the sky spends a great deal of its
+	 * time, so the drive crosses it every few minutes and the row is seen to set off after the sun and
+	 * come back. Sixty watts of beam is a statement instead of a threshold - it is six percent of a
+	 * clear sky, which is a sky with no beam in it at all, and there is nothing there to point at.
+	 *
+	 * A hundred and fifty coming back out, so the band is wide enough that no sky sits inside it for
+	 * long.
 	 */
-	private static final double DIFFUSE_MODE_THRESHOLD = 0.80;
+	private static final double DIFFUSE_MODE_ENTER = 60.0;
+	private static final double DIFFUSE_MODE_LEAVE = 150.0;
+	/**
+	 * How quickly the beam the controller acts on follows the sky, per tick.
+	 *
+	 * A two-hundred tick time constant, which is twelve minutes of real weather. Real controllers make
+	 * this decision on a mean over several minutes for the same reason: a passing cloud is not a reason
+	 * to move a hundred and fifty square metres of glass, and a drive that chased them would wear out.
+	 */
+	private static final double DIFFUSE_AVERAGE_ALPHA = 1.0 / 200.0;
 	/**
 	 * How far the wind has to fall below the stow threshold before a row comes back out, as a fraction.
 	 *
@@ -109,6 +123,16 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 * The same hysteresis the turbines use on their cut-out, for the same reason.
 	 */
 	private static final double STOW_RELEASE = 0.8;
+	/**
+	 * How long a weather stow is held after its cause has gone, in ticks.
+	 *
+	 * Six hundred, which is thirty-six minutes of real weather. Every real tracker controller has this
+	 * and it is not a nicety: you do not come out of a wind stow the instant a gust drops, because the
+	 * next gust is a minute away and standing a row up between them is how they get destroyed. The same
+	 * dwell serves the diffuse and night stows, where it reads as a controller waiting for the sky to
+	 * settle before committing the drive.
+	 */
+	private static final int STOW_DWELL_TICKS = 600;
 	/** Ticks of soiling accumulation per day-clock day. */
 	private static final double TICKS_PER_DAY = 24000.0;
 
@@ -127,6 +151,17 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private boolean slewing = false;
 	private boolean backtracking = false;
 	private boolean windStowLatched = false;
+	/**
+	 * The beam the controller actually acts on, W/m2: a rolling mean rather than this tick's reading.
+	 *
+	 * Persisted, and seeded from the first reading rather than from zero, because zero means an overcast
+	 * sky - so a reload would lay every tracking row flat under a sky that had not changed.
+	 */
+	private double beamAverage = 0.0;
+	private boolean beamAverageSeeded = false;
+	/** What the weather stow is being held at, and for how much longer. */
+	private TrackerMode.Stow heldStow = TrackerMode.Stow.NONE;
+	private int stowHoldTicks = 0;
 
 	// ---- what it is making ----
 
@@ -332,6 +367,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 			return;
 		}
 
+		updateBeamAverage(sky);
 		targetRotationDeg = commandedRotation(tracker, spec, sky, weather);
 
 		double step = tracker.slewPerTick();
@@ -361,38 +397,19 @@ public class PvArrayBlockEntity extends BlockEntity {
 			return tracker.nightStowDeg();
 		}
 
-		// latched with hysteresis, so a gust sitting on the threshold does not have the drive going
-		// back and forth across it
-		if (weather.gustWind() >= tracker.windStowSpeed()) {
-			windStowLatched = true;
-		} else if (windStowLatched && weather.gustWind() < tracker.windStowSpeed() * STOW_RELEASE) {
-			windStowLatched = false;
-		}
-
-		if (windStowLatched) {
-			stowReason = TrackerMode.Stow.WIND;
+		TrackerMode.Stow stow = heldWeatherStow(weatherStow(tracker, sky, weather));
+		if (stow != TrackerMode.Stow.NONE) {
+			stowReason = stow;
 			backtracking = false;
-			return tracker.windStowDeg();
-		}
-
-		if (snowDepthM >= tracker.snowStowDepth()) {
-			stowReason = TrackerMode.Stow.SNOW;
-			backtracking = false;
-			// whichever way it is already leaning, so a row does not swing through the whole range to
-			// shed snow it could have dropped by carrying on
-			return rotationDeg < 0.0 ? -tracker.snowStowDeg() : tracker.snowStowDeg();
-		}
-
-		if (!sky.sun().up()) {
-			stowReason = TrackerMode.Stow.NIGHT;
-			backtracking = false;
-			return tracker.nightStowDeg();
-		}
-
-		if (sky.diffuseFraction() >= DIFFUSE_MODE_THRESHOLD) {
-			stowReason = TrackerMode.Stow.DIFFUSE;
-			backtracking = false;
-			return 0.0;
+			// snow is the one stow that is not flat, and it goes whichever way the row is already
+			// leaning, so it does not swing through the whole range to shed what it could drop by
+			// carrying on
+			return switch (stow) {
+				case SNOW -> rotationDeg < 0.0 ? -tracker.snowStowDeg() : tracker.snowStowDeg();
+				case WIND -> tracker.windStowDeg();
+				case NIGHT -> tracker.nightStowDeg();
+				default -> 0.0;
+			};
 		}
 
 		stowReason = TrackerMode.Stow.NONE;
@@ -401,6 +418,75 @@ public class PvArrayBlockEntity extends BlockEntity {
 		double commanded = tracker.backtrackRotation(trueRotation, elevation, spec.groundCoverRatio());
 		backtracking = Math.abs(commanded - trueRotation) > 0.01;
 		return tracker.clampRotation(commanded);
+	}
+
+	/**
+	 * Which weather stow the controller wants right now, in order of precedence.
+	 *
+	 * Wind first, because a row standing up in a gale is how trackers get destroyed and no other
+	 * decision may outrank that. Then snow, then night, then the sky.
+	 */
+	private TrackerMode.Stow weatherStow(TrackerSpec tracker, SkyConditions sky, WeatherSnapshot weather) {
+		// latched with hysteresis, so a gust sitting on the threshold does not have the drive going
+		// back and forth across it
+		if (weather.gustWind() >= tracker.windStowSpeed()) {
+			windStowLatched = true;
+		} else if (windStowLatched && weather.gustWind() < tracker.windStowSpeed() * STOW_RELEASE) {
+			windStowLatched = false;
+		}
+
+		if (windStowLatched) return TrackerMode.Stow.WIND;
+		if (snowDepthM >= tracker.snowStowDepth()) return TrackerMode.Stow.SNOW;
+		if (!sky.sun().up()) return TrackerMode.Stow.NIGHT;
+
+		// on a rolling mean of the beam with hysteresis, not on this tick's diffuse ratio: the ratio
+		// version of this test sat on a knife edge the sky crossed every few minutes, and the row was
+		// seen to set off after the sun and come back
+		double threshold = heldStow == TrackerMode.Stow.DIFFUSE ? DIFFUSE_MODE_LEAVE : DIFFUSE_MODE_ENTER;
+		if (beamAverage <= threshold) return TrackerMode.Stow.DIFFUSE;
+
+		return TrackerMode.Stow.NONE;
+	}
+
+	/**
+	 * Holds a weather stow for a while after its cause has gone.
+	 *
+	 * The dwell is what turns a threshold into a decision. Without it every one of these conditions is
+	 * a comparison against a noisy signal, and the drive spends the day crossing back and forth over it.
+	 */
+	private TrackerMode.Stow heldWeatherStow(TrackerMode.Stow wanted) {
+		if (wanted != TrackerMode.Stow.NONE) {
+			heldStow = wanted;
+			stowHoldTicks = STOW_DWELL_TICKS;
+			return wanted;
+		}
+
+		if (stowHoldTicks > 0) {
+			stowHoldTicks--;
+			return heldStow;
+		}
+
+		heldStow = TrackerMode.Stow.NONE;
+		return TrackerMode.Stow.NONE;
+	}
+
+	/**
+	 * Follows the sky's beam slowly.
+	 *
+	 * Only while the sun is up, because a dark sky has no beam by definition and letting that into the
+	 * mean would have every row wake at dawn believing it was overcast.
+	 */
+	private void updateBeamAverage(SkyConditions sky) {
+		if (!sky.sun().up()) return;
+
+		double reading = sky.directNormal();
+		if (!beamAverageSeeded) {
+			beamAverage = reading;
+			beamAverageSeeded = true;
+			return;
+		}
+
+		beamAverage += (reading - beamAverage) * DIFFUSE_AVERAGE_ALPHA;
 	}
 
 	// ---- what the inverter talks to ----
@@ -673,6 +759,10 @@ public class PvArrayBlockEntity extends BlockEntity {
 		tag.putBoolean("slewing", slewing);
 		tag.putBoolean("backtracking", backtracking);
 		tag.putBoolean("windStowLatched", windStowLatched);
+		tag.putDouble("beamAverage", beamAverage);
+		tag.putBoolean("beamAverageSeeded", beamAverageSeeded);
+		tag.putString("heldStow", heldStow.name());
+		tag.putInt("stowHoldTicks", stowHoldTicks);
 
 		tag.putDouble("availableDc", availableDcKw);
 		tag.putDouble("mpptFraction", mpptFraction);
@@ -712,6 +802,10 @@ public class PvArrayBlockEntity extends BlockEntity {
 		slewing = tag.getBoolean("slewing");
 		backtracking = tag.getBoolean("backtracking");
 		windStowLatched = tag.getBoolean("windStowLatched");
+		beamAverage = tag.getDouble("beamAverage");
+		beamAverageSeeded = tag.getBoolean("beamAverageSeeded");
+		heldStow = stowByName(tag.getString("heldStow"));
+		stowHoldTicks = tag.getInt("stowHoldTicks");
 
 		availableDcKw = tag.getDouble("availableDc");
 		mpptFraction = tag.getDouble("mpptFraction");

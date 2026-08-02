@@ -77,18 +77,29 @@ public abstract class ObjRendererBase {
 	}
 
 	/**
+	 * Where a moving part turns, from the marker the model carries for it.
+	 *
+	 * This used to take the centre of the rotating group's own bounding box, which is exact for anything
+	 * symmetric about its axis - a torque tube, an elevation frame - and wrong for everything else. Three
+	 * anemometer cups at 120 degrees have a box centre nowhere near the mast, so they turned about a
+	 * point beside it and wobbled; a wind vane's box centre sits out by its tail.
+	 *
+	 * A pivot is a property of the design, so the generator emits it as a zero-size {@code pivot_*}
+	 * object and this reads that. No pose is ever built for those groups, so they draw nothing.
+	 *
+	 * The fallback keeps a model with a renamed marker visibly wrong rather than invisible, which is the
+	 * easier failure to notice.
+	 */
+	protected static Vec3 pivot(ObjModel model, String name, Vec3 fallback) {
+		return groupCentre(model, "pivot_" + name, fallback);
+	}
+
+	/**
 	 * Centre of every group whose name starts with a prefix, taken together.
 	 *
-	 * How a renderer finds a pivot: a torque tube, an azimuth collar and an anemometer hub are all parts
-	 * the model already contains, so measuring them beats restating their coordinates in Java where they
-	 * could drift away from the geometry.
-	 *
 	 * Every match rather than the first, and that is not fussiness - the group map is a HashMap, so
-	 * "the first" is whatever order the hash happened to produce, and a pivot that moves between runs
-	 * would be a genuinely nasty thing to debug. A prefix matching two groups gets the centre of both.
-	 *
-	 * The fallback keeps a model with a renamed group visibly wrong rather than invisible, which is the
-	 * easier failure to notice.
+	 * "the first" is whatever order the hash happened to produce, and a bound that moved between runs
+	 * would be a genuinely nasty thing to debug.
 	 */
 	protected static Vec3 groupCentre(ObjModel model, String prefix, Vec3 fallback) {
 		float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;

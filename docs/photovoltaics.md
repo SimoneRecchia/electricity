@@ -190,10 +190,21 @@ In AUTO the order of precedence is the safe one, and the panel says which applie
 | Wind | gust over the threshold | flat, so a horizontal gust has no leverage on the tube |
 | Snow | snow lying on the modules | steep, to drop the lot |
 | Night | the sun is down | flat, so the dew runs off |
-| Diffuse | the sky is over 80% diffuse | flat, to see as much of the dome as possible |
+| Diffuse | under 60 W/m² of beam | flat, to see as much of the dome as possible |
 
-The wind stow latches with hysteresis and releases at four fifths of the threshold, so a gust
-sitting on the limit does not have the drive going back and forth across it.
+**Every one of these decisions is deliberately slow**, and that is not a detail — it is what
+separates a controller from a comparison. The wind stow latches with hysteresis and releases
+at four fifths of the threshold. The diffuse decision is made on a **twelve-minute mean of the
+direct beam**, not on this instant's reading, and it enters at 60 W/m² and leaves at 150. And
+once any weather stow engages it is **held for thirty-six minutes** after its cause has gone.
+
+The first version of this decided on the instantaneous diffuse *fraction* against a single
+threshold of 0.80, which is a knife edge: the sky sits there a great deal of the time, so the
+row was seen setting off after the sun and coming back several times an hour. Sixty watts of
+beam is a statement rather than a threshold — six percent of a clear sky is a sky with no beam
+in it, and there is nothing there to point at. Real controllers use long means and long dwells
+for exactly this reason: a passing cloud is not a reason to move a hundred and fifty square
+metres of glass, and a drive that chased them would wear out.
 
 ### Backtracking
 
@@ -404,6 +415,15 @@ sky is the same across a site, so IEC 61724 asks for one or two masts for a whol
 | Kelvinsen SN-50 | snow distance, snow height | ultrasonic, 0.5–10 m, ±1 cm |
 | Kelvinsen WS-3 | wind speed | cup anemometer, 0–75 m/s |
 | Kelvinsen WV-3 | wind direction | vane, ±3° |
+
+**Each instrument is at the height its own standard puts it.** A block is ten metres
+throughout this mod, so the mast is a ten-metre one — which is exactly where the world's
+weather services measure wind, and where the anemometer and vane go. Everything else
+belongs much lower: the radiometers on a boom at 4 m pointing away from the mast so its
+shadow cannot fall on them, the radiation shield at 2.4 m which is the standard screen
+height for air temperature, and the snow gauge on its own arm at 2.3 m looking down at
+clear ground — the same two metres the depth is worked out from, so the picture and the
+arithmetic agree.
 
 **The readings are not simply the weather**, and that is the point of having a mast at all.
 Each one has been through its instrument's own time constant, so a thermopile pyranometer
