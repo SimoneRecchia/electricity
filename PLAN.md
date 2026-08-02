@@ -414,7 +414,7 @@ an array took away the beam at once and the diffuse a minute later.
 
 ---
 
-## 14. The direct-current collection system — commits 13 to 16
+## 14. The direct-current collection system — commits 13 to 16, all landed
 
 Everything above makes power and hands it over, and nothing above says how it gets from the
 modules to the cabinet. The plant worked by proximity: an inverter swept a radius and claimed
@@ -463,7 +463,7 @@ Ampacity is the other half: 240 mm² carries 570 A in free air and 0.82 of that 
 buried, because IEC method D is a worse place to be than method E — so thirty-two strings will
 not go down one buried trunk, and the copper is what says so.
 
-### 14.2 The cable a player runs — commit 14
+### 14.2 The cable a player runs — commit 14 ✔
 
 `DcCableSpec` and `CableCatalog`: 6 mm² string cable and 240 mm² trunk, with the figures above.
 
@@ -481,7 +481,7 @@ which is the real trade and is worth having in the game for exactly that reason.
 The two gauges do not connect to each other. A 240 mm² trunk cannot be terminated in an MC4
 plug, and one rule beats a page of exceptions.
 
-### 14.3 The plant runs on the copper — commit 15
+### 14.3 The plant runs on the copper — commit 15 ✔
 
 `DcNetwork` walks it: bounded breadth-first, over loaded positions only, `isLoaded` before
 `getBlockState` — because reaching into an unloading chunk is precisely what stopped a world from
@@ -499,7 +499,7 @@ Cable loss and voltage drop are applied per array, both on the panel with the ru
 drop counts against the tracking window: a long enough run holds a string below the startup
 voltage, which is a real morning failure.
 
-### 14.4 The combiner box — commit 16
+### 14.4 The combiner box — commit 16 ✔
 
 `CombinerSpec` and `CombinerCatalog`: three products with real fuse and switch ratings. A block,
 a block entity, an OBJ model, a read-only panel. An empty hand on it throws the DC load-break
@@ -511,7 +511,7 @@ refused by one that has, with the reason said out loud rather than the click doi
 An array is claimed by a *collector*, which is now either an inverter or a combiner, and the
 operating point is forwarded down the same lease the inverters already use.
 
-### 14.5 Three sprites — commit 13
+### 14.5 Three sprites — commit 13 ✔
 
 Small, unrelated, and first because it is independent of all of the above.
 
@@ -522,3 +522,35 @@ Small, unrelated, and first because it is independent of all of the above.
 * `turbine_tower` pointed at `metal_casing.png`, a generic metal block. Own sprite: tapered tube,
   flange, bolts.
 * `met_station`'s sprite is too thin and too pale to read at sixteen pixels. Redrawn.
+
+### 14.6 What was verified, and how
+
+All of it in a running game, over RCON, reading the block entities' own NBT rather than the panels.
+
+* **A twenty-block run is 200 m.** The array's terminals read 495.5 V and 8.741 kW; the inverter's
+  read 464.6 V and 8.195 kW. A 31.0 V drop and 6.25% burnt, identical fractions, which is the
+  physics saying loss is IR over V. Back-solving the drop gives 17.9 A, the string current of a
+  210 mm cell module in full sun.
+* Six percent rather than the two the plan expected, and the difference is the lesson: that string
+  is 495 V, so the same 31 V is six percent of it. On a 1500 V string it would be two.
+* **Cutting the run** dropped the array to standby and the inverter to nothing. Mending it brought
+  both back at 200 m. **Burying ten of the twenty blocks** read back as exactly half, and the
+  trench met the surface run with a climb — dust's own rule doing its job.
+* An array with cable laid to it but **no leads fitted** was not claimed. An array with leads and a
+  **cut** run was not claimed. A **trunk cable** laid at an array stayed disconnected.
+* **A CB-16 fed by two trackers**: two strings in, 364.64 A of headroom left of 400, bus at
+  518.50 V, cabinet at 518.30 — a 0.204 V drop, exactly 35.36 A through 30 m of 240 mm². Both
+  arrays name the *box* as their collector and the box names the inverter as its own.
+* **A CB-6 with the same tracker on it**: refusal FUSE, nothing connected.
+* **The central machine with no DC section** took nothing at all from three blocks of cable laid to
+  it, then took the array and turned 8.55 kW of DC into 3.44 kW of AC the moment a CB-32 went in.
+* Throwing a box's switch took the group to zero: bus current, operating point, and the cabinet's
+  own output all followed.
+* The client loads every new blockstate, model and texture with no missing-model or missing-texture
+  warnings, and the server still shuts down clean in three seconds.
+
+One thing found in testing that is not a bug in this branch and is worth writing down: a
+**world's own copy of the config keeps the old defaults**. `pvExportFraction` and
+`turbineExportFraction` were changed from 0.2 to 1.0 in commit 12, and a world saved before that
+still holds 0.2 in `saves/<world>/serverconfig/Electricity/server.toml`. Forge has no migration for
+a changed default, so an existing world has to be edited or that file deleted.
