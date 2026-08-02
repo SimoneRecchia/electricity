@@ -1,7 +1,9 @@
 {
   "parent": "block/block",
   "textures": {
-    "particle": "electricity:block/dc_trench"
+    "particle": "#trench",
+    "cable": "electricity:block/dc_trunk_line",
+    "trench": "electricity:block/dc_trench"
   },
   "elements": [
     {
@@ -23,7 +25,7 @@
             13.0,
             3.0
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "north": {
           "uv": [
@@ -32,7 +34,7 @@
             13.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "south": {
           "uv": [
@@ -41,7 +43,7 @@
             13.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "west": {
           "uv": [
@@ -50,7 +52,7 @@
             3.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "east": {
           "uv": [
@@ -59,7 +61,7 @@
             3.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         }
       }
     }

@@ -170,6 +170,67 @@ def typical_value(fmt):
     return out
 
 
+# Which drawing helpers share a line legitimately.  A label and its right-aligned value are one row,
+# and so are a faint label and a faint value; a state line owns its row alone, and so does anything
+# written straight through drawString.  Two calls from *different* groups at the same y draw through
+# each other, which is a bug no amount of measuring string widths will find - and did: the combiner
+# panel had its state line and its ways row both at forty-eight, which read as a corrupted panel.
+DRAW_GROUPS = (('label', 'value'), ('faint', 'faintValue'), ('state',), ('drawString',))
+
+# Strings the screen hands to font.split itself, so their length is the game's business and not this
+# file's.  The mast's footnote is one sentence over two lines on purpose.
+WRAPPED = {'met_station.no_reference'}
+
+
+def rows(source, where):
+    """Every text row a screen draws, as {y: set of helper names}.
+
+    The y is the last argument of the call, which is the convention every one of these helpers
+    follows.  Named constants are resolved through the screen's own {@code private static final int}
+    declarations, and anything more complicated than a name or a number is skipped rather than
+    guessed at.
+    """
+    found = {}
+    for match in re.finditer(r'\b(label|value|faint|faintValue|state)\(graphics,', source):
+        helper = match.group(1)
+        depth, i = 1, match.end()
+        last = i
+        while i < len(source) and depth > 0:
+            if source[i] in '([':
+                depth += 1
+            elif source[i] in ')]':
+                depth -= 1
+                if depth == 0:
+                    break
+            elif source[i] == ',' and depth == 1:
+                last = i + 1
+            i += 1
+
+        argument = source[last:i].strip()
+        if argument.isdigit():
+            y = int(argument)
+        elif argument in where:
+            y = where[argument]
+        else:
+            continue
+
+        found.setdefault(y, set()).add(helper)
+
+    return found
+
+
+def collisions(prefix, source, where):
+    """Rows where two helpers from different groups are writing over each other."""
+    out = []
+    for y, helpers in sorted(rows(source, where).items()):
+        if any(helpers <= set(group) for group in DRAW_GROUPS):
+            continue
+
+        out.append('%s: %s all draw at y=%d' % (prefix, ', '.join(sorted(helpers)), y))
+
+    return out
+
+
 def main():
     if not os.path.exists(FONT):
         raise SystemExit('run the extraction step first: %s is missing' % FONT)
@@ -209,9 +270,11 @@ def main():
             problems.append('met mast: "%s" needs %d of %d' % (text, got, inner))
 
     for name, prefix in (('PvArrayScreen.java', 'pv_array'), ('PvInverterScreen.java', 'pv_inverter'),
-                         ('PvCombinerScreen.java', 'pv_combiner'), ('WindTurbineScreen.java', 'wind_turbine')):
+                         ('PvCombinerScreen.java', 'pv_combiner'), ('WindTurbineScreen.java', 'wind_turbine'),
+                         ('MetStationScreen.java', 'met_station')):
         source = open(os.path.join(SCREENS, name)).read()
         where = constants(source)
+        problems.extend(collisions(prefix, source, where))
         inner = where.get('WIDTH', where.get('IMAGE_WIDTH', 0)) - 2 * 8
         print('=== %s, %d wide ===' % (prefix, inner + 16))
         for key, text in sorted(lang.items()):
@@ -222,6 +285,9 @@ def main():
             # a tooltip is wrapped by the game, so its length is not this file's business
             if re.search(r'Tooltip\.create\(Component\.translatable\("screen\.electricity\.%s"'
                          % re.escape(short), source) or '.tip' in short:
+                continue
+
+            if short in WRAPPED:
                 continue
 
             worst = width_of(widest_value(resolved(text, key, source)), table)

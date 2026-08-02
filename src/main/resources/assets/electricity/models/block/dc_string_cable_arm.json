@@ -2,7 +2,8 @@
   "parent": "block/block",
   "ambientocclusion": false,
   "textures": {
-    "particle": "electricity:block/dc_string_line"
+    "particle": "#cable",
+    "cable": "electricity:block/dc_string_line"
   },
   "elements": [
     {
@@ -24,7 +25,7 @@
             11.0,
             5.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "north": {
           "uv": [
@@ -33,7 +34,7 @@
             11.0,
             16.0
           ],
-          "texture": "electricity:block/dc_string_line",
+          "texture": "#cable",
           "cullface": "north"
         },
         "south": {
@@ -43,7 +44,7 @@
             11.0,
             16.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "west": {
           "uv": [
@@ -52,7 +53,7 @@
             5.0,
             16.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "east": {
           "uv": [
@@ -61,7 +62,7 @@
             5.0,
             16.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         }
       }
     }

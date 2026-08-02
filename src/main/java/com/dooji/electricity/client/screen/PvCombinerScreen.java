@@ -30,10 +30,22 @@ public class PvCombinerScreen extends PlantScreen {
 	private static final ResourceLocation PANEL = new ResourceLocation(Electricity.MOD_ID, "textures/gui/pv_combiner.png");
 
 	private static final int WIDTH = 288;
-	private static final int HEIGHT = 136;
-	private static final int WAYS_BAR_Y = 62;
+	private static final int HEIGHT = 148;
+	private static final int WAYS_BAR_Y = 72;
 	private static final int SEPARATOR_Y = 40;
-	private static final int SECOND_SEPARATOR_Y = 78;
+	private static final int SECOND_SEPARATOR_Y = 88;
+	/**
+	 * Baseline of each line of text, and they are constants for one reason.
+	 *
+	 * The state line and the ways row were both written at 48 and drew straight through each other -
+	 * a collision no amount of measuring the *width* of a string will catch, and one that read as a
+	 * corrupted panel rather than as a mistake. Named, spaced ten apart, and now checked.
+	 */
+	private static final int STATE_Y = 46;
+	private static final int WAYS_Y = 60;
+	private static final int BUS_Y = 94;
+	private static final int TRUNK_Y = 104;
+	private static final int OUTPUT_Y = 114;
 
 	public PvCombinerScreen(BlockPos pos) {
 		super(Component.translatable("screen.electricity.pv_combiner.title"), PANEL, WIDTH, HEIGHT, pos);
@@ -66,13 +78,13 @@ public class PvCombinerScreen extends PlantScreen {
 		separator(graphics, SECOND_SEPARATOR_Y);
 		faint(graphics, Component.translatable("screen.electricity.pv_combiner.bus",
 				fmt("%.0f V", combiner.busVoltage()), fmt("%.0f A", combiner.busCurrent()),
-				power(combiner.offeredDcKw())), 84);
+				power(combiner.offeredDcKw())), BUS_Y);
 		faint(graphics, Component.translatable("screen.electricity.pv_combiner.trunk",
 				fmt("%.0f m", combiner.runMetres()), fmt("%.0f%%", combiner.runBuriedFraction() * 100.0),
-				fmt("%.2f%%", combiner.trunkLossFraction() * 100.0)), 94);
+				fmt("%.2f%%", combiner.trunkLossFraction() * 100.0)), TRUNK_Y);
 		faint(graphics, Component.translatable(combiner.wired()
 				? "screen.electricity.pv_combiner.wired"
-				: "screen.electricity.pv_combiner.unwired"), 104);
+				: "screen.electricity.pv_combiner.unwired"), OUTPUT_Y);
 	}
 
 	/**
@@ -83,27 +95,27 @@ public class PvCombinerScreen extends PlantScreen {
 	 */
 	private void drawState(GuiGraphics graphics, PvCombinerBlockEntity combiner) {
 		if (combiner.isolated()) {
-			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.isolated"), AMBER, 48);
+			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.isolated"), AMBER, STATE_Y);
 			return;
 		}
 
 		if (!combiner.wired()) {
-			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.no_inverter"), RED, 48);
+			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.no_inverter"), RED, STATE_Y);
 			return;
 		}
 
 		if (combiner.stringsConnected() == 0) {
-			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.empty"), RED, 48);
+			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.empty"), RED, STATE_Y);
 			return;
 		}
 
 		if (combiner.refusal() != CombinerSpec.Refusal.NONE) {
 			state(graphics, Component.translatable("screen.electricity.pv_combiner.refusal."
-					+ combiner.refusal().name().toLowerCase(Locale.ROOT)), AMBER, 48);
+					+ combiner.refusal().name().toLowerCase(Locale.ROOT)), AMBER, STATE_Y);
 			return;
 		}
 
-		state(graphics, Component.translatable("screen.electricity.pv_combiner.state.closed"), GREEN, 48);
+		state(graphics, Component.translatable("screen.electricity.pv_combiner.state.closed"), GREEN, STATE_Y);
 	}
 
 	/** How much of the box is used, in ways and in amps, on one bar with the two marked apart. */
@@ -112,9 +124,9 @@ public class PvCombinerScreen extends PlantScreen {
 		double amps = spec.outputAmps() <= 0.0 ? 0.0
 				: 1.0 - Math.max(0.0, combiner.stringCurrentHeadroom()) / spec.outputAmps();
 
-		label(graphics, Component.translatable("screen.electricity.pv_combiner.ways"), WAYS_BAR_Y - 14);
+		label(graphics, Component.translatable("screen.electricity.pv_combiner.ways"), WAYS_Y);
 		value(graphics, fmt("%d of %d  ·  %s free", combiner.stringsConnected(), spec.fusedInputs(),
-				fmt("%.0f A", Math.max(0.0, combiner.stringCurrentHeadroom()))), WAYS_BAR_Y - 14);
+				fmt("%.0f A", Math.max(0.0, combiner.stringCurrentHeadroom()))), WAYS_Y);
 
 		fillBar(graphics, WAYS_BAR_Y, barWidth(Math.min(1.0, ways)), BLUE);
 		// the copper marked over the ways, because which of the two is nearly full is the whole question

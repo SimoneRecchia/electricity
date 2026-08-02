@@ -42,7 +42,13 @@ CABLES = {
     'dc_trunk_cable': dict(half=5.0, thick=2.5, texture='dc_trunk_line'),
 }
 
-TRENCH = 'electricity:block/dc_trench'
+# Face textures are *names* looked up in the model's own textures map, not paths - a raw resource
+# location in a face comes out as the missing-texture chequerboard, which is exactly what the first
+# version of this did to every cable in the world.  So the paths are declared once at the top of each
+# model under these names and the faces reference them.
+CABLE = '#cable'
+TRENCH = '#trench'
+TRENCH_PATH = 'electricity:block/dc_trench'
 
 
 def write(path, data):
@@ -89,7 +95,7 @@ def cable_faces(texture, lo, hi, cull=None):
 
 def dot(cable, y0, y1):
     """The centre of a run: where a clip holds the pair down, and where the arms meet."""
-    half, texture = cable['half'], 'electricity:block/' + cable['texture']
+    half, texture = cable['half'], CABLE
     lo = (8 - half, y0, 8 - half)
     hi = (8 + half, y1, 8 + half)
     return element(lo, hi, cable_faces(texture, lo, hi))
@@ -103,7 +109,7 @@ def arm(cable, y0, y1, near):
     is nothing on the surface and the width of the rim in a trench - so a buried pair passes under
     a pixel of backfill at each block edge and a surface one runs straight through.
     """
-    half, texture = cable['half'], 'electricity:block/' + cable['texture']
+    half, texture = cable['half'], CABLE
     lo = (8 - half, y0, near)
     hi = (8 + half, y1, 8 - half)
     return element(lo, hi, cable_faces(texture, lo, hi, cull='north' if near == 0.0 else None))
@@ -111,7 +117,7 @@ def arm(cable, y0, y1, near):
 
 def climb(cable):
     """The run going up the wall of the block alongside, to reach a run on top of it."""
-    half, thick, texture = cable['half'], cable['thick'], 'electricity:block/' + cable['texture']
+    half, thick, texture = cable['half'], cable['thick'], CABLE
     lo = (8 - half, 0.0, 0.0)
     hi = (8 + half, 16.0, thick)
     faces = {
@@ -162,12 +168,13 @@ def bedding():
 
 def models(name, cable):
     """Every model one gauge of cable needs, keyed by file name."""
-    texture = 'electricity:block/' + cable['texture']
+    path = 'electricity:block/' + cable['texture']
     thick = cable['thick']
 
     flat = {'parent': 'block/block', 'ambientocclusion': False,
-            'textures': {'particle': texture}}
-    trench = {'parent': 'block/block', 'textures': {'particle': TRENCH}}
+            'textures': {'particle': CABLE, 'cable': path}}
+    trench = {'parent': 'block/block',
+              'textures': {'particle': TRENCH, 'cable': path, 'trench': TRENCH_PATH}}
 
     return {
         name: dict(flat, elements=[dot(cable, 0.0, thick)]),
@@ -203,9 +210,31 @@ def blockstate(name):
     return {'multipart': parts}
 
 
+def check(name, model):
+    """Fails if any face names a texture the model does not declare.
+
+    Worth a function of its own because of how this fails in the game: a block model's face carries the
+    *name* of a texture, which is looked up in the model's own textures map and then up through its
+    parents.  A raw resource location put there is looked up as a name, is not found, and silently
+    resolves to the missing-texture chequerboard - no warning in the log, nothing on the console, just
+    every cable in the world turned magenta.  Which is exactly what shipped.
+    """
+    declared = set(model.get('textures', {}))
+    for element in model.get('elements', ()):
+        for side, face in element['faces'].items():
+            texture = face['texture']
+            if not texture.startswith('#'):
+                raise SystemExit('%s: %s face names "%s", which is a path where a #name belongs'
+                                 % (name, side, texture))
+            if texture[1:] not in declared:
+                raise SystemExit('%s: %s face wants #%s, which the model does not declare'
+                                 % (name, side, texture[1:]))
+
+
 def main():
     for name, cable in CABLES.items():
         for file_name, model in models(name, cable).items():
+            check(file_name, model)
             write(os.path.join(BLOCK_MODELS, file_name + '.json'), model)
             print('models/block/%s.json' % file_name)
 

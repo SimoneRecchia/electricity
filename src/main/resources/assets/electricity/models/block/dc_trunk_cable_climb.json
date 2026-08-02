@@ -2,7 +2,8 @@
   "parent": "block/block",
   "ambientocclusion": false,
   "textures": {
-    "particle": "electricity:block/dc_trunk_line"
+    "particle": "#cable",
+    "cable": "electricity:block/dc_trunk_line"
   },
   "elements": [
     {
@@ -24,7 +25,7 @@
             13.0,
             16
           ],
-          "texture": "electricity:block/dc_trunk_line",
+          "texture": "#cable",
           "cullface": "north"
         },
         "south": {
@@ -34,7 +35,7 @@
             13.0,
             16
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "west": {
           "uv": [
@@ -43,7 +44,7 @@
             2.5,
             16
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         },
         "east": {
           "uv": [
@@ -52,7 +53,7 @@
             2.5,
             16
           ],
-          "texture": "electricity:block/dc_trunk_line"
+          "texture": "#cable"
         }
       }
     }

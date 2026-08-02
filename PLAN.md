@@ -549,6 +549,20 @@ All of it in a running game, over RCON, reading the block entities' own NBT rath
 * The client loads every new blockstate, model and texture with no missing-model or missing-texture
   warnings, and the server still shuts down clean in three seconds.
 
+Two bugs the testing above did **not** catch, both found by looking at the game:
+
+* Every cable rendered as the magenta chequerboard. A block model's face carries the *name* of a
+  texture, looked up in the model's own textures map and then up through its parents — and a raw
+  resource location put there is looked up as a name, not found, and resolves silently to the
+  missing texture. No warning in the log, nothing on the console. `gen_cable_models.py` now refuses
+  to write a model whose face names a texture the model does not declare, and the same check run
+  over every other block model in the mod comes back clean.
+* The combiner's panel drew its state line and its ways row both at y=48, straight through each
+  other. `check_gui_fits.py` measured every string's *width* and had nothing to say about two
+  strings sharing a line, so it now groups the drawing helpers — a label and its right-aligned
+  value share a row, a state line owns one — and fails when calls from different groups collide.
+  Every panel is checked, the mast included.
+
 One thing found in testing that is not a bug in this branch and is worth writing down: a
 **world's own copy of the config keeps the old defaults**. `pvExportFraction` and
 `turbineExportFraction` were changed from 0.2 to 1.0 in commit 12, and a world saved before that

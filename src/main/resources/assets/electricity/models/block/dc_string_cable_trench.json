@@ -1,7 +1,9 @@
 {
   "parent": "block/block",
   "textures": {
-    "particle": "electricity:block/dc_trench"
+    "particle": "#trench",
+    "cable": "electricity:block/dc_string_line",
+    "trench": "electricity:block/dc_trench"
   },
   "elements": [
     {
@@ -23,7 +25,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "down"
         },
         "up": {
@@ -33,7 +35,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "north": {
           "uv": [
@@ -42,7 +44,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "north"
         },
         "south": {
@@ -52,7 +54,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "south"
         },
         "west": {
@@ -62,7 +64,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "west"
         },
         "east": {
@@ -72,7 +74,7 @@
             16,
             16
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "east"
         }
       }
@@ -96,7 +98,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "down": {
           "uv": [
@@ -105,7 +107,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "north": {
           "uv": [
@@ -114,7 +116,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "north"
         },
         "south": {
@@ -124,7 +126,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "west": {
           "uv": [
@@ -133,7 +135,7 @@
             1.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "east": {
           "uv": [
@@ -142,7 +144,7 @@
             1.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         }
       }
     },
@@ -165,7 +167,7 @@
             16.0,
             16.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "down": {
           "uv": [
@@ -174,7 +176,7 @@
             16.0,
             16.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "north": {
           "uv": [
@@ -183,7 +185,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "south": {
           "uv": [
@@ -192,7 +194,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "south"
         },
         "west": {
@@ -202,7 +204,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "east": {
           "uv": [
@@ -211,7 +213,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         }
       }
     },
@@ -234,7 +236,7 @@
             1.0,
             15.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "down": {
           "uv": [
@@ -243,7 +245,7 @@
             1.0,
             15.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "north": {
           "uv": [
@@ -252,7 +254,7 @@
             1.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "south": {
           "uv": [
@@ -261,7 +263,7 @@
             1.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "west": {
           "uv": [
@@ -270,7 +272,7 @@
             15.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "west"
         },
         "east": {
@@ -280,7 +282,7 @@
             15.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         }
       }
     },
@@ -303,7 +305,7 @@
             16.0,
             15.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "down": {
           "uv": [
@@ -312,7 +314,7 @@
             16.0,
             15.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "north": {
           "uv": [
@@ -321,7 +323,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "south": {
           "uv": [
@@ -330,7 +332,7 @@
             16.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "west": {
           "uv": [
@@ -339,7 +341,7 @@
             15.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench"
+          "texture": "#trench"
         },
         "east": {
           "uv": [
@@ -348,7 +350,7 @@
             15.0,
             1.0
           ],
-          "texture": "electricity:block/dc_trench",
+          "texture": "#trench",
           "cullface": "east"
         }
       }
@@ -372,7 +374,7 @@
             11.0,
             11.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "north": {
           "uv": [
@@ -381,7 +383,7 @@
             11.0,
             1.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "south": {
           "uv": [
@@ -390,7 +392,7 @@
             11.0,
             1.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "west": {
           "uv": [
@@ -399,7 +401,7 @@
             11.0,
             1.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         },
         "east": {
           "uv": [
@@ -408,7 +410,7 @@
             11.0,
             1.0
           ],
-          "texture": "electricity:block/dc_string_line"
+          "texture": "#cable"
         }
       }
     }

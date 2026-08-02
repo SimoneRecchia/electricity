@@ -753,28 +753,33 @@ def limb(c, start, end, width, palette):
 
 
 def item_wrench():
-    """An insulated adjustable spanner, laid on the diagonal a handheld model grips.
+    """A combination spanner: an insulated grip, a shank, and a ring end.
 
-    Drawn corner to corner because {@code item/handheld} rotates a sprite about its lower left and
-    expects the working end at the upper right - a tool drawn upright is held like a sheet of paper,
-    which is exactly how this one used to look.  The insulated grip is not decoration either: a
-    wrench for live electrical work has one, and this mod is about electricity.
+    The ring is the whole point of the redraw.  The first attempt cut an open jaw out of a blob with a
+    diagonal stroke, and what came out was a bird's beak: the two jaws tapered, so the mouth read as a
+    claw rather than as something that fits over a nut.  A closed box end is an annulus, an annulus is
+    unmistakable at sixteen pixels, and it is what half the spanners in a real tool roll are.
+
+    Laid corner to corner because {@code item/handheld} rotates a sprite about its lower left and
+    expects the working end at the upper right.  The grip is red because a wrench for live electrical
+    work has an insulated one, and this is a mod about electricity.
     """
     c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    ring_x, ring_y = 11.4, 4.4
 
-    limb(c, (3.2, 13.0), (7.4, 8.8), 4.0, GRIP)
-    # the ferrule where the moulding ends and the forging begins
-    limb(c, (7.2, 9.0), (7.9, 8.3), 4.2, STEEL)
-    limb(c, (7.8, 8.4), (10.6, 5.6), 3.0, STEEL)
-    # the head, wider than the shank the way a forged one is
-    limb(c, (10.0, 6.0), (13.4, 2.6), 6.4, STEEL)
-    # the mouth, cut along the handle's own axis and out through the corner: what is left either
-    # side of it is the two jaws, and the cut sits off centre because on an adjustable wrench the
-    # fixed jaw is the heavier of the two
-    c.stroke(16.2, -0.2, 12.3, 3.7, (0, 0, 0, 0), 2.6)
-    # the worm screw that adjusts them, on the side of the head a thumb reaches
-    c.stroke(11.4, 7.2, 13.2, 5.4, STEEL[0], 1.8)
-    c.stroke(11.7, 6.9, 12.9, 5.7, (128, 132, 138, 255), 1.0)
+    # the shank first, so the ring is drawn over where the two meet
+    limb(c, (3.0, 13.0), (7.2, 8.8), 4.2, GRIP)
+    limb(c, (7.0, 9.0), (7.7, 8.3), 4.4, STEEL)
+    limb(c, (7.6, 8.4), (10.4, 5.6), 3.2, STEEL)
+
+    # the ring: an outer rim, a band lit from the upper left, an inner rim, and the hole through it
+    c.disc(ring_x, ring_y, 4.5, dark)
+    c.disc(ring_x, ring_y, 3.9, light)
+    c.disc(ring_x + 0.8, ring_y + 0.8, 3.7, mid)
+    c.disc(ring_x, ring_y, 2.8, dark)
+    c.disc(ring_x, ring_y, 2.2, (0, 0, 0, 0))
+
     # the loop in the end of the grip, so it can hang on a board
     c.set(2, 14, GRIP[0])
     c.set(3, 14, GRIP[1])
@@ -874,7 +879,7 @@ PANELS = {
     'pv_array': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
     # shorter than the rest, because a combiner box is switchgear: one bar, and nothing to control
-    'pv_combiner': dict(width=288, height=136, bar_x=12, bar_width=264, bars=(62,), separators=(40, 78)),
+    'pv_combiner': dict(width=288, height=148, bar_x=12, bar_width=264, bars=(72,), separators=(40, 88)),
 }
 
 
