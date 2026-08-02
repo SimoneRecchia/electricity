@@ -68,10 +68,17 @@ for itself in cable, which is why they exist on plants whose inverters do not ne
 
 Every machine that takes cable grows the last stretch of it **itself**, from its own middle out to
 whichever edges a run has actually been laid against — at the same cross-section a laid run has, so
-the two meet with nothing to see through. That is why an array's junction box sits in the middle of
-its block rather than in a corner: from the middle it reaches every edge, so wherever you bring the
-cable from, it comes in. On a tracker it is also the one place with room, since the bay at the centre
-of the row is the bay with no module in it.
+the two meet with nothing to see through. Two pixels across and one tall, one pixel to a conductor,
+and it is the same figure everywhere: on a run across the ground, on the stub into a machine, and on
+the riser up a combiner's post. One number, so nothing swells at a join. At a block to ten metres a
+real cable would not be a pixel wide, so all of it is symbolic anyway, and a symbol that shouts is
+worse than one you have to look for.
+
+The *leads* are centred on the block's axis because that is where a laid run is, but the junction
+**box** goes where a junction box belongs on that mounting — bolted to the front edge of a table,
+under the high edge of a tilted rack, strapped to the pier inside a tracker's drive bay, on a
+dual-axis pedestal. Putting the box in the middle to match the leads stood it up through the glass in
+the centre of the panel, which looked like damage.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

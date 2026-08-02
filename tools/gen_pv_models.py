@@ -195,8 +195,12 @@ def stubs(mesh, name='stub'):
     renderer includes only the sides a run of cable has actually been laid against, which is what makes
     the cable appear to run *into* the machine instead of stopping a pixel short of it over open sand.
 
-    The cross-section is a laid run's own - 0.375 across, 0.094 tall, centred on the block's axis, so
-    where the two meet there is no seam to see.
+    The cross-section is a laid run's own - two pixels across and one tall, one pixel to a conductor,
+    centred on the block's axis, so where the two meet there is no seam to see.  Deliberately the
+    narrowest thing that still reads as a pair: at a block to ten metres a real cable would not be a
+    pixel wide, so everything drawn here is symbolic, and a symbol that shouts is worse than one that
+    has to be looked for.  It is the same figure on a run laid across the ground, on the stub into a
+    machine, and on the riser up a combiner's post - one number, so nothing swells at a join.
 
     All four are the same box turned about the block's middle rather than four boxes written out, and
     that is not brevity: this file maps a face's texture along its own x and z, so a stub *written* along
@@ -207,36 +211,30 @@ def stubs(mesh, name='stub'):
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
         spin = ((0.0, 0.0, 0.0), 'y', turn)
         box(mesh, mesh.faces('%s_%s' % (name, side), 'dc_cable'),
-            (-0.1875, 0.0, -0.5), (0.1875, 0.094, 0.0), rot=spin)
+            (-0.0625, 0.0, -0.5), (0.0625, 0.0625, 0.0), rot=spin)
         # the saddle clipping it down a hand's width out from the machine, which is where a real one is
         box(mesh, mesh.faces('%s_%s' % (name, side), 'steel'),
-            (-0.205, 0.0, -0.425), (0.205, 0.128, -0.385), uv_scale=0.3, rot=spin)
+            (-0.09, 0.0, -0.425), (0.09, 0.085, -0.40), uv_scale=0.3, rot=spin)
 
 
-def harness(mesh, top=0.26):
+def harness(mesh, enclosure, run):
     """The junction box an array grows when a reel of cable is worked into it, and the leads out of it.
 
-    In the middle of the block, and that is the whole of the redraw.  The first version put a thin pair
-    out of a box in the *corner*, and a laid run of cable goes down the middle of its own block - so the
-    two could never meet however close they got, and the stub read as a cable going nowhere.  From the
-    middle it reaches every edge, so wherever the cable comes from, it comes in.
+    Two things have to be true at once, and the first version of this got one of them at the cost of the
+    other.  The *leads* have to be centred on the block's axis, because that is where a laid run of cable
+    is and a stub anywhere else can never meet one.  The *box* has to be where a junction box belongs on
+    that particular mounting, which is bolted to the racking - and putting it in the middle to match the
+    leads stood it up through the glass in the centre of the panel, which looked like damage.
 
-    The middle is also the one place every mounting has room.  A tracked row's modules sweep a disc
-    about their tube, and the bay at the centre of the row has no module in it at all - which is where a
-    real independent-row tracker keeps its controller and its combiner for exactly this reason.
+    So they are separate: ``run`` is the length of pair from the middle of the block to the box, at a laid
+    run's own cross-section, and ``enclosure`` is where the box sits.  Both are given per mounting,
+    because the answer is different for each one - a table has a front rail to bolt it to, a tilted rack
+    has room under its high edge, and a tracked row has only the bay at the centre where no module goes.
     """
     stubs(mesh, 'harness')
-
-    # the box, straddling whatever is at the middle of the block - the mid rail of a table, the pier of
-    # a tracker, the pedestal of a dual-axis frame - the way a real one is strapped to it
-    clad_box(mesh, 'harness', (-0.13, 0.094, -0.09), (0.13, top, 0.09),
-             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.4)
-    # the compression glands the pair leaves through, on both faces the cable can leave by.
-    # Kept inside |z| < 0.11 and under y = 0.168, which is the bay a tracked row's modules leave empty:
-    # eight thousandths of a block outside it and the row grinds through them twice a day
-    harness_steel = mesh.faces('harness', 'steel')
-    for z in (-0.085, 0.085):
-        box(mesh, harness_steel, (-0.11, 0.088, z - 0.015), (0.11, min(top - 0.02, 0.168), z + 0.015), uv_scale=0.3)
+    box(mesh, mesh.faces('harness', 'dc_cable'), run[0], run[1])
+    clad_box(mesh, 'harness', enclosure[0], enclosure[1],
+             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.5)
 
 
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
@@ -394,7 +392,10 @@ def flat_table():
     clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
     clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
 
-    harness(mesh)
+    # hung on the very front edge rather than out on the glass, which is where it was when it looked
+    # right - and the pair runs back to the middle underneath the modules, out of sight
+    harness(mesh, ((-0.10, 0.055, 0.435), (0.10, 0.205, 0.50)),
+            ((-0.0625, 0.0, 0.0), (0.0625, 0.0625, 0.46)))
     return mesh
 
 
@@ -457,7 +458,9 @@ def tilted_rack():
     clad_box(mesh, 'modules', (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
     clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
 
-    harness(mesh)
+    # under the high edge, where a tilted rack has the most room and a technician can reach it
+    harness(mesh, ((-0.10, 0.0, 0.375), (0.10, 0.17, 0.465)),
+            ((-0.0625, 0.0, 0.0), (0.0625, 0.0625, 0.40)))
     return mesh
 
 
@@ -519,7 +522,10 @@ def single_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
 
-    harness(mesh)
+    # strapped to the pier inside the drive bay: the one span of a tracked row with no module over it,
+    # which is where a real independent row keeps its controller for exactly the same reason
+    harness(mesh, ((0.065, 0.05, -0.075), (0.235, 0.28, 0.075)),
+            ((0.0, 0.0, -0.0625), (0.21, 0.0625, 0.0625)))
     return mesh
 
 
@@ -585,7 +591,9 @@ def dual_axis():
         clad_box(mesh, 'rotate_elevation_modules', (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1), LAMINATE)
 
 
-    harness(mesh)
+    # on the pedestal, which is the only fixed thing a dual-axis frame has above ground
+    harness(mesh, ((0.065, 0.05, -0.075), (0.235, 0.30, 0.075)),
+            ((0.0, 0.0, -0.0625), (0.21, 0.0625, 0.0625)))
     return mesh
 
 
@@ -711,7 +719,7 @@ def combiner():
     stubs(mesh, 'entry')
     # the riser up the post, at exactly the cross-section of the run it continues - a join that changes
     # thickness halfway is the one thing a player's eye lands on
-    box(mesh, mesh.faces('post', 'dc_cable'), (-0.1875, 0.02, 0.032), (0.1875, box_y0 + 0.01, 0.126))
+    box(mesh, mesh.faces('post', 'dc_cable'), (-0.0625, 0.02, 0.032), (0.0625, box_y0 + 0.01, 0.0945))
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
     handle = mesh.add_object('rotate_handle', 'switch')

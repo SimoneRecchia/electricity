@@ -41,8 +41,8 @@ RIM = 1.0
 # cable would be a pixel wide anyway - both sizes are already symbolic - so the gauge is told apart by
 # what is drawn on it instead, which is the armour bands a heavy cable actually carries.
 CABLES = {
-    'dc_string_cable': dict(half=3.0, thick=1.5, texture='dc_string_line'),
-    'dc_trunk_cable': dict(half=3.0, thick=1.5, texture='dc_trunk_line'),
+    'dc_string_cable': dict(half=1.0, thick=1.0, texture='dc_string_line'),
+    'dc_trunk_cable': dict(half=1.0, thick=1.0, texture='dc_trunk_line'),
 }
 
 # Face textures are *names* looked up in the model's own textures map, not paths - a raw resource

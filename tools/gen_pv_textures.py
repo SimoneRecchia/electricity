@@ -590,16 +590,16 @@ def cable_line(half, thick, armoured=False):
     for index, palette in ((0, CABLE_RED), (1, CABLE_BLACK)):
         x0 = left + index * width
         for x in range(x0, x0 + width):
-            # round: dark at both edges, brightest a third of the way in from the lit side
-            offset = x - x0
-            if offset < thick and offset >= width - thick:
+            # lit on the side the light comes from and shaded away from it, by position rather than by
+            # a pixel count - a conductor only two pixels wide has no room for a count to work with,
+            # and that is the width they are drawn at now
+            if width < 2:
+                # one pixel to a conductor, which is the width they are drawn at: there is no room for
+                # a lit side and a shaded one, so it gets the body colour and the jacket reads by hue
                 colour = palette[1]
-            elif offset == 0 or offset == width - 1:
-                colour = palette[0]
-            elif offset <= thick:
-                colour = palette[2]
             else:
-                colour = palette[1]
+                across = (x - x0) / (width - 1.0)
+                colour = palette[2] if across < 0.34 else (palette[1] if across < 0.7 else palette[0])
             c.rect(x, 0, x + 1, 16, colour)
 
     # the clip: a stainless hanger over both conductors, which is what a real run is held by and
@@ -985,8 +985,8 @@ def panel(spec):
 
 
 BLOCK_TEXTURES = {
-    'dc_string_line': lambda: cable_line(3.0, 1),
-    'dc_trunk_line': lambda: cable_line(3.0, 1, armoured=True),
+    'dc_string_line': lambda: cable_line(1.0, 1),
+    'dc_trunk_line': lambda: cable_line(1.0, 1, armoured=True),
     # the same pair filling the whole tile, for the stub on an array: the OBJ pipeline maps a face
     # across a whole texture, so a pair drawn six columns wide would come out six columns wide on a
     # stub that has to match a laid run exactly
