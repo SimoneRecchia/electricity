@@ -454,6 +454,44 @@ def switch_handle():
     return c
 
 
+def dc_section():
+    """The direct-current section on the front of a cabinet: fuse ways, a rating label, a hazard strip.
+
+    Its own texture, and wide rather than square, because the compartment it goes on is wide: the door
+    texture from the combiner box was being stretched across a face nearly three times wider than tall,
+    which turned a row of six fuse ways into six long smears and put the switch escutcheon on the end
+    like an afterthought.  A picture drawn at the shape it will be seen at needs no stretching.
+    """
+    c = Canvas(64, 32)
+    base = (198, 201, 205, 255)
+    for y in range(32):
+        for x in range(64):
+            c.set(x, y, shade(base, int(noise(x, y, 71) * 8) - 4))
+
+    # the window over the fuse ways, and the carriers behind it
+    c.rect(3, 4, 61, 17, (44, 52, 58, 255))
+    c.outline(3, 4, 61, 17, shade(base, -62))
+    for i in range(9):
+        x = 6 + i * 6
+        c.rect(x, 6, x + 4, 15, (168, 172, 178, 255))
+        c.rect(x, 6, x + 4, 8, (206, 158, 62, 255))
+        c.rect(x + 3, 6, x + 4, 15, shade((168, 172, 178, 255), -46))
+
+    # the rating label, and the live-parts warning beside it - the two things every section carries
+    c.rect(3, 21, 30, 29, shade(base, 24))
+    c.outline(3, 21, 30, 29, shade(base, -44))
+    for x in range(6, 28, 3):
+        c.rect(x, 24, x + 2, 26, shade(base, -34))
+
+    c.rect(34, 21, 61, 29, (222, 186, 40, 255))
+    c.outline(34, 21, 61, 29, (32, 30, 24, 255))
+    for i in range(5):
+        x = 37 + i * 5
+        c.rect(x, 23, x + 2, 27, (32, 30, 24, 255))
+
+    return c
+
+
 def vent():
     """A cooling grille: dark behind, with the slats catching the light.
 
@@ -1014,6 +1052,7 @@ BLOCK_TEXTURES = {
     'dc_trench': trench,
     'dc_jacket': cable_jacket,
     'pv_combiner_door': combiner_door,
+    'pv_dc_section': dc_section,
     'pv_switch': switch_handle,
     'pv_module': module,
     'pv_module_back': module_back,

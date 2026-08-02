@@ -50,6 +50,7 @@ MATERIALS = {
     'dc_cable': 'dc_harness.png',
     'dc_jacket': 'dc_jacket.png',
     'combiner_door': 'pv_combiner_door.png',
+    'dc_section': 'pv_dc_section.png',
     'switch': 'pv_switch.png',
 }
 
@@ -653,11 +654,14 @@ def inverter():
     # difference between a machine that can take a string and one that cannot, and it needs to be
     # visible - fitting a box used to change nothing at all, so a player could not tell whether the
     # click had worked.
-    clad_box(mesh, 'section', (-0.40, 0.08, -0.375), (0.40, 0.36, -0.335),
-             {'north': 'combiner_door', 'up': 'cabinet_top', '*': 'cabinet'})
+    # Narrower than the cabinet and drawn at its own aspect, so nothing is stretched.  The lid of a
+    # ledge four hundredths of a block deep gets plain sheet rather than the bolted frame a real lid
+    # carries: a frame squeezed into a sliver that thin reads as damage.
+    clad_box(mesh, 'section', (-0.30, 0.08, -0.375), (0.30, 0.40, -0.335),
+             {'north': 'dc_section', 'up': 'frame', '*': 'cabinet'})
     glands = mesh.faces('section', 'steel')
-    for i in range(6):
-        cylinder(mesh, glands, (-0.30 + i * 0.12, 0.06, -0.355), 'y', 0.016, 0.025, sides=6,
+    for i in range(5):
+        cylinder(mesh, glands, (-0.22 + i * 0.11, 0.06, -0.355), 'y', 0.016, 0.025, sides=6,
                  uv_scale=0.2, caps=glands)
 
     # where the direct current comes in, one run per side, drawn only for the sides it comes in from
@@ -838,7 +842,7 @@ MODELS = [
     ('pv_tilt', tilted_rack, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable', 'dc_jacket', 'combiner_door')),
+    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable', 'dc_jacket', 'dc_section')),
     ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'switch', 'dc_cable', 'dc_jacket')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
