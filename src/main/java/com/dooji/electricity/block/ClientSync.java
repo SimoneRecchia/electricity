@@ -18,8 +18,21 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  */
 final class ClientSync {
 	private static final int INTERVAL_TICKS = 10;
+	/**
+	 * Nothing has been sent yet, which is a state and not a time.
+	 *
+	 * Writing it as a very old time instead is a trap, and this fell into it: with lastTick at
+	 * Long.MIN_VALUE, {@code now - lastTick} overflows and comes back *negative*, so the gate reads as
+	 * shut for ever and lastTick is never written. Every machine went quiet to its clients - the server
+	 * kept tracking the sun perfectly and no client was ever told, so a tracker stood flat at the angle
+	 * its chunk packet happened to carry and changing the time did nothing at all.
+	 *
+	 * Tested against a sentinel rather than subtracted from, so the arithmetic never has to be trusted
+	 * near the ends of the range.
+	 */
+	private static final long NEVER = Long.MIN_VALUE;
 
-	private long lastTick = Long.MIN_VALUE;
+	private long lastTick = NEVER;
 
 	/** Sends now if the gate is open, and answers whether it went. */
 	boolean throttled(BlockEntity blockEntity) {
@@ -27,7 +40,7 @@ final class ClientSync {
 		if (level == null || level.isClientSide()) return false;
 
 		long now = level.getGameTime();
-		if (now - lastTick < INTERVAL_TICKS) return false;
+		if (lastTick != NEVER && now - lastTick < INTERVAL_TICKS) return false;
 
 		lastTick = now;
 		now(blockEntity);
