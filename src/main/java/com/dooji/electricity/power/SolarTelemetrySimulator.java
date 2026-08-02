@@ -91,6 +91,7 @@ public final class SolarTelemetrySimulator {
 			boolean stoppedByRedstone,
 			int arraysConnected,
 			int stringsConnected,
+			int combinersConnected,
 			int stringCapacity,
 			double dcCurrentHeadroom,
 			double dcAcRatio,
@@ -131,6 +132,7 @@ public final class SolarTelemetrySimulator {
 		out.put(SolarTelemetry.STOPPED_BY_REDSTONE, s.stoppedByRedstone());
 		out.put(SolarTelemetry.ARRAYS_CONNECTED, s.arraysConnected());
 		out.put(SolarTelemetry.STRINGS_CONNECTED, s.stringsConnected());
+		out.put(SolarTelemetry.COMBINERS_CONNECTED, s.combinersConnected());
 		out.put(SolarTelemetry.STRING_CAPACITY, s.stringCapacity());
 		out.put(SolarTelemetry.DC_CURRENT_HEADROOM, s.dcCurrentHeadroom());
 

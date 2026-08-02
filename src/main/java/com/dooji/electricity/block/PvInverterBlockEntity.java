@@ -14,7 +14,9 @@ import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.compat.energy.EnergyBridge;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
+import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.main.registry.CableCatalog;
+import com.dooji.electricity.main.registry.CombinerCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -30,6 +32,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.LongTag;
 import net.minecraft.network.protocol.Packet;
@@ -92,7 +95,17 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private static final long TICKS_PER_DAY = 24000L;
 
 	private final List<BlockPos> arrays = new ArrayList<>();
+	/**
+	 * The combiner boxes wired to this cabinet on trunk cable.
+	 *
+	 * A second list rather than one of collectors, because the two are gathered from different networks
+	 * and counted against the same limits: an array brings its own strings and a box brings the strings
+	 * behind it, and both fill the same terminals.
+	 */
+	private final List<BlockPos> combiners = new ArrayList<>();
 	private int rescanCountdown = 0;
+	/** The box fitted inside the cabinet, if any. Its ways are what a busbar machine's string inputs become. */
+	private CombinerSpec integrated = null;
 
 	private double availableDcKw = 0.0;
 	private double dcPowerKw = 0.0;
@@ -337,6 +350,17 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			referenceModuleTempC = live.get(0).moduleTempC();
 		}
 
+		List<PvCombinerBlockEntity> liveBoxes = new ArrayList<>();
+		for (BlockPos pos : combiners) {
+			PvCombinerBlockEntity box = LoadedBlockEntities.find(serverLevel, pos, PvCombinerBlockEntity.class);
+			if (box == null) continue;
+			if (!worldPosition.equals(box.inverterPos())) continue;
+
+			liveBoxes.add(box);
+			availableDcKw += box.offeredDcKw();
+			highestStringVoltage = Math.max(highestStringVoltage, box.busVoltageAtInverter());
+		}
+
 		boolean allowed = isRunning();
 		// below the startup voltage there is nothing to track: the strings are lit but not lit enough,
 		// which is why a real plant sits at exactly zero for a few minutes after sunrise rather than
@@ -365,6 +389,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				array.setMpptFraction(0.0);
 			}
 
+			for (PvCombinerBlockEntity box : liveBoxes) {
+				box.setMpptFraction(0.0);
+			}
+
 			cabinetTempC = spec.cabinetTemperature(ambientTempC, 0.0);
 			return;
 		}
@@ -381,6 +409,12 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		double fraction = availableDcKw <= 0.0 ? 0.0 : Mth.clamp(dcPowerKw / availableDcKw, 0.0, 1.0);
 		for (PvArrayBlockEntity array : live) {
 			array.setMpptFraction(fraction);
+		}
+
+		// the boxes get the same fraction and hand it on to their own strings, so a clipping cabinet is
+		// visible in the current reading of every module behind every box
+		for (PvCombinerBlockEntity box : liveBoxes) {
+			box.setMpptFraction(fraction);
 		}
 
 		dcVoltage = highestStringVoltage;
@@ -407,6 +441,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private void rescan(ServerLevel serverLevel, InverterSpec spec) {
 		releaseArrays();
 		arrays.clear();
+		combiners.clear();
 		stringsConnected = 0;
 
 		// two limits, and which one binds depends on what the modules are. The terminal count is the
@@ -426,9 +461,15 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			double current = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * strings;
 
 			// three limits off the same datasheet, and any of them can be the one that bites
-			if (stringsConnected + strings > spec.stringInputs()) continue;
+			if (stringsConnected + strings > stringInputs(spec)) continue;
 			if (currentConnected + current > currentCeiling) continue;
 			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;
+			// and the fitted box's own four, when the terminals a string is going into are its
+			if (integrated != null
+					&& integrated.accepts(wanted, stringsConnected, currentConnected, integrated.outputAmps()) != CombinerSpec.Refusal.NONE) {
+				continue;
+			}
+
 			if (!array.claim(worldPosition, reach, CableCatalog.STRING_6)) continue;
 
 			arrays.add(array.getBlockPos().immutable());
@@ -437,15 +478,71 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			dcConnected += wanted.dcPowerKw();
 		}
 
+		// then the boxes, on the other cable. Their strings fill the same terminals, because that is what
+		// a terminal count on a central machine means: strings arriving through combiner boxes
+		for (DcNetwork.Reach reach : reachableCombiners(serverLevel, spec)) {
+			PvCombinerBlockEntity box = LoadedBlockEntities.find(serverLevel, reach.pos(), PvCombinerBlockEntity.class);
+			if (box == null) continue;
+
+			if (stringsConnected + box.stringsConnected() > stringInputs(spec)) continue;
+			if (currentConnected + box.designAmps() > currentCeiling) continue;
+			if (dcConnected + box.nameplateDcKw() > spec.maxDcPowerKw()) continue;
+			if (!box.claim(worldPosition, reach, CableCatalog.TRUNK_240)) continue;
+
+			combiners.add(box.getBlockPos().immutable());
+			stringsConnected += box.stringsConnected();
+			currentConnected += box.designAmps();
+			dcConnected += box.nameplateDcKw();
+		}
+
 		stringCurrentHeadroom = currentCeiling - currentConnected;
+	}
+
+	/**
+	 * String terminals the machine has to offer.
+	 *
+	 * Its own, unless it has none and a box has been fitted - in which case it has the box's, which is
+	 * the difference between a central inverter with a direct-current section and one without.
+	 */
+	private int stringInputs(InverterSpec spec) {
+		if (spec.stringTerminals() || integrated == null) return spec.stringInputs();
+
+		return Math.min(spec.stringInputs(), integrated.fusedInputs());
 	}
 
 	/** Every set of leads a run of string cable reaches from this cabinet, shortest run first. */
 	private List<DcNetwork.Reach> reachableArrays(ServerLevel serverLevel, InverterSpec spec) {
-		if (!spec.stringTerminals()) return List.of();
+		if (!spec.stringTerminals() && integrated == null) return List.of();
 
 		return DcNetwork.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
 				PvArrayBlock::harnessed, ElectricityServerConfig.maxCableRun());
+	}
+
+	/** Every combiner box a run of trunk cable reaches, shortest run first. */
+	private List<DcNetwork.Reach> reachableCombiners(ServerLevel serverLevel, InverterSpec spec) {
+		if (!spec.trunkTerminals()) return List.of();
+
+		return DcNetwork.reachable(serverLevel, worldPosition, CableCatalog.TRUNK_240,
+				state -> state.getBlock() instanceof PvCombinerBlock, ElectricityServerConfig.maxCableRun());
+	}
+
+	/** The box fitted inside the cabinet, or null. */
+	@Nullable
+	public CombinerSpec integratedCombiner() {
+		return integrated;
+	}
+
+	/**
+	 * Records the box a player has just worked into the cabinet.
+	 *
+	 * The block state already says there is one - a cable has to be able to see that while a chunk is
+	 * being meshed - and this is which one, because that decides how many strings rather than whether any.
+	 */
+	public void fitCombiner(CombinerSpec spec) {
+		integrated = spec;
+		rescanCountdown = 0;
+		setChanged();
+		ClientSync.now(this);
 	}
 
 	/**
@@ -485,7 +582,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				spec, acPowerKw, dcPowerKw, availableDcKw, dcVoltage, dcCurrent, efficiency, cabinetTempC,
 				ambientTempC, referenceModuleTempC, referenceIrradiance, energyTodayKwh, energyLifetimeKwh,
 				activePowerLimitKw, powerFactorSetpoint, isRunning(), clipping, derating,
-				stoppedByComputer, stoppedByPlayer, isStoppedByRedstone(), arrays.size(), stringsConnected,
+				stoppedByComputer, stoppedByPlayer, isStoppedByRedstone(), arrays.size(), stringsConnected, combiners.size(),
 				stringCapacity(), stringCurrentHeadroom, dcAcRatio(), serverLevel.isRainingAt(worldPosition.above())));
 	}
 
@@ -812,6 +909,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 
 		tag.put("insulatorIds", ids);
+
+		long[] boxes = new long[combiners.size()];
+		for (int i = 0; i < boxes.length; i++) {
+			boxes[i] = combiners.get(i).asLong();
+		}
+
+		tag.putLongArray("combiners", boxes);
+		if (integrated != null) tag.putString("combiner", integrated.id().toString());
 	}
 
 	@Override
@@ -848,6 +953,13 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		for (int i = 0; i < positions.size(); i++) {
 			arrays.add(BlockPos.of(((LongTag) positions.get(i)).getAsLong()));
 		}
+
+		combiners.clear();
+		for (long packed : tag.getLongArray("combiners")) {
+			combiners.add(BlockPos.of(packed));
+		}
+
+		integrated = tag.contains("combiner") ? CombinerCatalog.byId(new ResourceLocation(tag.getString("combiner"))) : null;
 
 		ensureArraySizes();
 		if (tag.contains("wirePositions")) {
@@ -928,6 +1040,13 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			PvArrayBlockEntity array = LoadedBlockEntities.find(level, pos, PvArrayBlockEntity.class);
 			if (array != null) {
 				array.releaseClaim(worldPosition);
+			}
+		}
+
+		for (BlockPos pos : combiners) {
+			PvCombinerBlockEntity box = LoadedBlockEntities.find(level, pos, PvCombinerBlockEntity.class);
+			if (box != null) {
+				box.releaseClaim(worldPosition);
 			}
 		}
 	}

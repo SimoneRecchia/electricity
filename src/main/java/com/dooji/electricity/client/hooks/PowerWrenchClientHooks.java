@@ -4,6 +4,7 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
+import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -12,6 +13,7 @@ import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.screen.MetStationScreen;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
 import com.dooji.electricity.client.screen.PvArrayScreen;
+import com.dooji.electricity.client.screen.PvCombinerScreen;
 import com.dooji.electricity.client.screen.PvInverterScreen;
 import com.dooji.electricity.client.screen.WindTurbineScreen;
 import javax.annotation.Nullable;
@@ -68,6 +70,8 @@ public final class PowerWrenchClientHooks {
 			mc.setScreen(new PvInverterScreen(target));
 		} else if (blockEntity instanceof PvArrayBlockEntity) {
 			mc.setScreen(new PvArrayScreen(target));
+		} else if (blockEntity instanceof PvCombinerBlockEntity) {
+			mc.setScreen(new PvCombinerScreen(target));
 		} else if (blockEntity instanceof MetStationBlockEntity) {
 			mc.setScreen(new MetStationScreen(target));
 		} else {
@@ -162,6 +166,6 @@ public final class PowerWrenchClientHooks {
 	private static boolean isElectricBlock(BlockEntity blockEntity) {
 		return blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof UtilityPoleBlockEntity
 				|| blockEntity instanceof PowerBoxBlockEntity || blockEntity instanceof PvInverterBlockEntity || blockEntity instanceof PvArrayBlockEntity
-				|| blockEntity instanceof MetStationBlockEntity;
+				|| blockEntity instanceof MetStationBlockEntity || blockEntity instanceof PvCombinerBlockEntity;
 	}
 }

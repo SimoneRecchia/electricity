@@ -370,6 +370,48 @@ def cabinet_top():
     return c
 
 
+def combiner_door():
+    """The door of a combiner box: the fuse window, the label, and the switch escutcheon.
+
+    A field combiner's door is the one thing on a solar farm that is *meant* to be read at close
+    range - it carries the number of ways, the fuse rating, and the notice telling you the strings
+    are still live with the switch open, because they are: a photovoltaic string is lit whenever
+    the sun is on it and there is nothing at the array end to turn off.
+    """
+    size = 32
+    c = Canvas(size, size)
+    base = (198, 201, 205, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(base, int(noise(x, y, 43) * 8) - 4))
+
+    # the window over the fuse ways, with the fuse carriers behind it
+    c.rect(4, 5, 22, 17, (44, 52, 58, 255))
+    c.outline(4, 5, 22, 17, shade(base, -62))
+    for i in range(6):
+        x = 6 + i * 3
+        c.rect(x, 7, x + 2, 15, (168, 172, 178, 255))
+        c.rect(x, 7, x + 2, 8, (206, 158, 62, 255))
+
+    # the hazard label: a live-parts warning, which is the one notice a combiner box always carries
+    c.rect(4, 20, 22, 27, (222, 186, 40, 255))
+    c.outline(4, 20, 22, 27, (32, 30, 24, 255))
+    for i in range(4):
+        x = 6 + i * 4
+        c.rect(x, 22, x + 2, 25, (32, 30, 24, 255))
+
+    # the escutcheon the switch handle turns in, and its two marked positions
+    c.rect(24, 9, 30, 21, shade(base, -34))
+    c.outline(24, 9, 30, 21, shade(base, -58))
+    c.rect(26, 11, 28, 13, (58, 138, 62, 255))
+    c.rect(26, 17, 28, 19, (176, 54, 46, 255))
+
+    # the hinges down the far edge
+    for y in (6, 23):
+        c.rect(0, y, 3, y + 3, shade(base, -50))
+    return c
+
+
 def vent():
     """A cooling grille: dark behind, with the slats catching the light.
 
@@ -548,6 +590,36 @@ def trench():
 
 
 # ------------------------------------------------------------- item textures
+
+def item_combiner():
+    """A box on a post with a red handle on it, which is what one looks like from ten metres."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+
+    # the post and its footing
+    c.rect(7, 11, 9, 15, mid)
+    c.rect(7, 11, 8, 15, light)
+    c.rect(5, 14, 11, 15, dark)
+
+    # the enclosure, lit from the top left the way every other item here is
+    c.rect(2, 3, 14, 12, mid)
+    c.rect(2, 3, 14, 4, light)
+    c.rect(2, 11, 14, 12, dark)
+    c.rect(13, 3, 14, 12, dark)
+
+    # the fuse window, with the carriers behind it
+    c.rect(4, 5, 10, 9, (48, 56, 62, 255))
+    for x in range(4, 10, 2):
+        c.rect(x, 5, x + 1, 9, (170, 174, 180, 255))
+        c.set(x, 5, (208, 160, 64, 255))
+
+    # the handle, and the glands the strings come in through
+    c.rect(11, 5, 12, 9, (176, 54, 46, 255))
+    c.set(11, 5, (214, 96, 84, 255))
+    for x in range(3, 13, 3):
+        c.set(x, 12, dark)
+    return c
+
 
 def item_string_cable():
     """A coil of solar cable, which is how a reel of 6 mm² arrives.
@@ -801,6 +873,8 @@ PANELS = {
     'pv_inverter': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'pv_array': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
+    # shorter than the rest, because a combiner box is switchgear: one bar, and nothing to control
+    'pv_combiner': dict(width=288, height=136, bar_x=12, bar_width=264, bars=(62,), separators=(40, 78)),
 }
 
 
@@ -851,6 +925,7 @@ BLOCK_TEXTURES = {
     'dc_string_line': lambda: cable_line(3.0, 1),
     'dc_trunk_line': lambda: cable_line(5.0, 2),
     'dc_trench': trench,
+    'pv_combiner_door': combiner_door,
     'pv_module': module,
     'pv_module_back': module_back,
     'pv_module_edge': module_edge,
@@ -867,6 +942,7 @@ BLOCK_TEXTURES = {
 }
 
 ITEM_TEXTURES = {
+    'pv_combiner': item_combiner,
     'dc_string_cable': item_string_cable,
     'dc_trunk_cable': item_trunk_cable,
     'power_wrench': item_wrench,

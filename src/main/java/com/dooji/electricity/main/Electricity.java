@@ -1,6 +1,7 @@
 package com.dooji.electricity.main;
 
 import com.dooji.electricity.api.power.ElectricityCapabilities;
+import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
@@ -14,6 +15,8 @@ import com.dooji.electricity.block.MetStationBlock;
 import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PvArrayBlock;
+import com.dooji.electricity.block.PvCombinerBlock;
+import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvInverterBlock;
 import com.dooji.electricity.block.PvInverterBlockEntity;
@@ -28,6 +31,7 @@ import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.block.WorkbenchBlock;
 import com.dooji.electricity.compat.computercraft.ComputerCraftBridge;
 import com.dooji.electricity.item.DcCableItem;
+import com.dooji.electricity.item.PvCombinerBlockItem;
 import com.dooji.electricity.item.ItemWire;
 import com.dooji.electricity.item.PowerWrenchItem;
 import com.dooji.electricity.item.PvArrayBlockItem;
@@ -38,6 +42,7 @@ import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.menu.WorkbenchMenu;
 import com.dooji.electricity.recipe.WorkbenchRecipe;
 import com.dooji.electricity.main.registry.CableCatalog;
+import com.dooji.electricity.main.registry.CombinerCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.PvCatalog;
@@ -161,6 +166,15 @@ public class Electricity {
 	public static final Map<ResourceLocation, RegistryObject<Item>> DC_CABLE_ITEMS = registerCableItems();
 
 	/**
+	 * A combiner box per product: the switchgear between a field of strings and one cabinet.
+	 *
+	 * The block a plant needs before it can be large, and the one a central inverter needs before it can
+	 * take a string at all.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_COMBINER_BLOCKS = registerCombinerBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_COMBINER_ITEMS = registerCombinerItems();
+
+	/**
 	 * A meteorological mast: the seven instruments a plant measures the sky with.
 	 *
 	 * One block rather than one per instrument, because a real plant has one or two masts for the whole
@@ -190,6 +204,35 @@ public class Electricity {
 		}
 
 		return items;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerCombinerBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (CombinerSpec spec : CombinerCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvCombinerBlock(combinerProperties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerCombinerItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (CombinerSpec spec : CombinerCatalog.all()) {
+			RegistryObject<Block> block = PV_COMBINER_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
+					() -> new PvCombinerBlockItem((PvCombinerBlock) block.get(), new Item.Properties())));
+		}
+
+		return items;
+	}
+
+	private static BlockBehaviour.Properties combinerProperties() {
+		return Block.Properties.of().strength(1.5f, 6.0f).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	/** Every combiner block, so one block entity type serves the whole catalogue. */
+	private static Block[] pvCombinerBlocks() {
+		return PV_COMBINER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
 
 	private static BlockBehaviour.Properties arrayProperties() {
@@ -325,6 +368,10 @@ public class Electricity {
 					output.accept(DC_CABLE_ITEMS.get(spec.id()).get());
 				}
 
+				for (CombinerSpec spec : CombinerCatalog.all()) {
+					output.accept(PV_COMBINER_ITEMS.get(spec.id()).get());
+				}
+
 				for (InverterSpec spec : InverterCatalog.all()) {
 					output.accept(PV_INVERTER_ITEMS.get(spec.id()).get());
 				}
@@ -348,6 +395,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<ElectricLampBlockEntity>> ELECTRIC_LAMP_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<PvArrayBlockEntity>> PV_ARRAY_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<PvInverterBlockEntity>> PV_INVERTER_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<PvCombinerBlockEntity>> PV_COMBINER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<MetStationBlockEntity>> MET_STATION_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
@@ -389,6 +437,8 @@ public class Electricity {
 		PV_ARRAY_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_array", () -> BlockEntityType.Builder.of(PvArrayBlockEntity::new, pvArrayBlocks()).build(null));
 
 		PV_INVERTER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_inverter", () -> BlockEntityType.Builder.of(PvInverterBlockEntity::new, pvInverterBlocks()).build(null));
+
+		PV_COMBINER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_combiner", () -> BlockEntityType.Builder.of(PvCombinerBlockEntity::new, pvCombinerBlocks()).build(null));
 
 		MET_STATION_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("met_station", () -> BlockEntityType.Builder.of(MetStationBlockEntity::new, MET_STATION_BLOCK.get()).build(null));
 

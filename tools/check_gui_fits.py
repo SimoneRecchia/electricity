@@ -209,7 +209,7 @@ def main():
             problems.append('met mast: "%s" needs %d of %d' % (text, got, inner))
 
     for name, prefix in (('PvArrayScreen.java', 'pv_array'), ('PvInverterScreen.java', 'pv_inverter'),
-                         ('WindTurbineScreen.java', 'wind_turbine')):
+                         ('PvCombinerScreen.java', 'pv_combiner'), ('WindTurbineScreen.java', 'wind_turbine')):
         source = open(os.path.join(SCREENS, name)).read()
         where = constants(source)
         inner = where.get('WIDTH', where.get('IMAGE_WIDTH', 0)) - 2 * 8

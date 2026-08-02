@@ -23,6 +23,9 @@
     "electricity:inverter_110",
     "electricity:inverter_350",
     "electricity:inverter_2500",
-    "electricity:met_station"
+    "electricity:met_station",
+    "electricity:pv_combiner_6",
+    "electricity:pv_combiner_16",
+    "electricity:pv_combiner_32"
   ]
 }

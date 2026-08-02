@@ -48,6 +48,8 @@ MATERIALS = {
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
     'dc_cable': 'dc_string_line.png',
+    'combiner_door': 'pv_combiner_door.png',
+    'warning': 'warning.png',
 }
 
 # Which material each face of a laminate carries.  A module is not one material: the sun
@@ -586,6 +588,61 @@ def inverter():
     return mesh
 
 
+# ------------------------------------------------------- the combiner box
+
+def combiner():
+    """An enclosure on a post, with the switch that takes a group of strings off the cabinet.
+
+    Authored at the size the collision box claims, which is a box about waist high on this mod's
+    scale rather than the eight hundred millimetres a real one is.  Everything in this mod is
+    drawn for legibility rather than to scale - a real combiner at a block to ten metres would be
+    one pixel - and the collision shape agrees with the drawing, which is the part that matters.
+
+    The handle is its own rotating group so the renderer can put it up or down off the block
+    state.  A load-break switch reads at a distance, which is the whole reason it is drawn: a
+    player walking a field can see which group is isolated.
+    """
+    mesh = Mesh()
+    box_y0, box_y1 = 0.38, 0.78
+
+    # the footing and the post, because a field combiner stands on one rather than lying on the ground
+    plinth = mesh.add_object('post', 'steel')
+    box(mesh, plinth, (-0.10, 0.0, -0.08), (0.10, 0.03, 0.08), uv_scale=0.4)
+    cylinder(mesh, plinth, (0.0, 0.21, 0.0), 'y', 0.032, 0.18, uv_scale=0.3,
+             caps=mesh.faces('post', 'steel_end'))
+
+    # the enclosure: a lid that is a lid, and side sheet everywhere else
+    clad_box(mesh, 'enclosure', (-0.22, box_y0, -0.10), (0.22, box_y1, 0.10),
+             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.8)
+
+    # the door, with the fuse window and the rating label on the one face anybody stands at
+    clad_box(mesh, 'door', (-0.19, box_y0 + 0.03, -0.115), (0.19, box_y1 - 0.03, -0.10),
+             {'north': 'combiner_door', '*': 'frame'}, uv_scale=0.9)
+
+    # the gland plate underneath, where every string arrives: one row of them, which is what the
+    # underside of a real box looks like and the only view that says how many ways it has
+    clad_box(mesh, 'glands', (-0.20, box_y0 - 0.025, -0.075), (0.20, box_y0, 0.075),
+             {'down': 'steel_end', '*': 'steel'}, uv_scale=0.4)
+    glands = mesh.faces('glands', 'steel')
+    for i in range(6):
+        x = -0.155 + i * 0.062
+        cylinder(mesh, glands, (x, box_y0 - 0.05, 0.0), 'y', 0.014, 0.025, sides=6, uv_scale=0.2,
+                 caps=glands)
+
+    # and the one heavy gland the trunk leaves through, on the end
+    trunk = mesh.faces('glands', 'steel_end')
+    cylinder(mesh, trunk, (0.245, box_y0 + 0.08, 0.0), 'x', 0.03, 0.025, uv_scale=0.3, caps=trunk)
+
+    pivot(mesh, 'handle', (0.15, box_y0 + 0.12, -0.115))
+
+    # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
+    handle = mesh.add_object('rotate_handle', 'warning')
+    cylinder(mesh, handle, (0.15, box_y0 + 0.12, -0.128), 'z', 0.018, 0.014, sides=6, uv_scale=0.3,
+             caps=handle)
+    box(mesh, handle, (0.135, box_y0 + 0.12, -0.145), (0.165, box_y0 + 0.20, -0.13), uv_scale=0.3)
+    return mesh
+
+
 # --------------------------------------------------------- the met station
 
 def met_mast():
@@ -692,6 +749,7 @@ MODELS = [
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument')),
+    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'warning')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
 

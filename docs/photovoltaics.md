@@ -38,6 +38,50 @@ The central machine takes **nothing** here however much cable you lay to it. It 
 rather than fused string terminals, which is what a central inverter is, and what fills the gap is a
 combiner box.
 
+### The combiner box
+
+Two reasons a plant has them, and they are both arithmetic.
+
+**Fuses.** A string needs one, a string inverter's own terminals *are* its fuses, and a central
+inverter has neither. So the central machine cannot take a single string until it is given some — and
+there are two ways to do that, both of which real vendors sell:
+
+* Put a **box on a post** in the field, run string cable from the arrays to it, and one **trunk
+  cable** from the box to the cabinet.
+* Or **right-click the cabinet with the box** to fit it inside as a DC section. Then strings come
+  straight in, and the cabinet has the box's ways rather than its own two hundred and eighty-eight.
+  Fitting one into a *string* inverter is refused out loud: its terminals already are its fuses, and a
+  box inside one would be a second set in series with the first.
+
+**Copper.** Sixteen strings each running two hundred metres of 6 mm² lose nearly three percent. The
+same sixteen paralleled at the end of the row and sent down one 240 mm² trunk lose one. The box pays
+for itself in cable, which is why they exist on plants whose inverters do not need them.
+
+An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
+sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's
+wording, because it is true: *the strings are still live*. There is nothing at the array end to turn
+off while the sun is on it.
+
+| | CB-6 | CB-16 | CB-32 |
+|---|---|---|---|
+| Ways | 6 | 16 | 32 |
+| Insulation | 1000 V | 1500 V | 1500 V |
+| Fuse holders to | 20 A | 30 A | 30 A |
+| Output switch | 125 A | 400 A | 630 A |
+| String monitoring | — | yes | yes |
+| Ingress | IP65 | IP65 | IP66 |
+
+Four things off that datasheet can turn a row away, and the box's panel names which one. The
+interesting one is the **holders**. IEC 62548 wants a string fuse at 1.4 times the string's
+short-circuit current; a 210 mm cell module makes 18.75 A of it, so that string needs a 26 A fuse and
+the next standard size up is 30. The six-way box stops at 20 — it was a perfectly ordinary
+specification when a module made nine amps — so it takes the two flat tables and refuses the tracker
+outright. The cheap box is the wrong box, and the reason is on both datasheets.
+
+The fifth limit is not on the box's datasheet at all, it is on the cable's: thirty-two high-current
+strings is 566 A, which one 240 mm² pair carries in free air and does **not** carry buried. Filling a
+thirty-two way box and then digging its trunk in costs a string, and the box says so.
+
 A **Power Wrench** opens a panel on any of them. The panels are 288 pixels wide, which is not
 a round number either: it is what two columns of a label and a right-aligned value actually
 measure. `tools/check_gui_fits.py` measures the real font against the real layout constants and

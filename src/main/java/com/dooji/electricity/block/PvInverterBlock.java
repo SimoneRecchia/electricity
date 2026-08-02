@@ -1,12 +1,15 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.main.registry.CombinerCatalog;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -19,6 +22,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -39,6 +43,19 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * able to open it.
  */
 public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+	/**
+	 * A combiner box fitted inside the cabinet, giving it fused string terminals it did not have.
+	 *
+	 * A real option on a real product: a central inverter's direct-current section is a factory-fitted
+	 * combiner, and the *virtual central* arrangement - boxes spread through the field, machines together
+	 * at one end - is the other way of solving the same problem. So both are here, and this is the first.
+	 *
+	 * A block state rather than block entity data because a cable has to know whether the machine takes
+	 * strings while a chunk is being meshed. Which box it is lives in the block entity, since that only
+	 * decides how many strings, not whether any.
+	 */
+	public static final BooleanProperty COMBINER = BooleanProperty.create("combiner");
+
 	/** A wall-mounted residential machine: shallow, and not much taller than it is wide. */
 	private static final VoxelShape SMALL_SHAPE = Block.box(2.0, 0.0, 4.0, 14.0, 12.0, 12.0);
 	/** A commercial cabinet standing on the ground. */
@@ -56,7 +73,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	public PvInverterBlock(Properties properties, InverterSpec spec) {
 		super(properties.sound(SoundType.METAL));
 		this.spec = spec;
-		registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
+		registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH).setValue(COMBINER, false));
 	}
 
 	public InverterSpec spec() {
@@ -65,7 +82,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(FACING);
+		builder.add(FACING, COMBINER);
 	}
 
 	/**
@@ -78,7 +95,28 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	 */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
-		return cable.trunk() ? spec.trunkTerminals() : spec.stringTerminals();
+		if (cable.trunk()) return spec.trunkTerminals();
+
+		return spec.stringTerminals() || state.getValue(COMBINER);
+	}
+
+	/**
+	 * Whether a combiner box can be worked into this cabinet, and the state it takes when it is.
+	 *
+	 * Only a machine that has no fused string terminals of its own, which is the central one. Refusing it
+	 * on the others is not pedantry: a string inverter's terminals *are* its fuses, so a box inside one
+	 * would be a second set of fuses in series with the first, and no vendor sells that.
+	 */
+	@Nullable
+	public BlockState withCombinerFitted(BlockState state) {
+		if (spec.stringTerminals() || state.getValue(COMBINER)) return null;
+
+		return state.setValue(COMBINER, true);
+	}
+
+	/** Whether a cabinet has a direct-current section in it, asked of the state so a cable can ask too. */
+	public static boolean hasCombiner(BlockState state) {
+		return state.getBlock() instanceof PvInverterBlock && state.getValue(COMBINER);
 	}
 
 	@Override
@@ -126,6 +164,11 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 				// there and would wait for an operating point that never comes
 				inverter.releaseArrays();
 				Electricity.wireManager.removeConnectionsForInsulators(serverLevel, inverter.getInsulatorIds());
+				// and the box out of the cabinet, so rearranging a plant is not a tax on the parts
+				CombinerSpec fitted = inverter.integratedCombiner();
+				if (fitted != null) {
+					popResource(level, pos, new ItemStack(Electricity.PV_COMBINER_ITEMS.get(fitted.id()).get()));
+				}
 			}
 		}
 

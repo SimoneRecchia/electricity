@@ -53,6 +53,8 @@ public final class SolarTelemetry {
 	public static final String STOPPED_BY_REDSTONE = "stoppedByRedstone";
 	public static final String ARRAYS_CONNECTED = "arraysConnected";
 	public static final String STRINGS_CONNECTED = "stringsConnected";
+	/** Combiner boxes wired to the cabinet on trunk cable. Zero on a plant wired string-direct. */
+	public static final String COMBINERS_CONNECTED = "combinersConnected";
 	/** String terminals the machine has. Arrays past this are not wired in, however much capacity is left. */
 	public static final String STRING_CAPACITY = "stringCapacity";
 	/**
@@ -184,7 +186,7 @@ public final class SolarTelemetry {
 	private static final Map<String, Telemetry.Kind> INVERTER = Telemetry.tags()
 			.measured(ACTIVE_POWER, PV_ACTIVE_POWER, AVAILABLE_DC_POWER, ACTIVE_ENERGY, ACTIVE_ENERGY_TODAY, AMBIENT_TEMP, CABINET_TEMP, MODULE_TEMP,
 					IRRADIATION, ACTIVE_POWER_LIMIT, POWER_LIMITATION_ACTIVE, RUNNING, CLIPPING, DERATING, STOPPED_BY_COMPUTER, STOPPED_BY_PLAYER,
-					STOPPED_BY_REDSTONE, ARRAYS_CONNECTED, STRINGS_CONNECTED, STRING_CAPACITY, DC_CURRENT_HEADROOM)
+					STOPPED_BY_REDSTONE, ARRAYS_CONNECTED, STRINGS_CONNECTED, COMBINERS_CONNECTED, STRING_CAPACITY, DC_CURRENT_HEADROOM)
 			.derived(APPARENT_POWER, REACTIVE_POWER, POWER_FACTOR, FREQUENCY, GRID_VOLTAGE, GRID_CURRENT, V1, V2, V3, V12, V23, V31, I1, I2, I3,
 					DC_VOLTAGE, DC_CURRENT, EFFICIENCY, PERFORMANCE_RATIO, DC_AC_RATIO)
 			.simulated(HEAT_SINK_TEMP, INTERNAL_AIR_TEMP, INSULATION_RESISTANCE, DC_BUS_VOLTAGE, FAN_SPEED)

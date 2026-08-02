@@ -8,6 +8,7 @@ import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
 import com.dooji.electricity.client.render.block.PowerBoxRenderer;
 import com.dooji.electricity.client.render.block.PvArrayRenderer;
+import com.dooji.electricity.client.render.block.PvCombinerRenderer;
 import com.dooji.electricity.client.render.block.PvInverterRenderer;
 import com.dooji.electricity.client.render.block.UtilityPoleRenderer;
 import com.dooji.electricity.client.render.block.WindTurbineRenderer;
@@ -52,6 +53,7 @@ public class ElectricityClient {
 		WindTurbineRenderer.init();
 		PvArrayRenderer.init();
 		PvInverterRenderer.init();
+		PvCombinerRenderer.init();
 		MetStationRenderer.init();
 	}
 

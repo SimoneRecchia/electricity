@@ -64,6 +64,15 @@ public final class ObjDefinitions {
 			ALL.add(new ObjBlockDefinition(block, inverterModel, List.of("insulator_instrument")));
 		}
 
+		// The combiner boxes share one model: the difference between a six-way box and a thirty-two way
+		// one is the label on the door and the count on the panel, which is all it is in a catalogue
+		// either. No wire fitting, because a combiner's output leaves on cable and not on a line.
+		ResourceLocation combinerModel = new ResourceLocation(Electricity.MOD_ID, "models/pv_combiner/pv_combiner.obj");
+		for (var spec : CombinerCatalog.all()) {
+			Block block = Electricity.PV_COMBINER_BLOCKS.get(spec.id()).get();
+			ALL.add(new ObjBlockDefinition(block, combinerModel, List.of()));
+		}
+
 		ALL.add(new ObjBlockDefinition(Electricity.MET_STATION_BLOCK.get(),
 				new ResourceLocation(Electricity.MOD_ID, "models/met_mast/met_mast.obj"), List.of()));
 	}

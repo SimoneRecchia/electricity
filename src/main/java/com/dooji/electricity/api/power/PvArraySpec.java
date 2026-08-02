@@ -62,7 +62,7 @@ public record PvArraySpec(
 	 * ten is a cold clear morning in a temperate biome, and it is the figure the catalogue's layouts were
 	 * worked out against.
 	 */
-	private static final double COLDEST_DESIGN_CELL_C = -10.0;
+	public static final double COLDEST_DESIGN_CELL_C = -10.0;
 
 	public PvArraySpec {
 		if (modulesPerString < 1 || strings < 1) throw new IllegalArgumentException(id + ": an array has at least one module");
