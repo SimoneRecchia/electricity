@@ -411,3 +411,114 @@ the next row's face; feeding the first into the second gives zero at every sun e
 
 The one bug this found is commit 11: the sky-view survey was cached for a minute, so roofing
 an array took away the beam at once and the diffuse a minute later.
+
+---
+
+## 14. The direct-current collection system — commits 13 to 16
+
+Everything above makes power and hands it over, and nothing above says how it gets from the
+modules to the cabinet. The plant worked by proximity: an inverter swept a radius and claimed
+whatever arrays it found, which is not a connection, it is a coincidence. This part makes the
+copper real, and makes its length cost something.
+
+### R.8 Research — how a real field is actually wired
+
+1. **Module to module** is series inside the array, and stays abstracted: one block is one array
+   section, so its strings are its own business.
+2. **String to collector** is the *home run*. Solar cable — H1Z2Z2-K or PV1-F, 1.5 kV DC, tinned
+   copper, cross-linked polyolefin — clipped along the racking in stainless or PVDF hangers,
+   in free air under the modules and supported off the torque tube. Plastic ties are what fails:
+   they go brittle under ultraviolet and drop the cable into the dirt. Where the run leaves the
+   row it goes into conduit, a tray, or a direct-buried trench.
+3. **The combiner box** — field combiner, string combiner — is an IP65 or IP66 enclosure mounted
+   *near the array*, on a post or on the racking, to keep the parallel runs short. Inside it:
+   one gPV fuse per pole per string, so two per string on a floating array; a Type 2 DC surge
+   protector; and an output load-break switch. Four to thirty-two string inputs, output 125 to
+   630 A.
+4. **Combiner to inverter** is one heavy pair, trenched or in tray.
+5. **String inverters take strings directly.** Their own MPPT terminals are the fusing and the
+   disconnect — that is what the product *is*, and nobody puts a combiner in front of one.
+6. **Central inverters have busbars** and take combiner outputs. Integrated DC sections are also
+   real: the *virtual central* arrangement spreads combiners through the field and puts the
+   machines together at one end.
+
+So a combiner is both a thing in a field and an option inside a cabinet, and both get built.
+
+### 14.1 Why length has to cost something
+
+Otherwise a cable is decoration. The figures are IEC 60228 conductor resistance at 20 °C times
+1.275 for a 90 °C conductor:
+
+| | 6 mm² | 240 mm² |
+|---|---|---|
+| Resistance at 90 °C | 4.32 Ω/km | 0.0961 Ω/km |
+| In free air at 60 °C ambient | 70 A | 570 A |
+
+A string of a 210 mm cell module carries 17.7 A. Two hundred metres of 6 mm²: 1.73 Ω round trip,
+31 V of drop, 542 W burnt on a 19.5 kW string — **2.8%**. Sixteen of those strings down one
+240 mm² trunk over the same two hundred metres: 283 A, 0.038 Ω, 3.1 kW on 312 kW — **1.0%**.
+
+Those 1.8 points are the entire reason combiner boxes exist, and they will be on the panel.
+Ampacity is the other half: 240 mm² carries 570 A in free air and 0.82 of that where it is
+buried, because IEC method D is a worse place to be than method E — so thirty-two strings will
+not go down one buried trunk, and the copper is what says so.
+
+### 14.2 The cable a player runs — commit 14
+
+`DcCableSpec` and `CableCatalog`: 6 mm² string cable and 240 mm² trunk, with the figures above.
+
+`DcCableBlock` is redstone dust with two conductors on it: vanilla's own `RedstoneSide` per
+horizontal direction, so it lies flat, turns corners, and climbs a block the way dust does. The
+rule is stated once and both the model and the walk obey it, so what a player sees connected is
+what the plant finds connected.
+
+Placed normally it goes in the air above the block clicked, which is a run in tray or clipped to
+the racking. Placed while sneaking on soil it **digs a trench**: the cable takes the soil's place,
+the soil drops, the cable renders flush with the ground on a gravel bedding and collides as a
+full block so it is walked over rather than tripped in. Buried costs 18% of the cable's ampacity,
+which is the real trade and is worth having in the game for exactly that reason.
+
+The two gauges do not connect to each other. A 240 mm² trunk cannot be terminated in an MC4
+plug, and one rule beats a page of exceptions.
+
+### 14.3 The plant runs on the copper — commit 15
+
+`DcNetwork` walks it: bounded breadth-first, over loaded positions only, `isLoaded` before
+`getBlockState` — because reaching into an unloading chunk is precisely what stopped a world from
+finishing its save once already.
+
+An array needs its **harness** integrated before anything can be plugged into it: right-click it
+with string cable and it grows a junction box and a stub, which is its string leads, and is what
+a cable then connects to. Without it the strings go nowhere and the panel says so.
+
+`InverterSpec` gains what its terminals actually are: `stringTerminals` and `trunkTerminals`. The
+10 kW and 110 kW machines are plugs only, the 350 kW has both, and the central machine is busbars
+only — so it cannot take a string at all until it is given fuses.
+
+Cable loss and voltage drop are applied per array, both on the panel with the run length, and the
+drop counts against the tracking window: a long enough run holds a string below the startup
+voltage, which is a real morning failure.
+
+### 14.4 The combiner box — commit 16
+
+`CombinerSpec` and `CombinerCatalog`: three products with real fuse and switch ratings. A block,
+a block entity, an OBJ model, a read-only panel. An empty hand on it throws the DC load-break
+switch, because that is what a hand does to one.
+
+It is integrable into an inverter that has no fused string terminals — the central machine — and
+refused by one that has, with the reason said out loud rather than the click doing nothing.
+
+An array is claimed by a *collector*, which is now either an inverter or a combiner, and the
+operating point is forwarded down the same lease the inverters already use.
+
+### 14.5 Three sprites — commit 13
+
+Small, unrelated, and first because it is independent of all of the above.
+
+* `power_wrench` pointed at **`crowbar.png`**, through `item/generated`. So it was a crowbar,
+  drawn flat, and held like a sheet of paper. It gets its own sprite and the `item/handheld`
+  parent, which is the actual answer to "the 3D model is ugly": handheld grips a tool diagonally
+  and generated does not.
+* `turbine_tower` pointed at `metal_casing.png`, a generic metal block. Own sprite: tapered tube,
+  flange, bolts.
+* `met_station`'s sprite is too thin and too pale to read at sixteen pixels. Redrawn.
