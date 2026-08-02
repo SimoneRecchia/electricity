@@ -17,6 +17,7 @@ import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -92,11 +93,15 @@ public class PvArrayRenderer extends ObjRendererBase {
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
 			int packedLight, PvArrayBlockEntity array) {
 		boolean harnessed = array.harnessed();
+		Set<String> entries = harnessed && array.getLevel() != null
+				? cableEntries(array.getLevel(), array.getBlockPos(), drawnFacing(array.getBlockState()), "harness")
+				: Set.of();
+
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
 			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE,
-					groupName -> harnessed || !isHarness(groupName));
+					groupName -> drawn(groupName, harnessed, entries));
 			return;
 		}
 
@@ -109,7 +114,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 			poseSingleAxis(model, poseStack, poses, rotation);
 		}
 
-		if (!harnessed) poses.keySet().removeIf(PvArrayRenderer::isHarness);
+		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, entries));
 
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
 	}
@@ -124,6 +129,19 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 */
 	private static boolean isHarness(String groupName) {
 		return groupName.startsWith("harness");
+	}
+
+	/**
+	 * Whether one group of an array's model is drawn.
+	 *
+	 * Nothing of the harness until a reel of cable has been worked in, and then only the runs towards the
+	 * sides a cable has actually been laid against - so plugging an array in is visible from across the
+	 * field, and the copper is visible going into it rather than stopping short of it.
+	 */
+	private static boolean drawn(String groupName, boolean harnessed, Set<String> entries) {
+		if (!isHarness(groupName)) return true;
+
+		return harnessed && entryVisible(groupName, "harness", entries);
 	}
 
 	/**

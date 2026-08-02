@@ -20,8 +20,9 @@ reports what it *could* have made, and its panel says so in as many words.
 1. Place an **inverter**. Everything else is decided by which one.
 2. Place **arrays**.
 3. **Right-click each array with a reel of string cable.** That fits its leads, and the array grows
-   a junction box you can see from across the field. Until then its strings go nowhere and its panel
-   says so — a string with no leads on it is not connected to anything.
+   a junction box at the middle of the block that you can see from across the field. Until then its
+   strings go nowhere and its panel says so — a string with no leads on it is not connected to
+   anything.
 4. **Lay string cable from the array to the inverter**, the way you lay redstone. It turns corners,
    steps up and down, and climbs the wall of a block to reach a run on top of it. Sneak on ground a
    shovel would move and it digs itself in instead: the spoil comes back, the run lies flush, and you
@@ -56,6 +57,13 @@ there are two ways to do that, both of which real vendors sell:
 **Copper.** Sixteen strings each running two hundred metres of 6 mm² lose nearly three percent. The
 same sixteen paralleled at the end of the row and sent down one 240 mm² trunk lose one. The box pays
 for itself in cable, which is why they exist on plants whose inverters do not need them.
+
+Every machine that takes cable grows the last stretch of it **itself**, from its own middle out to
+whichever edges a run has actually been laid against — at the same cross-section a laid run has, so
+the two meet with nothing to see through. That is why an array's junction box sits in the middle of
+its block rather than in a corner: from the middle it reaches every edge, so wherever you bring the
+cable from, it comes in. On a tracker it is also the one place with room, since the bay at the centre
+of the row is the bay with no module in it.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

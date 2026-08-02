@@ -232,6 +232,33 @@ public class DcCableBlock extends Block implements DcTerminal {
 	}
 
 	/**
+	 * Whether this run reaches one particular position.
+	 *
+	 * What a machine's renderer asks of its neighbours to decide which of its four cable entries to
+	 * draw, so a plant shows copper going *into* a cabinet rather than stopping a pixel short of it over
+	 * open ground. Asked of the cable rather than worked out by the machine, so the picture agrees with
+	 * {@link DcNetwork} by construction.
+	 */
+	public boolean reaches(BlockState state, BlockGetter level, BlockPos pos, BlockPos target) {
+		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> entry : SIDES.entrySet()) {
+			if (state.getValue(entry.getValue()) == RedstoneSide.NONE) continue;
+
+			Direction direction = entry.getKey();
+			BlockPos beside = pos.relative(direction);
+			// the cheap test first, because this is asked of every neighbour of every machine on screen
+			boolean candidate = target.equals(beside) || target.equals(beside.above()) || target.equals(beside.below());
+			if (!candidate) continue;
+
+			Ways ways = ways(level, pos, direction);
+			if (ways.climbs() && target.equals(beside.above())) return true;
+			if (ways.flat() && target.equals(beside)) return true;
+			if (ways.steps() && target.equals(beside.below())) return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Whether a run of this gauge joins onto that block at all.
 	 *
 	 * Its own kind, or a machine whose terminals take this gauge. The two gauges do not join to each

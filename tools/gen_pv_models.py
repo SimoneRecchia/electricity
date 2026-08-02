@@ -47,7 +47,7 @@ MATERIALS = {
     'display': 'pv_display.png',
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
-    'dc_cable': 'dc_string_line.png',
+    'dc_cable': 'dc_harness.png',
     'combiner_door': 'pv_combiner_door.png',
     'warning': 'warning.png',
 }
@@ -187,25 +187,56 @@ def pivot(mesh, name, point):
     box(mesh, faces, point, point)
 
 
-def harness(mesh):
-    """The junction box and the leads an array grows when a reel of cable is worked into it.
+def stubs(mesh, name='stub'):
+    """A run of cable from the middle of the block out to each of the four edges, one group apiece.
 
-    Drawn only when the block state says the leads are fitted, which is what
-    ``PvArrayRenderer`` uses the group name for - so the array visibly changes when a player
-    plugs it in, and the picture and the wiring cannot disagree.
+    Four groups rather than one rotated four ways, because a renderer draws a group once: the pose map
+    is keyed by group name, so the way to draw a stub towards two different sides is to have two.  The
+    renderer includes only the sides a run of cable has actually been laid against, which is what makes
+    the cable appear to run *into* the machine instead of stopping a pixel short of it over open sand.
 
-    Everything here stays under ``y = 0.17``.  That is not decoration: a single-axis row's
-    modules sweep a disc of radius 0.446 about a tube at 0.62, so the lowest a moving part
-    ever gets is 0.174, and a fixed part above that line is a part the row grinds through
-    twice a day.  It is also where a real one is - a string junction box is bolted low on the
-    racking where a technician can open it standing up.
+    The cross-section is a laid run's own - 0.375 across, 0.094 tall, centred on the block's axis, so
+    where the two meet there is no seam to see.
+
+    All four are the same box turned about the block's middle rather than four boxes written out, and
+    that is not brevity: this file maps a face's texture along its own x and z, so a stub *written* along
+    x would come out with its conductors running across it instead of along it.  Turning the geometry
+    turns the mapping with it, and the same quarter turns the renderer uses for a facing are the ones
+    used here - north, then ninety degrees a side round to east.
     """
-    clad_box(mesh, 'harness', (0.34, 0.02, 0.30), (0.46, 0.17, 0.42),
+    for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
+        spin = ((0.0, 0.0, 0.0), 'y', turn)
+        box(mesh, mesh.faces('%s_%s' % (name, side), 'dc_cable'),
+            (-0.1875, 0.0, -0.5), (0.1875, 0.094, 0.0), rot=spin)
+        # the saddle clipping it down a hand's width out from the machine, which is where a real one is
+        box(mesh, mesh.faces('%s_%s' % (name, side), 'steel'),
+            (-0.205, 0.0, -0.425), (0.205, 0.128, -0.385), uv_scale=0.3, rot=spin)
+
+
+def harness(mesh, top=0.26):
+    """The junction box an array grows when a reel of cable is worked into it, and the leads out of it.
+
+    In the middle of the block, and that is the whole of the redraw.  The first version put a thin pair
+    out of a box in the *corner*, and a laid run of cable goes down the middle of its own block - so the
+    two could never meet however close they got, and the stub read as a cable going nowhere.  From the
+    middle it reaches every edge, so wherever the cable comes from, it comes in.
+
+    The middle is also the one place every mounting has room.  A tracked row's modules sweep a disc
+    about their tube, and the bay at the centre of the row has no module in it at all - which is where a
+    real independent-row tracker keeps its controller and its combiner for exactly this reason.
+    """
+    stubs(mesh, 'harness')
+
+    # the box, straddling whatever is at the middle of the block - the mid rail of a table, the pier of
+    # a tracker, the pedestal of a dual-axis frame - the way a real one is strapped to it
+    clad_box(mesh, 'harness', (-0.13, 0.094, -0.09), (0.13, top, 0.09),
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.4)
-    # the pair leaving it and running out to the edge of the block, which is where a laid run
-    # of cable comes to meet them
-    for x in (0.375, 0.425):
-        box(mesh, mesh.faces('harness', 'dc_cable'), (x - 0.014, 0.0, 0.36), (x + 0.014, 0.03, 0.5), uv_scale=0.4)
+    # the compression glands the pair leaves through, on both faces the cable can leave by.
+    # Kept inside |z| < 0.11 and under y = 0.168, which is the bay a tracked row's modules leave empty:
+    # eight thousandths of a block outside it and the row grinds through them twice a day
+    harness_steel = mesh.faces('harness', 'steel')
+    for z in (-0.085, 0.085):
+        box(mesh, harness_steel, (-0.11, 0.088, z - 0.015), (0.11, min(top - 0.02, 0.168), z + 0.015), uv_scale=0.3)
 
 
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
@@ -467,7 +498,6 @@ def single_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
 
-
     harness(mesh)
     return mesh
 
@@ -585,6 +615,9 @@ def inverter():
     insulator = mesh.add_object('insulator', 'instrument')
     cylinder(mesh, insulator, (0.30, 1.03, 0.0), 'y', 0.045, 0.05, uv_scale=0.3,
              caps=mesh.faces('insulator', 'instrument'))
+
+    # where the direct current comes in, one run per side, drawn only for the sides it comes in from
+    stubs(mesh, 'entry')
     return mesh
 
 
@@ -634,6 +667,12 @@ def combiner():
     cylinder(mesh, trunk, (0.245, box_y0 + 0.08, 0.0), 'x', 0.03, 0.025, uv_scale=0.3, caps=trunk)
 
     pivot(mesh, 'handle', (0.15, box_y0 + 0.12, -0.115))
+
+    # where the strings come in and the trunk leaves, one run per side of the block, and the riser that
+    # carries them up the post into the glands - a box on a post with cable arriving at ground level has
+    # to have something joining the two or the copper stops at the footing
+    stubs(mesh, 'entry')
+    box(mesh, mesh.faces('post', 'dc_cable'), (-0.05, 0.02, 0.032), (0.05, box_y0 + 0.01, 0.064))
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
     handle = mesh.add_object('rotate_handle', 'warning')
@@ -748,8 +787,8 @@ MODELS = [
     ('pv_tilt', tilted_rack, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument')),
-    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'warning')),
+    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable')),
+    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'warning', 'dc_cable')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
 

@@ -19,6 +19,7 @@ import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -95,15 +96,20 @@ public class PvInverterRenderer extends ObjRendererBase {
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
 
 		Vec3 hub = pivot(model, "fan", new Vec3(0.46, 0.68, 0.0));
+		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
+		Set<String> entries = inverter.getLevel() == null ? Set.of()
+				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), facing, "entry");
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
 			if (groupName.startsWith("pivot_")) continue;
+			if (!entryVisible(groupName, "entry", entries)) continue;
 
 			poseStack.pushPose();
 			// the whole machine scales about the middle of its own footprint, so a small one sits on
-			// the ground rather than hovering over it
-			poseStack.scale(scale, scale, scale);
+			// the ground rather than hovering over it - but not the cable entry, which has to reach the
+			// edge of the block whatever size the cabinet is, because that is where the cable is
+			if (!groupName.startsWith("entry")) poseStack.scale(scale, scale, scale);
 
 			if (groupName.startsWith("rotate_fan")) {
 				poseStack.translate(hub.x, hub.y, hub.z);

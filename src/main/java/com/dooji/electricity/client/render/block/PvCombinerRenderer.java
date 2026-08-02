@@ -17,6 +17,7 @@ import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -77,10 +78,14 @@ public class PvCombinerRenderer extends ObjRendererBase {
 			PvCombinerBlockEntity combiner) {
 		Vec3 spindle = pivot(model, "handle", new Vec3(0.15, 0.50, -0.115));
 		float angle = advanceHandle(combiner.getBlockPos(), combiner.isolated());
+		Direction facing = combiner.getBlockState().getValue(PvCombinerBlock.FACING);
+		Set<String> entries = combiner.getLevel() == null ? Set.of()
+				: cableEntries(combiner.getLevel(), combiner.getBlockPos(), facing, "entry");
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
 			if (groupName.startsWith("pivot_")) continue;
+			if (!entryVisible(groupName, "entry", entries)) continue;
 
 			poseStack.pushPose();
 			if (groupName.startsWith("rotate_handle")) {

@@ -58,7 +58,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd dc_string_line.png
+map_Kd dc_harness.png
 
 newmtl module
 Ns 250.000000

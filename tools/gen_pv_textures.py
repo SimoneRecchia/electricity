@@ -929,6 +929,10 @@ def panel(spec):
 BLOCK_TEXTURES = {
     'dc_string_line': lambda: cable_line(3.0, 1),
     'dc_trunk_line': lambda: cable_line(5.0, 2),
+    # the same pair filling the whole tile, for the stub on an array: the OBJ pipeline maps a face
+    # across a whole texture, so a pair drawn six columns wide would come out six columns wide on a
+    # stub that has to match a laid run exactly
+    'dc_harness': lambda: cable_line(8.0, 3),
     'dc_trench': trench,
     'pv_combiner_door': combiner_door,
     'pv_module': module,

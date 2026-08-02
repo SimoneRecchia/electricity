@@ -1,21 +1,26 @@
 package com.dooji.electricity.client.render.obj;
 
+import com.dooji.electricity.block.DcCableBlock;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
@@ -88,6 +93,61 @@ public abstract class ObjRendererBase {
 			VertexBuffer.unbind();
 			type.clearRenderState();
 		}
+	}
+
+	/**
+	 * The cable entries a machine should draw: one per side a run has actually been laid against.
+	 *
+	 * Four groups in the model, one per side, and this decides which of them get a pose. That is the
+	 * whole answer to a cable that stopped a pixel short of the machine over open ground: the machine
+	 * grows the last stretch itself, from its own middle out to the edge the copper arrives at, at the
+	 * cross-section a laid run has - so the two meet with no seam and nothing to see through.
+	 *
+	 * The names are model-space, because that is what the model is authored in and the block's facing
+	 * has already turned it: the base rotation maps model north onto the block's facing, so a world
+	 * direction is shifted by the same offset to find the group that will end up pointing at it.
+	 */
+	protected static Set<String> cableEntries(BlockGetter level, BlockPos pos, Direction facing, String prefix) {
+		Set<String> live = new HashSet<>();
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (!arrivesFrom(level, pos, direction)) continue;
+
+			int offset = (2 + direction.get2DDataValue() - facing.get2DDataValue() + 4) % 4;
+			live.add(prefix + "_" + Direction.from2DDataValue(offset).getName());
+		}
+
+		return live;
+	}
+
+	/**
+	 * Whether a run of cable reaches this machine from one direction.
+	 *
+	 * The three positions a run can reach from, which are the three dust reaches from: alongside, a step
+	 * up, and a step down. The cable itself is asked, so this cannot drift from what the plant counts.
+	 */
+	private static boolean arrivesFrom(BlockGetter level, BlockPos pos, Direction direction) {
+		BlockPos beside = pos.relative(direction);
+		for (BlockPos candidate : new BlockPos[]{beside, beside.above(), beside.below()}) {
+			BlockState state = level.getBlockState(candidate);
+			if (state.getBlock() instanceof DcCableBlock cable && cable.reaches(state, level, candidate, pos)) return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether one group should be drawn, given which entries are live.
+	 *
+	 * Anything that is not part of an entry is drawn as usual; an entry is drawn only for the side it
+	 * belongs to.
+	 */
+	protected static boolean entryVisible(String groupName, String prefix, Set<String> live) {
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			String entry = prefix + "_" + direction.getName();
+			if (groupName.startsWith(entry)) return live.contains(entry);
+		}
+
+		return true;
 	}
 
 	/**
