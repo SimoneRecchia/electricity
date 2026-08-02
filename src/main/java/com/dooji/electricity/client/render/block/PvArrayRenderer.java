@@ -143,8 +143,8 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * prefix of the azimuth ones rather than being a separate family.
 	 */
 	private static void poseDualAxis(ObjModel model, PoseStack poseStack, Map<String, Matrix4f> poses, PvArrayBlockEntity array, double rotation) {
-		Vec3 collar = groupCentre(model, "rotate_azimuth", new Vec3(0.0, 0.59, 0.0));
-		Vec3 elevation = groupCentre(model, "rotate_elevation_", new Vec3(0.0, 0.73, 0.0));
+		Vec3 collar = groupCentre(model, "rotate_azimuth", new Vec3(0.0, 0.65, 0.0));
+		Vec3 elevation = groupCentre(model, "rotate_elevation_", new Vec3(0.0, 0.7475, 0.0));
 		float azimuth = smoothAzimuth(array.getBlockPos(), rotation >= 0.0 ? 0.0f : 180.0f);
 
 		for (String groupName : model.groups.keySet()) {

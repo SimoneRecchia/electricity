@@ -48,6 +48,18 @@ MATERIALS = {
 # saying so.
 FIXED_TILT_DEG = 25.0
 
+# Half-width of the drive bay at the centre of a tracker, in blocks.
+#
+# A plane rotating about an axis sweeps a disc of radius equal to its own semi-width, so
+# any fixed part inside that disc gets swept through.  Rather than trying to thread the
+# piers and the drive between the module edges - which cannot be done, because the plane
+# passes through every angle - the fixed parts live in a bay at the centre of the row and
+# the modules stop short of it.  Nothing can then collide at any angle.
+#
+# It is also what a real independent-row tracker looks like: one bay with no module in it,
+# because that is where the slew drive is.
+DRIVE_BAY = 0.11
+
 
 class Mesh:
     """Accumulates vertices, normals, texture coordinates and faces for one OBJ file."""
@@ -255,7 +267,7 @@ def tilted_rack():
 # ---------------------------------------------------- single-axis tracker
 
 def single_axis():
-    """A torque tube on piers, with the module plane authored flat.
+    """A torque tube through a slew drive, with the module plane authored flat.
 
     The plane is flat because its tilt is a matrix at draw time: the buffer cache
     is keyed by block position and rebuilt only when the light changes, so baking a
@@ -264,28 +276,49 @@ def single_axis():
     The tube runs north-south, which is the only axis from which a row can follow a
     sun that travels east to west - and it is why PvArrayBlock forces a tracker to
     that orientation whatever direction the player was facing.
+
+    The drive bay
+    -------------
+    A plane rotating about an axis sweeps a *disc* of radius equal to its own
+    semi-width, so any fixed part inside that disc gets swept through - which is
+    exactly what the first version of this model did, putting the drive housing at
+    the tube's height where the modules pass over it twice a day.
+
+    The fix is the one real trackers use.  The pier and the drive sit in a bay at the
+    centre of the row and the modules stop short of it, so every fixed part lives in
+    ``|z| <= DRIVE_BAY`` and every moving part in ``|z| >= DRIVE_BAY``.  Nothing can
+    collide at any angle, and the row reads correctly: a real independent-row tracker
+    has a bay with no module in it, because that is where the slew drive is.
     """
     mesh = Mesh()
     axis_y = 0.62
+    bay = DRIVE_BAY
 
     pier = mesh.add_object('pier', 'steel')
-    for z in (-0.34, 0.26):
-        box(mesh, pier, (-0.05, 0.0, z), (0.05, axis_y, z + 0.08), uv_scale=0.3)
     box(mesh, pier, (-0.16, 0.0, -0.16), (0.16, 0.05, 0.16), uv_scale=0.4)
+    # one central pier rather than a pair, because a pair either side of the bay would
+    # stand in the swept disc: within one block a real row has a pier every six metres
+    box(mesh, pier, (-0.055, 0.05, -0.075), (0.055, axis_y, 0.075), uv_scale=0.3)
 
     motor = mesh.add_object('motor', 'cabinet')
-    box(mesh, motor, (-0.14, axis_y - 0.09, 0.30), (0.14, axis_y + 0.09, 0.44), uv_scale=0.6)
+    # the slew drive: a housing round the tube, wholly inside the bay
+    box(mesh, motor, (-0.13, axis_y - 0.13, -0.085), (0.13, axis_y + 0.13, 0.085), uv_scale=0.6)
 
     tube = mesh.add_object('rotate_tube', 'steel')
     cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, uv_scale=0.5)
 
+    # two bays of modules, two rows deep, which is the 2-up portrait layout a real
+    # horizontal single axis carries
     modules = mesh.add_object('rotate_modules', 'module')
-    box(mesh, modules, (-0.44, axis_y + 0.045, -0.48), (-0.02, axis_y + 0.075, 0.48))
-    box(mesh, modules, (0.02, axis_y + 0.045, -0.48), (0.44, axis_y + 0.075, 0.48))
-
     rails = mesh.add_object('rotate_rails', 'frame')
-    box(mesh, rails, (-0.46, axis_y + 0.02, -0.48), (0.46, axis_y + 0.045, -0.42), uv_scale=0.4)
-    box(mesh, rails, (-0.46, axis_y + 0.02, 0.42), (0.46, axis_y + 0.045, 0.48), uv_scale=0.4)
+    for z0, z1 in ((-0.48, -bay), (bay, 0.48)):
+        box(mesh, modules, (-0.44, axis_y + 0.045, z0), (-0.02, axis_y + 0.075, z1))
+        box(mesh, modules, (0.02, axis_y + 0.045, z0), (0.44, axis_y + 0.075, z1))
+        # purlins along the tube rather than across it: a rail spanning the full width
+        # would pass through the tube it is supposed to be clamped to
+        for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
+            box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
+
     return mesh
 
 
@@ -300,27 +333,51 @@ def dual_axis():
     is invisible, because at noon the elevation frame is lying flat and a flat plate
     turned about its own vertical axis looks identical.  Which is exactly what a
     real azimuth-elevation machine does as the sun crosses its zenith.
+
+    The same drive bay as the single axis, and for the same reason: the yoke arms that
+    carry the elevation axis used to reach exactly as high as the modules started, so
+    they clashed at zero degrees and got swept through completely by eighty.  Now the
+    arms sit inside ``|z| <= DRIVE_BAY`` and the modules outside it, which is also what
+    a real pedestal frame looks like - a gap down the middle where the yoke comes up.
+
+    The elevation tube through the yoke is the one place geometry is allowed to
+    intersect, because that is a bearing: a cylinder turning about its own axis inside
+    a housing sweeps nothing.
     """
     mesh = Mesh()
     top = 0.55
+    bay = DRIVE_BAY + 0.005
+    # the elevation axis, and the height the renderer measures back off the rotating
+    # groups' own bounding box - so the two cannot disagree about where the pivot is
+    pivot_y = top + 0.1975
 
     pedestal = mesh.add_object('pedestal', 'steel')
     box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.06, 0.20), uv_scale=0.5)
     cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.03, 0.0), 'y', 0.085, top / 2.0 - 0.03, uv_scale=0.4)
 
     azimuth = mesh.add_object('rotate_azimuth', 'cabinet')
-    cylinder(mesh, azimuth, (0.0, top + 0.04, 0.0), 'y', 0.13, 0.05, uv_scale=0.5)
-    # the yoke arms the elevation axis is carried on
-    for x in (-0.15, 0.11):
-        box(mesh, azimuth, (x, top + 0.09, -0.045), (x + 0.04, top + 0.20, 0.045), uv_scale=0.3)
+    cylinder(mesh, azimuth, (0.0, top + 0.05, 0.0), 'y', 0.10, 0.05, uv_scale=0.5)
+    # the yoke arms, separated along the elevation axis rather than across it, so the
+    # frame's own torque tube runs between them and the modules clear them entirely. Kept
+    # narrow so the bay - and therefore the gap down the middle of the plane - can be too
+    for z0, z1 in ((-0.095, -0.04), (0.04, 0.095)):
+        box(mesh, azimuth, (-0.04, top + 0.09, z0), (0.04, pivot_y + 0.012, z1), uv_scale=0.3)
 
     elevation = mesh.add_object('rotate_elevation', 'frame')
-    box(mesh, elevation, (-0.44, top + 0.17, -0.46), (0.44, top + 0.195, -0.40), uv_scale=0.4)
-    box(mesh, elevation, (-0.44, top + 0.17, 0.40), (0.44, top + 0.195, 0.46), uv_scale=0.4)
+    # the frame's torque tube, through the yoke bearings and out to both module bays
+    cylinder(mesh, elevation, (0.0, pivot_y, 0.0), 'z', 0.03, 0.42, uv_scale=0.4)
+    for z0, z1 in ((-0.46, -bay), (bay, 0.46)):
+        # a cross member at the bay's *inner* edge, tying the purlins back to the tube
+        inner = (z1 - 0.06, z1) if z1 < 0.0 else (z0, z0 + 0.06)
+        box(mesh, elevation, (-0.42, pivot_y - 0.0275, inner[0]), (0.42, pivot_y - 0.0025, inner[1]), uv_scale=0.4)
+        for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
+            box(mesh, elevation, (x0, pivot_y - 0.0275, z0), (x1, pivot_y - 0.0025, z1), uv_scale=0.3)
 
     modules = mesh.add_object('rotate_elevation_modules', 'module')
-    box(mesh, modules, (-0.44, top + 0.195, -0.46), (-0.02, top + 0.225, 0.46))
-    box(mesh, modules, (0.02, top + 0.195, -0.46), (0.44, top + 0.225, 0.46))
+    for z0, z1 in ((-0.46, -bay), (bay, 0.46)):
+        box(mesh, modules, (-0.44, pivot_y - 0.0025, z0), (-0.02, pivot_y + 0.0275, z1))
+        box(mesh, modules, (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1))
+
     return mesh
 
 
