@@ -93,7 +93,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
 			int packedLight, PvArrayBlockEntity array) {
 		boolean harnessed = array.harnessed();
-		boolean fed = harnessed && fedFromBehind(array);
+		boolean fed = fedFromBehind(array);
 
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
@@ -132,16 +132,19 @@ public class PvArrayRenderer extends ObjRendererBase {
 	/**
 	 * Whether one group of an array's model is drawn.
 	 *
-	 * Nothing of the harness until a reel of cable has been worked in - so plugging an array in is visible
-	 * from across the field. And the socket only when there is something to plug into it: a row with
-	 * nothing behind it has no input, and a socket on every panel whether or not anything feeds it is the
-	 * difference between a plant that reads as wired through and a warehouse of identical parts.
+	 * Nothing of a row's own harness until a reel of cable has been worked in - so plugging an array in is
+	 * visible from across the field.
+	 *
+	 * The socket is the exception, and deliberately: it belongs to whatever is *feeding* this row rather
+	 * than to this row, so it appears as soon as the row behind has an output pointing at it whether or not
+	 * this one has been cabled yet. Which is the right way round - a socket is where a cable arrives, and a
+	 * cable arriving does not wait for the thing it is arriving at.
 	 */
 	private static boolean drawn(String groupName, boolean harnessed, boolean fed) {
 		if (!isHarness(groupName)) return true;
-		if (!harnessed) return false;
+		if (groupName.startsWith("harness_input")) return fed;
 
-		return fed || !groupName.startsWith("harness_input");
+		return harnessed;
 	}
 
 	/**

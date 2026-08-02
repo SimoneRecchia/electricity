@@ -80,11 +80,13 @@ socket is drawn only when something is actually feeding it. Nothing on the flank
 *attach* to the flanks either: a run joins a row where the next row would, which is both what a plant
 looks like and why the model has one lead instead of a ring.
 
-Where that edge is differs by mounting. A **table** carries it on top, where it shades nothing. A
-**rack** carries it along the ground, because it stands off the ground on legs and a cable lying across
-a cell is a cell out of the string. A **tracked row** carries it down the middle, because its flanks
-are under modules that turn through sixty degrees — and it also gets the drag loop that rotation
-demands, as a **dual-axis frame** gets the service coil an azimuth drive is given.
+How far the lead reaches differs by mounting, for one reason. A **table**'s whole footprint is glass, so
+there is no edge to run a lead along — it gets a short tail out of the corner and nothing more, because a
+cable running the length of a panel runs *across cells* and a cable across a cell is a cell out of the
+string. A **rack** and a **tracked row** have ground underneath to cross, so theirs run the length: the
+rack's along its side, the tracked row's down the middle, since its flanks are under modules that turn
+through sixty degrees. The tracked row also gets the drag loop that rotation demands, and a **dual-axis
+frame** the service coil an azimuth drive is given.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

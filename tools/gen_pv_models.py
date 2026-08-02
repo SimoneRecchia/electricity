@@ -244,18 +244,23 @@ def lead(mesh, name, lo, hi, face='up', rot=None):
     clad_box(mesh, name, lo, hi, {face: 'dc_cable', '*': 'dc_jacket'}, rot=rot)
 
 
-def row_lead(mesh, x0, height):
-    """The lead along one edge of a row: in at one end, out at the other, and nothing on the other sides.
+def row_lead(mesh, x0, height, start=-0.44):
+    """The lead out of one end of a row, and nothing on the other sides.
 
     A string has two ends.  They are where the next row's string arrives and where this one's leaves, so
-    everything a row shows is on one edge: the lead runs its length and out past the block boundary, and
-    the socket at the far end takes the row behind it.  Nothing on the flanks - a run round all four
-    edges read as a plant wrapped in wire, and it is not what a plant looks like either.
+    everything a row shows is on one edge: the lead, and the socket at the far end that takes the row
+    behind it.  Nothing on the flanks - a run round all four edges read as a plant wrapped in wire, and it
+    is not what a plant looks like either.
 
-    The lead reaches past the frame to the boundary itself, so it meets the next row's socket with no gap
-    and a laid run of cable with no step.
+    ``start`` is how far back the lead reaches, and it differs by mounting for one reason: on a table the
+    whole footprint is glass, so a lead running the length of it runs *across cells*, and a cable across a
+    cell is a cell out of the string.  A table therefore gets a short tail out of the corner and nothing
+    more.  A rack and a tracked row have ground under them to cross, so theirs runs the length.
+
+    Either way it reaches past the frame to the block boundary itself, so it meets the next row's socket
+    with no gap and a laid run of cable with no step.
     """
-    lead(mesh, 'harness', (x0, height, -0.44), (x0 + LEAD, height + LEAD, 0.50))
+    lead(mesh, 'harness', (x0, height, start), (x0 + LEAD, height + LEAD, 0.50))
 
 
 def row_socket(mesh, x0, height):
@@ -428,10 +433,11 @@ def flat_table():
     clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
     clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
 
-    # The harness: one lead along one edge, out at one end, socket at the other.  A table is looked down
-    # on, so the lead goes on top where it can be seen and along the edge where it shades nothing.
+    # The harness: a short tail out of the corner and a socket on the far edge, and that is all.  A table's
+    # whole footprint is glass, so there is no edge to run a lead along - the last version ran one the
+    # length of the panel and it crossed the cells, which is a cable shading the thing it is wired to.
     glass = 0.11
-    row_lead(mesh, 0.36, glass)
+    row_lead(mesh, 0.36, glass, start=0.38)
     row_socket(mesh, 0.36, glass)
     return mesh
 
