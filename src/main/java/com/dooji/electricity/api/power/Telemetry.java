@@ -86,10 +86,6 @@ public final class Telemetry {
 
 			return false;
 		}
-
-		public boolean isEmpty() {
-			return values.isEmpty();
-		}
 	}
 
 	private Telemetry() {

@@ -54,6 +54,15 @@ public record PvArraySpec(
 	 * a target, and tight enough that a fixed rack cannot quietly end up packed like a flat roof.
 	 */
 	private static final double GROUND_COVER_TOLERANCE = 0.25;
+	/**
+	 * Coldest cell temperature a string layout has to survive, in Celsius.
+	 *
+	 * String length is decided at the coldest temperature a site sees rather than at 25 C, because a
+	 * module's open-circuit voltage *rises* as it cools - which is the wrong direction for safety. Minus
+	 * ten is a cold clear morning in a temperate biome, and it is the figure the catalogue's layouts were
+	 * worked out against.
+	 */
+	private static final double COLDEST_DESIGN_CELL_C = -10.0;
 
 	public PvArraySpec {
 		if (modulesPerString < 1 || strings < 1) throw new IllegalArgumentException(id + ": an array has at least one module");
@@ -63,6 +72,15 @@ public record PvArraySpec(
 
 		if (tracker != null && (mounting == PvMounting.DUAL_AXIS) != tracker.dualAxis()) {
 			throw new IllegalArgumentException(id + ": the mounting and the tracker disagree about how many axes it has");
+		}
+
+		// the layout has to survive a cold morning, or the array would exceed its own system voltage
+		// limit exactly when it was producing best. Checked here rather than left as a method nothing
+		// called, because an unchecked invariant is not an invariant
+		int maxSeries = module.maxSeriesModules(COLDEST_DESIGN_CELL_C);
+		if (modulesPerString > maxSeries) {
+			throw new IllegalArgumentException(id + ": " + modulesPerString + " modules in series exceeds " + module.maxSystemVolts()
+					+ " V at " + COLDEST_DESIGN_CELL_C + " C, where only " + maxSeries + " fit");
 		}
 
 		double cover = modulesPerString * strings * module.areaM2() / LAND_AREA_M2;
@@ -96,11 +114,6 @@ public record PvArraySpec(
 	/** Nameplate at standard test conditions, kW. */
 	public double dcPowerKw() {
 		return moduleCount() * module.ratedPowerW() / 1000.0;
-	}
-
-	/** Nameplate per unit of land, kW per hectare. What the mountings are actually competing on. */
-	public double dcPowerKwPerHectare() {
-		return dcPowerKw() / LAND_AREA_M2 * 10000.0;
 	}
 
 	public boolean tracked() {
@@ -138,11 +151,6 @@ public record PvArraySpec(
 	/** Total array current at the combiner, in amps. */
 	public double arrayCurrent(double poaIrradiance, double cellTemperatureC) {
 		return strings * stringCurrent(poaIrradiance, cellTemperatureC);
-	}
-
-	/** Whether this string layout stays under the module's own system voltage limit when cold. */
-	public boolean stringFitsSystemVoltage(double coldestCellC) {
-		return modulesPerString <= module.maxSeriesModules(coldestCellC);
 	}
 
 	/**
@@ -183,10 +191,5 @@ public record PvArraySpec(
 	 */
 	public boolean shedsSnow(double trackerRotation, double moduleTempC) {
 		return tiltDeg(trackerRotation) >= PvMounting.SNOW_SHED_TILT && moduleTempC > 0.0;
-	}
-
-	/** Full designation as a nameplate prints it. */
-	public String fullName(String manufacturer) {
-		return manufacturer + " " + displayName;
 	}
 }

@@ -159,6 +159,13 @@ public class PvInverterScreen extends PlantScreen {
 		} else if (inverter.arraysConnected() == 0) {
 			key = "screen.electricity.pv_inverter.state.no_arrays";
 			colour = RED;
+		} else if (inverter.stringsOutOfWindow()) {
+			// named rather than left at standby, because it is the one mismatch a player cannot see
+			graphics.fill(leftPos + MARGIN, topPos + 47, leftPos + MARGIN + 4, topPos + 51, RED);
+			graphics.drawString(font, Component.translatable("screen.electricity.pv_inverter.state.out_of_window",
+					fmt("%.0f", inverter.dcVoltage()), fmt("%.0f", inverter.spec().mpptMinVolts()),
+					fmt("%.0f", inverter.spec().mpptMaxVolts())), leftPos + MARGIN + 8, topPos + 46, VALUE_COLOUR, false);
+			return;
 		} else if (inverter.derating()) {
 			key = "screen.electricity.pv_inverter.state.derating";
 			colour = RED;

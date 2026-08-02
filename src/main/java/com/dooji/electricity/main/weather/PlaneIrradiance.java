@@ -36,11 +36,6 @@ public record PlaneIrradiance(
 		return beam + skyDiffuse + groundReflected;
 	}
 
-	/** Whether the sun is on the front face at all. */
-	public boolean sunlit() {
-		return incidenceAngleDeg < 90.0 && beam > 0.0;
-	}
-
 	/**
 	 * Scales the beam and leaves everything else, which is what an obstruction between the sun and
 	 * the plane does.

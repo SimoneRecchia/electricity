@@ -84,17 +84,23 @@ public final class PvCatalog {
 			18, 1));
 
 	/**
-	 * Tilted rack, thin film, four strings of four.
+	 * Tilted rack, thin film, three strings of six.
 	 *
-	 * The lowest nameplate per block of any fixed array here, and the point is that nameplate is not
-	 * what a plant is paid for. This module runs cooler than the silicon ones, holds its efficiency
-	 * further down into weak light, and has a spectral response that is barely troubled by the
-	 * overcast which costs a silicon array a third of its day. Four to a string rather than eighteen,
-	 * because two hundred and twenty-three volts a module fills a string very quickly.
+	 * This module runs cooler than the silicon ones, holds its efficiency further down into weak light,
+	 * and has a spectral response barely troubled by the overcast which costs a silicon array a third of
+	 * its day. Six to a string rather than eighteen, because two hundred and twenty-three volts a module
+	 * fills a 1500 V string very quickly.
+	 *
+	 * Six is also what makes this the one array in the catalogue the central inverter can use. A string of
+	 * six sits near a thousand volts at operating temperature, inside that machine's narrow high window,
+	 * where every silicon array here sits between four and eight hundred and cannot be tracked by it at
+	 * all. That is not an accident of this catalogue - it is why real central inverters are sold with a
+	 * string design rather than a voltage range, and it is the same reason this array will not run on the
+	 * two small string inverters.
 	 */
 	public static final PvArraySpec TR_530 = register(new PvArraySpec(
 			id("pv_tilt_530"), "TR-530", PvModuleCatalog.HT_268_530, PvMounting.FIXED_TILT, null,
-			4, 4));
+			6, 3));
 
 	/**
 	 * Horizontal single-axis tracker, large-format bifacial modules, one string of thirteen.
@@ -140,10 +146,6 @@ public final class PvCatalog {
 	/** Every array product, cheapest first. */
 	public static List<PvArraySpec> all() {
 		return List.copyOf(BY_ID.values());
-	}
-
-	public static PvArraySpec byId(ResourceLocation id) {
-		return BY_ID.get(id);
 	}
 
 	/** Full designation as a nameplate prints it, e.g. {@code Meridian TR-580}. */

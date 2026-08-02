@@ -182,19 +182,4 @@ public record TrackerSpec(
 		return slewDegPerMinute / 60.0 * WorldConditions.SECONDS_PER_DAY_TICK;
 	}
 
-	/** Whether a row this far from its target still has the drive running, and is therefore drawing motor power. */
-	public boolean slewing(double rotation, double target) {
-		return Math.abs(target - rotation) > slewPerTick();
-	}
-
-	/** Ticks the drive needs to reach a target from here. What a stow decision has to be made far enough ahead of. */
-	public double ticksToReach(double rotation, double target) {
-		double step = slewPerTick();
-		return step <= 0.0 ? Double.POSITIVE_INFINITY : Math.abs(target - rotation) / step;
-	}
-
-	/** How fast the sun itself moves, in degrees per day-clock tick. What the drive has to beat to track at all. */
-	public static double sunDegreesPerTick() {
-		return SUN_DEGREES_PER_HOUR * WorldConditions.SECONDS_PER_DAY_TICK / 3600.0;
-	}
 }

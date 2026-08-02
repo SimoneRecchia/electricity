@@ -26,7 +26,15 @@ import net.minecraft.resources.ResourceLocation;
  * That is the difference the MPPT count in this catalogue exists to express, and it is why the
  * central machine's window is narrow and high - 875 to 1325 volts - while a string machine will track
  * anything from 200 volts up: a central inverter is designed around one string length and the strings
- * are built to suit it.
+ * are built to suit it. Which is a real constraint here too, and the panel says so: the only array in
+ * the catalogue wired long enough to feed the central machine is the thin-film rack, because two hundred
+ * and twenty-three volts a module fills a string in six.
+ *
+ * The string terminal count is declared beside the tracker count for the same reason. A string inverter
+ * has two or three terminals per tracker; a central one has a single tracker and several hundred
+ * terminals, because the strings arrive through combiner boxes aggregating sixteen to thirty-two each.
+ * Deriving one from the other would have given the central machine two string inputs and made it
+ * useless.
  *
  * <h2>Why the DC input is half again the AC nameplate</h2>
  *
@@ -52,7 +60,7 @@ public final class InverterCatalog {
 	public static final InverterSpec VX_10 = register(new InverterSpec(
 			id("inverter_10"), "VX-10K",
 			10.0, 11.0, 15.0,
-			2, 140.0, 980.0, 1100.0, 200.0,
+			2, 4, 140.0, 980.0, 1100.0, 200.0,
 			0.986, 0.45,
 			1.0,
 			400.0, 50.0, 0.8,
@@ -68,7 +76,7 @@ public final class InverterCatalog {
 	public static final InverterSpec VX_110 = register(new InverterSpec(
 			id("inverter_110"), "VX-110K",
 			110.0, 121.0, 165.0,
-			9, 200.0, 1000.0, 1100.0, 200.0,
+			9, 18, 200.0, 1000.0, 1100.0, 200.0,
 			0.987, 0.50,
 			2.0,
 			800.0, 50.0, 0.8,
@@ -84,7 +92,7 @@ public final class InverterCatalog {
 	public static final InverterSpec VX_350 = register(new InverterSpec(
 			id("inverter_350"), "VX-350K",
 			352.0, 387.0, 528.0,
-			16, 500.0, 1500.0, 1500.0, 550.0,
+			16, 32, 500.0, 1500.0, 1500.0, 550.0,
 			0.990, 0.50,
 			3.0,
 			800.0, 50.0, 0.8,
@@ -104,7 +112,7 @@ public final class InverterCatalog {
 	public static final InverterSpec VC_2500 = register(new InverterSpec(
 			id("inverter_2500"), "VC-2500K",
 			2500.0, 2750.0, 3125.0,
-			1, 875.0, 1325.0, 1500.0, 875.0,
+			1, 288, 875.0, 1325.0, 1500.0, 875.0,
 			0.989, 0.50,
 			100.0,
 			690.0, 50.0, 0.8,
@@ -125,10 +133,6 @@ public final class InverterCatalog {
 	/** Every inverter, smallest first. */
 	public static List<InverterSpec> all() {
 		return List.copyOf(BY_ID.values());
-	}
-
-	public static InverterSpec byId(ResourceLocation id) {
-		return BY_ID.get(id);
 	}
 
 	/** Full designation as a nameplate prints it, e.g. {@code Volterra VX-110K}. */

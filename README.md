@@ -142,7 +142,7 @@ and rain washes a tilted array clean and a flat one only partly.
 | 🔧 | **Power Wrench** | Opens a live diagnostics panel on any electric block. |
 | 🧵 | **Wire** | Right-click one insulator, then another. |
 | 🛠️ | **Electric Workbench** | Crafts every component below. |
-| ☀️ | **Photovoltaic Arrays** | Six products from a flat 18 kW table to a dual-axis tracker, on four mountings, built from six real module datasheets. Produce nothing without an inverter, because an open-circuit string does not. |
+| ☀️ | **Photovoltaic Arrays** | Six products from a flat 18 kW table to a dual-axis tracker, on four mountings, built from six real module datasheets. Produce nothing without an inverter, because an open-circuit string does not — and not every string fits every inverter's tracking window. |
 | 🔌 | **Inverters** | Four machines from 10 kW to 2.5 MW. Clip when the array offers too much, derate when the air is hot, hold a power factor, and draw a watt overnight like the real ones. |
 | 📡 | **Meteorological Mast** | Nine instruments: global, diffuse and plane-of-array irradiance, albedo, air and module temperature, wind, and snow. Each answers at its own instrument's speed. |
 | 📡 | **Weather Tablet** | Weather intensity map. Not functional yet. |

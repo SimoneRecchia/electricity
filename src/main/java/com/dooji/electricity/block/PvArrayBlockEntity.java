@@ -243,10 +243,9 @@ public class PvArrayBlockEntity extends BlockEntity {
 		obstructionFraction = Shading.beamFraction(serverLevel, worldPosition, sky.sun())
 				* Shading.entityBeamFraction(serverLevel, worldPosition, sky.sun());
 
-		Shading.Shade snow = new Shading.Shade(1.0, 1.0, snowDepthM);
 		plane = plane.withBeamFraction(obstructionFraction * (1.0 - rowShadedFraction))
 				.withSkyFraction(skyViewFactor)
-				.scaled(snow.snowTransmittance() * (1.0 - soiling));
+				.scaled(Shading.snowTransmittance(snowDepthM) * (1.0 - soiling));
 
 		poaBeam = plane.beam();
 		poaDiffuse = plane.skyDiffuse();
@@ -785,10 +784,5 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/** Whether the tracker has two axes, which the renderer needs to know to build the right pivot chain. */
 	public boolean dualAxis() {
 		return spec().mounting() == PvMounting.DUAL_AXIS;
-	}
-
-	/** Where the modules face, for the renderer: the same bearing the physics used. */
-	public Direction facing() {
-		return getBlockState().getValue(PvArrayBlock.FACING);
 	}
 }

@@ -1,7 +1,6 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.PvArraySpec;
-import com.dooji.electricity.api.power.PvMounting;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -109,11 +108,6 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 			case WEST -> 180.0;
 			default -> 270.0;
 		};
-	}
-
-	/** Whether this mounting is one a player can stand on without jumping. */
-	public boolean walkable() {
-		return spec.mounting() == PvMounting.FLAT;
 	}
 
 	@Nullable

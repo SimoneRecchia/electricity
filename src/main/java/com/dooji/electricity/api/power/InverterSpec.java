@@ -52,6 +52,17 @@ public record InverterSpec(
 		 */
 		double maxDcPowerKw,
 		int mpptCount,
+		/**
+		 * String terminals the machine actually has.
+		 *
+		 * Declared rather than derived from the tracker count, because the relation between the two is
+		 * not one relation. A string inverter has two or three terminals on each tracker, so a
+		 * nine-tracker machine takes eighteen strings. A central inverter has *one* tracker and several
+		 * hundred strings, because they arrive through combiner boxes aggregating sixteen to
+		 * thirty-two each - which is the whole architectural difference between the two and exactly the
+		 * thing a derived figure got wrong.
+		 */
+		int stringInputs,
 		double mpptMinVolts,
 		double mpptMaxVolts,
 		double maxDcVolts,
@@ -138,6 +149,7 @@ public record InverterSpec(
 		if (apparentPowerKva < acPowerKw) throw new IllegalArgumentException(id + ": apparent power cannot be under the active nameplate");
 		if (maxDcPowerKw < acPowerKw) throw new IllegalArgumentException(id + ": an inverter accepts at least its own nameplate in DC");
 		if (mpptCount < 1) throw new IllegalArgumentException(id + ": an inverter has at least one maximum power point tracker");
+		if (stringInputs < mpptCount) throw new IllegalArgumentException(id + ": every tracker needs at least one string terminal");
 		if (mpptMaxVolts <= mpptMinVolts) throw new IllegalArgumentException(id + ": invalid MPPT window");
 		if (maxDcVolts < mpptMaxVolts) throw new IllegalArgumentException(id + ": the MPPT window has to fit inside the input rating");
 		if (peakEfficiency <= 0.0 || peakEfficiency >= 1.0) throw new IllegalArgumentException(id + ": efficiency is a fraction under one");
@@ -300,11 +312,6 @@ public record InverterSpec(
 	/** Nominal DC-to-AC ratio the machine is sold at: what an array this inverter is meant for looks like. */
 	public double nominalDcAcRatio() {
 		return maxDcPowerKw / acPowerKw;
-	}
-
-	/** Middle of the MPPT window, which is where a well-sized string sits at operating temperature. */
-	public double mpptMidVolts() {
-		return (mpptMinVolts + mpptMaxVolts) / 2.0;
 	}
 
 	/** Whether a string at this voltage is one the machine can actually track. */

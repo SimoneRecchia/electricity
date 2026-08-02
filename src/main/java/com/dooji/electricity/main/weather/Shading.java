@@ -141,31 +141,14 @@ public final class Shading {
 	}
 
 	/**
-	 * What an array can see, at one moment.
+	 * What the snow on the glass passes.
 	 *
-	 * @param beamFraction fraction of the direct beam that reaches the modules: 1 in the open, 0 under
-	 *                     something solid, and in between under glass, water or leaves
-	 * @param skyFraction  fraction of the sky dome the modules can see, which is what the diffuse and
-	 *                     the ground-reflected terms are scaled by
-	 * @param snowDepthM   snow lying on the modules, in metres
+	 * Exponential in depth with a very short half-depth, so the transition from producing a little and
+	 * warming itself free to producing nothing at all happens over a couple of centimetres - which is
+	 * where it happens outside. One vanilla snow layer, five centimetres, already passes only 8%.
 	 */
-	public record Shade(double beamFraction, double skyFraction, double snowDepthM) {
-		public static final Shade OPEN = new Shade(1.0, 1.0, 0.0);
-
-		/**
-		 * What the snow on the glass passes.
-		 *
-		 * Exponential in depth with a very short half-depth, so the transition from "producing a
-		 * little and warming itself free" to "producing nothing at all" happens over a couple of
-		 * centimetres - which is where it happens outside.
-		 */
-		public double snowTransmittance() {
-			return snowDepthM <= 0.0 ? 1.0 : Math.exp(-snowDepthM * Math.log(2.0) / SNOW_HALF_DEPTH_M);
-		}
-
-		public boolean buried() {
-			return snowTransmittance() < 0.02;
-		}
+	public static double snowTransmittance(double snowDepthM) {
+		return snowDepthM <= 0.0 ? 1.0 : Math.exp(-snowDepthM * Math.log(2.0) / SNOW_HALF_DEPTH_M);
 	}
 
 	// ---- what is overhead ----

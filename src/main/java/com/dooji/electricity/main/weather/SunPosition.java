@@ -48,11 +48,6 @@ public record SunPosition(double elevationDeg, double azimuthDeg) {
 		return Math.cos(Math.toRadians(Math.max(0.0, elevationDeg)));
 	}
 
-	/** Degrees from straight up. The angle an air mass is measured along. */
-	public double zenithDeg() {
-		return 90.0 - elevationDeg;
-	}
-
 	public boolean afternoon() {
 		return azimuthDeg == WEST;
 	}
@@ -72,11 +67,5 @@ public record SunPosition(double elevationDeg, double azimuthDeg) {
 		double tilt = Math.toRadians(planeTiltDeg);
 		double bearing = Math.toRadians(planeAzimuthDeg - azimuthDeg);
 		return Math.cos(tilt) * sinElevation() + Math.sin(tilt) * cosElevation() * Math.cos(bearing);
-	}
-
-	/** Angle of incidence on a plane, in degrees. 90 or more means the sun is not on that face at all. */
-	public double incidenceDeg(double planeTiltDeg, double planeAzimuthDeg) {
-		double cos = cosIncidence(planeTiltDeg, planeAzimuthDeg);
-		return Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, cos))));
 	}
 }

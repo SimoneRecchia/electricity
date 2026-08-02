@@ -167,11 +167,6 @@ public final class SensorCatalog {
 		return BY_ID.values().stream().filter(spec -> !spec.instrument().onArray()).toList();
 	}
 
-	/** The instruments fitted to an array itself: the back-of-module thermometer and the reference cell. */
-	public static List<SensorSpec> arrayInstruments() {
-		return BY_ID.values().stream().filter(spec -> spec.instrument().onArray()).toList();
-	}
-
 	/** Full designation as a calibration certificate prints it, e.g. {@code Kelvinsen SP-11}. */
 	public static String fullName(SensorSpec spec) {
 		return MANUFACTURER + " " + spec.displayName();

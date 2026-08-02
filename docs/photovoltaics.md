@@ -19,8 +19,10 @@ reports what it *could* have made, and its panel says so in as many words.
 
 1. Place an **inverter**. Everything else is decided by which one.
 2. Place **arrays** within twelve blocks of it. It claims them nearest first, up to the
-   number of string terminals it actually has — two per maximum power point tracker. An
-   array past that limit is not wired in and says so.
+   number of string terminals it actually has — four on the smallest machine and two hundred
+   and eighty-eight on the central one, because a central inverter's strings arrive through
+   combiner boxes. An array past that limit is not wired in and says so, and so does one whose
+   string voltage falls outside the machine's tracking window.
 3. Run a **wire** from the fitting on top of the inverter to the **right** insulator of an
    **Electric Cabin**, then on to poles and a Power Box exactly as a turbine does.
 4. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
@@ -55,7 +57,7 @@ can cover the block with. Everything else follows.
 | `solar_panel` | Meridian FT-415 | flat table | Helion HP-108-415 PERC | 44 (22×2) | 18.3 kW | 86% |
 | `pv_flat_430` | Meridian FT-430 | flat table | Helion HJ-132-430 HJT | 44 (22×2) | 18.9 kW | 85% |
 | `pv_tilt_580` | Meridian TR-580 | fixed tilt, 25° | Helion HN-144-580 TOPCon | 18 (18×1) | 10.4 kW | 47% |
-| `pv_tilt_530` | Meridian TR-530 | fixed tilt, 25° | Helion HT-268-530 CdTe | 16 (4×4) | 8.5 kW | 45% |
+| `pv_tilt_530` | Meridian TR-530 | fixed tilt, 25° | Helion HT-268-530 CdTe | 18 (6×3) | 9.5 kW | 50% |
 | `pv_track_700` | Meridian HX-700 | single-axis tracker | Helion HN-132-700 TOPCon | 13 (13×1) | 9.1 kW | 40% |
 | `pv_dual_440` | Meridian AE-440 | dual-axis tracker | Helion HB-066-440 IBC | 13 (13×1) | 5.7 kW | 25% |
 
@@ -110,15 +112,37 @@ so it cannot disagree with either.
 
 ## 3. The inverters
 
-| Block | Product | AC | MPPT | Window | Max DC | ηpeak | ηeuro | Night |
-|---|---|---|---|---|---|---|---|---|
-| `inverter_10` | Volterra VX-10K | 10 kW | 2 | 140–980 V | 15 kW | 98.6% | 98.2% | 1 W |
-| `inverter_110` | Volterra VX-110K | 110 kW | 9 | 200–1000 V | 165 kW | 98.7% | 98.3% | 2 W |
-| `inverter_350` | Volterra VX-350K | 352 kW | 16 | 500–1500 V | 528 kW | 99.0% | 98.7% | 3 W |
-| `inverter_2500` | Volterra VC-2500K | 2500 kW | 1 | 875–1325 V | 3125 kW | 98.9% | 98.5% | 100 W |
+| Block | Product | AC | MPPT | Strings | Window | Max DC | ηpeak | ηeuro | Night |
+|---|---|---|---|---|---|---|---|---|---|
+| `inverter_10` | Volterra VX-10K | 10 kW | 2 | 4 | 140–980 V | 15 kW | 98.6% | 98.2% | 1 W |
+| `inverter_110` | Volterra VX-110K | 110 kW | 9 | 18 | 200–1000 V | 165 kW | 98.7% | 98.3% | 2 W |
+| `inverter_350` | Volterra VX-350K | 352 kW | 16 | 32 | 500–1500 V | 528 kW | 99.0% | 98.7% | 3 W |
+| `inverter_2500` | Volterra VC-2500K | 2500 kW | 1 | 288 | 875–1325 V | 3125 kW | 98.9% | 98.5% | 100 W |
 
-The European efficiency is not a declared figure either — it is the load curve averaged at
-the six standard load points, which is what it means.
+The European efficiency is not a declared figure — it is the load curve averaged at the six
+standard load points, which is what it means.
+
+### Not every array goes in front of every inverter
+
+**The tracking window is a real constraint**, and it is the one mismatch you can make without
+being able to see it. A string sits at a voltage decided by how many modules are in series and
+how hot they are; if that lands outside the machine's window it cannot be tracked, and the
+plant sits in standby forever. So the panel names the window and the voltage rather than
+leaving it at "standby".
+
+| Array | String at 55 °C | VX-10K | VX-110K | VX-350K | VC-2500K |
+|---|---|---|---|---|---|
+| FT-415 | 635 V | ✓ | ✓ | ✓ | — |
+| FT-430 | 674 V | ✓ | ✓ | ✓ | — |
+| TR-580 | 725 V | ✓ | ✓ | ✓ | — |
+| TR-530 | 1006 V | — | — | ✓ | ✓ |
+| HX-700 | 476 V | ✓ | ✓ | — | — |
+| AE-440 | 810 V | ✓ | ✓ | ✓ | — |
+
+The thin-film rack is the only thing the central machine can use, because 223 V a module fills
+a 1500 V string in six and six of them sit inside that narrow high window. That is not an
+accident of this catalogue — it is why real central inverters are sold with a string design
+rather than a voltage range.
 
 **String against central** is the real choice. A string inverter has a maximum power point
 tracker per few strings, so a shaded, soiled or failed row only drags down its own tracker.

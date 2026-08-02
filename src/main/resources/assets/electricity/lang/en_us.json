@@ -197,5 +197,6 @@
   "screen.electricity.met_station.snow_height": "Snow height",
   "screen.electricity.met_station.fitted": "Fitted instruments  (* on the array)",
   "screen.electricity.met_station.reference": "Reference array at %s, %s, %s",
-  "screen.electricity.met_station.no_reference": "No array in range: the plane and module readings are the mast’s own"
+  "screen.electricity.met_station.no_reference": "No array in range: the plane and module readings are the mast’s own",
+  "screen.electricity.pv_inverter.state.out_of_window": "Strings at %s V — outside the %s–%s V tracking window"
 }

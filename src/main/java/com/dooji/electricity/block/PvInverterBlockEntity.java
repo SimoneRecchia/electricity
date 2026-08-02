@@ -88,15 +88,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	 * position, which is the difference between a few dozen lookups and several thousand.
 	 */
 	private static final int RESCAN_TICKS = 40;
-	/**
-	 * String terminals on each maximum power point tracker.
-	 *
-	 * Two, which is what a real multi-tracker string inverter offers and what makes the input capacity
-	 * come out near the DC capacity: a nine-tracker machine takes eighteen strings, which at the
-	 * string sizes in this catalogue is about the fifteen array blocks its 165 kW of DC input wants.
-	 * The two limits agreeing was not arranged - it falls out of both being real figures.
-	 */
-	private static final int STRINGS_PER_MPPT = 2;
 	/** Ticks in a day, for the energy counters that reset with it. */
 	private static final long TICKS_PER_DAY = 24000L;
 
@@ -113,6 +104,15 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private double efficiency = 0.0;
 	private boolean clipping = false;
 	private boolean derating = false;
+	/**
+	 * The strings are lit but at a voltage this machine cannot track.
+	 *
+	 * Worth publishing separately from plain standby, because it is the one silent mismatch a player
+	 * can make and not diagnose: a central inverter is designed around one string length, so putting
+	 * flat tables of twenty-two modules in front of one leaves it waiting for a voltage that will
+	 * never arrive. The panel names the window rather than leaving it at "standby".
+	 */
+	private boolean stringsOutOfWindow = false;
 	private int stringsConnected = 0;
 
 	private double energyTodayKwh = 0.0;
@@ -343,8 +343,12 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		boolean allowed = isRunning();
 		// below the startup voltage there is nothing to track: the strings are lit but not lit enough,
 		// which is why a real plant sits at exactly zero for a few minutes after sunrise rather than
-		// producing a trickle
-		boolean awake = allowed && highestStringVoltage >= spec.startupVolts() && availableDcKw > 0.0;
+		// producing a trickle. Above the window there is nothing to track either, and a real machine
+		// locks out rather than tracking an input it cannot regulate - which is the failure mode a
+		// string designed for a warmer site than it was built on actually has, on the coldest morning
+		boolean trackable = highestStringVoltage >= spec.startupVolts() && spec.withinMpptWindow(highestStringVoltage);
+		stringsOutOfWindow = availableDcKw > 0.0 && highestStringVoltage > 0.0 && !trackable;
+		boolean awake = allowed && trackable && availableDcKw > 0.0;
 
 		double ceiling = Math.min(spec.thermalLimitKw(ambientTempC), Math.max(0.0, activePowerLimitKw));
 		derating = spec.derating(ambientTempC);
@@ -369,7 +373,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 
 		clipping = spec.clipping(availableDcKw, ceiling);
-		double wantedAc = Math.min(spec.unclippedAcKw(availableDcKw), ceiling);
+		double wantedAc = spec.acPowerFromDcKw(availableDcKw, ceiling);
 		// the direct current the machine actually pulls: what it needs to make that output. When it is
 		// clipping this is less than the array could give, which is the maximum power point tracker
 		// stepping off the peak
@@ -432,7 +436,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		candidates.sort(Comparator.comparingDouble(array -> array.getBlockPos().distSqr(worldPosition)));
 
-		int stringCapacity = spec.mpptCount() * STRINGS_PER_MPPT;
+		int stringCapacity = spec.stringInputs();
 		for (PvArrayBlockEntity array : candidates) {
 			int strings = array.spec().strings();
 			if (stringsConnected + strings > stringCapacity) continue;
@@ -500,15 +504,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	// ---- readings ----
 
-	/** Irradiance in the plane of the reference array, W/m2: what the plant reports as its own. */
-	public double referenceIrradiance() {
-		return referenceIrradiance;
-	}
-
-	public double referenceModuleTempC() {
-		return referenceModuleTempC;
-	}
-
 	public double availableDcKw() {
 		return availableDcKw;
 	}
@@ -550,6 +545,11 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return derating;
 	}
 
+	/** Whether the arrays are producing at a voltage this machine cannot track. */
+	public boolean stringsOutOfWindow() {
+		return stringsOutOfWindow;
+	}
+
 	public int arraysConnected() {
 		return arrays.size();
 	}
@@ -564,7 +564,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	}
 
 	public int stringCapacity() {
-		return spec().mpptCount() * STRINGS_PER_MPPT;
+		return spec().stringInputs();
 	}
 
 	public double energyTodayKwh() {
@@ -795,6 +795,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		tag.putDouble("efficiency", efficiency);
 		tag.putBoolean("clipping", clipping);
 		tag.putBoolean("derating", derating);
+		tag.putBoolean("stringsOutOfWindow", stringsOutOfWindow);
 		tag.putInt("stringsConnected", stringsConnected);
 
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
@@ -855,6 +856,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		efficiency = tag.getDouble("efficiency");
 		clipping = tag.getBoolean("clipping");
 		derating = tag.getBoolean("derating");
+		stringsOutOfWindow = tag.getBoolean("stringsOutOfWindow");
 		stringsConnected = tag.getInt("stringsConnected");
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");

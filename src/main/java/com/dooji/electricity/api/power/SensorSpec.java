@@ -140,10 +140,6 @@ public record SensorSpec(
 		if (rangeHigh <= rangeLow) throw new IllegalArgumentException(id + ": invalid measurement range");
 	}
 
-	public boolean radiometer() {
-		return spectralHighNm > spectralLowNm;
-	}
-
 	/**
 	 * What this instrument reads, given what is actually there and what it read last tick.
 	 *
