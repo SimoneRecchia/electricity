@@ -135,6 +135,17 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private static final int STOW_DWELL_TICKS = 600;
 	/** Ticks of soiling accumulation per day-clock day. */
 	private static final double TICKS_PER_DAY = 24000.0;
+	/**
+	 * How long a claim outlives the last word from the inverter that made it, in ticks.
+	 *
+	 * The inverter rescans every forty ticks and pushes an operating point every tick, so a hundred is
+	 * generous - and it is the reason nothing has to be told when the other end goes away. An inverter
+	 * that is broken, unloaded, or on the far side of a chunk border that has just gone out of memory
+	 * simply stops renewing, and the array releases itself. A lease is also what a real string sees: it
+	 * talks to its inverter over a serial link, and when the link goes quiet it stops delivering,
+	 * without ever being told why.
+	 */
+	private static final int CLAIM_LEASE_TICKS = 100;
 
 	// ---- what the block is ----
 
@@ -169,6 +180,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/** How much of the maximum power point the inverter is actually letting the array sit at, 0 to 1. */
 	private double mpptFraction = 0.0;
 	private BlockPos inverterPos = null;
+	/** Ticks since the inverter last said anything, against which the claim is a lease. */
+	private int claimAge = 0;
 
 	private double poaBeam = 0.0;
 	private double poaDiffuse = 0.0;
@@ -231,6 +244,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		ambientTempC = sky.ambientTempC();
 		windSpeed = sky.windSpeed();
+
+		expireClaim();
 
 		if (--skyViewCountdown <= 0) {
 			skyViewFactor = Shading.skyViewFactor(serverLevel, worldPosition);
@@ -501,11 +516,12 @@ public class PvArrayBlockEntity extends BlockEntity {
 	public boolean claim(BlockPos candidate) {
 		if (level == null) return false;
 		if (inverterPos != null && !inverterPos.equals(candidate)) {
-			boolean stillThere = level.getBlockEntity(inverterPos) instanceof PvInverterBlockEntity;
+			boolean stillThere = LoadedBlockEntities.find(level, inverterPos, PvInverterBlockEntity.class) != null;
 			if (stillThere && inverterPos.distSqr(worldPosition) <= candidate.distSqr(worldPosition)) return false;
 		}
 
 		inverterPos = candidate.immutable();
+		claimAge = 0;
 		return true;
 	}
 
@@ -516,13 +532,34 @@ public class PvArrayBlockEntity extends BlockEntity {
 		}
 	}
 
+	/**
+	 * Lets the claim go when the inverter has stopped renewing it.
+	 *
+	 * A saved claim is trusted for one lease after a world loads, so an array does not read as unwired
+	 * for the two seconds it takes its inverter to rescan.
+	 */
+	private void expireClaim() {
+		if (inverterPos == null) return;
+		if (++claimAge <= CLAIM_LEASE_TICKS) return;
+
+		inverterPos = null;
+		mpptFraction = 0.0;
+	}
+
 	@Nullable
 	public BlockPos inverterPos() {
 		return inverterPos;
 	}
 
+	/**
+	 * Whether an inverter is claiming this array and still saying so.
+	 *
+	 * Answered from the lease rather than by looking the cabinet up, both because the answer is wanted
+	 * on the client and from a computer's own thread, and because an inverter whose chunk is out of
+	 * memory is no use to the array whether or not the block is still there.
+	 */
 	public boolean hasInverter() {
-		return inverterPos != null && level != null && level.getBlockEntity(inverterPos) instanceof PvInverterBlockEntity;
+		return inverterPos != null;
 	}
 
 	/** What the modules could deliver at their maximum power point, in kW. */
@@ -544,6 +581,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 */
 	public void setMpptFraction(double fraction) {
 		mpptFraction = Mth.clamp(fraction, 0.0, 1.0);
+		claimAge = 0;
 	}
 
 	// ---- readings ----

@@ -104,7 +104,7 @@ public class MetStationBlockEntity extends BlockEntity {
 		WeatherSnapshot weather = GlobalWeatherManager.get(serverLevel).sample(worldPosition, 1);
 		SkyConditions sky = weather.sky();
 
-		PvArrayBlockEntity array = referenceArray != null && serverLevel.getBlockEntity(referenceArray) instanceof PvArrayBlockEntity found ? found : null;
+		PvArrayBlockEntity array = LoadedBlockEntities.find(serverLevel, referenceArray, PvArrayBlockEntity.class);
 		double tilt = array != null ? array.tiltDeg() : 0.0;
 		double azimuth = array != null ? array.planeAzimuthDeg() : 90.0;
 		PlaneIrradiance plane = Atmosphere.planeOfArray(sky, tilt, azimuth, 0.0);

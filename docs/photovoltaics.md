@@ -32,6 +32,13 @@ A **Power Wrench** opens a panel on any of the three.
 There is no cable to draw between an array and its inverter, and that is also how a real
 plant looks: the only overhead line on a solar farm is the one leaving it.
 
+The claim is a **lease**, not a wire. The inverter renews it every tick it runs, and an array
+that stops hearing from its inverter for five seconds releases itself and goes to standby.
+That is what a string actually sees — it talks to its inverter over a serial link and knows
+nothing about the world beyond it — and it is why nothing has to be told when the other end
+goes away: a cabinet that is broken, or standing in a chunk that is no longer loaded, simply
+stops renewing.
+
 ### How much glass to put in front of an inverter
 
 More than it can pass. That is not a mistake, it is the entire design convention: real

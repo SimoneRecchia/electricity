@@ -1,9 +1,11 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.InverterSpec;
+import com.dooji.electricity.main.Electricity;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -93,5 +95,26 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 				inverter.serverTick();
 			}
 		};
+	}
+
+	/**
+	 * Takes the cabinet out of the plant when it is actually broken.
+	 *
+	 * This and not the block entity's own removal, which also happens every time the chunk unloads: the
+	 * plant reaches into other chunks here, and reaching out of an unloading chunk is what stops a world
+	 * from ever finishing its save.
+	 */
+	@Override
+	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+		if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {
+			if (level.getBlockEntity(pos) instanceof PvInverterBlockEntity inverter) {
+				// the arrays, or they would go on believing they were wired to a cabinet that is no longer
+				// there and would wait for an operating point that never comes
+				inverter.releaseArrays();
+				Electricity.wireManager.removeConnectionsForInsulators(serverLevel, inverter.getInsulatorIds());
+			}
+		}
+
+		super.onRemove(state, level, pos, newState, movedByPiston);
 	}
 }

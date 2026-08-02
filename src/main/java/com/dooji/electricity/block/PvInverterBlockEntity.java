@@ -323,7 +323,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		List<PvArrayBlockEntity> live = new ArrayList<>();
 
 		for (BlockPos pos : arrays) {
-			if (!(serverLevel.getBlockEntity(pos) instanceof PvArrayBlockEntity array)) continue;
+			PvArrayBlockEntity array = LoadedBlockEntities.find(serverLevel, pos, PvArrayBlockEntity.class);
+			// an array whose ground has gone out of memory is a part of the plant that is not there for
+			// the moment, and a claim it cannot renew lapses at its end
+			if (array == null) continue;
 			// a closer inverter may have taken it since the last scan, and until this one rescans it
 			// would otherwise go on counting an array it no longer owns
 			if (!worldPosition.equals(array.inverterPos())) continue;
@@ -403,12 +406,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	 * lookups, and it is what makes a two-second rescan free.
 	 */
 	private void rescan(ServerLevel serverLevel, InverterSpec spec) {
-		for (BlockPos pos : arrays) {
-			if (serverLevel.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
-				array.releaseClaim(worldPosition);
-			}
-		}
-
+		releaseArrays();
 		arrays.clear();
 		stringsConnected = 0;
 
@@ -581,7 +579,8 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		double dcNameplate = 0.0;
 		for (BlockPos pos : arrays) {
-			if (level.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
+			PvArrayBlockEntity array = LoadedBlockEntities.find(level, pos, PvArrayBlockEntity.class);
+			if (array != null) {
 				dcNameplate += array.spec().dcPowerKw();
 			}
 		}
@@ -940,14 +939,20 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
 			});
 		}
+	}
 
-		if (level != null && !level.isClientSide()) {
-			// the arrays have to be told, or they would go on believing they were wired to a cabinet
-			// that is no longer there and would wait for a claim that never comes
-			for (BlockPos pos : arrays) {
-				if (level.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
-					array.releaseClaim(worldPosition);
-				}
+	/**
+	 * Tells the arrays this inverter is letting them go.
+	 *
+	 * Called when the cabinet is broken and before every rescan, and deliberately not when its chunk
+	 * unloads: an unloading block entity must not reach into another chunk, and an array does not need
+	 * telling anyway, because a claim it stops hearing about lapses on its own.
+	 */
+	void releaseArrays() {
+		for (BlockPos pos : arrays) {
+			PvArrayBlockEntity array = LoadedBlockEntities.find(level, pos, PvArrayBlockEntity.class);
+			if (array != null) {
+				array.releaseClaim(worldPosition);
 			}
 		}
 	}
