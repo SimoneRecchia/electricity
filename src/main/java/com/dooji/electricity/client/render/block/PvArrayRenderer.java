@@ -91,10 +91,12 @@ public class PvArrayRenderer extends ObjRendererBase {
 
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
 			int packedLight, PvArrayBlockEntity array) {
+		boolean harnessed = array.harnessed();
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
-			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
+			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE,
+					groupName -> harnessed || !isHarness(groupName));
 			return;
 		}
 
@@ -107,7 +109,21 @@ public class PvArrayRenderer extends ObjRendererBase {
 			poseSingleAxis(model, poseStack, poses, rotation);
 		}
 
+		if (!harnessed) poses.keySet().removeIf(PvArrayRenderer::isHarness);
+
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
+	}
+
+	/**
+	 * The groups that only exist once a set of leads has been worked into the array.
+	 *
+	 * The whole of the contract between this and the generator, the same way {@code rotate_} is: the model
+	 * carries the junction box and the pair leaving it under one name, and this decides whether they are
+	 * there. So plugging a reel of cable into an array is visible from across the field, which is the only
+	 * way a player finds the one row they forgot.
+	 */
+	private static boolean isHarness(String groupName) {
+		return groupName.startsWith("harness");
 	}
 
 	/**

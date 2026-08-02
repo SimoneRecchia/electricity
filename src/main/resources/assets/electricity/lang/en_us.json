@@ -117,7 +117,7 @@
   "tooltip.electricity.pv.ground": "Covers %s of the ground · %s m² of modules",
   "tooltip.electricity.pv.bifacial": "Bifacial: the back is worth %s of the front",
   "tooltip.electricity.pv.tracker": "%s · %s axis/axes · ±%s° · tracks a sun down to %s°",
-  "tooltip.electricity.pv.needs_inverter": "Produces nothing without an inverter in range.",
+  "tooltip.electricity.pv.needs_inverter": "Right-click with string cable to fit its leads, then run the cable to a combiner or an inverter.",
   "tooltip.electricity.inverter.nameplate": "%s AC · %s apparent",
   "tooltip.electricity.inverter.dc": "Accepts %s DC · %s× the AC nameplate",
   "tooltip.electricity.inverter.mppt": "%s MPPT · %s–%s V window · starts at %s V",
@@ -174,7 +174,6 @@
   "screen.electricity.pv_array.state.shaded": "Shaded — something is standing over it",
   "screen.electricity.pv_array.state.row_shaded": "Row shading — the row in front is in the way",
   "screen.electricity.pv_array.state.snow": "Buried — snow on the modules",
-  "screen.electricity.pv_array.state.no_inverter": "Open circuit — no inverter in range",
   "screen.electricity.pv_array.state.dark": "Dark",
   "screen.electricity.pv_array.stow.none": "Tracking the sun",
   "screen.electricity.pv_array.stow.night": "Night stow",
@@ -205,5 +204,8 @@
   "tooltip.electricity.dc_cable.rating": "%s mm² · %s A in free air · %s V DC",
   "tooltip.electricity.dc_cable.trench": "Sneak to dig it in: %s A buried, and the spoil comes back.",
   "tooltip.electricity.dc_cable.string": "Strings to a combiner or an inverter. Right-click an array to fit its leads.",
-  "tooltip.electricity.dc_cable.trunk": "A combiner box to an inverter. Too heavy to plug into an array."
+  "tooltip.electricity.dc_cable.trunk": "A combiner box to an inverter. Too heavy to plug into an array.",
+  "screen.electricity.pv_array.state.no_harness": "Open circuit — no leads on the strings",
+  "screen.electricity.pv_array.state.no_collector": "Open circuit — the cable reaches nothing",
+  "screen.electricity.pv_array.run": "Run %s · %s buried · %s in the copper"
 }

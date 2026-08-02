@@ -78,6 +78,23 @@ public record InverterSpec(
 		 * up on fewer strings per tracker than a narrow one.
 		 */
 		double maxCurrentPerMppt,
+		/**
+		 * Whether the machine has fused string terminals of its own.
+		 *
+		 * True of every string inverter, and that is what a string inverter *is*: its terminals are the
+		 * fusing and the disconnect, which is why nobody puts a combiner box in front of one. A central
+		 * inverter has bare busbars instead, so it cannot take a string at all until it is given a set of
+		 * fuses - which is the real reason combiner boxes exist and not a rule invented for this.
+		 */
+		boolean stringTerminals,
+		/**
+		 * Whether it has busbars a combiner box's output can be lugged onto.
+		 *
+		 * A residential or commercial machine does not: its inputs are plug connectors, and three hundred
+		 * amps of 240 mm² will not go into one. A utility string machine has both, because it is sold into
+		 * plants laid out either way, and a central machine has only these.
+		 */
+		boolean trunkTerminals,
 		double mpptMinVolts,
 		double mpptMaxVolts,
 		double maxDcVolts,
@@ -166,6 +183,7 @@ public record InverterSpec(
 		if (mpptCount < 1) throw new IllegalArgumentException(id + ": an inverter has at least one maximum power point tracker");
 		if (stringInputs < mpptCount) throw new IllegalArgumentException(id + ": every tracker needs at least one string terminal");
 		if (maxCurrentPerMppt <= 0.0) throw new IllegalArgumentException(id + ": a tracker's terminals carry some current");
+		if (!stringTerminals && !trunkTerminals) throw new IllegalArgumentException(id + ": direct current has to get in somehow");
 		if (mpptMaxVolts <= mpptMinVolts) throw new IllegalArgumentException(id + ": invalid MPPT window");
 		if (maxDcVolts < mpptMaxVolts) throw new IllegalArgumentException(id + ": the MPPT window has to fit inside the input rating");
 		if (peakEfficiency <= 0.0 || peakEfficiency >= 1.0) throw new IllegalArgumentException(id + ": efficiency is a fraction under one");
@@ -330,7 +348,6 @@ public record InverterSpec(
 		return maxDcPowerKw / acPowerKw;
 	}
 
-	/** Whether a string at this voltage is one the machine can actually track. */
 	/** String terminals on one tracker: the terminal count shared out, at least one each. */
 	public int inputsPerMppt() {
 		return Math.max(1, stringInputs / mpptCount);
@@ -355,6 +372,7 @@ public record InverterSpec(
 		return mpptCount * stringsPerMppt(stringCurrentAmps);
 	}
 
+	/** Whether a string at this voltage is one the machine can actually track. */
 	public boolean withinMpptWindow(double volts) {
 		return volts >= mpptMinVolts && volts <= mpptMaxVolts;
 	}

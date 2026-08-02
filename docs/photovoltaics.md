@@ -18,30 +18,69 @@ reports what it *could* have made, and its panel says so in as many words.
 ## 1. Building one
 
 1. Place an **inverter**. Everything else is decided by which one.
-2. Place **arrays** within twelve blocks of it. It claims them nearest first, up to the
-   number of string terminals it actually has — four on the smallest machine and two hundred
-   and eighty-eight on the central one, because a central inverter's strings arrive through
-   combiner boxes. An array past that limit is not wired in and says so, and so does one whose
-   string voltage falls outside the machine's tracking window.
-3. Run a **wire** from the fitting on top of the inverter to the **right** insulator of an
+2. Place **arrays**.
+3. **Right-click each array with a reel of string cable.** That fits its leads, and the array grows
+   a junction box you can see from across the field. Until then its strings go nowhere and its panel
+   says so — a string with no leads on it is not connected to anything.
+4. **Lay string cable from the array to the inverter**, the way you lay redstone. It turns corners,
+   steps up and down, and climbs the wall of a block to reach a run on top of it. Sneak on ground a
+   shovel would move and it digs itself in instead: the spoil comes back, the run lies flush, and you
+   walk over it.
+5. Run a **wire** from the fitting on top of the inverter to the **right** insulator of an
    **Electric Cabin**, then on to poles and a Power Box exactly as a turbine does.
-4. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
+6. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
 
-A **Power Wrench** opens a panel on any of the three. The panels are 288 pixels wide, which is not
+An inverter takes the arrays whose runs are **shortest** first, up to the string terminals, the input
+current and the DC power it actually has. An array past those limits is not wired in and says so, and
+so does one whose string voltage falls outside the machine's tracking window.
+
+The central machine takes **nothing** here however much cable you lay to it. It has bare busbars
+rather than fused string terminals, which is what a central inverter is, and what fills the gap is a
+combiner box.
+
+A **Power Wrench** opens a panel on any of them. The panels are 288 pixels wide, which is not
 a round number either: it is what two columns of a label and a right-aligned value actually
 measure. `tools/check_gui_fits.py` measures the real font against the real layout constants and
 fails if any label would draw through its own value — which is how the mast's panel came to read
 "Plane of arr@yW/m²" and stay that way through a review that read every line of the code.
 
-There is no cable to draw between an array and its inverter, and that is also how a real
-plant looks: the only overhead line on a solar farm is the one leaving it.
+### The run costs what a run of copper costs
 
-The claim is a **lease**, not a wire. The inverter renews it every tick it runs, and an array
-that stops hearing from its inverter for five seconds releases itself and goes to standby.
-That is what a string actually sees — it talks to its inverter over a serial link and knows
-nothing about the world beyond it — and it is why nothing has to be told when the other end
-goes away: a cabinet that is broken, or standing in a chunk that is no longer loaded, simply
-stops renewing.
+This is the part worth knowing before you lay a plant out. A cable is not a permission slip; it is a
+length of metal with resistance in it.
+
+| | 6 mm² string cable | 240 mm² DC trunk |
+|---|---|---|
+| Resistance at 90 °C | 4.32 Ω/km | 0.0961 Ω/km |
+| In free air at 60 °C | 70 A | 570 A |
+| Buried | 60 A | 467 A |
+
+A block is ten metres, so a run of twenty blocks is two hundred metres, and two hundred metres of
+6 mm² at a string's eighteen amps drops about **31 volts**. What that costs depends entirely on the
+string it is dropped out of, which is the real lesson: on a 1500 V string it is two percent, and on a
+500 V one it is six. It is why the industry went to 1500 V, and it is measured here rather than
+asserted — the array's panel shows the run, how much of it is buried and what the copper is taking,
+and the inverter sees the *lower* voltage, so a long enough run will hold a string under the
+machine's startup voltage on a cold morning.
+
+Burying costs a seventh of a string cable's rating and a fifth of a trunk's, because the ground is a
+worse place to shed heat into than moving air. That is IEC 60364-5-52 method D against method E, and
+it is a real trade rather than a cosmetic choice.
+
+The two gauges do not connect to each other. A 240 mm² lug does not go into the plug on the end of a
+module, so string cable goes from arrays to whatever collects them and trunk cable goes from a
+combiner box to a cabinet. Which machine takes which is on its datasheet: the 10 kW and 110 kW have
+plug terminals only, the 350 kW has both, and the central machine has only busbars.
+
+### The lease
+
+Ownership of an array is a **lease**, not a wire — the cable decides *whether* a collector can claim
+it, and the lease decides whether the claim still holds. The collector renews it every tick it runs,
+and an array that stops hearing from its collector for five seconds releases itself and goes to
+standby. That is what a string actually sees — it talks to its inverter over a serial link and knows
+nothing about the world beyond it — and it is why nothing has to be told when the other end goes
+away: a cabinet that is broken, or standing in a chunk that is no longer loaded, simply stops
+renewing.
 
 ### How much glass to put in front of an inverter
 

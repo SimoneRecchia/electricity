@@ -60,6 +60,14 @@ public class MetStationBlockEntity extends BlockEntity {
 	 * and low enough that the echo comes back. It is also what makes the two snow readings differ, since
 	 * the distance is measured from here and the depth is worked out from it.
 	 */
+	/**
+	 * How far a mast's on-array instruments reach, in blocks.
+	 *
+	 * A hundred and twenty metres of signal cable at the mod's ten metres to the block, which is about as
+	 * far as anyone runs a reference cell before putting in a second mast.
+	 */
+	private static final int REFERENCE_RADIUS = 12;
+
 	private static final double SNOW_SENSOR_HEIGHT_M = 2.0;
 	/** How often the mast looks again for the array its two on-array instruments are fitted to, in ticks. */
 	private static final int RESCAN_TICKS = 40;
@@ -143,10 +151,15 @@ public class MetStationBlockEntity extends BlockEntity {
 	 * thermometer to it, and every performance calculation for the whole site is then written against
 	 * that one array's plane. Nearest is as good a choice as any and better than most, because a mast is
 	 * put where the plant is.
+	 *
+	 * Straight-line distance rather than a cable run, unlike everything else in the plant, and rightly so:
+	 * the instrument on the module is a sensor on a signal cable and not part of the direct-current
+	 * collection, so it does not care where the power goes. {@link #REFERENCE_RADIUS} is how long a real
+	 * one's cable is.
 	 */
 	@Nullable
 	private BlockPos findReferenceArray(ServerLevel serverLevel) {
-		int radius = ElectricityServerConfig.pvArrayRadius();
+		int radius = REFERENCE_RADIUS;
 		List<PvArrayBlockEntity> candidates = new ArrayList<>();
 
 		int minChunkX = (worldPosition.getX() - radius) >> 4;

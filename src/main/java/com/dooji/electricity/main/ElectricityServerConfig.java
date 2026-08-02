@@ -10,7 +10,7 @@ public final class ElectricityServerConfig {
 	private static final ForgeConfigSpec.DoubleValue TURBINE_MAX_JOULES_PER_TICK;
 	private static final ForgeConfigSpec.DoubleValue PV_EXPORT_FRACTION;
 	private static final ForgeConfigSpec.DoubleValue PV_MAX_JOULES_PER_TICK;
-	private static final ForgeConfigSpec.IntValue PV_ARRAY_RADIUS;
+	private static final ForgeConfigSpec.IntValue PV_ARRAY_RUN;
 
 	static {
 		ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -50,13 +50,14 @@ public final class ElectricityServerConfig {
 		).defineInRange("pvMaxJoulesPerTick", 0.0, 0.0, 1.0e9);
 		builder.pop();
 		builder.push("photovoltaics");
-		PV_ARRAY_RADIUS = builder.comment(
-				"How far an inverter looks for arrays to wire up, in blocks.",
-				"Twelve is a hundred and twenty metres of DC cable at the mod's ten metres to the block, which is",
-				"about as far as a real plant will run a string before the voltage drop stops being worth it.",
-				"An inverter still refuses arrays past the number of string terminals it actually has, so raising",
-				"this lets a plant spread out rather than letting one cabinet swallow more of them."
-		).defineInRange("arraySearchRadius", 12, 2, 48);
+		PV_ARRAY_RUN = builder.comment(
+				"Longest run of DC cable a machine will follow, in blocks.",
+				"Thirty-two is three hundred and twenty metres at the mod's ten metres to the block, which is past",
+				"the point where a string's volt drop has already made the run a bad idea - so this is a backstop",
+				"against a cable laid across a continent rather than a design limit. The physics is the limit:",
+				"a long run loses real percent, and the panel says how much.",
+				"An inverter still refuses arrays past the terminals, the current and the DC power it actually has."
+		).defineInRange("maxCableRun", 32, 2, 256);
 		builder.pop();
 		SERVER_SPEC_INTERNAL = builder.build();
 	}
@@ -95,8 +96,8 @@ public final class ElectricityServerConfig {
 		return configured <= 0.0 ? Double.MAX_VALUE : configured;
 	}
 
-	/** How far an inverter looks for arrays, in blocks. */
-	public static int pvArrayRadius() {
-		return PV_ARRAY_RADIUS.get();
+	/** Longest run of cable a machine will follow, in blocks. */
+	public static int maxCableRun() {
+		return PV_ARRAY_RUN.get();
 	}
 }

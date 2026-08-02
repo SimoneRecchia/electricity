@@ -133,7 +133,15 @@ public final class SolarTelemetry {
 	public static final String TRACKER_STOW = "trackerStow";
 	public static final String TRACKER_SLEWING = "trackerSlewing";
 	public static final String BACKTRACKING = "backtracking";
-	public static final String INVERTER_CONNECTED = "inverterConnected";
+	public static final String WIRED = "wired";
+	/** Whether the strings have leads on them. Without them the array is not connected to anything. */
+	public static final String HARNESSED = "harnessed";
+	/** Length of the run from this array to whatever collects it, in metres. */
+	public static final String DC_RUN_LENGTH = "dcRunLength";
+	/** How much of that run is in the ground, 0 to 1. Buried cable carries less. */
+	public static final String DC_RUN_BURIED = "dcRunBuried";
+	/** What the run burns, as a fraction of what goes down it. */
+	public static final String DC_CABLE_LOSS = "dcCableLoss";
 
 	// ---- an array: derived ----
 
@@ -185,9 +193,9 @@ public final class SolarTelemetry {
 	private static final Map<String, Telemetry.Kind> ARRAY = Telemetry.tags()
 			.measured(POA_IRRADIANCE, POA_BEAM, POA_DIFFUSE, POA_GROUND, POA_REAR, EFFECTIVE_IRRADIANCE, MODULE_TEMP, AMBIENT_TEMP, WIND_SPEED,
 					SOILING, SNOW_DEPTH, ROW_SHADING, OBSTRUCTION, SKY_VIEW, AVAILABLE_DC_POWER, DELIVERED_DC_POWER, TRACKER_ANGLE, TRACKER_TARGET,
-					TRACKER_MODE, TRACKER_STOW, TRACKER_SLEWING, BACKTRACKING, INVERTER_CONNECTED)
+					TRACKER_MODE, TRACKER_STOW, TRACKER_SLEWING, BACKTRACKING, WIRED, HARNESSED)
 			.derived(INCIDENCE_ANGLE, TILT_ANGLE, PLANE_AZIMUTH, STRING_VOLTAGE, STRING_CURRENT, ARRAY_CURRENT, PERFORMANCE_RATIO, SPECTRAL_FACTOR,
-					MODULE_COUNT, DC_NAMEPLATE, GROUND_COVER_RATIO)
+					MODULE_COUNT, DC_NAMEPLATE, GROUND_COVER_RATIO, DC_RUN_LENGTH, DC_RUN_BURIED, DC_CABLE_LOSS)
 			.simulated(TRACKER_MOTOR_POWER, TRACKER_DRIVE_TEMP)
 			.build();
 

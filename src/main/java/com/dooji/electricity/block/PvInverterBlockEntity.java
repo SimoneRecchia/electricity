@@ -14,6 +14,7 @@ import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.compat.energy.EnergyBridge;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
+import com.dooji.electricity.main.registry.CableCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -22,7 +23,6 @@ import com.dooji.electricity.power.SolarTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -39,7 +39,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.capabilities.Capability;
@@ -83,10 +82,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	/**
 	 * How often the plant is surveyed for arrays again, in ticks.
 	 *
-	 * Two seconds. Frequent enough that an array placed beside a running inverter comes online while
-	 * the player is still standing there, and rare enough that the walk over the loaded chunks in
-	 * range costs nothing. The walk is over each chunk's block entity map rather than over every block
-	 * position, which is the difference between a few dozen lookups and several thousand.
+	 * Two seconds. Frequent enough that an array cabled to a running inverter comes online while the
+	 * player is still standing there, and rare enough that following the copper costs nothing - the walk
+	 * only ever visits cable, so a plant of a hundred arrays is a few hundred block states rather than
+	 * the several thousand a radius used to read.
 	 */
 	private static final int RESCAN_TICKS = 40;
 	/** Ticks in a day, for the energy counters that reset with it. */
@@ -320,13 +319,15 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			// an array whose ground has gone out of memory is a part of the plant that is not there for
 			// the moment, and a claim it cannot renew lapses at its end
 			if (array == null) continue;
-			// a closer inverter may have taken it since the last scan, and until this one rescans it
-			// would otherwise go on counting an array it no longer owns
-			if (!worldPosition.equals(array.inverterPos())) continue;
+			// a shorter run may have taken it since the last scan, and until this one rescans it would
+			// otherwise go on counting an array it no longer owns
+			if (!worldPosition.equals(array.collectorPos())) continue;
 
 			live.add(array);
-			availableDcKw += array.availableDcKw();
-			highestStringVoltage = Math.max(highestStringVoltage, array.stringVoltage());
+			// what arrives, not what the modules made: the difference is burnt in the run, and on a long
+			// home run it is a real percent or two rather than a rounding error
+			availableDcKw += array.offeredDcKw();
+			highestStringVoltage = Math.max(highestStringVoltage, array.stringVoltageAtCollector());
 		}
 
 		// the first array in the list is the nearest, because that is the order the scan claimed them
@@ -388,44 +389,25 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	}
 
 	/**
-	 * Finds the arrays this inverter is wired to.
+	 * Finds the arrays this inverter is wired to, by following the cable.
 	 *
-	 * Nearest first, up to the number of string terminals the machine actually has, because a real
-	 * inverter runs out of inputs before it runs out of capacity - and an array with nowhere to plug in
-	 * is a real situation with a real answer, which is to buy another inverter.
+	 * This used to sweep a radius, which is not a connection - it is a coincidence. Now an array counts
+	 * if and only if a continuous run of string cable reaches from this cabinet to a set of leads on it,
+	 * which is what "wired to" means, and the run's length goes on to cost what a length of copper
+	 * costs.
 	 *
-	 * The walk is over the block entities the loaded chunks already hold rather than over every block
-	 * position in range. That is the difference between a few dozen map entries and five thousand block
-	 * lookups, and it is what makes a two-second rescan free.
+	 * Shortest run first, so when the machine runs out of terminals it is the far arrays that are left
+	 * over - which is both the sensible answer and what a designer would have done. An array with nowhere
+	 * to plug in is a real situation with a real answer, and the answer is another inverter.
+	 *
+	 * A machine with no fused string terminals of its own gets nothing here however much cable is laid to
+	 * it. That is the central inverter, and it is not a limitation of the game: strings need fuses, a
+	 * central machine has busbars, and what fills the gap is a combiner box.
 	 */
 	private void rescan(ServerLevel serverLevel, InverterSpec spec) {
 		releaseArrays();
 		arrays.clear();
 		stringsConnected = 0;
-
-		int radius = ElectricityServerConfig.pvArrayRadius();
-		List<PvArrayBlockEntity> candidates = new ArrayList<>();
-
-		int minChunkX = (worldPosition.getX() - radius) >> 4;
-		int maxChunkX = (worldPosition.getX() + radius) >> 4;
-		int minChunkZ = (worldPosition.getZ() - radius) >> 4;
-		int maxChunkZ = (worldPosition.getZ() + radius) >> 4;
-
-		for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-			for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-				if (!serverLevel.getChunkSource().hasChunk(chunkX, chunkZ)) continue;
-
-				LevelChunk chunk = serverLevel.getChunk(chunkX, chunkZ);
-				for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
-					if (!(blockEntity instanceof PvArrayBlockEntity array)) continue;
-					if (array.getBlockPos().distSqr(worldPosition) > (double) radius * radius) continue;
-
-					candidates.add(array);
-				}
-			}
-		}
-
-		candidates.sort(Comparator.comparingDouble(array -> array.getBlockPos().distSqr(worldPosition)));
 
 		// two limits, and which one binds depends on what the modules are. The terminal count is the
 		// holes in the machine; the current limit is the copper behind them, and a designer usually
@@ -435,7 +417,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		double currentConnected = 0.0;
 		double dcConnected = 0.0;
 
-		for (PvArrayBlockEntity array : candidates) {
+		for (DcNetwork.Reach reach : reachableArrays(serverLevel, spec)) {
+			PvArrayBlockEntity array = LoadedBlockEntities.find(serverLevel, reach.pos(), PvArrayBlockEntity.class);
+			if (array == null) continue;
+
 			PvArraySpec wanted = array.spec();
 			int strings = wanted.strings();
 			double current = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * strings;
@@ -444,7 +429,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			if (stringsConnected + strings > spec.stringInputs()) continue;
 			if (currentConnected + current > currentCeiling) continue;
 			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;
-			if (!array.claim(worldPosition)) continue;
+			if (!array.claim(worldPosition, reach, CableCatalog.STRING_6)) continue;
 
 			arrays.add(array.getBlockPos().immutable());
 			stringsConnected += strings;
@@ -453,6 +438,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 
 		stringCurrentHeadroom = currentCeiling - currentConnected;
+	}
+
+	/** Every set of leads a run of string cable reaches from this cabinet, shortest run first. */
+	private List<DcNetwork.Reach> reachableArrays(ServerLevel serverLevel, InverterSpec spec) {
+		if (!spec.stringTerminals()) return List.of();
+
+		return DcNetwork.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
+				PvArrayBlock::harnessed, ElectricityServerConfig.maxCableRun());
 	}
 
 	/**

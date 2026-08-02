@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.Set;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.RenderType;
@@ -21,9 +22,22 @@ import org.joml.Matrix4f;
 // OBJ pipeline code will be migrated to Renderix
 public abstract class ObjRendererBase {
 	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, cache, groupName -> true);
+	}
+
+	/**
+	 * The same, with a say in which groups are drawn.
+	 *
+	 * For the parts of a model that are there only sometimes: an array grows a junction box and a set of
+	 * leads when a reel of cable is worked into it, and the alternative to leaving a group out is a second
+	 * model that differs from the first by one box.
+	 */
+	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache, Predicate<String> draw) {
 		Map<ResourceLocation, List<GroupBuffer>> byTexture = new HashMap<>();
 		for (Map.Entry<String, ObjModel.ObjGroup> groupEntry : model.groups.entrySet()) {
 			String groupName = groupEntry.getKey();
+			if (!draw.test(groupName)) continue;
+
 			ObjModel.ObjGroup group = groupEntry.getValue();
 			GroupBuffer buffer = bufferFor(pos, groupName, group, model, texture, packedLight, cache);
 			if (buffer == null) continue;

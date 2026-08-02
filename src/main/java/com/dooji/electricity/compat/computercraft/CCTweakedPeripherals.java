@@ -744,11 +744,16 @@ public final class CCTweakedPeripherals {
 			return out;
 		}
 
-		/** Where the inverter this array is wired to is, or nil if there is none in range. */
+		/**
+		 * Where this array's strings actually land, or nil if they land nowhere.
+		 *
+		 * A collector rather than an inverter, because on a large plant the thing at the other end of the
+		 * home run is a combiner box - and the array cannot tell the difference, which is the point.
+		 */
 		@LuaFunction
-		public final Object getInverter() {
-			BlockPos pos = array.inverterPos();
-			if (pos == null || !array.hasInverter()) return null;
+		public final Object getCollector() {
+			BlockPos pos = array.collectorPos();
+			if (pos == null) return null;
 
 			Map<String, Object> out = new LinkedHashMap<>();
 			out.put("x", pos.getX());

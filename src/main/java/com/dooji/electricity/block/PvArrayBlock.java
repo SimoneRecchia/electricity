@@ -1,9 +1,13 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
+import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.main.registry.CableCatalog;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -16,6 +20,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -46,7 +51,20 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * follow a sun that travels east to west, so a tracker snaps to that whatever direction the player
  * was looking.
  */
-public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+	/**
+	 * Whether the strings have leads on them.
+	 *
+	 * A block state rather than block entity data, because it decides what the cable alongside gets to
+	 * draw and that answer is wanted while a chunk is being meshed. It is also the honest place for it:
+	 * a set of leads worked onto an array is part of the array, the way a plug is part of an appliance.
+	 *
+	 * An array without them makes exactly nothing. That is not a technicality invented for the game -
+	 * strings with no leads on them are not connected to anything, and a field of glass wired to nothing
+	 * is a field of glass.
+	 */
+	public static final BooleanProperty HARNESSED = BooleanProperty.create("harnessed");
+
 	/** Ankle high: a flat table is walked over rather than round. */
 	private static final VoxelShape FLAT_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 3.0, 16.0);
 	/** A tilted rack, low edge on the ground and high edge about half a block up. */
@@ -61,7 +79,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	public PvArrayBlock(Properties properties, PvArraySpec spec) {
 		super(properties.sound(SoundType.GLASS));
 		this.spec = spec;
-		registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH));
+		registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH).setValue(HARNESSED, false));
 	}
 
 	public PvArraySpec spec() {
@@ -70,7 +88,47 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(FACING);
+		builder.add(FACING, HARNESSED);
+	}
+
+	/** Only string cable, and only once it is there: the leads are what a run plugs into. */
+	@Override
+	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
+		return !cable.trunk() && state.getValue(HARNESSED);
+	}
+
+	/**
+	 * Fitting the leads, which is what right-clicking an array with a reel of string cable does.
+	 *
+	 * Refused for trunk cable, and not out of pedantry: a 240 mm² conductor cannot be terminated in the
+	 * plug on the end of a module, so there is nowhere for it to go.
+	 */
+	@Override
+	@Nullable
+	public BlockState withCableFitted(BlockState state, DcCableSpec cable) {
+		if (cable.trunk() || state.getValue(HARNESSED)) return null;
+
+		return state.setValue(HARNESSED, true);
+	}
+
+	/** Whether this array has its leads, asked of the state so the client can ask it too. */
+	public static boolean harnessed(BlockState state) {
+		return state.getBlock() instanceof PvArrayBlock && state.getValue(HARNESSED);
+	}
+
+	/**
+	 * Hands the leads back when the array is taken away.
+	 *
+	 * A player who fitted a reel of cable into a machine should get it out again by breaking the
+	 * machine, or the cable is a tax on rearranging a plant rather than a part of it.
+	 */
+	@Override
+	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+		if (!level.isClientSide && !state.is(newState.getBlock()) && state.getValue(HARNESSED)) {
+			popResource(level, pos, new ItemStack(Electricity.DC_CABLE_ITEMS.get(CableCatalog.STRING_6.id()).get()));
+		}
+
+		super.onRemove(state, level, pos, newState, movedByPiston);
 	}
 
 	@Override
@@ -80,7 +138,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		// however the player was standing. Everything else faces them, which for a tilted rack is
 		// the direction it tips
 		Direction facing = spec.tracked() ? Direction.NORTH : context.getHorizontalDirection().getOpposite();
-		return defaultBlockState().setValue(FACING, facing);
+		return defaultBlockState().setValue(FACING, facing).setValue(HARNESSED, false);
 	}
 
 	@Override

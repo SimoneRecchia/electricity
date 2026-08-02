@@ -146,8 +146,13 @@ public class PvArrayScreen extends PlantScreen {
 		if (array.snowDepthM() > 0.0 && array.effectiveIrradiance() <= 1.0) {
 			key = "screen.electricity.pv_array.state.snow";
 			colour = RED;
-		} else if (!array.hasInverter()) {
-			key = "screen.electricity.pv_array.state.no_inverter";
+		} else if (!array.harnessed()) {
+			// the two ways of not being connected, said apart, because the fixes are different: one wants
+			// a reel of cable on the array and the other wants the cable run somewhere
+			key = "screen.electricity.pv_array.state.no_harness";
+			colour = RED;
+		} else if (!array.wired()) {
+			key = "screen.electricity.pv_array.state.no_collector";
 			colour = RED;
 		} else if (array.obstructionFraction() < 0.5) {
 			key = "screen.electricity.pv_array.state.shaded";
@@ -254,8 +259,11 @@ public class PvArrayScreen extends PlantScreen {
 				fmt("%.1f", array.windSpeed()), fmt("%.0f", array.incidenceDeg())), 156);
 		faint(graphics, Component.translatable("screen.electricity.pv_array.wiring",
 				fmt("%.0f V", array.stringVoltage()), fmt("%.1f A", array.arrayCurrent()),
-				array.hasInverter() ? Component.translatable("screen.electricity.pv_array.wired").getString()
+				array.wired() ? Component.translatable("screen.electricity.pv_array.wired").getString()
 						: Component.translatable("screen.electricity.pv_array.unwired").getString()), 166);
+		faint(graphics, Component.translatable("screen.electricity.pv_array.run",
+				fmt("%.0f m", array.runMetres()), fmt("%.0f%%", array.runBuriedFraction() * 100.0),
+				fmt("%.2f%%", array.dcLossFraction() * 100.0)), 176);
 	}
 
 	/** Where an angle sits on the drive's full travel, 0 at one limit and 1 at the other. */

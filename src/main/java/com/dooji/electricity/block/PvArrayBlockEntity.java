@@ -1,11 +1,13 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.PvMounting;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TrackerMode;
 import com.dooji.electricity.api.power.TrackerSpec;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.main.registry.CableCatalog;
 import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.weather.Atmosphere;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
@@ -19,6 +21,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -209,7 +212,18 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private double availableDcKw = 0.0;
 	/** How much of the maximum power point the inverter is actually letting the array sit at, 0 to 1. */
 	private double mpptFraction = 0.0;
-	private BlockPos inverterPos = null;
+	/**
+	 * Whichever machine is collecting this array's strings, or null.
+	 *
+	 * A collector rather than an inverter, because a real string does not necessarily land in a cabinet:
+	 * it lands in whatever has fuses for it, which is a combiner box on most of a large plant and the
+	 * inverter's own terminals on a small one.
+	 */
+	private BlockPos collectorPos = null;
+	/** The cable its leads are wired with, and how far that run is. */
+	private DcCableSpec cable = null;
+	private double runMetres = 0.0;
+	private double runBuriedFraction = 0.0;
 	/** Ticks since the inverter last said anything, against which the claim is a lease. */
 	private int claimAge = 0;
 
@@ -229,6 +243,13 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private double obstructionFraction = 1.0;
 	private double stringVoltage = 0.0;
 	private double stringCurrent = 0.0;
+	/**
+	 * String current at the maximum power point, before the operating point scales it.
+	 *
+	 * Kept apart from the reading because the volt drop down the run is worked out from it: what the
+	 * copper would carry if the machine took everything, which is the condition the cable was sized for.
+	 */
+	private double stringCurrentMpp = 0.0;
 
 	private final ClientSync clientSync = new ClientSync();
 
@@ -374,7 +395,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 		// the string readings follow the operating point, not the maximum power point, so a clipped
 		// array shows the voltage the inverter has pushed it to rather than the one it would prefer
 		stringVoltage = spec.stringVoltage(moduleTempC);
-		stringCurrent = spec.stringCurrent(effectiveIrradiance, moduleTempC) * mpptFraction;
+		stringCurrentMpp = spec.stringCurrent(effectiveIrradiance, moduleTempC);
+		stringCurrent = stringCurrentMpp * mpptFraction;
 	}
 
 	/**
@@ -629,63 +651,119 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 	// ---- what the inverter talks to ----
 
-	/**
-	 * Offers this array to an inverter, and answers whether that inverter now owns it.
-	 *
-	 * First claim wins, and a closer one takes it over. Ownership matters because an array feeds
-	 * exactly one inverter through exactly one set of DC cables, so letting two claim the same array
-	 * would have the same modules producing twice.
-	 */
-	public boolean claim(BlockPos candidate) {
-		if (level == null) return false;
-		if (inverterPos != null && !inverterPos.equals(candidate)) {
-			boolean stillThere = LoadedBlockEntities.find(level, inverterPos, PvInverterBlockEntity.class) != null;
-			if (stillThere && inverterPos.distSqr(worldPosition) <= candidate.distSqr(worldPosition)) return false;
-		}
+	/** Whether the strings have leads on them at all, which is the first thing anything else asks. */
+	public boolean harnessed() {
+		return PvArrayBlock.harnessed(getBlockState());
+	}
 
-		inverterPos = candidate.immutable();
+	/**
+	 * Offers this array to a collector down a measured run, and answers whether that collector owns it.
+	 *
+	 * Shorter copper wins. Not nearer copper - shorter, which is the run the walk actually followed, so
+	 * an inverter two blocks away round a wall loses to one five blocks away in a straight line. That is
+	 * the pair with less resistance in it and it is the one a designer would have used.
+	 *
+	 * Ownership matters because a string is wired to one thing through one pair of conductors, so letting
+	 * two collectors claim the same array would have the same modules producing twice. A collector that
+	 * goes away stops renewing and the lease does the rest, which is why nothing here has to look the
+	 * other end up.
+	 */
+	public boolean claim(BlockPos candidate, DcNetwork.Reach run, DcCableSpec through) {
+		if (level == null || !harnessed()) return false;
+		if (collectorPos != null && !collectorPos.equals(candidate) && runMetres <= run.metres()) return false;
+
+		collectorPos = candidate.immutable();
+		cable = through;
+		runMetres = run.metres();
+		runBuriedFraction = run.buriedFraction();
 		claimAge = 0;
 		return true;
 	}
 
 	public void releaseClaim(BlockPos claimant) {
-		if (claimant.equals(inverterPos)) {
-			inverterPos = null;
-			mpptFraction = 0.0;
-		}
+		if (claimant.equals(collectorPos)) forgetCollector();
 	}
 
 	/**
-	 * Lets the claim go when the inverter has stopped renewing it.
+	 * Lets the claim go when the collector has stopped renewing it.
 	 *
 	 * A saved claim is trusted for one lease after a world loads, so an array does not read as unwired
-	 * for the two seconds it takes its inverter to rescan.
+	 * for the two seconds it takes its collector to rescan.
 	 */
 	private void expireClaim() {
-		if (inverterPos == null) return;
+		if (collectorPos == null) return;
 		if (++claimAge <= CLAIM_LEASE_TICKS) return;
 
-		inverterPos = null;
+		forgetCollector();
+	}
+
+	private void forgetCollector() {
+		collectorPos = null;
+		cable = null;
+		runMetres = 0.0;
+		runBuriedFraction = 0.0;
 		mpptFraction = 0.0;
 	}
 
 	@Nullable
-	public BlockPos inverterPos() {
-		return inverterPos;
+	public BlockPos collectorPos() {
+		return collectorPos;
 	}
 
 	/**
-	 * Whether an inverter is claiming this array and still saying so.
+	 * Whether something is collecting this array's strings and still saying so.
 	 *
-	 * Answered from the lease rather than by looking the cabinet up, both because the answer is wanted
-	 * on the client and from a computer's own thread, and because an inverter whose chunk is out of
+	 * Answered from the lease rather than by looking the other end up, both because the answer is wanted
+	 * on the client and from a computer's own thread, and because a collector whose chunk is out of
 	 * memory is no use to the array whether or not the block is still there.
 	 */
-	public boolean hasInverter() {
-		return inverterPos != null;
+	public boolean wired() {
+		return collectorPos != null;
 	}
 
-	/** What the modules could deliver at their maximum power point, in kW. */
+	/** Length of the run to the collector, in metres. Zero when there is none. */
+	public double runMetres() {
+		return runMetres;
+	}
+
+	/** How much of that run is in the ground, from nothing to all of it. */
+	public double runBuriedFraction() {
+		return runBuriedFraction;
+	}
+
+	/**
+	 * What the run burns, as a fraction of what is going down it.
+	 *
+	 * Real and worth having: two hundred metres of 6 mm² at eighteen amps loses nearly three percent of
+	 * a string, which is why a plant puts a combiner box at the end of the row and sends one heavy pair
+	 * the rest of the way rather than sixteen light ones.
+	 */
+	public double dcLossFraction() {
+		if (cable == null || runMetres <= 0.0) return 0.0;
+
+		return cable.lossFraction(stringCurrentMpp, stringVoltage, runMetres);
+	}
+
+	/** What arrives at the collector, in kW: everything the modules can make, less what the copper takes. */
+	public double offeredDcKw() {
+		return availableDcKw * (1.0 - dcLossFraction());
+	}
+
+	/**
+	 * The string voltage as the collector sees it, which is lower by the drop down the run.
+	 *
+	 * It counts: a run long enough holds a string under the inverter's startup voltage, and a plant that
+	 * comes up ten minutes late on a winter morning is a plant whose home runs are too long. Worked out
+	 * at the maximum power point current rather than the operating one, because that is the condition
+	 * the machine has to be able to track before it can choose an operating point at all.
+	 */
+	public double stringVoltageAtCollector() {
+		if (cable == null || runMetres <= 0.0) return stringVoltage;
+
+		return Math.max(0.0, stringVoltage - cable.voltageDrop(stringCurrentMpp, runMetres));
+	}
+
+	/** What the modules could deliver at their maximum power point, in kW, at the array's own terminals. */
 	public double availableDcKw() {
 		return availableDcKw;
 	}
@@ -865,7 +943,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 				rowShadedFraction, obstructionFraction, skyViewFactor, stringVoltage, stringCurrent,
 				availableDcKw, deliveredDcKw(), performanceRatio(), rotationDeg, targetRotationDeg,
 				tiltDeg(), planeAzimuthDeg(), trackerMode.name(), stowReason.name(), slewing, backtracking,
-				hasInverter(), trackerMotorKw()));
+				wired(), harnessed(), runMetres, runBuriedFraction, dcLossFraction(), trackerMotorKw()));
 	}
 
 	// ---- control ----
@@ -916,8 +994,11 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		tag.putDouble("availableDc", availableDcKw);
 		tag.putDouble("mpptFraction", mpptFraction);
-		if (inverterPos != null) {
-			tag.putLong("inverter", inverterPos.asLong());
+		tag.putDouble("runMetres", runMetres);
+		tag.putDouble("runBuried", runBuriedFraction);
+		if (cable != null) tag.putString("cable", cable.id().toString());
+		if (collectorPos != null) {
+			tag.putLong("collector", collectorPos.asLong());
 		}
 
 		tag.putDouble("poaBeam", poaBeam);
@@ -959,7 +1040,10 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		availableDcKw = tag.getDouble("availableDc");
 		mpptFraction = tag.getDouble("mpptFraction");
-		inverterPos = tag.contains("inverter") ? BlockPos.of(tag.getLong("inverter")) : null;
+		runMetres = tag.getDouble("runMetres");
+		runBuriedFraction = tag.getDouble("runBuried");
+		cable = tag.contains("cable") ? CableCatalog.byId(new ResourceLocation(tag.getString("cable"))) : null;
+		collectorPos = tag.contains("collector") ? BlockPos.of(tag.getLong("collector")) : null;
 
 		poaBeam = tag.getDouble("poaBeam");
 		poaDiffuse = tag.getDouble("poaDiffuse");

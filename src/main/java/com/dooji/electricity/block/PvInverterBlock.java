@@ -1,5 +1,6 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.main.Electricity;
 import javax.annotation.Nullable;
@@ -37,7 +38,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * with a transformer next to it. The door faces the way it was placed, because a technician has to be
  * able to open it.
  */
-public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
 	/** A wall-mounted residential machine: shallow, and not much taller than it is wide. */
 	private static final VoxelShape SMALL_SHAPE = Block.box(2.0, 0.0, 4.0, 14.0, 12.0, 12.0);
 	/** A commercial cabinet standing on the ground. */
@@ -65,6 +66,19 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
 		builder.add(FACING);
+	}
+
+	/**
+	 * Which gauge lands on this machine, off its own datasheet.
+	 *
+	 * The distinction a real catalogue makes and this one now makes too: a residential or commercial
+	 * machine has plug connectors, so strings go straight in and a combiner's trunk has nowhere to go. A
+	 * utility string machine has both. A central machine has bare busbars, so it takes a trunk and cannot
+	 * take a string at all - which is why it needs combiner boxes rather than merely liking them.
+	 */
+	@Override
+	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
+		return cable.trunk() ? spec.trunkTerminals() : spec.stringTerminals();
 	}
 
 	@Override

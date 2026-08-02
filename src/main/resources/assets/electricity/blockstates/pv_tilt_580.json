@@ -1,16 +1,9 @@
 {
-  "variants": {
-    "facing=north": {
-      "model": "electricity:block/glass_particle"
-    },
-    "facing=south": {
-      "model": "electricity:block/glass_particle"
-    },
-    "facing=west": {
-      "model": "electricity:block/glass_particle"
-    },
-    "facing=east": {
-      "model": "electricity:block/glass_particle"
+  "multipart": [
+    {
+      "apply": {
+        "model": "electricity:block/glass_particle"
+      }
     }
-  }
+  ]
 }

@@ -3,6 +3,7 @@ package com.dooji.electricity.block;
 import com.dooji.electricity.api.power.DcCableSpec;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -176,32 +177,58 @@ public class DcCableBlock extends Block implements DcTerminal {
 	}
 
 	/**
-	 * Whether, and how, a run at this position reaches in one direction.
+	 * The ways a run can reach in one direction, which is more than one of them at a time.
 	 *
-	 * Dust's rules, in dust's order. The first case is the climb: if there is headroom above to leave
-	 * over, and the block alongside has a top to lie on, and there is a run on top of *that*, then this
-	 * one goes up the wall to reach it. The second is the flat case. The third is the step down, where
-	 * this run reaches over a low neighbour to something a level below - the lower run draws the climb
-	 * from its own side, so only one of the pair has to know about the height difference.
+	 * Dust's three cases. {@code climbs} is a run on top of the block alongside, reached by going up its
+	 * wall - which needs headroom over this block to leave through and a top on that one to land on.
+	 * {@code flat} is the plain case. {@code steps} is a run a level below, reached over the top of a
+	 * neighbour too low to be in the way. {@code wall} is whether the block alongside is a full cube,
+	 * which is the only thing that separates going *up* it from lying against it.
 	 */
-	public RedstoneSide connection(BlockGetter level, BlockPos pos, Direction direction) {
+	private record Ways(boolean climbs, boolean flat, boolean steps, boolean wall) {
+		boolean any() {
+			return climbs || flat || steps;
+		}
+	}
+
+	private Ways ways(BlockGetter level, BlockPos pos, Direction direction) {
 		BlockPos beside = pos.relative(direction);
-		BlockState alongside = level.getBlockState(beside);
 		BlockPos above = pos.above();
+		BlockState alongside = level.getBlockState(beside);
+		boolean wall = alongside.isCollisionShapeFullBlock(level, beside);
 
-		if (!level.getBlockState(above).isCollisionShapeFullBlock(level, above)
+		boolean climbs = !level.getBlockState(above).isCollisionShapeFullBlock(level, above)
 				&& alongside.isFaceSturdy(level, beside, Direction.UP)
-				&& connectsTo(level.getBlockState(beside.above()))) {
-			return alongside.isCollisionShapeFullBlock(level, beside) ? RedstoneSide.UP : RedstoneSide.SIDE;
+				&& connectsTo(level.getBlockState(beside.above()));
+		boolean steps = !wall && connectsTo(level.getBlockState(beside.below()));
+		return new Ways(climbs, connectsTo(alongside), steps, wall);
+	}
+
+	/** How a run at this position reaches in one direction, for the model to draw. */
+	public RedstoneSide connection(BlockGetter level, BlockPos pos, Direction direction) {
+		Ways ways = ways(level, pos, direction);
+		if (ways.climbs() && ways.wall()) return RedstoneSide.UP;
+
+		return ways.any() ? RedstoneSide.SIDE : RedstoneSide.NONE;
+	}
+
+	/**
+	 * Every position a run reaches, machines included: what {@link DcNetwork} follows.
+	 *
+	 * The same three tests the model is drawn from, so what a player sees connected and what the plant
+	 * counts are the same thing by construction.
+	 */
+	public void collectReached(BlockState state, BlockGetter level, BlockPos pos, Consumer<BlockPos> out) {
+		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> entry : SIDES.entrySet()) {
+			if (state.getValue(entry.getValue()) == RedstoneSide.NONE) continue;
+
+			Direction direction = entry.getKey();
+			BlockPos beside = pos.relative(direction);
+			Ways ways = ways(level, pos, direction);
+			if (ways.climbs()) out.accept(beside.above());
+			if (ways.flat()) out.accept(beside);
+			if (ways.steps()) out.accept(beside.below());
 		}
-
-		if (connectsTo(alongside)) return RedstoneSide.SIDE;
-
-		if (!alongside.isCollisionShapeFullBlock(level, beside) && connectsTo(level.getBlockState(beside.below()))) {
-			return RedstoneSide.SIDE;
-		}
-
-		return RedstoneSide.NONE;
 	}
 
 	/**

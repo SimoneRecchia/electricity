@@ -239,7 +239,11 @@ public final class SolarTelemetrySimulator {
 			String stowReason,
 			boolean slewing,
 			boolean backtracking,
-			boolean inverterConnected,
+			boolean wired,
+			boolean harnessed,
+			double runMetres,
+			double runBuriedFraction,
+			double dcLossFraction,
 			double trackerMotorKw
 	) {
 	}
@@ -270,7 +274,11 @@ public final class SolarTelemetrySimulator {
 		out.put(SolarTelemetry.TRACKER_STOW, s.stowReason());
 		out.put(SolarTelemetry.TRACKER_SLEWING, s.slewing());
 		out.put(SolarTelemetry.BACKTRACKING, s.backtracking());
-		out.put(SolarTelemetry.INVERTER_CONNECTED, s.inverterConnected());
+		out.put(SolarTelemetry.WIRED, s.wired());
+		out.put(SolarTelemetry.HARNESSED, s.harnessed());
+		out.put(SolarTelemetry.DC_RUN_LENGTH, s.runMetres());
+		out.put(SolarTelemetry.DC_RUN_BURIED, s.runBuriedFraction());
+		out.put(SolarTelemetry.DC_CABLE_LOSS, s.dcLossFraction());
 
 		out.put(SolarTelemetry.INCIDENCE_ANGLE, s.incidenceDeg());
 		out.put(SolarTelemetry.TILT_ANGLE, s.tiltDeg());

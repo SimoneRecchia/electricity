@@ -47,6 +47,7 @@ MATERIALS = {
     'display': 'pv_display.png',
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
+    'dc_cable': 'dc_string_line.png',
 }
 
 # Which material each face of a laminate carries.  A module is not one material: the sun
@@ -184,6 +185,27 @@ def pivot(mesh, name, point):
     box(mesh, faces, point, point)
 
 
+def harness(mesh):
+    """The junction box and the leads an array grows when a reel of cable is worked into it.
+
+    Drawn only when the block state says the leads are fitted, which is what
+    ``PvArrayRenderer`` uses the group name for - so the array visibly changes when a player
+    plugs it in, and the picture and the wiring cannot disagree.
+
+    Everything here stays under ``y = 0.17``.  That is not decoration: a single-axis row's
+    modules sweep a disc of radius 0.446 about a tube at 0.62, so the lowest a moving part
+    ever gets is 0.174, and a fixed part above that line is a part the row grinds through
+    twice a day.  It is also where a real one is - a string junction box is bolted low on the
+    racking where a technician can open it standing up.
+    """
+    clad_box(mesh, 'harness', (0.34, 0.02, 0.30), (0.46, 0.17, 0.42),
+             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.4)
+    # the pair leaving it and running out to the edge of the block, which is where a laid run
+    # of cable comes to meet them
+    for x in (0.375, 0.425):
+        box(mesh, mesh.faces('harness', 'dc_cable'), (x - 0.014, 0.0, 0.36), (x + 0.014, 0.03, 0.5), uv_scale=0.4)
+
+
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
     """A box whose six faces are not all the same material.
 
@@ -317,6 +339,8 @@ def flat_table():
     # two modules with a gap between them, which is where a real table's rails run
     clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
     clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
+
+    harness(mesh)
     return mesh
 
 
@@ -378,6 +402,8 @@ def tilted_rack():
     top = pivot_y + frame_half + module_thickness
     clad_box(mesh, 'modules', (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
     clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
+
+    harness(mesh)
     return mesh
 
 
@@ -439,6 +465,8 @@ def single_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
 
+
+    harness(mesh)
     return mesh
 
 
@@ -503,6 +531,8 @@ def dual_axis():
         clad_box(mesh, 'rotate_elevation_modules', (-0.44, pivot_y - 0.0025, z0), (-0.02, pivot_y + 0.0275, z1), LAMINATE)
         clad_box(mesh, 'rotate_elevation_modules', (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1), LAMINATE)
 
+
+    harness(mesh)
     return mesh
 
 
@@ -654,12 +684,13 @@ def met_mast():
 
 
 LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
+HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'dc_cable')
 
 MODELS = [
-    ('pv_flat', flat_table, ('steel', 'frame') + LAMINATE_MATERIALS),
-    ('pv_tilt', tilted_rack, ('steel', 'frame') + LAMINATE_MATERIALS),
-    ('pv_track', single_axis, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'frame') + LAMINATE_MATERIALS),
-    ('pv_dual', dual_axis, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'frame') + LAMINATE_MATERIALS),
+    ('pv_flat', flat_table, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
+    ('pv_tilt', tilted_rack, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
+    ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
+    ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
