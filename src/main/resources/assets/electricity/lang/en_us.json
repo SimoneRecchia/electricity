@@ -99,6 +99,8 @@
   "block.electricity.inverter_110": "Volterra VX-110K",
   "block.electricity.inverter_350": "Volterra VX-350K",
   "block.electricity.inverter_2500": "Volterra VC-2500K",
+  "block.electricity.dc_string_cable": "Cabria SC-6 Solar Cable",
+  "block.electricity.dc_trunk_cable": "Cabria DT-240 DC Trunk",
   "block.electricity.met_station": "Meteorological Mast",
   "mounting.electricity.flat": "flat table",
   "mounting.electricity.fixed_tilt": "fixed tilt, 25°",
@@ -199,5 +201,9 @@
   "screen.electricity.met_station.fitted": "Fitted instruments  (* on the array)",
   "screen.electricity.met_station.reference": "Reference array at %s, %s, %s",
   "screen.electricity.met_station.no_reference": "No array in range: the plane and module readings are the mast’s own",
-  "screen.electricity.pv_inverter.state.out_of_window": "%s V is outside the %s–%s V window"
+  "screen.electricity.pv_inverter.state.out_of_window": "%s V is outside the %s–%s V window",
+  "tooltip.electricity.dc_cable.rating": "%s mm² · %s A in free air · %s V DC",
+  "tooltip.electricity.dc_cable.trench": "Sneak to dig it in: %s A buried, and the spoil comes back.",
+  "tooltip.electricity.dc_cable.string": "Strings to a combiner or an inverter. Right-click an array to fit its leads.",
+  "tooltip.electricity.dc_cable.trunk": "A combiner box to an inverter. Too heavy to plug into an array."
 }

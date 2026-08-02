@@ -479,7 +479,130 @@ def instrument():
     return c
 
 
+# The two direct-current cables.  Positive is red and negative is black, which is the marking a
+# North American plant uses and the only pair of colours that reads at three pixels.  Nothing in
+# these is transparent: the block models sit in the solid render layer, where a transparent texel
+# comes out black, and a jacket-coloured field costs nothing.
+
+CABLE_BLACK = ((24, 24, 28, 255), (52, 52, 60, 255), (80, 80, 90, 255))
+CABLE_RED = ((74, 22, 22, 255), (132, 40, 36, 255), (176, 66, 58, 255))
+CLIP = (138, 142, 150, 255)
+
+
+def cable_line(half, thick):
+    """A pair running the length of the tile, with the clip that holds it down across the middle.
+
+    One texture serves the whole run.  The conductors sit at fixed columns, so a corner piece and
+    the arm leading into it take different rectangles out of the same image and the pair still
+    lines up across the seam - which is the trick that makes a multipart cable look continuous.
+
+    ``thick`` is how many pixels of highlight each conductor gets, which is what makes a 240 mm²
+    trunk read as heavier than a 6 mm² string rather than merely wider.
+    """
+    c = Canvas(16, 16, CABLE_BLACK[0])
+    left = int(8 - half)
+    width = int(half)
+
+    for index, palette in ((0, CABLE_RED), (1, CABLE_BLACK)):
+        x0 = left + index * width
+        for x in range(x0, x0 + width):
+            # round: dark at both edges, brightest a third of the way in from the lit side
+            offset = x - x0
+            if offset < thick and offset >= width - thick:
+                colour = palette[1]
+            elif offset == 0 or offset == width - 1:
+                colour = palette[0]
+            elif offset <= thick:
+                colour = palette[2]
+            else:
+                colour = palette[1]
+            c.rect(x, 0, x + 1, 16, colour)
+
+    # the clip: a stainless hanger over both conductors, which is what a real run is held by and
+    # what stops this reading as two painted lines
+    c.rect(left, 7, left + 2 * width, 9, CLIP)
+    c.rect(left, 7, left + 2 * width, 8, shade(CLIP, 34))
+    c.rect(left + width - 1, 7, left + width + 1, 9, shade(CLIP, -46))
+    return c
+
+
+def trench():
+    """Sand bedding: what a buried cable is laid in and backfilled with.
+
+    Sand rather than the soil that came out of the trench, because a cable laid straight onto
+    stones is a cable with a stone pressing into its insulation - so a real trench gets a bed of
+    sand under and over it, and that is what shows at the surface afterwards.
+    """
+    c = Canvas(16, 16)
+    base = (176, 158, 122, 255)
+    for y in range(16):
+        for x in range(16):
+            grain = noise(x, y, 31)
+            colour = shade(base, int(grain * 26) - 13)
+            if grain > 0.94:
+                # the odd pebble the sieve missed
+                colour = shade(base, -34)
+            c.set(x, y, colour)
+
+    return c
+
+
 # ------------------------------------------------------------- item textures
+
+def item_string_cable():
+    """A coil of solar cable, which is how a reel of 6 mm² arrives.
+
+    Two turns rather than one, because the item has to say *pair*: a single loop of black reads as
+    rope.  The tails leave it the way they leave a coil that has been unwound from once.
+    """
+    c = Canvas(16, 16)
+    c.disc(7.5, 7.5, 6.8, CABLE_BLACK[1])
+    c.disc(7.5, 7.5, 5.6, CABLE_BLACK[0])
+    c.disc(7.5, 7.5, 5.0, CABLE_RED[1])
+    c.disc(7.5, 7.5, 3.8, CABLE_RED[0])
+    c.disc(7.5, 7.5, 3.2, (0, 0, 0, 0))
+    # the light on the upper left of each turn, which is what makes a flat ring look wound
+    c.stroke(3.4, 5.4, 5.6, 3.2, CABLE_BLACK[2], 1.6)
+    c.stroke(4.8, 6.2, 6.4, 4.6, CABLE_RED[2], 1.4)
+
+    # the two tails, and the tie that keeps the rest of it a coil
+    c.stroke(10.6, 11.4, 14.6, 14.6, CABLE_BLACK[1], 2.0)
+    c.stroke(12.4, 9.6, 15.2, 11.4, CABLE_RED[1], 2.0)
+    c.stroke(1.2, 8.4, 3.4, 8.4, CLIP, 2.0)
+    return c
+
+
+def item_trunk_cable():
+    """A drum of 240 mm², because that is the only way a cable that heavy is delivered.
+
+    Deliberately a different object from the string coil rather than a fatter version of it: two
+    sprites that differ by half a pixel of ring thickness are two sprites nobody can tell apart in
+    a hotbar, and a drum against a coil is exactly the distinction the yard makes.
+    """
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+
+    # the windings, wound onto the barrel between the flanges
+    for y in range(3, 13):
+        palette = CABLE_RED if y % 3 == 0 else CABLE_BLACK
+        c.rect(4, y, 12, y + 1, palette[1])
+        c.rect(4, y, 6, y + 1, palette[2])
+        c.rect(11, y, 12, y + 1, palette[0])
+
+    # the two flanges, which is what makes it a drum and not a bale
+    for x0 in (2, 12):
+        c.rect(x0, 1, x0 + 2, 15, mid)
+        c.rect(x0, 1, x0 + 1, 15, light)
+        c.rect(x0 + 1, 1, x0 + 2, 15, dark)
+
+    # the spindle hole through both of them
+    c.disc(3, 8, 1.2, (52, 54, 58, 255))
+    c.disc(13, 8, 1.2, (52, 54, 58, 255))
+
+    # the tail hanging off it
+    c.stroke(12.5, 12.5, 15.0, 14.6, CABLE_RED[1], 2.4)
+    return c
+
 
 def item_flat():
     c = Canvas(16, 16)
@@ -725,6 +848,9 @@ def panel(spec):
 
 
 BLOCK_TEXTURES = {
+    'dc_string_line': lambda: cable_line(3.0, 1),
+    'dc_trunk_line': lambda: cable_line(5.0, 2),
+    'dc_trench': trench,
     'pv_module': module,
     'pv_module_back': module_back,
     'pv_module_edge': module_edge,
@@ -741,6 +867,8 @@ BLOCK_TEXTURES = {
 }
 
 ITEM_TEXTURES = {
+    'dc_string_cable': item_string_cable,
+    'dc_trunk_cable': item_trunk_cable,
     'power_wrench': item_wrench,
     'turbine_tower': item_tower,
     'pv_flat': item_flat,

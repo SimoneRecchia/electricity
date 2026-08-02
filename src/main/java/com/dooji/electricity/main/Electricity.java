@@ -1,9 +1,11 @@
 package com.dooji.electricity.main;
 
 import com.dooji.electricity.api.power.ElectricityCapabilities;
+import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.TurbineSpec;
+import com.dooji.electricity.block.DcCableBlock;
 import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
@@ -25,6 +27,7 @@ import com.dooji.electricity.block.WindTurbineBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.block.WorkbenchBlock;
 import com.dooji.electricity.compat.computercraft.ComputerCraftBridge;
+import com.dooji.electricity.item.DcCableItem;
 import com.dooji.electricity.item.ItemWire;
 import com.dooji.electricity.item.PowerWrenchItem;
 import com.dooji.electricity.item.PvArrayBlockItem;
@@ -34,6 +37,7 @@ import com.dooji.electricity.item.TooltipItem;
 import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.menu.WorkbenchMenu;
 import com.dooji.electricity.recipe.WorkbenchRecipe;
+import com.dooji.electricity.main.registry.CableCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.PvCatalog;
@@ -147,6 +151,16 @@ public class Electricity {
 	public static final Map<ResourceLocation, RegistryObject<Item>> PV_INVERTER_ITEMS = registerInverterItems();
 
 	/**
+	 * A block of cable per gauge, and the reel that lays it.
+	 *
+	 * Two products because a real plant uses two, and they are two blocks rather than one with a gauge
+	 * property so that the item a player is holding says which one it is. Registered from the catalogue
+	 * the same way everything else here is.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Block>> DC_CABLE_BLOCKS = registerCableBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> DC_CABLE_ITEMS = registerCableItems();
+
+	/**
 	 * A meteorological mast: the seven instruments a plant measures the sky with.
 	 *
 	 * One block rather than one per instrument, because a real plant has one or two masts for the whole
@@ -157,6 +171,26 @@ public class Electricity {
 			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
 			() -> new TooltipBlockItem(MET_STATION_BLOCK.get(), new Item.Properties(), "tooltip.electricity.met_station"));
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerCableBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (DcCableSpec spec : CableCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new DcCableBlock(DcCableBlock.properties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerCableItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (DcCableSpec spec : CableCatalog.all()) {
+			RegistryObject<Block> block = DC_CABLE_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
+					() -> new DcCableItem((DcCableBlock) block.get(), new Item.Properties())));
+		}
+
+		return items;
+	}
 
 	private static BlockBehaviour.Properties arrayProperties() {
 		return Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion();
@@ -283,6 +317,12 @@ public class Electricity {
 				// order a plant is actually built in
 				for (PvArraySpec spec : PvCatalog.all()) {
 					output.accept(PV_ARRAY_ITEMS.get(spec.id()).get());
+				}
+
+				// the cable between them, because that is the order it is built in: racking, then the copper,
+				// then the machine the copper goes to
+				for (DcCableSpec spec : CableCatalog.all()) {
+					output.accept(DC_CABLE_ITEMS.get(spec.id()).get());
 				}
 
 				for (InverterSpec spec : InverterCatalog.all()) {

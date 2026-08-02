@@ -1,0 +1,416 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "electricity:block/dc_trench"
+  },
+  "elements": [
+    {
+      "from": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "to": [
+        16.0,
+        15.0,
+        16.0
+      ],
+      "faces": {
+        "down": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "down"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "north": {
+          "uv": [
+            0,
+            1.0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "north"
+        },
+        "south": {
+          "uv": [
+            0,
+            1.0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "south"
+        },
+        "west": {
+          "uv": [
+            0,
+            1.0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "west"
+        },
+        "east": {
+          "uv": [
+            0,
+            1.0,
+            16,
+            16
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "east"
+        }
+      }
+    },
+    {
+      "from": [
+        0.0,
+        15.0,
+        0.0
+      ],
+      "to": [
+        16.0,
+        16.0,
+        1.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            0.0,
+            0.0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "down": {
+          "uv": [
+            0.0,
+            0.0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "north": {
+          "uv": [
+            0.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "north"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "west": {
+          "uv": [
+            0.0,
+            0,
+            1.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "east": {
+          "uv": [
+            0.0,
+            0,
+            1.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        }
+      }
+    },
+    {
+      "from": [
+        0.0,
+        15.0,
+        15.0
+      ],
+      "to": [
+        16.0,
+        16.0,
+        16.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            0.0,
+            15.0,
+            16.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "down": {
+          "uv": [
+            0.0,
+            15.0,
+            16.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "north": {
+          "uv": [
+            0.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "south"
+        },
+        "west": {
+          "uv": [
+            15.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "east": {
+          "uv": [
+            15.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        }
+      }
+    },
+    {
+      "from": [
+        0.0,
+        15.0,
+        1.0
+      ],
+      "to": [
+        1.0,
+        16.0,
+        15.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            0.0,
+            1.0,
+            1.0,
+            15.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "down": {
+          "uv": [
+            0.0,
+            1.0,
+            1.0,
+            15.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "north": {
+          "uv": [
+            0.0,
+            0,
+            1.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "south": {
+          "uv": [
+            0.0,
+            0,
+            1.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "west": {
+          "uv": [
+            1.0,
+            0,
+            15.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "west"
+        },
+        "east": {
+          "uv": [
+            1.0,
+            0,
+            15.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        }
+      }
+    },
+    {
+      "from": [
+        15.0,
+        15.0,
+        1.0
+      ],
+      "to": [
+        16.0,
+        16.0,
+        15.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            15.0,
+            1.0,
+            16.0,
+            15.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "down": {
+          "uv": [
+            15.0,
+            1.0,
+            16.0,
+            15.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "north": {
+          "uv": [
+            15.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "south": {
+          "uv": [
+            15.0,
+            0,
+            16.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "west": {
+          "uv": [
+            1.0,
+            0,
+            15.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench"
+        },
+        "east": {
+          "uv": [
+            1.0,
+            0,
+            15.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trench",
+          "cullface": "east"
+        }
+      }
+    },
+    {
+      "from": [
+        3.0,
+        15.0,
+        3.0
+      ],
+      "to": [
+        13.0,
+        16.0,
+        13.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            3.0,
+            3.0,
+            13.0,
+            13.0
+          ],
+          "texture": "electricity:block/dc_trunk_line"
+        },
+        "north": {
+          "uv": [
+            3.0,
+            0.0,
+            13.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trunk_line"
+        },
+        "south": {
+          "uv": [
+            3.0,
+            0.0,
+            13.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trunk_line"
+        },
+        "west": {
+          "uv": [
+            3.0,
+            0.0,
+            13.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trunk_line"
+        },
+        "east": {
+          "uv": [
+            3.0,
+            0.0,
+            13.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_trunk_line"
+        }
+      }
+    }
+  ]
+}

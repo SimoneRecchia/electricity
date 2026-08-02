@@ -1,0 +1,67 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "electricity:block/dc_trench"
+  },
+  "elements": [
+    {
+      "from": [
+        5.0,
+        15.0,
+        1.0
+      ],
+      "to": [
+        11.0,
+        16.0,
+        5.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            5.0,
+            1.0,
+            11.0,
+            5.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "north": {
+          "uv": [
+            5.0,
+            0.0,
+            11.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "south": {
+          "uv": [
+            5.0,
+            0.0,
+            11.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "west": {
+          "uv": [
+            1.0,
+            0.0,
+            5.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "east": {
+          "uv": [
+            1.0,
+            0.0,
+            5.0,
+            1.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        }
+      }
+    }
+  ]
+}

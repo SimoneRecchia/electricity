@@ -1,0 +1,69 @@
+{
+  "parent": "block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "electricity:block/dc_string_line"
+  },
+  "elements": [
+    {
+      "from": [
+        5.0,
+        0.0,
+        0.0
+      ],
+      "to": [
+        11.0,
+        1.5,
+        5.0
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            5.0,
+            0.0,
+            11.0,
+            5.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "north": {
+          "uv": [
+            5.0,
+            14.5,
+            11.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_string_line",
+          "cullface": "north"
+        },
+        "south": {
+          "uv": [
+            5.0,
+            14.5,
+            11.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "west": {
+          "uv": [
+            0.0,
+            14.5,
+            5.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        },
+        "east": {
+          "uv": [
+            0.0,
+            14.5,
+            5.0,
+            16.0
+          ],
+          "texture": "electricity:block/dc_string_line"
+        }
+      }
+    }
+  ]
+}
