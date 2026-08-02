@@ -563,6 +563,15 @@ Two bugs the testing above did **not** catch, both found by looking at the game:
   value share a row, a state line owns one — and fails when calls from different groups collide.
   Every panel is checked, the mast included.
 
+A third, found by looking at the combiner box: **every side face's texture was mirrored**. The corner
+lists in `gen_pv_models.py` are wound for outward normals, which is what the renderer needs, and a
+texture laid on them in the obvious order comes out back to front — the first corner of a side face is
+its low-x end, and viewed from outside the block that end is on the *right*. Nobody noticed while
+every side texture was noise or a pattern of stripes, and then a door arrived with a fuse window on
+one side and a switch escutcheon on the other and they came out swapped. The lid had the opposite
+problem, its own v reversed, because the loader reads texture v from the bottom. Both fixed at the
+source, which also un-mirrors the inverter's door.
+
 One thing found in testing that is not a bug in this branch and is worth writing down: a
 **world's own copy of the config keeps the old defaults**. `pvExportFraction` and
 `turbineExportFraction` were changed from 0.2 to 1.0 in commit 12, and a world saved before that

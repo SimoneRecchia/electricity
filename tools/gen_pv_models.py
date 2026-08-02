@@ -49,7 +49,7 @@ MATERIALS = {
     'dome': 'pv_dome.png',
     'dc_cable': 'dc_harness.png',
     'combiner_door': 'pv_combiner_door.png',
-    'warning': 'warning.png',
+    'switch': 'pv_switch.png',
 }
 
 # Which material each face of a laminate carries.  A module is not one material: the sun
@@ -275,12 +275,33 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None):
         'down': (0, -1, 0), 'up': (0, 1, 0), 'north': (0, 0, -1),
         'south': (0, 0, 1), 'west': (-1, 0, 0), 'east': (1, 0, 0),
     }
-    uvs = [(0.0, 0.0), (u1, 0.0), (u1, u1), (0.0, u1)]
+
+    # Which corner of the texture goes on which corner of the face, and it is not the same for all six.
+    #
+    # The corner lists above are wound for outward normals, which is what the renderer needs, and a
+    # texture laid on them in the obvious order comes out *mirrored* on all four sides: the first corner
+    # of a side face is its low-x (or low-z) end, and viewed from outside the block that end is on the
+    # right rather than the left.  Nobody noticed while every side texture was either noise or a pattern
+    # of stripes, and then the combiner box got a door with a fuse window on one side of it and a switch
+    # escutcheon on the other, and they came out swapped.
+    #
+    # The lid has the opposite problem: its first corner is the one nearest north, which is the *top* of
+    # the picture on screen, while the loader reads texture v from the bottom.  So the sides get their u
+    # reversed and the lid gets its v reversed, and the two other faces are left as they were - nothing
+    # in this mod has a picture on its underside.
+    plain = [(0.0, 0.0), (u1, 0.0), (u1, u1), (0.0, u1)]
+    flipped_u = [(u1, 0.0), (0.0, 0.0), (0.0, u1), (u1, u1)]
+    flipped_v = [(0.0, u1), (u1, u1), (u1, 0.0), (0.0, 0.0)]
+    mapping = {
+        'down': plain, 'up': flipped_v,
+        'north': flipped_u, 'south': flipped_u, 'west': flipped_u, 'east': flipped_u,
+    }
 
     for face, pts in corners.items():
         if only is not None and face != only:
             continue
 
+        uvs = mapping[face]
         normal = normals[face]
         if rot is not None:
             pivot, axis, degrees = rot
@@ -590,7 +611,7 @@ def inverter():
     # the door: louvres, handle and rating plate on the one face anybody stands in front of,
     # and plain aluminium on the five they do not
     clad_box(mesh, 'door', (-0.40, 0.10, -0.335), (0.40, 0.90, -0.30),
-             {'north': 'cabinet_door', '*': 'frame'}, uv_scale=0.9)
+             {'north': 'cabinet_door', '*': 'frame'})
     # the hinge side and the handle, which is what makes it read as a door
     box(mesh, mesh.faces('door', 'frame'), (0.34, 0.42, -0.36), (0.40, 0.58, -0.335), uv_scale=0.2)
 
@@ -650,7 +671,7 @@ def combiner():
 
     # the door, with the fuse window and the rating label on the one face anybody stands at
     clad_box(mesh, 'door', (-0.19, box_y0 + 0.03, -0.115), (0.19, box_y1 - 0.03, -0.10),
-             {'north': 'combiner_door', '*': 'frame'}, uv_scale=0.9)
+             {'north': 'combiner_door', '*': 'frame'})
 
     # the gland plate underneath, where every string arrives: one row of them, which is what the
     # underside of a real box looks like and the only view that says how many ways it has
@@ -675,7 +696,7 @@ def combiner():
     box(mesh, mesh.faces('post', 'dc_cable'), (-0.05, 0.02, 0.032), (0.05, box_y0 + 0.01, 0.064))
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
-    handle = mesh.add_object('rotate_handle', 'warning')
+    handle = mesh.add_object('rotate_handle', 'switch')
     cylinder(mesh, handle, (0.15, box_y0 + 0.12, -0.128), 'z', 0.018, 0.014, sides=6, uv_scale=0.3,
              caps=handle)
     box(mesh, handle, (0.135, box_y0 + 0.12, -0.145), (0.165, box_y0 + 0.20, -0.13), uv_scale=0.3)
@@ -788,7 +809,7 @@ MODELS = [
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable')),
-    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'warning', 'dc_cable')),
+    ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'switch', 'dc_cable')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]
 

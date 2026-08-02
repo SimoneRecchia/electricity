@@ -106,6 +106,23 @@ class Canvas:
             f.write(png)
 
 
+def sprite(rows, palette):
+    """A sixteen by sixteen from a picture of it, one character to a pixel.
+
+    Some shapes cannot be got at with strokes and discs.  A spanner's head is one: it needs two jaws a
+    pixel and a half apart with a straight gap between them, and every attempt to build that out of
+    capsules ended with the shadow passes welding the mouth shut.  At this size the honest way is to draw
+    it, and a map of characters is a drawing that can be read in a diff.
+    """
+    c = Canvas(len(rows[0]), len(rows))
+    for y, row in enumerate(rows):
+        for x, key in enumerate(row):
+            if key in palette:
+                c.set(x, y, palette[key])
+
+    return c
+
+
 def noise(x, y, salt=0):
     """A deterministic hash in 0..1. Not a good generator, and it does not need to be."""
     n = (x * 73856093) ^ (y * 19349663) ^ (salt * 83492791)
@@ -409,6 +426,31 @@ def combiner_door():
     # the hinges down the far edge
     for y in (6, 23):
         c.rect(0, y, 3, y + 3, shade(base, -50))
+    return c
+
+
+def switch_handle():
+    """The moulded handle of a load-break switch: red, ribbed, on a black boss.
+
+    It used to be drawn in the hazard-sign texture, which put a yellow triangle sticker in the middle of
+    the door where a handle belongs.  Red because that is what a load-break handle is - the one control
+    on the whole box, and the colour is a convention rather than a decoration: red means it breaks load.
+    """
+    size = 16
+    c = Canvas(size, size)
+    body = (176, 46, 40, 255)
+    for y in range(size):
+        for x in range(size):
+            c.set(x, y, shade(body, int(noise(x, y, 57) * 10) - 5))
+
+    # the ribs a thumb grips, across the handle
+    for y in range(2, size, 3):
+        c.rect(0, y, size, y + 1, shade(body, -46))
+        c.rect(0, y + 1, size, y + 2, shade(body, 30))
+
+    # and the moulded edge down each side
+    c.rect(0, 0, 2, size, shade(body, -60))
+    c.rect(size - 2, 0, size, size, shade(body, 34))
     return c
 
 
@@ -737,53 +779,65 @@ GRIP = ((104, 26, 24, 255), (172, 48, 42, 255), (214, 92, 78, 255))
 INSTRUMENT = ((150, 154, 160, 255), (226, 229, 234, 255), (255, 255, 255, 255))
 
 
-def limb(c, start, end, width, palette):
+def limb(c, start, end, width, palette, margin=1.4):
     """A shaded bar: shadow underneath, body over it, highlight along the top-left edge.
 
     Three passes rather than one, because a flat silhouette at sixteen pixels reads as a cut-out
     and a tool wants to look like metal.  The light comes from the top left, which is where
     Minecraft's own item sprites put it.
+
+    ``margin`` is how far the shadow pass reaches past the body, and it matters more than it looks:
+    two bars a pixel and a half apart with a shadow reaching seven tenths of a pixel each way have no
+    gap left between them, which is how the first wrench's jaws welded themselves shut.
     """
     dark, mid, light = palette
     x0, y0 = start
     x1, y1 = end
-    c.stroke(x0 + 0.5, y0 + 0.5, x1 + 0.5, y1 + 0.5, dark, width + 1.4)
+    c.stroke(x0 + margin / 3.0, y0 + margin / 3.0, x1 + margin / 3.0, y1 + margin / 3.0, dark, width + margin)
     c.stroke(x0, y0, x1, y1, mid, width)
     c.stroke(x0 - 0.55, y0 - 0.55, x1 - 0.55, y1 - 0.55, light, max(1.0, width - 2.0))
 
 
+# The spanner, drawn.  D dark steel, S the body, L the lit edge, K the knurl on the worm block.
+WRENCH = (
+    '..........LSSD..',
+    '.........LSSD...',
+    '........LSSD....',
+    '.......LSSD...LS',
+    '......LSSD...LSS',
+    '.....LSSD...LSSD',
+    '....LSSSSSSSSSD.',
+    '...LSSKKKKSSSD..',
+    '...LSSKKKSSD....',
+    '..LSSSSSSD......',
+    '..LSSSD.........',
+    '.LSSSD..........',
+    '.LSSD...........',
+    'LSSD............',
+    'LS.D............',
+    '.DD.............',
+)
+
+
 def item_wrench():
-    """A combination spanner: an insulated grip, a shank, and a ring end.
+    """An adjustable spanner, all steel: a handle with a hanging hole, a knurled worm block, two jaws.
 
-    The ring is the whole point of the redraw.  The first attempt cut an open jaw out of a blob with a
-    diagonal stroke, and what came out was a bird's beak: the two jaws tapered, so the mouth read as a
-    claw rather than as something that fits over a nut.  A closed box end is an annulus, an annulus is
-    unmistakable at sixteen pixels, and it is what half the spanners in a real tool roll are.
+    Three attempts before this one, and the first two failed the same way - the head.  Cutting a mouth
+    out of a solid blob tapers the jaws and a tapered mouth reads as a beak; a closed ring reads as a
+    ring rather than as a wrench.  What makes the real tool recognisable is three parts in a row down the
+    diagonal and a mouth that is *straight*: a long fixed jaw, a short sliding one, and a gap between
+    them that does not narrow.  Two pixels of gap, held for the whole length of the jaws, which is a
+    thing that has to be drawn rather than derived.
 
-    Laid corner to corner because {@code item/handheld} rotates a sprite about its lower left and
-    expects the working end at the upper right.  The grip is red because a wrench for live electrical
-    work has an insulated one, and this is a mod about electricity.
+    Laid corner to corner because {@code item/handheld} rotates a sprite about its lower left and wants
+    the working end at the upper right - so the mouth opens away from the hand, the way one is held.
     """
-    c = Canvas(16, 16)
-    dark, mid, light = STEEL
-    ring_x, ring_y = 11.4, 4.4
-
-    # the shank first, so the ring is drawn over where the two meet
-    limb(c, (3.0, 13.0), (7.2, 8.8), 4.2, GRIP)
-    limb(c, (7.0, 9.0), (7.7, 8.3), 4.4, STEEL)
-    limb(c, (7.6, 8.4), (10.4, 5.6), 3.2, STEEL)
-
-    # the ring: an outer rim, a band lit from the upper left, an inner rim, and the hole through it
-    c.disc(ring_x, ring_y, 4.5, dark)
-    c.disc(ring_x, ring_y, 3.9, light)
-    c.disc(ring_x + 0.8, ring_y + 0.8, 3.7, mid)
-    c.disc(ring_x, ring_y, 2.8, dark)
-    c.disc(ring_x, ring_y, 2.2, (0, 0, 0, 0))
-
-    # the loop in the end of the grip, so it can hang on a board
-    c.set(2, 14, GRIP[0])
-    c.set(3, 14, GRIP[1])
-    return c
+    return sprite(WRENCH, {
+        'D': STEEL[0],
+        'S': STEEL[1],
+        'L': STEEL[2],
+        'K': (70, 74, 80, 255),
+    })
 
 
 def item_tower():
@@ -935,6 +989,7 @@ BLOCK_TEXTURES = {
     'dc_harness': lambda: cable_line(8.0, 3),
     'dc_trench': trench,
     'pv_combiner_door': combiner_door,
+    'pv_switch': switch_handle,
     'pv_module': module,
     'pv_module_back': module_back,
     'pv_module_edge': module_edge,
