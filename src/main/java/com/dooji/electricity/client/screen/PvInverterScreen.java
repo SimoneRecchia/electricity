@@ -34,7 +34,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 public class PvInverterScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_inverter.png");
 	private static final int WIDTH = 288;
-	private static final int HEIGHT = 232;
+	private static final int HEIGHT = 252;
 
 	// the wells cut into the texture by tools/gen_pv_textures.py
 	private static final int AC_BAR_Y = 70;
@@ -61,15 +61,15 @@ public class PvInverterScreen extends PlantScreen {
 
 		PvInverterBlockEntity inverter = inverter();
 		double limitFraction = inverter == null ? 1.0 : inverter.getActivePowerLimit() / inverter.spec().acPowerKw();
-		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 180, WIDTH - 22, 20, limitFraction));
+		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 200, WIDTH - 22, 20, limitFraction));
 
 		int buttonWidth = (WIDTH - 24 - 8) / 3;
 		stopButton = addRenderableWidget(Button.builder(Component.empty(), b -> send(SolarControlPayload.Action.INVERTER_TOGGLE_RUNNING))
-				.bounds(leftPos + 12, topPos + 204, buttonWidth, 20).build());
+				.bounds(leftPos + 12, topPos + 224, buttonWidth, 20).build());
 		redstoneButton = addRenderableWidget(Button.builder(Component.empty(), b -> send(SolarControlPayload.Action.INVERTER_CYCLE_REDSTONE_MODE))
-				.bounds(leftPos + 12 + buttonWidth + 4, topPos + 204, buttonWidth, 20).build());
+				.bounds(leftPos + 12 + buttonWidth + 4, topPos + 224, buttonWidth, 20).build());
 		powerFactorButton = addRenderableWidget(Button.builder(Component.empty(), b -> cyclePowerFactor())
-				.bounds(leftPos + 12 + 2 * (buttonWidth + 4), topPos + 204, buttonWidth, 20).build());
+				.bounds(leftPos + 12 + 2 * (buttonWidth + 4), topPos + 224, buttonWidth, 20).build());
 
 		refreshWidgets();
 	}

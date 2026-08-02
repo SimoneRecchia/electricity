@@ -219,10 +219,29 @@ def rows(source, where):
     return found
 
 
+def widgets(source):
+    """Where the buttons and sliders sit, as (top, bottom) bands.
+
+    Text is not the only thing that occupies a row.  The inverter's panel had a line of readings drawn
+    at 176 and a slider placed at 180, and a checker that only compared text against text had nothing to
+    say about it - the line came out half hidden behind a button, which is worse than a collision between
+    two strings because at least those are both readable.  Twenty pixels is the height every widget in
+    these panels is built at.
+    """
+    return [(int(match.group(1)), int(match.group(1)) + 20)
+            for match in re.finditer(r'topPos \+ (\d+),\s*\w+[^;]*?,\s*20\)', source)]
+
+
 def collisions(prefix, source, where):
-    """Rows where two helpers from different groups are writing over each other."""
+    """Rows where two things are writing over each other: two helpers, or a helper and a widget."""
     out = []
+    bands = widgets(source)
     for y, helpers in sorted(rows(source, where).items()):
+        for top, bottom in bands:
+            # a line of text is nine pixels tall, so it clashes with anything starting under its baseline
+            if top < y + 9 and y < bottom:
+                out.append('%s: %s at y=%d is under a widget at y=%d' % (prefix, ', '.join(sorted(helpers)), y, top))
+
         if any(helpers <= set(group) for group in DRAW_GROUPS):
             continue
 

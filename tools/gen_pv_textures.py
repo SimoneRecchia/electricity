@@ -370,20 +370,22 @@ def cabinet_top():
         for x in range(size):
             c.set(x, y, shade(base, int(noise(x, y, 47) * 8) - 4))
 
-    # the drip edge, and the gutter inside it that takes the water to the ends
-    c.outline(0, 0, size, size, shade(base, -46))
-    c.outline(1, 1, size - 1, size - 1, shade(base, 16))
-    c.outline(4, 4, size - 4, size - 4, shade(base, -26))
+    # Ribs and fasteners on a repeating grid rather than a frame round the rim, and that is the whole
+    # point of the redraw.  A lid is mapped across faces of every size and shape in this mod - a cabinet
+    # roof, a tracker's drive housing, a ledge four hundredths of a block deep - and several of them take
+    # a fraction of the texture rather than all of it.  A frame shown four fifths of the way along runs
+    # down two edges and stops, which reads as a lid put on crooked.  A pattern that repeats has no
+    # centre to be off.
+    for y in range(0, size, 8):
+        c.rect(0, y, size, y + 1, shade(base, -40))
+        c.rect(0, y + 1, size, y + 2, shade(base, 18))
 
-    # fasteners round the rim
-    for i in range(6, size - 4, 6):
-        for x, y in ((i, 2), (i, size - 3), (2, i), (size - 3, i)):
-            c.set(x, y, shade(base, -70))
-
-    # two lifting eyes, which is how a cabinet this size arrives on site
-    for cx in (10, 21):
-        c.disc(cx, 16, 3, shade(base, -34))
-        c.disc(cx, 16, 1, shade(base, -80))
+    for y in range(4, size, 8):
+        for x in range(4, size, 8):
+            c.set(x, y, shade(base, -74))
+            c.set(x + 1, y, shade(base, -52))
+            c.set(x, y + 1, shade(base, -52))
+            c.set(x + 1, y + 1, shade(base, 12))
     return c
 
 
@@ -991,7 +993,7 @@ def item_met():
 # numbers - so if a bar moves here it moves there.
 
 PANELS = {
-    'pv_inverter': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
+    'pv_inverter': dict(width=288, height=252, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'pv_array': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
     # shorter than the rest, because a combiner box is switchgear: one bar, and nothing to control

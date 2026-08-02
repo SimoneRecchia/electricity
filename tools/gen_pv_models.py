@@ -219,24 +219,31 @@ def stubs(mesh, name='stub'):
             (-0.09, 0.0, -0.425), (0.09, 0.085, -0.40), uv_scale=0.3, rot=spin)
 
 
-def harness(mesh, enclosure, run):
-    """The junction box an array grows when a reel of cable is worked into it, and the leads out of it.
+# The pair's own figure: two pixels across, one tall, one conductor to a pixel.  Everything that draws
+# cable uses it, so nothing swells at a join.
+LEAD = 0.0625
 
-    Two things have to be true at once, and the first version of this got one of them at the cost of the
-    other.  The *leads* have to be centred on the block's axis, because that is where a laid run of cable
-    is and a stub anywhere else can never meet one.  The *box* has to be where a junction box belongs on
-    that particular mounting, which is bolted to the racking - and putting it in the middle to match the
-    leads stood it up through the glass in the centre of the panel, which looked like damage.
 
-    So they are separate: ``run`` is the length of pair from the middle of the block to the box, at a laid
-    run's own cross-section, and ``enclosure`` is where the box sits.  Both are given per mounting,
-    because the answer is different for each one - a table has a front rail to bolt it to, a tilted rack
-    has room under its high edge, and a tracked row has only the bay at the centre where no module goes.
+def lead(mesh, name, lo, hi, face='up', rot=None):
+    """A length of the pair, with the conductors on one face and jacket on the rest.
+
+    The pipeline maps a whole texture across every face of a box, so a length of cable given the pair
+    texture wears the pair on its sides as well - two conductors squeezed into a face one pixel tall,
+    which is not what the side of a cable looks like.  ``face`` is the one that is seen.
     """
-    stubs(mesh, 'harness')
-    clad_box(mesh, 'harness', run[0], run[1], {'up': 'dc_cable', '*': 'dc_jacket'})
-    clad_box(mesh, 'harness', enclosure[0], enclosure[1],
-             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.5)
+    clad_box(mesh, name, lo, hi, {face: 'dc_cable', '*': 'dc_jacket'}, rot=rot)
+
+
+def string_box(mesh, name, lo, hi, gland_at, gland_axis):
+    """The box a string's two leads come together in, and the input the next string plugs into.
+
+    The input matters more than it looks.  A string is not the end of anything - a row is wired to the
+    next row and the next, and a box with a gland facing out is the difference between a plant that
+    reads as connected and a row of identical objects standing near each other.
+    """
+    clad_box(mesh, name, lo, hi, {'up': 'cabinet_top', '*': 'cabinet'})
+    steel = mesh.faces(name, 'steel')
+    cylinder(mesh, steel, gland_at, gland_axis, 0.026, 0.022, sides=8, uv_scale=0.3, caps=steel)
 
 
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
@@ -394,10 +401,21 @@ def flat_table():
     clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
     clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
 
-    # hung on the very front edge rather than out on the glass, which is where it was when it looked
-    # right - and the pair runs back to the middle underneath the modules, out of sight
-    harness(mesh, ((-0.10, 0.055, 0.435), (0.10, 0.205, 0.50)),
-            ((-0.0625, 0.0, 0.0), (0.0625, 0.0625, 0.46)))
+    # The harness, and it is drawn for this mounting and no other.  A table is flat and is looked down on,
+    # so the leads go where they can be seen and where a real one puts them: along the frame rails on top,
+    # clipped down, linked across the front so the two read as one circuit, and brought together in a box
+    # on the back edge whose gland faces out for the next row's string.
+    stubs(mesh, 'harness')
+    glass = 0.11
+    for x in (-0.43, 0.43):
+        lead(mesh, 'harness', (x - LEAD / 2, glass, -0.36), (x + LEAD / 2, glass + LEAD, 0.44))
+
+    lead(mesh, 'harness', (-0.43, glass, 0.38), (0.43, glass + LEAD, 0.38 + LEAD))
+    string_box(mesh, 'harness', (-0.13, glass, -0.47), (0.13, glass + 0.09, -0.34),
+               (0.0, glass + 0.045, -0.485), 'z')
+    # and down to the ground at the back, where the run to the middle starts
+    lead(mesh, 'harness', (-LEAD / 2, 0.0, -0.44), (LEAD / 2, glass + 0.02, -0.44 + LEAD), face='west')
+    lead(mesh, 'harness', (-LEAD / 2, 0.0, -0.44), (LEAD / 2, LEAD, 0.0))
     return mesh
 
 
@@ -460,9 +478,24 @@ def tilted_rack():
     clad_box(mesh, 'modules', (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
     clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
 
-    # under the high edge, where a tilted rack has the most room and a technician can reach it
-    harness(mesh, ((-0.10, 0.0, 0.375), (0.10, 0.17, 0.465)),
-            ((-0.0625, 0.0, 0.0), (0.0625, 0.0625, 0.40)))
+    # The harness, drawn for a rack rather than for a table.  A tilted plane is seen from the front and
+    # from the side, so the leads climb the slope on the module rails where they are visible against the
+    # sky, meet in a link across the high edge, and drop from there into a box standing in the shade
+    # underneath - which is where a real one is, because that is the only part of a rack out of the
+    # weather and at a height a technician can work at.
+    stubs(mesh, 'harness')
+    slope = (pivot, 'x', -tilt)
+    for x in (-0.43, 0.43):
+        lead(mesh, 'harness', (x - LEAD / 2, top, -depth), (x + LEAD / 2, top + LEAD, depth), rot=slope)
+
+    lead(mesh, 'harness', (-0.43, top, depth - LEAD), (0.43, top + LEAD, depth), rot=slope)
+    # the drop off the high edge, worked out from where the tilt actually put that edge
+    high_y = pivot_y + (top - pivot_y) * cos_tilt + depth * sin_tilt
+    high_z = -(top - pivot_y) * sin_tilt + depth * cos_tilt
+    lead(mesh, 'harness', (-LEAD / 2, 0.13, high_z - LEAD), (LEAD / 2, high_y, high_z), face='south')
+    string_box(mesh, 'harness', (-0.13, 0.0, high_z - 0.14), (0.13, 0.13, high_z),
+               (0.0, 0.065, high_z + 0.015), 'z')
+    lead(mesh, 'harness', (-LEAD / 2, 0.0, 0.0), (LEAD / 2, LEAD, high_z - 0.06))
     return mesh
 
 
@@ -524,10 +557,19 @@ def single_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
 
-    # strapped to the pier inside the drive bay: the one span of a tracked row with no module over it,
-    # which is where a real independent row keeps its controller for exactly the same reason
-    harness(mesh, ((0.065, 0.05, -0.075), (0.235, 0.28, 0.075)),
-            ((0.0, 0.0, -0.0625), (0.21, 0.0625, 0.0625)))
+    # The harness, drawn for a row that turns.  Everything is inside the drive bay - the one span with no
+    # module over it, which is where a real independent row keeps its controller - and the interesting
+    # part is the drag loop: a tracked row's string cable has to take sixty degrees of rotation twice a
+    # day, so it is left slack in a loop under the tube rather than pulled tight, and a loop is the one
+    # detail that says at a glance this row moves.
+    stubs(mesh, 'harness')
+    string_box(mesh, 'harness', (0.065, 0.05, -0.075), (0.235, 0.28, 0.075),
+               (0.25, 0.165, 0.0), 'x')
+    lead(mesh, 'harness', (0.0, 0.0, -LEAD / 2), (0.21, LEAD, LEAD / 2))
+    # up the pier, then the slack loop under the tube
+    lead(mesh, 'harness', (0.13, 0.28, -LEAD / 2), (0.13 + LEAD, axis_y - 0.10, LEAD / 2), face='south')
+    lead(mesh, 'harness', (0.02, axis_y - 0.10, -LEAD / 2), (0.13 + LEAD, axis_y - 0.10 + LEAD, LEAD / 2))
+    lead(mesh, 'harness', (0.02, axis_y - 0.10, -LEAD / 2), (0.02 + LEAD, axis_y - 0.05, LEAD / 2), face='south')
     return mesh
 
 
@@ -593,9 +635,23 @@ def dual_axis():
         clad_box(mesh, 'rotate_elevation_modules', (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1), LAMINATE)
 
 
-    # on the pedestal, which is the only fixed thing a dual-axis frame has above ground
-    harness(mesh, ((0.065, 0.05, -0.075), (0.235, 0.30, 0.075)),
-            ((0.0, 0.0, -0.0625), (0.21, 0.0625, 0.0625)))
+    # The harness, drawn for a frame that turns about two axes rather than one.  A single loop is enough
+    # slack for sixty degrees of roll; a pedestal that also spins needs a service coil, which is a couple
+    # of turns left round the column so the cable can wind and unwind without being dragged.  Two turns
+    # is what a real azimuth drive is given, and they are stacked rather than side by side because that
+    # is how they sit when the frame is at rest.
+    stubs(mesh, 'harness')
+    string_box(mesh, 'harness', (0.065, 0.05, -0.075), (0.235, 0.30, 0.075),
+               (0.25, 0.175, 0.0), 'x')
+    lead(mesh, 'harness', (0.0, 0.0, -LEAD / 2), (0.21, LEAD, LEAD / 2))
+    # low round the column rather than high up it: the elevation frame sweeps a sphere about its axis at
+    # 0.7475 and reaches down to about 0.30, so anything above that line is something the frame grinds
+    # through - which check_pv_clearance.py said, at the first attempt, in so many words
+    for y in (0.105, 0.105 + 2 * LEAD):
+        for z in (-0.085, 0.085):
+            lead(mesh, 'harness', (-0.085, y, z - LEAD / 2), (0.085, y + LEAD, z + LEAD / 2))
+        for x in (-0.085, 0.085):
+            lead(mesh, 'harness', (x - LEAD / 2, y, -0.085), (x + LEAD / 2, y + LEAD, 0.085), face='east')
     return mesh
 
 
