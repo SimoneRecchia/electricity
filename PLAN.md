@@ -170,10 +170,17 @@ Seven instruments on one bus, which is what the screenshot's `M1.COM3-1..7` layo
 ### R.6 The physics, with the correlations named
 
 * **Clearness index** `kt = GHI / (E0 · sin α)`, `E0` the extraterrestrial normal irradiance.
-* **Erbs** diffuse fraction `Kd = DHI/GHI`:
-  * `kt ≤ 0.22`: `1 − 0.09 kt`
-  * `0.22 < kt ≤ 0.80`: `0.9511 − 0.1604 kt + 4.388 kt² − 16.638 kt³ + 12.336 kt⁴`
-  * `kt > 0.80`: `0.165`
+* **Erbs** diffuse fraction `Kd = DHI/GHI` — `kt ≤ 0.22`: `1 − 0.09 kt`; `0.22 < kt ≤ 0.80`:
+  `0.9511 − 0.1604 kt + 4.388 kt² − 16.638 kt³ + 12.336 kt⁴`; `kt > 0.80`: `0.165`.
+  **Researched and then rejected**, and the reason is worth recording: Erbs is for when GHI is the
+  only measurement there is, and here the cloud field is *known*. Feeding a statistical fit a total
+  in order to have it guess back what we already have would throw information away and pay for it —
+  Erbs under-predicts clear-sky DNI by about a tenth, which is exactly the quantity a tracker's
+  whole value rests on. So instead: **clear-sky beam** from Meinel & Meinel, **clear-sky diffuse**
+  from Liu & Jordan (`0.271·E0·sinα − 0.294·DNI·sinα`), then cloud attenuates the beam linearly in
+  cover (cover *is* the probability the sun's own patch of sky is covered) and the global by Kasten
+  & Czeplak, with the diffuse as the remainder. That keeps `GHI = DNI·sinα + DHI` exact by
+  construction and lands the clear zenith sun on DNI 953 / DHI 89 / GHI 1041 W/m².
 * **Transposition, Hay-Davies with the Reindl horizon term.**
   `POA_sky = DHI · [ Ai·Rb + (1−Ai)·(1+cos β)/2 · (1 + f·sin³(β/2)) ]`, `Ai = DNI/E0`,
   `Rb = cos AOI / cos Z`, `f = √(GHI_beam/GHI)`.
@@ -236,8 +243,8 @@ cold. All four fall out of the model above rather than needing to be drawn.
 - [ ] **Sun as a direction.** `SunPosition` record: elevation sine, azimuth degrees. Minecraft's
       sun is due east before noon and due west after, so the azimuth is honest about being a
       two-valued thing rather than pretending to sweep.
-- [ ] **Three components.** `Irradiance` record: DNI, DHI, GHI, extraterrestrial normal,
-      clearness index. Erbs split as in R.6.
+- [ ] **Three components.** `SkyConditions` record: DNI, DHI, GHI, extraterrestrial normal, air
+      mass, albedo, cloud cover. Split as in R.6 — physical, not Erbs.
 - [ ] **Transposition.** `Atmosphere.planeOfArray(...)` → beam / sky-diffuse / ground-reflected,
       Hay-Davies + Reindl + albedo view factor, with the Martin & Ruiz IAM on the beam.
 - [ ] **Albedo from the biome.** In `SiteConditions`, from the same tags the roughness uses,

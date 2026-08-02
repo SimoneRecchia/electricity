@@ -18,8 +18,11 @@ package com.dooji.electricity.main.weather;
  * @param airDensity    kg/m3, from that temperature and that pressure
  * @param shearExponent exponent of the wind profile here and now, which is how much another
  *                      ten metres of tower would be worth
- * @param cloudCover    fraction of the sky covered, 0 to 1
- * @param irradiance    global horizontal irradiance reaching the ground, W/m2
+ * @param sky           the sunlight, split into beam, diffuse and global, with the sun's position and
+ *                      the ground's albedo. One record rather than a cloud figure and an irradiance
+ *                      figure, because a panel needs all of it and needs it self-consistent - the
+ *                      three components have an identity between them that two loose doubles could
+ *                      not preserve.
  */
 public record WeatherSnapshot(
 		double meanWind,
@@ -31,7 +34,15 @@ public record WeatherSnapshot(
 		double pressureHpa,
 		double airDensity,
 		double shearExponent,
-		double cloudCover,
-		double irradiance
+		SkyConditions sky
 ) {
+	/** Fraction of the sky covered, 0 to 1. */
+	public double cloudCover() {
+		return sky.cloudCover();
+	}
+
+	/** Global horizontal irradiance reaching the ground, W/m2. What a pyranometer on the flat reads. */
+	public double irradiance() {
+		return sky.globalHorizontal();
+	}
 }
