@@ -74,12 +74,17 @@ the riser up a combiner's post. One number, so nothing swells at a join. At a bl
 real cable would not be a pixel wide, so all of it is symbolic anyway, and a symbol that shouts is
 worse than one you have to look for.
 
-What each mounting shows beyond that is deliberately small. A **table** and a **rack** get a lead out
-of one edge and a socket on the other at the same offset, so a line of them reads as one string wired
-through rather than as a grid of separate things — on top for the table, along the ground for the rack,
-because a cable lying across a cell is a cell out of the string. A **tracked row** gets the drag loop
-sixty degrees of rotation twice a day demands, and a **dual-axis frame** the service coil an azimuth
-drive is given. Anything more than that reads as a plant wrapped in wire.
+A string has **two ends**, and everything a row shows is on one edge because of it: a lead running its
+length and out past the block boundary, and a socket at the far end that the row behind plugs into. The
+socket is drawn only when something is actually feeding it. Nothing on the flanks — and cable will not
+*attach* to the flanks either: a run joins a row where the next row would, which is both what a plant
+looks like and why the model has one lead instead of a ring.
+
+Where that edge is differs by mounting. A **table** carries it on top, where it shades nothing. A
+**rack** carries it along the ground, because it stands off the ground on legs and a cable lying across
+a cell is a cell out of the string. A **tracked row** carries it down the middle, because its flanks
+are under modules that turn through sixty degrees — and it also gets the drag loop that rotation
+demands, as a **dual-axis frame** gets the service coil an azimuth drive is given.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

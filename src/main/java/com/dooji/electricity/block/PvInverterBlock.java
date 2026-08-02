@@ -94,7 +94,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	 * take a string at all - which is why it needs combiner boxes rather than merely liking them.
 	 */
 	@Override
-	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
+	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		if (cable.trunk()) return spec.trunkTerminals();
 
 		return spec.stringTerminals() || state.getValue(COMBINER);

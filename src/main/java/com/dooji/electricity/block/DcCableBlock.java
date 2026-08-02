@@ -199,9 +199,9 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 		boolean climbs = !level.getBlockState(above).isCollisionShapeFullBlock(level, above)
 				&& alongside.isFaceSturdy(level, beside, Direction.UP)
-				&& connectsTo(level.getBlockState(beside.above()));
-		boolean steps = !wall && connectsTo(level.getBlockState(beside.below()));
-		return new Ways(climbs, connectsTo(alongside), steps, wall);
+				&& connectsTo(level.getBlockState(beside.above()), direction);
+		boolean steps = !wall && connectsTo(level.getBlockState(beside.below()), direction);
+		return new Ways(climbs, connectsTo(alongside, direction), steps, wall);
 	}
 
 	/** How a run at this position reaches in one direction, for the model to draw. */
@@ -265,15 +265,17 @@ public class DcCableBlock extends Block implements DcTerminal {
 	 * other: a 240 mm² lug does not go into an MC4 plug, and one rule stated once beats a page of
 	 * exceptions about which end of a plant a cable is at.
 	 */
-	public boolean connectsTo(BlockState other) {
+	public boolean connectsTo(BlockState other, Direction towards) {
 		if (other.getBlock() instanceof DcCableBlock cable) return cable.spec == spec;
 
-		return other.getBlock() instanceof DcTerminal terminal && terminal.acceptsCable(other, spec);
+		// the face of the *other* block, which is the one opposite the way this run is reaching
+		return other.getBlock() instanceof DcTerminal terminal
+				&& terminal.acceptsCable(other, spec, towards.getOpposite());
 	}
 
 	/** A cable is a terminal too, which is how the walk treats a run and a machine alike. */
 	@Override
-	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
+	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		return cable == spec;
 	}
 

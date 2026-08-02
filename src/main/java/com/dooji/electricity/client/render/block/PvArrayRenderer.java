@@ -93,15 +93,13 @@ public class PvArrayRenderer extends ObjRendererBase {
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
 			int packedLight, PvArrayBlockEntity array) {
 		boolean harnessed = array.harnessed();
-		Set<String> entries = harnessed && array.getLevel() != null
-				? cableEntries(array.getLevel(), array.getBlockPos(), drawnFacing(array.getBlockState()), "harness")
-				: Set.of();
+		boolean fed = harnessed && fedFromBehind(array);
 
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
 			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE,
-					groupName -> drawn(groupName, harnessed, entries));
+					groupName -> drawn(groupName, harnessed, fed));
 			return;
 		}
 
@@ -114,7 +112,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 			poseSingleAxis(model, poseStack, poses, rotation);
 		}
 
-		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, entries));
+		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, fed));
 
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
 	}
@@ -134,14 +132,33 @@ public class PvArrayRenderer extends ObjRendererBase {
 	/**
 	 * Whether one group of an array's model is drawn.
 	 *
-	 * Nothing of the harness until a reel of cable has been worked in, and then only the runs towards the
-	 * sides a cable has actually been laid against - so plugging an array in is visible from across the
-	 * field, and the copper is visible going into it rather than stopping short of it.
+	 * Nothing of the harness until a reel of cable has been worked in - so plugging an array in is visible
+	 * from across the field. And the socket only when there is something to plug into it: a row with
+	 * nothing behind it has no input, and a socket on every panel whether or not anything feeds it is the
+	 * difference between a plant that reads as wired through and a warehouse of identical parts.
 	 */
-	private static boolean drawn(String groupName, boolean harnessed, Set<String> entries) {
+	private static boolean drawn(String groupName, boolean harnessed, boolean fed) {
 		if (!isHarness(groupName)) return true;
+		if (!harnessed) return false;
 
-		return harnessed && entryVisible(groupName, "harness", entries);
+		return fed || !groupName.startsWith("harness_input");
+	}
+
+	/**
+	 * Whether anything is feeding this row's input.
+	 *
+	 * The row behind it, or a run of cable laid to that side. Behind means towards the block's own facing,
+	 * because the model is authored with its input at the north end and the facing is what north is turned
+	 * into - so the row in front of this one, whose output points back at it, is the one at that offset.
+	 */
+	private static boolean fedFromBehind(PvArrayBlockEntity array) {
+		if (array.getLevel() == null) return false;
+
+		Direction facing = drawnFacing(array.getBlockState());
+		BlockPos behind = array.getBlockPos().relative(facing);
+		if (PvArrayBlock.harnessed(array.getLevel().getBlockState(behind))) return true;
+
+		return cableArrives(array.getLevel(), array.getBlockPos(), facing);
 	}
 
 	/**

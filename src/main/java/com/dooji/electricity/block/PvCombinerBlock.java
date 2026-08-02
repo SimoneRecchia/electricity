@@ -86,7 +86,7 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 	 * second.
 	 */
 	@Override
-	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
+	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		return true;
 	}
 

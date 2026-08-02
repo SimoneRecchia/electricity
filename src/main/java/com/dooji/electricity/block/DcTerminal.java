@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.DcCableSpec;
 import javax.annotation.Nullable;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -23,8 +24,12 @@ public interface DcTerminal {
 	 * Gauge matters because the termination does: string cable ends in a plug and goes into an array's
 	 * leads or a tracker's terminals, and trunk cable is lugged onto a busbar. A machine has one or the
 	 * other, or both, and saying which is what makes a catalogue of inverters a catalogue of choices.
+	 *
+	 * The face matters for an array and for nothing else. A string has two ends and they are at the two
+	 * ends of the row, so a run of cable joins a row where the next row would - not wherever it happens to
+	 * arrive. A cabinet and a combiner box take cable on any side, which is what a gland plate is for.
 	 */
-	boolean acceptsCable(BlockState state, DcCableSpec cable);
+	boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side);
 
 	/**
 	 * The state this block takes when a length of that cable is worked into it, or null if it will not

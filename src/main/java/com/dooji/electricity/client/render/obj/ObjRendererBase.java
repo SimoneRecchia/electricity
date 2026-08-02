@@ -125,6 +125,10 @@ public abstract class ObjRendererBase {
 	 * The three positions a run can reach from, which are the three dust reaches from: alongside, a step
 	 * up, and a step down. The cable itself is asked, so this cannot drift from what the plant counts.
 	 */
+	protected static boolean cableArrives(BlockGetter level, BlockPos pos, Direction direction) {
+		return arrivesFrom(level, pos, direction);
+	}
+
 	private static boolean arrivesFrom(BlockGetter level, BlockPos pos, Direction direction) {
 		BlockPos beside = pos.relative(direction);
 		for (BlockPos candidate : new BlockPos[]{beside, beside.above(), beside.below()}) {

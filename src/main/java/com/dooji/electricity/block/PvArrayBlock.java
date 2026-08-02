@@ -91,10 +91,18 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		builder.add(FACING, HARNESSED);
 	}
 
-	/** Only string cable, and only once it is there: the leads are what a run plugs into. */
+	/**
+	 * String cable only, once the leads are on, and only at the two ends of the row.
+	 *
+	 * A string has two ends. They are where the next row's string arrives and where this one's leaves, so
+	 * a run of cable joins a row there and not down its flank - which is both what a real plant looks like
+	 * and the reason the model has one lead along one edge instead of a run round all four. The axis is
+	 * the block's own facing, so it turns with the panel; a tracker's is forced north-south, which is the
+	 * axis its torque tube runs on and therefore the axis its rows chain along.
+	 */
 	@Override
-	public boolean acceptsCable(BlockState state, DcCableSpec cable) {
-		return !cable.trunk() && state.getValue(HARNESSED);
+	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
+		return !cable.trunk() && state.getValue(HARNESSED) && side.getAxis() == state.getValue(FACING).getAxis();
 	}
 
 	/**
