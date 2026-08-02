@@ -1,14 +1,13 @@
 # Realistic photovoltaics — plan
 
-Branch `feat/realistic-solar-plant`, cut from `main`. Written before the research pass and
-revised after it. Everything here is a checklist; each numbered block is one commit, and
-nothing is left half done.
+Branch `feat/realistic-solar-plant`, cut from `main`. §0–§2 were written before the research
+pass; everything from §R on is the research and the design it forces. Each numbered block in
+§12 is one commit, and nothing is left half done.
 
 ---
 
 ## 0. Where we start
 
-The mod already has all of this, and the work has to fit *inside* it rather than beside it.
 Every integration point below was read, not guessed:
 
 | Piece | File | What it gives us |
@@ -24,228 +23,334 @@ Every integration point below was read, not guessed:
 | Peripheral, tag-driven | `compat/computercraft/CCTweakedPeripherals.java` | `IDynamicPeripheral` generates one getter per tag |
 | Control panel | `client/screen/WindTurbineScreen.java` | Plain `Screen`, no menu; reads the client's block entity copy |
 | Control channel | `main/network/payloads/TurbineControlPayload.java` | `(pos, action, value)`, server-validated + distance-checked |
-| OBJ pipeline | `client/render/obj/*` | `o <name>` + `usemtl <mat>` → group `<name>_<mat>`; per-group matrices |
-| Renderer pattern | `client/render/block/WindTurbineRenderer.java` | `RenderLevelStageEvent`, `withAlignedPose`, `Map<String,Matrix4f>` poses, `BUFFER_CACHE` keyed by `BlockPos` |
-| Wire grid | `main/power/PowerNetwork.java` | Generator → cabin → pole → power box; `canTransfer` gates the topology |
+| OBJ pipeline | `client/render/obj/*` | `o <name>` + `usemtl <mat>` → group `<name>_<mat>`; `map_Kd x.png` → `textures/block/x.png` |
+| Renderer pattern | `client/render/block/WindTurbineRenderer.java` | `RenderLevelStageEvent`, `withAlignedPose`, `Map<String,Matrix4f>` poses, buffer cache keyed by `BlockPos` |
+| Wire grid | `main/power/PowerNetwork.java` | `canTransfer` gates the topology; generator nodes are recognised by class |
 | Wire anchors | `wire/InsulatorPartHelper.java` | Block type string, insulator part names, power direction |
 | Forge/Mekanism export | `compat/energy/EnergyBridge.java` | `IEnergyBudget`, 125 J per kW |
 
-The current solar panel is a **placeholder**, and this is the whole of it: one flat block,
-one hardcoded 20 kW `PhotovoltaicArray` with no catalogue, a vanilla cube model, three
-16×16 PNGs, no wire connection at all (Forge Energy / Mekanism only), no GUI, 8 Lua
-methods, no inverter, no strings, no tracker, no sensors, no shading.
+The current solar panel is a **placeholder**, and this is the whole of it: one flat block, one
+hardcoded 20 kW `PhotovoltaicArray` with no catalogue, a vanilla cube model, three 16×16 PNGs,
+no wire connection at all (Forge Energy / Mekanism only), no GUI, 8 Lua methods, no inverter,
+no strings, no tracker, no sensors, no shading.
 
-Two facts about the existing weather that this work has to *change* rather than build on:
+Two facts about the existing weather that this work has to **change** rather than build on:
 
-* `Atmosphere.solarElevationSin` returns only an elevation, and its own doc says a panel
-  "wants no tilt at all, because the sun comes overhead" — true for a fixed panel, and
-  precisely what makes a tracker pointless. A tracker needs an **azimuth**, so the sun
-  has to be a direction rather than a height.
-* `clearSkyIrradiance` folds the diffuse into a single `DIFFUSE_FACTOR = 1.10`. Shading
-  cannot be right on top of that: blocking the beam under a clear sky should cost ~90% and
-  under overcast ~10%, and one lumped number cannot express the difference.
+* `Atmosphere.solarElevationSin` returns only an elevation. A tracker needs a direction.
+* `clearSkyIrradiance` folds the diffuse into a single `DIFFUSE_FACTOR = 1.10`. Shading cannot
+  be right on top of that: blocking the beam under a clear sky should cost ~90% and under
+  overcast ~10%, and one lumped number cannot express the difference.
 
-## 1. Research (do first, then revise this plan)
-
-- [ ] **Modules.** Real dimensions and datasheet figures for utility and commercial c-Si
-      modules: half-cut PERC, TOPCon, HJT, bifacial. Vendors, model designations, and what
-      a datasheet actually prints (Pmax, Vmp/Imp, Voc/Isc, NOCT/NMOT, temperature
-      coefficients, bifaciality, dimensions, weight, cell count).
-- [ ] **Strings and arrays.** Modules in series into strings, strings in parallel into
-      combiner boxes, MPPT inputs per inverter, string length limits at 1000/1500 V,
-      DC/AC ratio, GCR and row pitch.
-- [ ] **Inverters.** String vs central vs micro vs optimiser. Vendors and model families,
-      kW ranges, CEC/Euro efficiency, MPPT windows, clipping, night self-consumption,
-      cabinet temperatures and derating.
-- [ ] **Trackers.** Single-axis (horizontal, tilted, backtracking) and dual-axis. Vendors.
-      Rotation range, tracking accuracy, stow angles, wind-stow thresholds, backtracking
-      geometry, gain over fixed tilt, motor power, slew rate.
-- [ ] **Mounting.** Fixed-tilt racking, torque tube, pier spacing, row pitch.
-- [ ] **Sensors.** Pyranometer, albedometer, diffuse (shadow-band/ball) pyranometer, snow
-      depth, ambient and module temperature (PT1000 on the back sheet), anemometer and
-      vane. Which are internal to the array and which are separate; ISO 9060 classes;
-      what a real met station on a PV plant carries; what SCADA tags they publish.
-- [ ] **Physics of sunlight on panels.** Beam/diffuse/ground-reflected decomposition
-      (Erbs), transposition (isotropic / Hay-Davies / Perez), incidence-angle modifier,
-      air-mass spectral correction, soiling, snow cover, low-light behaviour, cell
-      temperature models (NOCT vs Faiman vs Sandia), inverter clipping, row-to-row and
-      near-object shading, and how tightly neighbouring panels correlate.
-- [ ] **Plant SCADA tag names.** The target list, from the screenshot the user supplied:
-      Active Energy, Active Power, Ambient Temp, Cabinet Temp, Frequency, Grid Current,
-      Grid Voltage, I1/I2/I3, Irradiation, Module Temp, PF, PV Active Power, Reactive
-      Power, V1/V2/V3, V12/V23/V31 — plus the met-station bus (`M1.COM3-1..7`): Module
-      Temp, Ambient Temp, Irradiation, Diffused Irradiation, Global Irradiation, Wind
-      Direction, Wind Speed, Snow Distance, Snow Height.
-- [ ] **Trend shape.** Also from the screenshots: a clean bell over the day, power tracking
-      irradiance almost exactly, small high-frequency ripple, flat zero at night, ~77.6 kW
-      at 976.5 W/m² — so ~79.5 W per W/m², a plant around 80–100 kWp — and the power
-      leading irradiance slightly on the morning ramp.
+## 1. Research — done, findings in §R
 
 ## 2. Naming — the fictional vendors
 
-Follow the turbine convention exactly (`Cube` + rotor diameter, from Vestas): every real
-name replaced, every *figure* kept real.
+The turbine convention exactly (`Cube` + rotor diameter, from Vestas): every real name
+replaced, every *figure* kept real.
 
-- **Modules** — a maker whose designation carries cell count and watts, the way a
-  `JKM580N-72HL4-BDV` or a `TSM-DE21` does.
-- **Inverters** — designation carries AC kW, like `SUN2000-100KTL` or `SG110CX`.
-- **Trackers** — a name, not a number, like `NX Horizon` or `Terrasmart`.
-- **Sensors** — instrument-class designations, like `CMP11`, `SMP10`, `SR30`.
+* **Modules** — `Helio` + cell count + watts, the way a `JKM580N-72HL4` does.
+* **Inverters** — `Helio` + AC kW + family letter, the way an `SG110CX` or `SUN2000-100KTL` does.
+* **Trackers** — a name, not a number, like `NX Horizon` or `DuraTrack`.
+* **Instruments** — instrument-class designations, like `CMP11`, `SMP10`, `SR30`, `SR50A`.
 
-## 3. The datasheet layer (`api/power/`)
+---
 
-- [ ] `PvModuleSpec` — one module: cell technology, cell count, dimensions in metres,
-      Pmax, Voc/Isc/Vmp/Imp, temperature coefficients (Pmax, Voc, Isc), NOCT, bifaciality,
-      degradation. Derived: area, efficiency, power at a cell temperature and irradiance,
-      low-light behaviour, string voltage at temperature.
-- [ ] `PvArraySpec` (replaces `PhotovoltaicArray`) — one *block* of array: which module,
-      modules per string, strings, mounting (fixed / 1-axis / 2-axis), GCR, tilt, DC
-      nameplate. Derived: module count, area, land coverage, DC/AC ratio against an inverter.
-- [ ] `InverterSpec` — AC nameplate, DC window, MPPT count and window, peak/Euro/CEC
-      efficiency, night self-consumption, nominal voltage and frequency, power-factor
-      range, apparent-power ceiling, cabinet thermal limits and derating temperature.
-      Derived: efficiency at load as a real curve, clipping.
-- [ ] `TrackerSpec` — axis count, rotation limits, tracking rate, stow angles (night /
-      wind / snow / maintenance), wind-stow threshold, backtracking, motor power. Derived:
-      target angle for a sun position, backtracking angle for a GCR, incidence on the
-      tracked plane.
-- [ ] `SensorSpec` + `SensorCatalog` — the instruments, with ISO 9060 class, spectral
-      range, response time, accuracy.
-- [ ] `PvCatalog`, `InverterCatalog`, `TrackerCatalog` — at least six modules (matching the
-      six turbines), 4–6 inverters, 3–4 trackers, 5+ instruments.
+## R. Research findings — the figures this is built on
+
+### R.1 Modules — six real datasheets, one per turbine in the catalogue
+
+All six are real products with real numbers, renamed. Efficiency is Pmax / area, so it is
+derived rather than declared.
+
+| # | Drawn from | W | mm | m² | kg | Cells | Vmp | Imp | Voc | Isc | η | γPmax %/K | βVoc | αIsc | NOCT | Bifacial |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Jinko Tiger Neo 72HL4-BDV | 580 | 2278×1134×35 | 2.583 | 32.0 | 144 half TOPCon | 43.52 | 13.33 | 51.19 | 14.06 | 22.5% | −0.29 | −0.25 | +0.045 | 45 | 0.80 |
+| 2 | Trina Vertex N NEG21C.20 | 700 | 2384×1303×33 | 3.106 | 38.3 | 132 half G12 TOPCon | 39.6 | 17.68 | 46.7 | 18.75 | 22.5% | −0.29 | −0.25 | +0.045 | 43 | 0.80 |
+| 3 | 108-cell PERC mono | 415 | 1722×1134×30 | 1.953 | 21.5 | 108 half PERC | 31.4 | 13.22 | 37.6 | 13.93 | 21.3% | −0.34 | −0.27 | +0.048 | 45 | 0.70 |
+| 4 | REC Alpha Pure HJT | 430 | 1730×1118×30 | 1.934 | 21.5 | 132 half HJT | 33.0 | 13.03 | 39.5 | 13.85 | 22.2% | −0.24 | −0.24 | +0.040 | 44 | — |
+| 5 | Maxeon 6 IBC | 440 | 1872×1032×40 | 1.932 | 22.5 | 66 IBC | 67.0 | 6.57 | 80.5 | 6.98 | 22.8% | −0.27 | −0.235 | +0.050 | 43 | — |
+| 6 | First Solar Series 7 CdTe | 530 | 2300×1216×32 | 2.797 | 39.7 | 268 CdTe | 183.0 | 2.90 | 223.0 | 3.19 | 18.9% | −0.32 | −0.28 | +0.040 | 45 | — |
+
+What the spread is *for*, and every one of these is a real behavioural difference:
+
+* **γPmax** decides the desert argument. HJT at −0.24 %/K keeps a fifth more of its rating at
+  75 °C than PERC at −0.34.
+* **Voltage per module** decides string length. An IBC module at 80.5 V Voc takes 17 in series
+  at 1500 V where a 51 V TOPCon takes 27 — so the same DC nameplate arrives as very different
+  string currents, and the telemetry shows it.
+* **CdTe** is the outlier on purpose: low efficiency, high voltage, tiny current, the best
+  temperature coefficient of the thin films, better low-light and better spectral response in
+  humid air. It should win where the others lose.
+* Max system voltage 1500 V (1000 V on the residential module), series fuse 25–30 A,
+  −40…+85 °C operating range, 16 busbars.
+
+### R.2 Strings, arrays, ground cover
+
+* Modules in series into a **string**; strings in parallel into an **MPPT input** or a
+  **combiner box** aggregating 16–32 strings.
+* 1500 V systems run **28–32 modules per string**; 1000 V systems 18–22. The limit is Voc at
+  the coldest expected temperature, which is why βVoc is on the datasheet.
+* **GCR** = module row width / row pitch. Real ranges: fixed tilt 0.40–0.60, horizontal
+  single-axis **0.28–0.50** (NX Horizon's own published range), dual-axis 0.20–0.30, and
+  rooftop/flat ballast up to 0.85–0.95.
+* **ILR / DC-AC ratio** 1.30–1.55 for utility plant, optimum near 1.35–1.40, with 0–3 % annual
+  clipping loss treated as acceptable.
+
+### R.3 Inverters — four real families
+
+| # | Drawn from | AC kW | MPPTs | MPPT window | Max DC V | Startup V | ηmax | ηeuro | Night W | Cooling |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Huawei SUN2000-10KTL-M1 | 10 | 2 | 140–980 | 1100 | 200 | 98.6 % | 98.3 % | 1 | natural |
+| 2 | Sungrow SG110CX | 110 | 9 | 200–1000 | 1100 | 200 | 98.7 % | 98.4 % | 2 | fan |
+| 3 | Sungrow SG350HX | 352 | 16 | 500–1500 | 1500 | 550 | 99.0 % | 98.7 % | 3 | fan |
+| 4 | SMA Sunny Central 2500-EV | 2500 | 1 | 875–1325 | 1500 | 875 | 98.9 % | 98.6 % | 100 | forced air |
+
+* Nominal AC 400 V / 800 V line-to-line, 50 Hz, power factor 0.8 leading to 0.8 lagging,
+  apparent power ≈ 1.1 × active nameplate.
+* **Full power to ~45–50 °C ambient, derating above** — so the cabinet temperature in the
+  telemetry has to actually do something.
+* Night self-consumption is why a plant reads slightly *negative* at night on a real meter.
+  A microinverter's is 50 mW; a central inverter's is 100 W.
+* Efficiency curve shape: steeply up to ~15 % load, flat and high from 20 % to 100 %. That is
+  what the existing `INVERTER_KNEE = 0.017` was groping at and it is the right shape.
+
+### R.4 Trackers — three real families, and one hard fact about this world
+
+| # | Drawn from | Axes | Range | GCR | Slew | Stow | Motor |
+|---|---|---|---|---|---|---|---|
+| 1 | Nextracker NX Horizon | 1, independent row, self-powered | ±60° | 0.28–0.50 | 4.4 °/min | wind, night, snow | 24 V DC slew drive |
+| 2 | Array Tech DuraTrack HZ v3 | 1, mechanically ganged | ±52° | 0.33–0.50 | 4 °/min | wind | one drive per ~200 kW |
+| 3 | azimuth-elevation dual axis | 2 | ±135° az, 10–80° el | 0.20–0.30 | 3 °/min | wind, snow | 5000 Nm slew, ~3 kWh/yr |
+
+* Wind stow above ~20 m/s; tested to 200 km/h stowed; self-powered controllers stow on battery
+  so a grid outage cannot leave a row exposed.
+* **Backtracking.** Derived, and the derivation matters because it is the one place the mod's
+  geometry has to be exactly right. A row of width `L` normal to the sun intercepts a beam of
+  width `L` and casts a ground shadow `L/sin α` wide, so shading starts when `sin α < GCR`.
+  Below that, holding the shadow to exactly the pitch needs
+  `cos(R_true − R) = sin α / GCR`, and with true tracking at `R_true = 90° − α`:
+
+      R_backtrack = (90° − α) − arccos( sin α / GCR )
+
+  which is continuous at `sin α = GCR` and lies flat at sunrise. Matches the published
+  `θ_t = θ_s − arccos(cos θ_s / GCR)` with `θ_s` the zenith angle.
+
+* **The hard fact.** Minecraft's sun rises due east, passes through the zenith and sets due
+  west: the world has no axial tilt and no latitude, so the sun stays in one vertical plane all
+  day. A north-south horizontal single axis therefore tracks it **perfectly**, and a second
+  axis has no azimuth travel left to earn anything. Two real behaviours save the dual-axis
+  machine from being decoration, and both are what real controllers do:
+  1. **Rotation limits.** A ±60° single-axis row cannot face a sun below 30° elevation and
+     spills the rest; a dual-axis frame tilting to 80° reaches down to 10°. So the dual-axis
+     machine collects the morning and evening the single-axis one throws away.
+  2. **Diffuse mode.** Under a heavily overcast sky the brightest thing is the whole dome, not
+     the sun, so a real dual-axis controller goes flat to maximise sky view factor. A
+     single-axis row cannot.
+  Plus snow stow (steep, to shed) and wind stow (flat). This is stated in the docs rather than
+  hidden, because it is the sort of thing a player will work out and be annoyed by otherwise.
+
+### R.5 Instruments — what a real PV met station carries, and where each one lives
+
+The research answers the user's question directly: **module temperature is internal to the
+array** (a PT1000 taped to the back sheet of a representative module), and **everything else is
+external**, on a met mast, one or two per plant per IEC 61724.
+
+| Instrument | Drawn from | Reads | Real specification |
+|---|---|---|---|
+| Pyranometer | Kipp & Zonen CMP11 / SMP10 | GHI, and POA when tilted with the array | ISO 9060 Secondary Standard / Class A, 285–2800 nm, 7–14 µV/W/m², <5 s to 95 % (1.66 s to 63 %), non-linearity <0.2 %, temperature dependence <1 % over −10…+40 °C, directional error <10 W/m², range 0–4000 W/m² |
+| Albedometer | Kipp & Zonen CMA11 | ground albedo | two Class A pyranometers back to back, one up one down |
+| Diffuse pyranometer | CMP11 + CM121 shadow ring | DHI | shadow ring occludes the solar disc; needs a seasonal adjustment on a real one |
+| Reference cell | c-Si reference device | effective POA | same spectral response as the array, so it tracks module current better than a pyranometer and reads *lower* at low sun |
+| Back-of-module temperature | PT1000 Class A RTD | module temperature | ±0.15 °C at 0 °C, taped mid-cell to the back sheet |
+| Snow depth | Campbell SR50A | snow distance, snow height | ultrasonic, 0.5–10 m, ±1 cm — which is exactly why the screenshot has **two** tags: the sensor measures *distance to the surface* and the height is derived from it |
+| Anemometer + vane | cup + vane | wind speed, wind direction | 0–75 m/s ±0.3 m/s; 0–360° ±3° |
+
+Seven instruments on one bus, which is what the screenshot's `M1.COM3-1..7` layout is.
+
+### R.6 The physics, with the correlations named
+
+* **Clearness index** `kt = GHI / (E0 · sin α)`, `E0` the extraterrestrial normal irradiance.
+* **Erbs** diffuse fraction `Kd = DHI/GHI`:
+  * `kt ≤ 0.22`: `1 − 0.09 kt`
+  * `0.22 < kt ≤ 0.80`: `0.9511 − 0.1604 kt + 4.388 kt² − 16.638 kt³ + 12.336 kt⁴`
+  * `kt > 0.80`: `0.165`
+* **Transposition, Hay-Davies with the Reindl horizon term.**
+  `POA_sky = DHI · [ Ai·Rb + (1−Ai)·(1+cos β)/2 · (1 + f·sin³(β/2)) ]`, `Ai = DNI/E0`,
+  `Rb = cos AOI / cos Z`, `f = √(GHI_beam/GHI)`.
+  **Ground reflected** `= albedo · GHI · (1 − cos β)/2`.
+* **IAM, Martin & Ruiz**: `(1 − e^{−cos AOI / ar}) / (1 − e^{−1/ar})`, `ar = 0.16` for glass
+  (range 0.08–0.25). Costs ~2 % at 60° and ~30 % at 80°, and is why a tracker's *flat* output
+  curve is not quite flat.
+* **Cell temperature, Faiman** — adopted by IEC 61853, and better than NOCT because wind
+  enters: `Tm = Ta + POA/(u0 + u1·WS)`, `u0 = 25.0`, `u1 = 6.84 W/m²K`. NOCT stays as the
+  datasheet figure the module is *sold* on, and the two agree at 800 W/m², 20 °C, 1 m/s.
+* **Soiling, Kimber**: 0.1–0.3 %/day accumulation, rain over ~6 mm/day resets to clean, then a
+  two-week grace period.
+* **Snow**: 5–12 % annual loss for elevated unobstructed modules in a snowy climate, least at
+  the steepest tilt; below ~30° tilt a module can stay covered for a whole season; winter-month
+  reductions of 70 % at 23° and 40 % at 40° are on record.
+* **Albedo**: fresh snow 0.80–0.90, sand 0.30–0.40, concrete 0.30–0.40, grass 0.20–0.25,
+  water 0.06–0.10, white membrane 0.60–0.70.
+* **Bifacial gain** ≈ bifaciality × albedo × view factor; view factor 0.10–0.20 fixed tilt and
+  higher on an elevated tracker. Each +0.1 of albedo is worth 3–5 % of rear generation.
+  Bifaciality 0.80–0.90 for TOPCon/HJT, 0.65–0.75 for PERC.
+* **Low light**: relative efficiency at 200 W/m² is ~97–98 % of STC for a good module and falls
+  away below 100 W/m² — a shunt-resistance effect, not a rounding error.
+* **Cloud transmittance** stays Kasten & Czeplak, which the mod already has and which is right.
+
+### R.7 The trend the user supplied, as a calibration target
+
+77.6 kW at 976.5 W/m² is 79.5 W per W/m², so `P_dc · PR = 79.5 kW` — at a performance ratio of
+0.82 that is a **97 kWp plant on a ~90 kW inverter**, ILR ≈ 1.08. The shape to reproduce: a
+clean bell, power tracking irradiance almost exactly, small high-frequency ripple, flat zero at
+night, and power leading irradiance slightly on the morning ramp because the modules are still
+cold. All four fall out of the model above rather than needing to be drawn.
+
+---
+
+## 3. The datasheet layer (`api/power/`) — commit 2
+
+- [ ] `PvModuleSpec` — record: id, designation, technology, cell count, width/height/depth m,
+      Pmax, Vmp/Imp/Voc/Isc, γPmax/βVoc/αIsc, NOCT, bifaciality, max system volts, fuse.
+      Derived: `areaM2`, `efficiency`, `powerAt(poa, cellTemp)` with the low-light term,
+      `vocAt(cellTemp)`, `maxSeriesModules(coldestC)`.
+- [ ] `PvMounting` enum — `FLAT`, `FIXED_TILT`, `SINGLE_AXIS`, `DUAL_AXIS`, each carrying
+      whether it tracks, its default GCR band and its snow-shed behaviour.
+- [ ] `PvArraySpec` — record: id, designation, module, modules per string, strings, mounting,
+      GCR, fixed tilt, tracker (nullable). Derived: module count, module area, DC nameplate,
+      land coverage, string voltage and current, `poaTilt(sunElevation, …)`.
+- [ ] `InverterSpec` — record: id, designation, AC kW, MPPT count, MPPT window, max DC volts
+      and power, startup volts, ηmax, ηeuro, night watts, nominal AC volts, frequency, PF
+      range, apparent ceiling, derate-onset ambient, max ambient. Derived: efficiency at load
+      (a real curve, calibrated so it passes through ηmax and ηeuro), clipping, `maxDcKw`.
+- [ ] `TrackerSpec` — record: id, designation, axes, rotation limit, elevation range, slew
+      °/min, stow angles (night/wind/snow), wind stow threshold, backtracking flag, motor W.
+      Derived: `trueAngle`, `backtrackAngle(gcr, elevation)`, `targetAngle(conditions)`.
+- [ ] `SensorSpec` + `SensorCatalog` — the seven instruments with their real classes,
+      spectral ranges, response times and accuracies.
+- [ ] `PvCatalog`, `InverterCatalog`, `TrackerCatalog`.
 - [ ] `SolarTelemetry` — the screenshot's tag set with kinds, same shape as `TurbineTelemetry`.
-- [ ] The **inverter** is the SCADA node, as on a real plant; the array reports through it.
 
-## 4. Solar physics in the weather model (`main/weather/`)
+## 4. Solar physics in the weather model (`main/weather/`) — commits 3 and 4
 
-Rewrite the solar half of `Atmosphere` to be right rather than adequate. The wind half is
-untouched.
+- [ ] **Sun as a direction.** `SunPosition` record: elevation sine, azimuth degrees. Minecraft's
+      sun is due east before noon and due west after, so the azimuth is honest about being a
+      two-valued thing rather than pretending to sweep.
+- [ ] **Three components.** `Irradiance` record: DNI, DHI, GHI, extraterrestrial normal,
+      clearness index. Erbs split as in R.6.
+- [ ] **Transposition.** `Atmosphere.planeOfArray(...)` → beam / sky-diffuse / ground-reflected,
+      Hay-Davies + Reindl + albedo view factor, with the Martin & Ruiz IAM on the beam.
+- [ ] **Albedo from the biome.** In `SiteConditions`, from the same tags the roughness uses,
+      plus snow cover: snow 0.85, sand/beach 0.35, badlands 0.30, grass 0.22, water 0.07.
+- [ ] **Snow on modules.** Depth from the world's snow layers over the array, shed above a tilt
+      and module temperature threshold.
+- [ ] **Soiling.** Kimber: accumulate per day from the biome's dryness, reset on rain.
+- [ ] **Shading** (commit 4):
+  - [ ] Blocks above: opaque ⇒ the whole beam goes and the diffuse is cut by the fraction of the
+        dome hidden; translucent ⇒ attenuated by that block's own light-blocking value.
+  - [ ] Entities over the array cast a moving shadow.
+  - [ ] Row-to-row shading between adjacent array blocks at low sun, which is what backtracking
+        exists to avoid and which therefore has to be modelled for backtracking to mean anything.
+  - [ ] Nearby arrays stay correlated: only the cumulus field separates them.
+- [ ] **`SolarConditions`** — one record with everything, so an array asks once.
 
-- [ ] **Sun as a direction.** Keep Minecraft's east-to-west zenith path, but expose azimuth
-      as well as elevation, because a tracker needs both.
-- [ ] **Three components, not one.** DNI, DHI and GHI as separate quantities with a
-      clearness-index split (Erbs), so an overcast sky is nearly all diffuse and a clear one
-      nearly all beam. This is what makes shading behave correctly.
-- [ ] **Plane-of-array transposition.** Beam by cosine of incidence, diffuse by an
-      isotropic-plus-horizon-brightening model, ground-reflected by albedo × GHI × view
-      factor. Albedo from the biome (snow ~0.8, sand ~0.35, grass ~0.20, water ~0.06),
-      which also gives the albedometer something real to read.
-- [ ] **Cloud field.** Keep the two-scale cumulus model; verify its trend shape against the
-      screenshots and that two panels 30 blocks apart diverge and rejoin the way the real
-      pair do.
-- [ ] **Snow on modules.** Depth from the world's snow layers plus a shed model driven by
-      tilt and module temperature; zero output under lying snow, which is what the snow
-      sensors are for.
-- [ ] **Soiling.** A slow climate-dependent loss that washes off in rain.
-- [ ] **Shading**, which the user asked for explicitly:
-  - [ ] Occlusion by blocks above: opaque ⇒ the beam goes entirely, and the diffuse is cut
-        by the fraction of sky hidden; translucent (glass, water, leaves, ice) ⇒ attenuated
-        by that block's own light-blocking value.
-  - [ ] Entities standing over a panel cast a moving shadow.
-  - [ ] Row-to-row shading between adjacent array blocks at low sun — which is what GCR and
-        backtracking are *for*.
-  - [ ] Correlation between nearby panels: a big field should produce nearly the same
-        everywhere, with the cumulus field the only source of divergence.
-- [ ] **One `SolarConditions` sample record**: DNI/DHI/GHI, POA beam/diffuse/ground,
-      effective POA, sun elevation and azimuth, albedo, clearness index, snow, soiling — so
-      an array asks once and gets everything.
+## 5. The blocks — commit 5
 
-## 5. The blocks
+Six array blocks, four inverters, one met mast. The flat array keeps the registry name
+`solar_panel`, exactly as the C130 keeps `wind_turbine`, so existing worlds load unchanged.
 
-- [ ] **PV array block**, one per catalogue entry, mounting baked into the spec:
-  - [ ] Fixed-tilt table — walkable, low.
-  - [ ] Single-axis tracker — torque tube plus a rotating module plane.
-  - [ ] Dual-axis tracker — pedestal, azimuth ring, elevation frame.
-- [ ] **Inverter block** — a real cabinet, the SCADA node, the thing that clips, and the
-      thing a computer talks to.
-- [ ] **Met station block** — a mast carrying the instruments (matches the screenshot's
-      seven-instrument bus).
-- [ ] Wiring: array → inverter (DC, by proximity), inverter → cabin (the existing wire and
-      insulator system), so a PV plant joins the same grid the turbines do.
-- [ ] Placement: a tracker needs a clear rotation envelope.
+| Registry name | Product | Mounting | Module | GCR | Modules | DC kW |
+|---|---|---|---|---|---|---|
+| `solar_panel` | flat ballasted table | FLAT | 580 W TOPCon bifacial | 0.85 | 34 | 19.7 |
+| `pv_tilt_580` | fixed tilt 25° | FIXED_TILT | 580 W TOPCon bifacial | 0.45 | 18 | 10.4 |
+| `pv_tilt_530` | fixed tilt 25°, thin film | FIXED_TILT | 530 W CdTe | 0.45 | 17 | 9.0 |
+| `pv_track_700` | horizontal single-axis | SINGLE_AXIS | 700 W G12 bifacial | 0.40 | 13 | 9.1 |
+| `pv_track_580` | horizontal single-axis, ganged | SINGLE_AXIS | 580 W TOPCon bifacial | 0.45 | 18 | 10.4 |
+| `pv_dual_440` | azimuth-elevation dual axis | DUAL_AXIS | 440 W IBC | 0.25 | 13 | 5.7 |
 
-## 6. Models and textures
+One block is 100 m² of ground at the mod's ten metres to the block, so the module count is
+`GCR × 100 / module area` and the DC nameplate follows — which is why the flat array lands back
+on the 19.7 kW the placeholder asserted, and why the trackers carry less nameplate per block
+and earn it back in daily energy and in a flat output curve. The trade is real and gets said
+out loud in the docs.
 
-No Blender here, so the geometry is generated: a Python script (stdlib only — no PIL and no
-numpy on this machine, so PNGs are written through `zlib` by hand) emits OBJ + MTL and the
-textures, committed alongside the assets so the geometry is reproducible and reviewable.
+- [ ] **DC coupling.** An array produces nothing without an inverter in range: the inverter
+      scans a configurable radius (default 16 blocks) on a cached interval and claims arrays,
+      first come first served up to its own max DC power. Over-subscription is not an error, it
+      is **clipping**, which is what an ILR over 1.0 buys and what the trend screenshots show.
+- [ ] **Inverter → cabin** over the existing wire system: the inverter carries one insulator, is
+      a generator node in `PowerNetwork`, and `canTransfer` lets it reach a cabin.
+- [ ] Met mast: standalone, publishes instrument readings, needs no power.
 
-- [ ] `tools/gen_pv_models.py` — emits `models/pv_*/*.obj` + `.mtl` with the group naming
-      the OBJ pipeline needs, and a separate group for every moving part:
-  - [ ] fixed table: `frame`, `modules`, `legs`, `insulator`
-  - [ ] single-axis: `pier`, `torque_tube`, `rotate_plane` (moving), `motor`, `insulator`
-  - [ ] dual-axis: `pedestal`, `rotate_azimuth` (moving), `rotate_elevation` (moving), `insulator`
-  - [ ] inverter: `cabinet`, `door`, `display`, `fan` (moving), `insulator`
-  - [ ] met mast: `mast`, `boom`, `pyranometer`, `albedometer`, `diffuse`, `snow`,
-        `temp_shield`, `rotate_cups` (moving), `rotate_vane` (moving)
-- [ ] `tools/gen_pv_textures.py` — procedural PNGs: cell grid with busbars and the half-cut
-      split, anodised aluminium frame, galvanised steel, painted cabinet, white instrument
-      domes, item icons, GUI backgrounds.
-- [ ] Blockstates, block models, item models, loot tables, `mineable/pickaxe`, and lang
-      entries for every new block, item and GUI string.
+## 6. Models and textures — commit 6
 
-## 7. Renderers
+Generated, not authored by hand: `tools/gen_pv_models.py` and `tools/gen_pv_textures.py`,
+stdlib only (no PIL and no numpy here, so PNGs go out through `zlib` by hand), committed beside
+the assets so the geometry is reproducible and reviewable.
 
-- [ ] `PvArrayRenderer` — per-group matrices like `WindTurbineRenderer`.
-- [ ] **Tracker animation**, the hard part: the rotating plane needs its own pivot (the
-      torque-tube axis for one axis; azimuth ring plus elevation pivot for two),
-      interpolated on the client the way `smoothYaw` does, driven by a server-synced target
-      angle. The OBJ buffer cache is keyed by `BlockPos` and rebuilt only when light or
-      texture change, so per-frame motion must live in the matrix and never in the vertices.
-- [ ] `InverterRenderer` — fan spin proportional to cabinet temperature, display lit when
-      producing.
+- [ ] Groups, with every moving part separate so the renderer can drive it by matrix:
+  * flat / fixed tilt: `frame`, `modules`, `legs`, `insulator`
+  * single axis: `pier`, `rotate_tube`, `rotate_modules`, `motor`, `insulator`
+  * dual axis: `pedestal`, `rotate_azimuth`, `rotate_elevation`, `insulator`
+  * inverter: `cabinet`, `door`, `display`, `rotate_fan`, `insulator`
+  * met mast: `mast`, `boom`, `pyranometer`, `albedometer`, `diffuse`, `snow`, `shield`,
+    `rotate_cups`, `rotate_vane`, `insulator`
+- [ ] Textures: cell grid with busbars and the half-cut split, anodised frame, galvanised steel,
+      painted cabinet, white instrument domes, item icons, three GUI backgrounds.
+- [ ] Blockstates, block models, item models, loot tables, `mineable/pickaxe`, lang.
+
+## 7. Renderers — commits 6 and 7
+
+- [ ] `PvArrayRenderer` — per-group matrices; the tracked groups rotate about the torque-tube
+      axis (one axis) or the pedestal axis then the elevation pivot (two axes).
+- [ ] Client-side smoothing of the tracker angle towards the server's target, the way
+      `smoothYaw` does for a nacelle. Per-frame motion lives in the matrix and never in the
+      vertices, because the buffer cache is keyed by `BlockPos` and only rebuilt on light or
+      texture change.
+- [ ] `InverterRenderer` — fan speed from cabinet temperature, display lit when producing.
 - [ ] `MetStationRenderer` — cups spinning with wind speed, vane pointing downwind.
 
-## 8. GUIs
+## 8. GUIs — commit 9
 
-Modelled on what the real hardware shows: string inverters have a small LCD plus a web UI,
-and plant SCADA has a dashboard.
+- [ ] **Inverter screen** — the plant dashboard: AC and DC power with the clipping gap visible,
+      today's and lifetime energy, per-MPPT string voltage and current, grid V/I/f/PF, cabinet
+      temperature against the derate onset, efficiency, state (night / starting / MPPT /
+      clipping / derating / curtailed / stopped / fault), curtailment slider, power-factor
+      setpoint, redstone mode, stop.
+- [ ] **Array screen** — the datasheet: module designation and count, string layout, DC
+      nameplate, POA broken into beam / diffuse / ground, cell temperature, tracker angle and
+      mode, soiling, snow, shading, performance ratio; tracker controls auto / manual / stow.
+- [ ] **Met station screen** — the seven instruments laid out like a met display.
+- [ ] Power Wrench opens all three; `SolarControlPayload` validated and distance-checked.
 
-- [ ] **Inverter screen** — the plant dashboard: AC and DC power, today's and lifetime
-      energy, per-MPPT string voltage and current, grid V/I/f/PF, cabinet temperature,
-      efficiency, clipping indicator, state (standby / MPPT / clipping / derating / fault /
-      night), curtailment slider, power-factor setpoint, redstone mode, stop.
-- [ ] **Array screen** — the datasheet: module model, count, string layout, DC nameplate,
-      POA irradiance, cell temperature, tracker angle and mode, soiling, snow, performance
-      ratio, shading indicator; tracker controls (auto / manual / stow).
-- [ ] **Met station screen** — the instrument readings, laid out like a met display.
-- [ ] Power Wrench opens all three (`PowerWrenchClientHooks`).
-- [ ] `SolarControlPayload`, server-validated and distance-checked exactly like the turbine's.
+## 9. Peripherals — commit 8
 
-## 9. Peripherals
-
-- [ ] `electricity_pv_inverter` — the full tag set generated from `SolarTelemetry.kinds()`
-      through `IDynamicPeripheral`, plus the Mekanism-compatible names and the control
-      methods (`stop`, `start`, `setActivePowerLimit`, `setRedstoneMode`, `setPowerFactor`).
-- [ ] `electricity_pv_array` — module, string and tracker readings, and tracker control.
+- [ ] `electricity_pv_inverter` — the full tag set generated from `SolarTelemetry.kinds()`, the
+      Mekanism-compatible names, and the controls.
+- [ ] `electricity_pv_array` — module, string and tracker readings plus tracker control.
 - [ ] `electricity_met_station` — the instrument tags.
-- [ ] `electricity_solar_panel` keeps answering, so existing programs still work.
+- [ ] `electricity_solar_panel` keeps answering so existing programs still work.
 
-## 10. Grid integration
+## 10. Grid integration — commit 10
 
-- [ ] The inverter is a generator node in `PowerNetwork`: arrays feed it, it feeds a cabin.
-      Distance losses, the surge model and Forge/Mekanism export all apply.
-- [ ] `ElectricityServerConfig` — export fraction and ceiling for PV, mirroring the turbines'.
+- [ ] Inverter is a generator node in `PowerNetwork`; distance losses, the surge model and
+      Forge/Mekanism export all apply.
+- [ ] `ElectricityServerConfig` — PV export fraction and ceiling, and the DC search radius.
 
-## 11. Docs
+## 11. Docs — commit 11
 
-- [ ] `docs/photovoltaics.md` — the catalogue, the physics, the tags, the shading rules, the
-      tracker modes, written the way `docs/telemetry.md` is.
-- [ ] `docs/telemetry.md` — the new peripherals.
-- [ ] `README.md` — solar out of alpha, and the new rows in the block table.
+- [ ] `docs/photovoltaics.md`, `docs/telemetry.md`, `README.md`.
 
 ## 12. Commits
 
-One per block, in this order, each compiling and each self-contained:
-
-1. `docs: plan the photovoltaic plant` (this file)
+1. `docs: plan the photovoltaic plant` ✔
 2. `feat: a datasheet for modules, inverters, trackers and instruments` (§3)
-3. `feat: split the sunlight into beam, diffuse and ground-reflected` (§4 physics)
+3. `feat: split the sunlight into beam, diffuse and ground-reflected` (§4)
 4. `feat: shade a panel with whatever stands over it` (§4 shading)
-5. `feat: build the array out of modules on a mounting` (§5 blocks)
-6. `feat: draw the arrays, the inverter and the met mast` (§6 assets, §7 renderers)
+5. `feat: build the array out of modules on a mounting` (§5)
+6. `feat: draw the arrays, the inverter and the met mast` (§6, §7)
 7. `feat: turn the tracker to the sun` (§7 animation, tracker control)
-8. `feat: an inverter that publishes what a plant's SCADA does` (§3 telemetry, §9)
+8. `feat: an inverter that publishes what a plant's SCADA does` (§9)
 9. `feat: control panels for the array, the inverter and the mast` (§8)
 10. `feat: put a photovoltaic plant on the same grid as the turbines` (§10)
 11. `docs: write down the photovoltaic plant` (§11)
