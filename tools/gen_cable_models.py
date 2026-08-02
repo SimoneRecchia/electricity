@@ -33,13 +33,16 @@ ITEM_MODELS = os.path.join(ASSETS, 'models', 'item')
 GROUND = 15.0
 RIM = 1.0
 
-# The two products, and the only two numbers that differ between them.  Half-width is measured
-# from the middle of the block, so a string pair is six pixels across and a trunk ten - which is
-# about the ratio of 6 mm² to 240 mm², allowing for the fact that a pair of anything narrower than
-# four pixels is not readable at a block's size.
+# One cross-section for both products, and it is the same one the machines' own cable entries use.
+#
+# The honest ratio of 6 mm² to 240 mm² is a factor of six in diameter, and a trunk drawn at that came
+# out a slab: ten pixels across and two and a half tall, against six and a half on the panel it was
+# plugged into, so a run visibly swelled where it left the machine.  At a block to ten metres neither
+# cable would be a pixel wide anyway - both sizes are already symbolic - so the gauge is told apart by
+# what is drawn on it instead, which is the armour bands a heavy cable actually carries.
 CABLES = {
     'dc_string_cable': dict(half=3.0, thick=1.5, texture='dc_string_line'),
-    'dc_trunk_cable': dict(half=5.0, thick=2.5, texture='dc_trunk_line'),
+    'dc_trunk_cable': dict(half=3.0, thick=1.5, texture='dc_trunk_line'),
 }
 
 # Face textures are *names* looked up in the model's own textures map, not paths - a raw resource

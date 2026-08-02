@@ -604,7 +604,7 @@ def inverter():
     # the lid is a rain hood and the rest is side sheet, which is the whole difference
     # between a cabinet and a box with the same picture on all six faces
     clad_box(mesh, 'cabinet', (-0.44, 0.0, -0.30), (0.44, 0.98, 0.28),
-             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.9)
+             {'up': 'cabinet_top', '*': 'cabinet'})
     # a plinth, because a cabinet standing straight on the ground rusts
     box(mesh, mesh.faces('cabinet', 'cabinet'), (-0.46, 0.0, -0.32), (0.46, 0.05, 0.30), uv_scale=0.5)
 
@@ -637,6 +637,20 @@ def inverter():
     cylinder(mesh, insulator, (0.30, 1.03, 0.0), 'y', 0.045, 0.05, uv_scale=0.3,
              caps=mesh.faces('insulator', 'instrument'))
 
+    # The direct-current section, drawn only when a combiner box has been fitted into the cabinet.
+    #
+    # A compartment across the bottom of the front, which is where a central inverter's own DC section
+    # is: a row of fuse ways behind a window and a gland plate under them.  It is the whole visible
+    # difference between a machine that can take a string and one that cannot, and it needs to be
+    # visible - fitting a box used to change nothing at all, so a player could not tell whether the
+    # click had worked.
+    clad_box(mesh, 'section', (-0.40, 0.08, -0.375), (0.40, 0.36, -0.335),
+             {'north': 'combiner_door', 'up': 'cabinet_top', '*': 'cabinet'})
+    glands = mesh.faces('section', 'steel')
+    for i in range(6):
+        cylinder(mesh, glands, (-0.30 + i * 0.12, 0.06, -0.355), 'y', 0.016, 0.025, sides=6,
+                 uv_scale=0.2, caps=glands)
+
     # where the direct current comes in, one run per side, drawn only for the sides it comes in from
     stubs(mesh, 'entry')
     return mesh
@@ -666,8 +680,10 @@ def combiner():
              caps=mesh.faces('post', 'steel_end'))
 
     # the enclosure: a lid that is a lid, and side sheet everywhere else
+    # the whole texture rather than eight tenths of it: the lid's picture is a bolted frame, and a
+    # fraction of a frame is a frame off centre, which is exactly how it looked
     clad_box(mesh, 'enclosure', (-0.22, box_y0, -0.10), (0.22, box_y1, 0.10),
-             {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.8)
+             {'up': 'cabinet_top', '*': 'cabinet'})
 
     # the door, with the fuse window and the rating label on the one face anybody stands at
     clad_box(mesh, 'door', (-0.19, box_y0 + 0.03, -0.115), (0.19, box_y1 - 0.03, -0.10),
@@ -693,7 +709,9 @@ def combiner():
     # carries them up the post into the glands - a box on a post with cable arriving at ground level has
     # to have something joining the two or the copper stops at the footing
     stubs(mesh, 'entry')
-    box(mesh, mesh.faces('post', 'dc_cable'), (-0.05, 0.02, 0.032), (0.05, box_y0 + 0.01, 0.064))
+    # the riser up the post, at exactly the cross-section of the run it continues - a join that changes
+    # thickness halfway is the one thing a player's eye lands on
+    box(mesh, mesh.faces('post', 'dc_cable'), (-0.1875, 0.02, 0.032), (0.1875, box_y0 + 0.01, 0.126))
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
     handle = mesh.add_object('rotate_handle', 'switch')
@@ -808,7 +826,7 @@ MODELS = [
     ('pv_tilt', tilted_rack, ('steel', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_track', single_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, ('steel', 'steel_end', 'frame') + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable')),
+    ('pv_inverter', inverter, ('cabinet', 'cabinet_door', 'cabinet_top', 'vent', 'frame', 'display', 'steel', 'instrument', 'dc_cable', 'combiner_door')),
     ('pv_combiner', combiner, ('steel', 'steel_end', 'cabinet', 'cabinet_top', 'combiner_door', 'frame', 'switch', 'dc_cable')),
     ('met_mast', met_mast, ('steel', 'steel_end', 'instrument', 'dome', 'cabinet', 'cabinet_top', 'frame')),
 ]

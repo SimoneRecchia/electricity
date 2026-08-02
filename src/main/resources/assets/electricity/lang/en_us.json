@@ -231,5 +231,10 @@
   "screen.electricity.pv_combiner.refusal.insulation": "A row was left out: string volts above this box",
   "screen.electricity.pv_combiner.refusal.fuse": "A row was left out: its fuse will not fit these holders",
   "screen.electricity.pv_combiner.refusal.ways": "A row was left out: every way is used",
-  "screen.electricity.pv_combiner.refusal.output_current": "A row was left out: the output is full"
+  "screen.electricity.pv_combiner.refusal.output_current": "A row was left out: the output is full",
+  "screen.electricity.pv_inverter.terminals": "DC terminals: %s",
+  "screen.electricity.pv_inverter.terminals.strings": "plugs — strings straight in, no combiner",
+  "screen.electricity.pv_inverter.terminals.both": "plugs and busbars — strings or a combiner trunk",
+  "screen.electricity.pv_inverter.terminals.busbars": "busbars only — a trunk, or fit a combiner box in it",
+  "screen.electricity.pv_inverter.terminals.fitted": "combiner fitted — strings straight in"
 }

@@ -573,7 +573,7 @@ CABLE_RED = ((74, 22, 22, 255), (132, 40, 36, 255), (176, 66, 58, 255))
 CLIP = (138, 142, 150, 255)
 
 
-def cable_line(half, thick):
+def cable_line(half, thick, armoured=False):
     """A pair running the length of the tile, with the clip that holds it down across the middle.
 
     One texture serves the whole run.  The conductors sit at fixed columns, so a corner piece and
@@ -603,10 +603,14 @@ def cable_line(half, thick):
             c.rect(x, 0, x + 1, 16, colour)
 
     # the clip: a stainless hanger over both conductors, which is what a real run is held by and
-    # what stops this reading as two painted lines
-    c.rect(left, 7, left + 2 * width, 9, CLIP)
-    c.rect(left, 7, left + 2 * width, 8, shade(CLIP, 34))
-    c.rect(left + width - 1, 7, left + width + 1, 9, shade(CLIP, -46))
+    # what stops this reading as two painted lines.  A trunk gets three of them rather than one and a
+    # darker jacket, because it is armoured and because that is how it is told from a string cable now
+    # that the two are drawn the same size
+    for y in ((2, 6, 11) if armoured else (7,)):
+        c.rect(left, y, left + 2 * width, y + 2, CLIP)
+        c.rect(left, y, left + 2 * width, y + 1, shade(CLIP, 34))
+        c.rect(left + width - 1, y, left + width + 1, y + 2, shade(CLIP, -46))
+
     return c
 
 
@@ -982,7 +986,7 @@ def panel(spec):
 
 BLOCK_TEXTURES = {
     'dc_string_line': lambda: cable_line(3.0, 1),
-    'dc_trunk_line': lambda: cable_line(5.0, 2),
+    'dc_trunk_line': lambda: cable_line(3.0, 1, armoured=True),
     # the same pair filling the whole tile, for the stub on an array: the OBJ pipeline maps a face
     # across a whole texture, so a pair drawn six columns wide would come out six columns wide on a
     # stub that has to match a laid run exactly

@@ -258,6 +258,8 @@ public class PvInverterScreen extends PlantScreen {
 		faint(graphics, Component.translatable("screen.electricity.pv_inverter.plant",
 				inverter.arraysConnected(), inverter.stringsConnected(), inverter.stringCapacity(),
 				fmt("%.2f", inverter.dcAcRatio())), 156);
+		faint(graphics, Component.translatable("screen.electricity.pv_inverter.terminals",
+				Component.translatable(terminalsKey(inverter))), 176);
 		faint(graphics, Component.translatable("screen.electricity.pv_inverter.grid",
 				fmt("%.0f", inverter.spec().nominalAcVolts()), fmt("%.1f", inverter.phaseCurrentA()),
 				fmt("%.0f", inverter.spec().frequencyHz()), fmt("%.2f", inverter.powerFactor()),
@@ -291,6 +293,27 @@ public class PvInverterScreen extends PlantScreen {
 		if (minecraft.level.getBlockEntity(targetPos) instanceof PvInverterBlockEntity inverter) return inverter;
 
 		return null;
+	}
+
+	/**
+	 * What this cabinet's direct-current terminals actually are.
+	 *
+	 * The one thing a player cannot see from outside and has to know before laying a single metre of
+	 * cable: a machine with plug terminals takes strings, a machine with busbars takes a combiner's
+	 * trunk, and the central one takes no string at all until a box is fitted into it. It used to be
+	 * knowable only by trying, and a click that appears to do nothing is the worst answer available.
+	 */
+	private static String terminalsKey(PvInverterBlockEntity inverter) {
+		InverterSpec spec = inverter.spec();
+		if (spec.stringTerminals()) {
+			return spec.trunkTerminals()
+					? "screen.electricity.pv_inverter.terminals.both"
+					: "screen.electricity.pv_inverter.terminals.strings";
+		}
+
+		return inverter.integratedCombiner() != null
+				? "screen.electricity.pv_inverter.terminals.fitted"
+				: "screen.electricity.pv_inverter.terminals.busbars";
 	}
 
 	@Override

@@ -49,10 +49,18 @@ there are two ways to do that, both of which real vendors sell:
 
 * Put a **box on a post** in the field, run string cable from the arrays to it, and one **trunk
   cable** from the box to the cabinet.
-* Or **right-click the cabinet with the box** to fit it inside as a DC section. Then strings come
-  straight in, and the cabinet has the box's ways rather than its own two hundred and eighty-eight.
-  Fitting one into a *string* inverter is refused out loud: its terminals already are its fuses, and a
-  box inside one would be a second set in series with the first.
+* Or **right-click the cabinet with the box** to fit it inside as a DC section. The cabinet grows a
+  compartment across the bottom of its front — a row of fuse ways behind a window with a gland plate
+  under them, which is where a real central inverter's DC section is — and its panel's *DC terminals*
+  line changes to say so. Then strings come straight in, and the cabinet has the box's ways rather
+  than its own two hundred and eighty-eight. Fitting one into a *string* inverter is refused out loud:
+  its terminals already are its fuses, and a box inside one would be a second set in series with the
+  first.
+
+Without one, string cable **will not attach to the central machine at all** — the run simply does not
+connect, on the panel or on screen, because there is nothing to connect it to. Every inverter's panel
+now says which terminals it has, because that is the one thing you cannot see from outside and have to
+know before laying a metre of cable.
 
 **Copper.** Sixteen strings each running two hundred metres of 6 mm² lose nearly three percent. The
 same sixteen paralleled at the end of the row and sent down one 240 mm² trunk lose one. The box pays

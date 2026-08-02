@@ -99,11 +99,15 @@ public class PvInverterRenderer extends ObjRendererBase {
 		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
 		Set<String> entries = inverter.getLevel() == null ? Set.of()
 				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), facing, "entry");
+		boolean section = PvInverterBlock.hasCombiner(inverter.getBlockState());
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
 			if (groupName.startsWith("pivot_")) continue;
 			if (!entryVisible(groupName, "entry", entries)) continue;
+			// the direct-current section is only there when a combiner box has been fitted, and it is the
+			// whole visible difference between a cabinet that can take a string and one that cannot
+			if (!section && groupName.startsWith("section")) continue;
 
 			poseStack.pushPose();
 			// the whole machine scales about the middle of its own footprint, so a small one sits on
