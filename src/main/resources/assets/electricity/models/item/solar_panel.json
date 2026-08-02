@@ -1,3 +1,6 @@
 {
-  "parent": "electricity:block/solar_panel"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "electricity:item/pv_flat"
+  }
 }

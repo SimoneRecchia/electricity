@@ -15,6 +15,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 // OBJ pipeline code will be migrated to Renderix
@@ -73,6 +74,43 @@ public abstract class ObjRendererBase {
 			VertexBuffer.unbind();
 			type.clearRenderState();
 		}
+	}
+
+	/**
+	 * Centre of every group whose name starts with a prefix, taken together.
+	 *
+	 * How a renderer finds a pivot: a torque tube, an azimuth collar and an anemometer hub are all parts
+	 * the model already contains, so measuring them beats restating their coordinates in Java where they
+	 * could drift away from the geometry.
+	 *
+	 * Every match rather than the first, and that is not fussiness - the group map is a HashMap, so
+	 * "the first" is whatever order the hash happened to produce, and a pivot that moves between runs
+	 * would be a genuinely nasty thing to debug. A prefix matching two groups gets the centre of both.
+	 *
+	 * The fallback keeps a model with a renamed group visibly wrong rather than invisible, which is the
+	 * easier failure to notice.
+	 */
+	protected static Vec3 groupCentre(ObjModel model, String prefix, Vec3 fallback) {
+		float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
+		float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
+		boolean found = false;
+
+		for (String groupName : model.groups.keySet()) {
+			if (!groupName.startsWith(prefix)) continue;
+
+			ObjModel.BoundingBox box = model.getBoundingBox(groupName);
+			if (box == null) continue;
+
+			found = true;
+			minX = Math.min(minX, box.min.x());
+			minY = Math.min(minY, box.min.y());
+			minZ = Math.min(minZ, box.min.z());
+			maxX = Math.max(maxX, box.max.x());
+			maxY = Math.max(maxY, box.max.y());
+			maxZ = Math.max(maxZ, box.max.z());
+		}
+
+		return found ? new Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0) : fallback;
 	}
 
 	protected static void cleanupCache(Map<BlockPos, Map<String, GroupBuffer>> cache, Set<BlockPos> seen) {

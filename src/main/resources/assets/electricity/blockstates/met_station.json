@@ -1,19 +1,16 @@
 {
   "variants": {
     "facing=north": {
-      "model": "electricity:block/met_station"
+      "model": "electricity:block/metal_particle"
     },
     "facing=south": {
-      "model": "electricity:block/met_station",
-      "y": 180
+      "model": "electricity:block/metal_particle"
     },
     "facing=west": {
-      "model": "electricity:block/met_station",
-      "y": 270
+      "model": "electricity:block/metal_particle"
     },
     "facing=east": {
-      "model": "electricity:block/met_station",
-      "y": 90
+      "model": "electricity:block/metal_particle"
     }
   }
 }

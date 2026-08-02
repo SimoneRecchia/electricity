@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.registry;
 
+import com.dooji.electricity.api.power.PvMounting;
 import com.dooji.electricity.main.Electricity;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +45,38 @@ public final class ObjDefinitions {
 			Block block = Electricity.TURBINE_BLOCKS.get(spec.id()).get();
 			ALL.add(new ObjBlockDefinition(block, turbineModel, List.of("insulator_Plastic")));
 		}
+
+		// One model per mounting rather than per product, because what a player sees is the
+		// mounting: two products on the same racking differ by which modules are bolted to
+		// it, and at a block's scale that is a texture rather than a shape. Arrays carry no
+		// wire fitting - their direct current goes to an inverter by cable, not by insulator.
+		for (var spec : PvCatalog.all()) {
+			Block block = Electricity.PV_ARRAY_BLOCKS.get(spec.id()).get();
+			ALL.add(new ObjBlockDefinition(block, arrayModel(spec.mounting()), List.of()));
+		}
+
+		// The inverters share one cabinet, scaled per nameplate the way the turbines share one
+		// nacelle, and it is the only block here with a wire fitting on it: the inverter is
+		// where a photovoltaic plant joins the grid.
+		ResourceLocation inverterModel = new ResourceLocation(Electricity.MOD_ID, "models/pv_inverter/pv_inverter.obj");
+		for (var spec : InverterCatalog.all()) {
+			Block block = Electricity.PV_INVERTER_BLOCKS.get(spec.id()).get();
+			ALL.add(new ObjBlockDefinition(block, inverterModel, List.of("insulator_instrument")));
+		}
+
+		ALL.add(new ObjBlockDefinition(Electricity.MET_STATION_BLOCK.get(),
+				new ResourceLocation(Electricity.MOD_ID, "models/met_mast/met_mast.obj"), List.of()));
+	}
+
+	private static ResourceLocation arrayModel(PvMounting mounting) {
+		String name = switch (mounting) {
+			case FLAT -> "pv_flat";
+			case FIXED_TILT -> "pv_tilt";
+			case SINGLE_AXIS -> "pv_track";
+			case DUAL_AXIS -> "pv_dual";
+		};
+
+		return new ResourceLocation(Electricity.MOD_ID, "models/" + name + "/" + name + ".obj");
 	}
 
 	public static ObjBlockDefinition get(Block block) {

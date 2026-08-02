@@ -1,19 +1,16 @@
 {
   "variants": {
     "facing=north": {
-      "model": "electricity:block/pv_tilt_580"
+      "model": "electricity:block/glass_particle"
     },
     "facing=south": {
-      "model": "electricity:block/pv_tilt_580",
-      "y": 180
+      "model": "electricity:block/glass_particle"
     },
     "facing=west": {
-      "model": "electricity:block/pv_tilt_580",
-      "y": 270
+      "model": "electricity:block/glass_particle"
     },
     "facing=east": {
-      "model": "electricity:block/pv_tilt_580",
-      "y": 90
+      "model": "electricity:block/glass_particle"
     }
   }
 }

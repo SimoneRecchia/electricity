@@ -4,6 +4,7 @@ import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TickBudget;
+import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.compat.energy.EnergyBridge;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
@@ -28,10 +29,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.energy.IEnergyStorage;
+import net.minecraftforge.fml.DistExecutor;
 
 /**
  * The inverter: the whole electrical side of a photovoltaic plant, in one block.
@@ -188,8 +191,11 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		if (!awake) {
 			dcPowerKw = 0.0;
-			// the night draw, reported as a negative output. A real meter reads it and so should this one
-			acPowerKw = allowed || availableDcKw > 0.0 ? -spec.nightDrawKw() : -spec.nightDrawKw();
+			// the night draw, reported as a negative output. It is there whether the machine is stopped or
+			// merely waiting for the strings to come up, because what is drawing it is the controller and
+			// the controller is on either way - which is exactly why a real plant's meter reads negative
+			// overnight and why a stopped inverter is not a free inverter
+			acPowerKw = -spec.nightDrawKw();
 			efficiency = 0.0;
 			clipping = false;
 			dcVoltage = highestStringVoltage;
@@ -648,9 +654,22 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return ClientboundBlockEntityDataPacket.create(this);
 	}
 
+
+	@Override
+	public void onLoad() {
+		super.onLoad();
+		if (level != null && level.isClientSide()) {
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
+		}
+	}
+
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		if (level != null && level.isClientSide()) {
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
+		}
+
 		if (level != null && !level.isClientSide()) {
 			// the arrays have to be told, or they would go on believing they were wired to a cabinet
 			// that is no longer there and would wait for a claim that never comes

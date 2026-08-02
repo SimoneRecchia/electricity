@@ -1,3 +1,6 @@
 {
-  "parent": "electricity:block/pv_track_700"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "electricity:item/pv_track"
+  }
 }

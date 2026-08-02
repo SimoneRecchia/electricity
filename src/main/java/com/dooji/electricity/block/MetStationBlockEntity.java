@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.PvModuleSpec;
 import com.dooji.electricity.api.power.SensorSpec;
+import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.SensorCatalog;
@@ -26,6 +27,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 
 /**
  * The met mast's instruments, each answering at its own speed.
@@ -308,5 +311,21 @@ public class MetStationBlockEntity extends BlockEntity {
 	@Override
 	public Packet<ClientGamePacketListener> getUpdatePacket() {
 		return ClientboundBlockEntityDataPacket.create(this);
+	}
+
+	@Override
+	public void onLoad() {
+		super.onLoad();
+		if (level != null && level.isClientSide()) {
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
+		}
+	}
+
+	@Override
+	public void setRemoved() {
+		super.setRemoved();
+		if (level != null && level.isClientSide()) {
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
+		}
 	}
 }

@@ -1,3 +1,6 @@
 {
-  "parent": "electricity:block/met_station"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "electricity:item/met_station"
+  }
 }
