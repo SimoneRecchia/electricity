@@ -1,5 +1,6 @@
 package com.dooji.electricity.api.power;
 
+import com.dooji.electricity.api.WorldConditions;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -143,21 +144,33 @@ public record SensorSpec(
 	/**
 	 * What this instrument reads, given what is actually there and what it read last tick.
 	 *
-	 * A first-order lag on the instrument's own time constant, and the conversion is the part worth
-	 * getting right: a datasheet quotes the time to 95% of a step, which is three time constants,
-	 * so the constant is a third of it. Applied per tick against real seconds rather than the day
-	 * clock, because five seconds of thermal mass is five seconds however fast the sun is moving.
-	 *
-	 * An instrument with no response time - a resistance thermometer read through an ADC, near
-	 * enough - answers immediately, and this returns the truth unchanged rather than smoothing it
-	 * by a hair.
+	 * A first-order lag on the instrument's own time constant. A datasheet quotes the time to 95% of a
+	 * step, which is three time constants, so the constant is a third of it.
 	 */
 	public double reading(double previous, double actual, int ticks) {
-		if (responseTimeS <= 0.0 || ticks <= 0) return clampToRange(actual);
+		return clampToRange(previous + (actual - previous) * response(ticks));
+	}
+
+	/**
+	 * How far a reading moves towards the truth in this many ticks, 0 to 1.
+	 *
+	 * Against the day clock rather than against real seconds, and that is the whole of the argument
+	 * about this class. Five seconds of thermal mass is five seconds however fast the sun is moving - so
+	 * real seconds look like the honest choice, and it is what this did at first. But a tick of the day
+	 * clock stands for 3.6 seconds of weather, so against real seconds a five-second pyranometer answers
+	 * a cloud edge in a fourteenth of a tick: the lag is real, correct, and invisible, and the model
+	 * does nothing it was written to do. The same conversion is already applied to a tracker drive quoted
+	 * in degrees a minute, for the same reason and in the same words - the sky is what everything here is
+	 * being timed against.
+	 *
+	 * An instrument with no response time - a resistance thermometer read through an ADC, near enough -
+	 * answers immediately, and this returns one rather than smoothing the truth by a hair.
+	 */
+	public double response(int ticks) {
+		if (responseTimeS <= 0.0 || ticks <= 0) return 1.0;
 
 		double timeConstant = responseTimeS / 3.0;
-		double alpha = 1.0 - Math.exp(-(ticks / 20.0) / timeConstant);
-		return clampToRange(previous + (actual - previous) * alpha);
+		return 1.0 - Math.exp(-(ticks * WorldConditions.SECONDS_PER_DAY_TICK) / timeConstant);
 	}
 
 	/**
@@ -167,7 +180,7 @@ public record SensorSpec(
 	 * pyranometer that tops out at 4000 W/m2 will never see it, but a snow gauge whose range starts
 	 * at half a metre genuinely cannot tell you about the first centimetre.
 	 */
-	public double clampToRange(double value) {
+	private double clampToRange(double value) {
 		return Math.max(rangeLow, Math.min(rangeHigh, value));
 	}
 }

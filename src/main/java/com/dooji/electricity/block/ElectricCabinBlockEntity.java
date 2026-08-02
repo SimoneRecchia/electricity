@@ -1,6 +1,5 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
@@ -9,6 +8,7 @@ import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import javax.annotation.Nonnull;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -56,12 +56,6 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 		return 0;
 	}
 
-	private String insulatorName(int index) {
-		ObjBlockDefinition definition = definition();
-		if (definition != null && index < definition.insulators().size()) return definition.insulators().get(index);
-		return null;
-	}
-
 	private void ensureArraySizes() {
 		int count = insulatorCount();
 		if (count <= 0) count = 0;
@@ -84,11 +78,7 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 
 	private void generateInsulatorIds() {
 		ensureArraySizes();
-		for (int i = 0; i < insulatorIds.length; i++) {
-			if (insulatorIds[i] == 0) {
-				insulatorIds[i] = InsulatorIdRegistry.claimId();
-			}
-		}
+		InsulatorIdRegistry.claimMissing(insulatorIds);
 	}
 
 	public static void removeInsulatorIds(int[] ids) {
@@ -129,7 +119,7 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 	public Vec3 calculateOrientedInsulatorCenter(int index) {
 		if (index < 0 || index >= wirePositions.length) return null;
 
-		String groupName = insulatorName(index);
+		String groupName = InsulatorPartHelper.insulatorName(definition(), index);
 		if (groupName == null) return null;
 		ObjModel.BoundingBox boundingBox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groupName);
 
@@ -156,14 +146,7 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 			default -> 90.0f;
 		};
 
-		if (facingRotation == 0) return vector;
-
-		float cosYaw = (float) Math.cos(Math.toRadians(facingRotation));
-		float sinYaw = (float) Math.sin(Math.toRadians(facingRotation));
-		float x = (float) (vector.x * cosYaw + vector.z * sinYaw);
-		float z = (float) (-vector.x * sinYaw + vector.z * cosYaw);
-
-		return new Vec3(x, vector.y, z);
+		return vector.yRot((float) Math.toRadians(facingRotation));
 	}
 
 	public void tick() {
@@ -264,10 +247,10 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
+		ClientTracking.track(this);
 		updateWirePositions();
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.track(this);
 				InsulatorLookup.register(this);
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
@@ -277,10 +260,10 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		ClientTracking.untrack(this);
 		InsulatorIdRegistry.releaseIds(this.getInsulatorIds());
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.untrack(this);
 				InsulatorLookup.unregister(this.getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});

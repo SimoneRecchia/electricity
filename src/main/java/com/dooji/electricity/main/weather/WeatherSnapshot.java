@@ -36,13 +36,4 @@ public record WeatherSnapshot(
 		double shearExponent,
 		SkyConditions sky
 ) {
-	/** Fraction of the sky covered, 0 to 1. */
-	public double cloudCover() {
-		return sky.cloudCover();
-	}
-
-	/** Global horizontal irradiance reaching the ground, W/m2. What a pyranometer on the flat reads. */
-	public double irradiance() {
-		return sky.globalHorizontal();
-	}
 }

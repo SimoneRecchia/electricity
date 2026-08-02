@@ -78,10 +78,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 					(context, pose, buffers) -> renderWindTurbineWithAnimation(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), turbine));
 		}
 
-		if (!YAW_CACHE.isEmpty() && !seen.isEmpty()) {
-			YAW_CACHE.keySet().removeIf(pos -> !seen.contains(pos));
-		}
-
+		cleanupAngles(YAW_CACHE, seen);
 		cleanupCache(BUFFER_CACHE, seen);
 		renderBareTowers(mc, event, cameraPos);
 	}

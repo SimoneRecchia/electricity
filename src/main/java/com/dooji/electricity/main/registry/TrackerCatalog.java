@@ -2,9 +2,6 @@ package com.dooji.electricity.main.registry;
 
 import com.dooji.electricity.api.power.TrackerSpec;
 import com.dooji.electricity.main.Electricity;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -41,7 +38,6 @@ public final class TrackerCatalog {
 	/** The fictional maker whose racking and trackers the arrays are built on. */
 	public static final String MANUFACTURER = "Meridian";
 
-	private static final Map<ResourceLocation, TrackerSpec> BY_ID = new LinkedHashMap<>();
 
 	/**
 	 * Horizontal single axis, one drive per row, self-powered.
@@ -51,29 +47,13 @@ public final class TrackerCatalog {
 	 * pull on, and steep in snow because standing up and dropping the lot is the one thing no fixed
 	 * rack can do.
 	 */
-	public static final TrackerSpec HORIZON_R = register(new TrackerSpec(
+	public static final TrackerSpec HORIZON_R = new TrackerSpec(
 			id("tracker_horizon_r"), "Horizon R", 1,
 			60.0, 0.0,
 			4.4,
 			0.0, 0.0, 60.0,
 			20.0, 0.04,
-			true, 120.0));
-
-	/**
-	 * Horizontal single axis, rows mechanically linked to one drive.
-	 *
-	 * Fifty-two degrees rather than sixty, because a driveline that has to turn a long block of rows
-	 * together is built stiffer and shorter of travel. Cheaper, and one motor's worth of power spread
-	 * across a great deal of array - which is why the figure here is a fraction of the independent
-	 * row's rather than a larger number.
-	 */
-	public static final TrackerSpec HORIZON_L = register(new TrackerSpec(
-			id("tracker_horizon_l"), "Horizon L", 1,
-			52.0, 0.0,
-			4.0,
-			0.0, 0.0, 52.0,
-			22.0, 0.06,
-			true, 55.0));
+			true, 120.0);
 
 	/**
 	 * Azimuth-elevation dual axis on a pedestal.
@@ -83,28 +63,19 @@ public final class TrackerCatalog {
 	 * pedestal frame carrying its modules on a mast has far more inertia to turn than a torque tube
 	 * with the load balanced along it.
 	 */
-	public static final TrackerSpec ZENITH_AE = register(new TrackerSpec(
+	public static final TrackerSpec ZENITH_AE = new TrackerSpec(
 			id("tracker_zenith_ae"), "Zenith AE", 2,
 			80.0, 10.0,
 			3.0,
 			0.0, 0.0, 70.0,
 			18.0, 0.04,
-			true, 250.0));
+			true, 250.0);
 
 	private TrackerCatalog() {
 	}
 
 	private static ResourceLocation id(String path) {
 		return new ResourceLocation(Electricity.MOD_ID, path);
-	}
-
-	private static TrackerSpec register(TrackerSpec spec) {
-		BY_ID.put(spec.id(), spec);
-		return spec;
-	}
-
-	public static List<TrackerSpec> all() {
-		return List.copyOf(BY_ID.values());
 	}
 
 	/** Full name as a sell sheet prints it, e.g. {@code Meridian Horizon R}. */

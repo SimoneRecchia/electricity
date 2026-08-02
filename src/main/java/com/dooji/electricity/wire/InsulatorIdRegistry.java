@@ -32,6 +32,22 @@ public final class InsulatorIdRegistry {
 		}
 	}
 
+	/**
+	 * Fills in whatever ids a device has not got yet, leaving the ones it has.
+	 *
+	 * Zero means unclaimed, which is how a device loaded from an old save - or one just placed - asks for
+	 * the rest. Four block entities had a copy of this loop; the reason it is one now is that a copy
+	 * that forgot to skip the non-zero entries would silently hand every wire in the world a new
+	 * anchor.
+	 */
+	public static void claimMissing(int[] ids) {
+		for (int i = 0; i < ids.length; i++) {
+			if (ids[i] == 0) {
+				ids[i] = claimId();
+			}
+		}
+	}
+
 	public static void releaseIds(int[] ids) {
 		if (ids == null) return;
 

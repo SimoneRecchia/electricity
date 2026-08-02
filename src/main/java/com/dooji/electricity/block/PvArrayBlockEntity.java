@@ -5,7 +5,6 @@ import com.dooji.electricity.api.power.PvMounting;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TrackerMode;
 import com.dooji.electricity.api.power.TrackerSpec;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.weather.Atmosphere;
@@ -19,7 +18,6 @@ import com.dooji.electricity.power.SolarTelemetrySimulator;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -30,8 +28,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 
 /**
  * One block of photovoltaic array, working out what its modules are making.
@@ -125,6 +121,14 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 */
 	private static final int DIFFUSE_DWELL_TICKS = 100;
 	/**
+	 * How much of what a shower can wash off it takes away per tick, as a fraction.
+	 *
+	 * A hundredth, so a shower does its work over a couple of hundred ticks rather than in the instant
+	 * the first drop lands. Rain cleans a module over minutes, and an array that went from filthy to
+	 * spotless between two ticks would read as a fault on a trend rather than as weather.
+	 */
+	private static final double RAIN_WASH_PER_TICK = 0.01;
+	/**
 	 * How far the wind has to fall below the stow threshold before a row comes back out, as a fraction.
 	 *
 	 * Four fifths, so a gust that sits on the threshold does not have the drive going back and forth.
@@ -209,7 +213,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private double stringVoltage = 0.0;
 	private double stringCurrent = 0.0;
 
-	private long lastSyncTick = 0L;
+	private final ClientSync clientSync = new ClientSync();
 
 	/**
 	 * The latest published snapshot, safe to read from any thread.
@@ -268,7 +272,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		shedSnow(serverLevel, spec);
 		updateTelemetry(spec);
 
-		maybeSync(serverLevel);
+		clientSync.throttled(this);
 	}
 
 	/** Interpolates the tracker on the client, so the plane moves between the server's ten-tick updates. */
@@ -276,15 +280,25 @@ public class PvArrayBlockEntity extends BlockEntity {
 		if (level == null || !level.isClientSide()) return;
 
 		TrackerSpec tracker = tracker();
-		if (tracker == null) return;
+		if (tracker != null) {
+			slewTowardsTarget(tracker);
+		}
+	}
 
+	/**
+	 * Walks the drive one tick towards where the controller wants it.
+	 *
+	 * Both sides run this, against the same rule: the server decides the target and steps towards it,
+	 * and the client steps towards the target it was last told so the plane moves smoothly between
+	 * updates instead of jumping every ten ticks. Written twice it was exactly the kind of duplication
+	 * that fails quietly - the drawn plane would lag or overshoot the real one the moment one copy
+	 * changed, and nothing would report it.
+	 */
+	private void slewTowardsTarget(TrackerSpec tracker) {
 		double step = tracker.slewPerTick();
 		double delta = targetRotationDeg - rotationDeg;
-		if (Math.abs(delta) <= step) {
-			rotationDeg = targetRotationDeg;
-		} else {
-			rotationDeg += Math.signum(delta) * step;
-		}
+		slewing = Math.abs(delta) > step;
+		rotationDeg = slewing ? rotationDeg + Math.signum(delta) * step : targetRotationDeg;
 	}
 
 	// ---- the optics ----
@@ -304,6 +318,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		plane = plane.withBeamFraction(obstructionFraction * (1.0 - rowShadedFraction))
 				.withSkyFraction(skyViewFactor)
+				// both faces, and for two different reasons: snow buries a module, and dirt settles on
+				// whatever is facing up - which on a tracker at sixty degrees is very nearly both of them
 				.scaled(Shading.snowTransmittance(snowDepthM) * (1.0 - soiling));
 
 		poaBeam = plane.beam();
@@ -352,7 +368,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 			double washed = Shading.washedByRain(spec.tiltDeg(rotationDeg));
 			// a shower washes over a few minutes rather than instantly, which is why this is a decay
 			// rather than an assignment
-			soiling *= 1.0 - washed * 0.01;
+			soiling *= 1.0 - washed * RAIN_WASH_PER_TICK;
 		} else {
 			soiling = Math.min(Shading.soilingCeiling(), soiling + perDay / TICKS_PER_DAY);
 		}
@@ -392,11 +408,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		}
 
 		targetRotationDeg = commandedRotation(tracker, spec, sky, weather);
-
-		double step = tracker.slewPerTick();
-		double delta = targetRotationDeg - rotationDeg;
-		slewing = Math.abs(delta) > step;
-		rotationDeg = slewing ? rotationDeg + Math.signum(delta) * step : targetRotationDeg;
+		slewTowardsTarget(tracker);
 	}
 
 	/**
@@ -411,12 +423,14 @@ public class PvArrayBlockEntity extends BlockEntity {
 		if (trackerMode == TrackerMode.MANUAL) {
 			stowReason = TrackerMode.Stow.NONE;
 			backtracking = false;
+			releaseDiffuse();
 			return tracker.clampRotation(manualRotationDeg);
 		}
 
 		if (trackerMode == TrackerMode.STOW) {
 			stowReason = TrackerMode.Stow.COMMANDED;
 			backtracking = false;
+			releaseDiffuse();
 			return tracker.nightStowDeg();
 		}
 
@@ -424,8 +438,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		if (putAway != TrackerMode.Stow.NONE) {
 			stowReason = putAway;
 			backtracking = false;
-			diffuseMode = false;
-			diffuseHoldTicks = 0;
+			releaseDiffuse();
 			// snow is the one stow that is not flat, and it goes whichever way the row is already
 			// leaning, so it does not swing through the whole range to shed what it could drop by
 			// carrying on
@@ -520,6 +533,17 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		heldStow = TrackerMode.Stow.NONE;
 		return TrackerMode.Stow.NONE;
+	}
+
+	/**
+	 * Drops the diffuse choice and its dwell.
+	 *
+	 * Every branch that decides the angle for some other reason has to, or a row taken into hand mode and
+	 * put back would lie down for the rest of a dwell it is no longer in.
+	 */
+	private void releaseDiffuse() {
+		diffuseMode = false;
+		diffuseHoldTicks = 0;
 	}
 
 	/** The same for the diffuse choice, which keeps its own dwell because it is a much shorter one. */
@@ -787,7 +811,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		trackerMode = mode;
 		setChanged();
-		sync();
+		ClientSync.now(this);
 	}
 
 	public void setManualRotation(double degrees) {
@@ -796,7 +820,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		manualRotationDeg = tracker.clampRotation(degrees);
 		setChanged();
-		sync();
+		ClientSync.now(this);
 	}
 
 	public double manualRotationDeg() {
@@ -804,21 +828,6 @@ public class PvArrayBlockEntity extends BlockEntity {
 	}
 
 	// ---- persistence and syncing ----
-
-	private void maybeSync(ServerLevel serverLevel) {
-		long now = serverLevel.getGameTime();
-		if (now - lastSyncTick < 10L) return;
-
-		lastSyncTick = now;
-		setChanged();
-		sync();
-	}
-
-	private void sync() {
-		if (level == null || level.isClientSide()) return;
-
-		level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
-	}
 
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
@@ -934,17 +943,13 @@ public class PvArrayBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
-		}
+		ClientTracking.track(this);
 	}
 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
-		}
+		ClientTracking.untrack(this);
 	}
 
 	/** Whether this mounting is one whose plane a renderer has to turn. */

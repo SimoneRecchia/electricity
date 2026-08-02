@@ -829,6 +829,12 @@ public final class CCTweakedPeripherals {
 				entry.put("uncertaintyPercent", spec.uncertaintyPercent());
 				entry.put("unit", spec.unit());
 				entry.put("onArray", spec.instrument().onArray());
+				// only the radiometers have one, and it is the reason two of them in the same light
+				// disagree: a reference cell stops at 1150 nm where a pyranometer runs to 2800
+				if (spec.spectralHighNm() > spec.spectralLowNm()) {
+					entry.put("spectralLowNm", spec.spectralLowNm());
+					entry.put("spectralHighNm", spec.spectralHighNm());
+				}
 				out.add(entry);
 			}
 

@@ -110,6 +110,7 @@
   "tooltip.electricity.pv.mounting": "%s",
   "tooltip.electricity.pv.nameplate": "%s DC · %s× %s",
   "tooltip.electricity.pv.module": "%s · %s · %s · %s",
+  "tooltip.electricity.pv.laminate": "%s × %s × %s mm · %s kg",
   "tooltip.electricity.pv.strings": "%s string(s) of %s · %s Voc · %s per string",
   "tooltip.electricity.pv.ground": "Covers %s of the ground · %s m² of modules",
   "tooltip.electricity.pv.bifacial": "Bifacial: the back is worth %s of the front",

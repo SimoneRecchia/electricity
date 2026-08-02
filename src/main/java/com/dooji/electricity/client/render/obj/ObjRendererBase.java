@@ -124,6 +124,19 @@ public abstract class ObjRendererBase {
 		return found ? new Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0) : fallback;
 	}
 
+	/**
+	 * Forgets the interpolated angle of anything no longer on screen.
+	 *
+	 * The angle caches carry a machine's drawn position between frames, which is what makes a rotor or a
+	 * frame walk towards its target instead of snapping to it. They have to be emptied on the same terms
+	 * as the buffers, or a client that walks past a field of trackers keeps every one of them for ever.
+	 */
+	protected static void cleanupAngles(Map<BlockPos, Float> cache, Set<BlockPos> seen) {
+		if (cache.isEmpty() || seen.isEmpty()) return;
+
+		cache.keySet().removeIf(pos -> !seen.contains(pos));
+	}
+
 	protected static void cleanupCache(Map<BlockPos, Map<String, GroupBuffer>> cache, Set<BlockPos> seen) {
 		if (cache.isEmpty() || seen.isEmpty()) return;
 		cache.keySet().removeIf(pos -> {

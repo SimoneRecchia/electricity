@@ -173,11 +173,14 @@ cured by a bigger inverter and derating is cured by shade.
 
 ## 4. The trackers
 
-| Tracker | Axes | Range | Slew | Wind stow | Snow stow |
-|---|---|---|---|---|---|
-| Meridian Horizon R | 1, independent row, self-powered | ±60° | 4.4 °/min | 20 m/s | 60° |
-| Meridian Horizon L | 1, rows linked to one drive | ±52° | 4.0 °/min | 22 m/s | 52° |
-| Meridian Zenith AE | 2, azimuth-elevation pedestal | ±80° | 3.0 °/min | 18 m/s | 70° |
+| Tracker | Axes | Range | Slew | Wind stow | Snow stow | Fitted to |
+|---|---|---|---|---|---|---|
+| Meridian Horizon R | 1, independent row, self-powered | ±60° | 4.4 °/min | 20 m/s | 60° | HX-700 |
+| Meridian Zenith AE | 2, azimuth-elevation pedestal | ±80° | 3.0 °/min | 18 m/s | 70° | AE-440 |
+
+Two, and the table says which array carries each — because a datasheet nothing can be built
+with is a datasheet that is wrong. A third was written for a linked-row drive and then had no
+product to go in, so it went.
 
 The slew rate is against the **sky**, not the tick counter. One tick of Minecraft's day clock
 stands for 3.6 seconds of real weather, so 4.4 degrees a minute converts to about seventeen

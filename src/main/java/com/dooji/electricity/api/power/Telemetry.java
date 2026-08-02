@@ -78,14 +78,6 @@ public final class Telemetry {
 			return 0.0;
 		}
 
-		/** A reading as a flag, with any non-zero number counting as true. */
-		public boolean flag(String tag) {
-			Object value = values.get(tag);
-			if (value instanceof Boolean bool) return bool;
-			if (value instanceof Number number) return number.doubleValue() != 0.0;
-
-			return false;
-		}
 	}
 
 	private Telemetry() {

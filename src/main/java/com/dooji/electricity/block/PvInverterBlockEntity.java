@@ -5,7 +5,6 @@ import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TickBudget;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
@@ -19,6 +18,7 @@ import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.power.SolarTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -35,7 +35,6 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -121,8 +120,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private volatile boolean stoppedByComputer = false;
 	private volatile boolean stoppedByPlayer = false;
-	private volatile RedstoneMode redstoneMode = RedstoneMode.DISABLED;
-	private volatile boolean redstonePowered = false;
+	private final RedstoneStop redstone = new RedstoneStop();
 	private volatile double activePowerLimitKw;
 	private volatile double powerFactorSetpoint = 1.0;
 
@@ -130,7 +128,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
-	private long lastSyncTick = 0L;
+	private final ClientSync clientSync = new ClientSync();
 
 	/**
 	 * The wire fitting on top of the cabinet.
@@ -168,13 +166,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return ObjDefinitions.get(getBlockState().getBlock());
 	}
 
-	private String insulatorName(int index) {
-		ObjBlockDefinition definition = definition();
-		if (definition != null && index < definition.insulators().size()) return definition.insulators().get(index);
-
-		return null;
-	}
-
 	private void ensureArraySizes() {
 		ObjBlockDefinition definition = definition();
 		int count = definition == null ? 0 : definition.insulators().size();
@@ -190,11 +181,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private void generateInsulatorIds() {
 		ensureArraySizes();
-		for (int i = 0; i < insulatorIds.length; i++) {
-			if (insulatorIds[i] == 0) {
-				insulatorIds[i] = InsulatorIdRegistry.claimId();
-			}
-		}
+		InsulatorIdRegistry.claimMissing(insulatorIds);
 	}
 
 	public Vec3 getWirePosition(int index) {
@@ -230,7 +217,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		ensureArraySizes();
 		if (index < 0 || index >= wirePositions.length) return null;
 
-		String groupName = insulatorName(index);
+		String groupName = InsulatorPartHelper.insulatorName(definition(), index);
 		if (groupName == null) return null;
 
 		ObjModel.BoundingBox boundingBox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groupName);
@@ -265,11 +252,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			default -> 0.0;
 		};
 
-		if (degrees == 0.0) return vector;
-
-		double cos = Math.cos(Math.toRadians(degrees));
-		double sin = Math.sin(Math.toRadians(degrees));
-		return new Vec3(vector.x * cos + vector.z * sin, vector.y, -vector.x * sin + vector.z * cos);
+		return vector.yRot((float) Math.toRadians(degrees));
 	}
 
 	private void updateWirePositions() {
@@ -295,7 +278,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			rescanCountdown = RESCAN_TICKS;
 		}
 
-		pollRedstone();
+		redstone.poll(this, this::onControlChanged);
 		ambientTempC = GlobalWeatherManager.get(serverLevel).sample(worldPosition, 1).temperatureC();
 
 		gatherAndConvert(serverLevel, spec);
@@ -305,7 +288,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		budget.open(Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW);
 		EnergyBridge.emit(this, this, worldPosition, energyFaces());
 
-		maybeSync(serverLevel);
+		clientSync.throttled(this);
 	}
 
 	/**
@@ -472,20 +455,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		energyLifetimeKwh += kwh;
 	}
 
-	private void pollRedstone() {
-		if (level == null || level.isClientSide()) return;
-
-		boolean powered = level.hasNeighborSignal(worldPosition);
-		if (powered == redstonePowered) return;
-
-		redstonePowered = powered;
-		if (redstoneMode != RedstoneMode.DISABLED) {
-			onControlChanged();
-		} else {
-			setChanged();
-		}
-	}
-
 	/** The latest published snapshot. Safe to read from any thread; never null. */
 	public Telemetry.Snapshot getTelemetry() {
 		return telemetry;
@@ -607,7 +576,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	// ---- control ----
 
 	public boolean isRunning() {
-		return !stoppedByComputer && !stoppedByPlayer && redstoneMode.allowsRunning(redstonePowered);
+		return !stoppedByComputer && !stoppedByPlayer && !redstone.stopping();
 	}
 
 	public boolean isStoppedByComputer() {
@@ -619,11 +588,11 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	}
 
 	public boolean isStoppedByRedstone() {
-		return !redstoneMode.allowsRunning(redstonePowered);
+		return redstone.stopping();
 	}
 
 	public RedstoneMode getRedstoneMode() {
-		return redstoneMode;
+		return redstone.mode();
 	}
 
 	public double getActivePowerLimit() {
@@ -645,10 +614,9 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	}
 
 	public void setRedstoneMode(RedstoneMode mode) {
-		if (mode == null || redstoneMode == mode) return;
-
-		redstoneMode = mode;
-		onControlChanged();
+		if (redstone.mode(mode)) {
+			onControlChanged();
+		}
 	}
 
 	public void setActivePowerLimit(double limitKw) {
@@ -677,7 +645,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private void onControlChanged() {
 		setChanged();
-		sync();
+		ClientSync.now(this);
 	}
 
 	// ---- energy out ----
@@ -759,21 +727,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	// ---- persistence and syncing ----
 
-	private void maybeSync(ServerLevel serverLevel) {
-		long now = serverLevel.getGameTime();
-		if (now - lastSyncTick < 10L) return;
-
-		lastSyncTick = now;
-		setChanged();
-		sync();
-	}
-
-	private void sync() {
-		if (level == null || level.isClientSide()) return;
-
-		level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
-	}
-
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);
@@ -799,8 +752,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
 		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
-		tag.putBoolean("redstonePowered", redstonePowered);
-		tag.putString("redstoneMode", redstoneMode.name());
+		redstone.save(tag);
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
 		tag.putDouble("powerFactor", powerFactorSetpoint);
 
@@ -860,9 +812,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
 		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
-		redstonePowered = tag.getBoolean("redstonePowered");
-		RedstoneMode savedMode = RedstoneMode.byName(tag.getString("redstoneMode"));
-		redstoneMode = savedMode != null ? savedMode : RedstoneMode.DISABLED;
+		redstone.load(tag);
 		// an inverter saved before this field existed is uncurtailed rather than limited to nothing,
 		// which would silently switch it off on load
 		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : spec().acPowerKw();
@@ -918,9 +868,9 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	@Override
 	public void onLoad() {
 		super.onLoad();
+		ClientTracking.track(this);
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.track(this);
 				updateWirePositions();
 				InsulatorLookup.register(this, getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
@@ -931,10 +881,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		ClientTracking.untrack(this);
 		InsulatorIdRegistry.releaseIds(getInsulatorIds());
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.untrack(this);
 				InsulatorLookup.unregister(getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
 			});

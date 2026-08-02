@@ -84,8 +84,6 @@ public record TrackerSpec(
 		/** Drive power while slewing, in watts. A real row's drive is a 24 V motor and a gearbox. */
 		double motorW
 ) {
-	/** Degrees the sun moves in an hour. */
-	private static final double SUN_DEGREES_PER_HOUR = 15.0;
 
 	public TrackerSpec {
 		if (axes < 1 || axes > 2) throw new IllegalArgumentException(id + ": a tracker has one axis or two");

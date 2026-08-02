@@ -6,7 +6,6 @@ import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TurbineSpec;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
@@ -20,6 +19,7 @@ import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -133,8 +133,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * turbine down believing it had put it there.
 	 */
 	private volatile boolean stoppedByPlayer = false;
-	private volatile RedstoneMode redstoneMode = RedstoneMode.DISABLED;
-	private volatile boolean redstonePowered = false;
+	private final RedstoneStop redstone = new RedstoneStop();
 	private volatile double activePowerLimitKw;
 	/** What the wind alone would have produced, before curtailment. */
 	private double uncappedPower = 0.0;
@@ -217,12 +216,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		ObjBlockDefinition definition = definition();
 		if (definition != null && !definition.insulators().isEmpty()) return definition.insulators().size();
 		return 0;
-	}
-
-	private String insulatorName(int index) {
-		ObjBlockDefinition definition = definition();
-		if (definition != null && index < definition.insulators().size()) return definition.insulators().get(index);
-		return null;
 	}
 
 	private void ensureArraySizes() {
@@ -386,7 +379,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * wind cut-out alone.
 	 */
 	public boolean isBraked() {
-		return cutOutActive || stoppedByComputer || stoppedByPlayer || !redstoneMode.allowsRunning(redstonePowered);
+		return cutOutActive || stoppedByComputer || stoppedByPlayer || redstone.stopping();
 	}
 
 	public boolean isRunning() {
@@ -410,7 +403,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public boolean isStoppedByRedstone() {
-		return !redstoneMode.allowsRunning(redstonePowered);
+		return redstone.stopping();
 	}
 
 	public boolean isWindCutOut() {
@@ -418,7 +411,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public RedstoneMode getRedstoneMode() {
-		return redstoneMode;
+		return redstone.mode();
 	}
 
 	public double getActivePowerLimit() {
@@ -438,10 +431,9 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public void setRedstoneMode(RedstoneMode mode) {
-		if (mode == null || redstoneMode == mode) return;
-
-		redstoneMode = mode;
-		onControlChanged();
+		if (redstone.mode(mode)) {
+			onControlChanged();
+		}
 	}
 
 	/** Curtailment setpoint in kW, clamped to what the machine can actually produce. */
@@ -458,21 +450,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// pushed immediately rather than waiting for the periodic sync, so a stop
 		// command is visible on the rotor at once instead of up to half a second later
 		syncStateToClients();
-	}
-
-	private void pollRedstone() {
-		if (level == null || level.isClientSide()) return;
-
-		boolean powered = level.hasNeighborSignal(worldPosition);
-		if (powered == redstonePowered) return;
-
-		redstonePowered = powered;
-		// only matters visually when the mode actually reacts to redstone
-		if (redstoneMode != RedstoneMode.DISABLED) {
-			onControlChanged();
-		} else {
-			setChanged();
-		}
 	}
 
 	/** Gross production before the output cap and before anything claims it, in Joules per tick. */
@@ -611,7 +588,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public Vec3 calculateOrientedInsulatorCenter(int index) {
 		if (index < 0 || index >= wirePositions.length) return null;
 
-		String groupName = insulatorName(index);
+		String groupName = InsulatorPartHelper.insulatorName(definition(), index);
 		if (groupName == null) return null;
 		var boundingBox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groupName);
 		Vec3 localCenter;
@@ -641,14 +618,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			default -> 180.0f;
 		};
 
-		double radians = Math.toRadians(facingRotation);
-		double cos = Math.cos(radians);
-		double sin = Math.sin(radians);
-
-		double newX = vector.x * cos - vector.z * sin;
-		double newZ = vector.x * sin + vector.z * cos;
-
-		return new Vec3(newX, vector.y, newZ);
+		// negated, because this model's angles are measured the other way round from Vec3's
+		return vector.yRot((float) -Math.toRadians(facingRotation));
 	}
 
 	public void tick() {
@@ -698,7 +669,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			cutOutActive = false;
 		}
 
-		pollRedstone();
+		redstone.poll(this, this::onControlChanged);
 		// power first: the rotor speed reads the setpoint against what the wind was offering, so
 		// working them out in the other order would have it answering last tick's curtailment
 		updateGeneratedPower();
@@ -761,9 +732,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
 		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
-		redstonePowered = tag.getBoolean("redstonePowered");
-		RedstoneMode savedMode = RedstoneMode.byName(tag.getString("redstoneMode"));
-		redstoneMode = savedMode != null ? savedMode : RedstoneMode.DISABLED;
+		redstone.load(tag);
 		// an older turbine has no setpoint saved, so it defaults to uncurtailed rather
 		// than to a limit of zero, which would silently switch it off on load
 		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : spec().ratedPowerKw();
@@ -846,8 +815,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// needs every input to isBraked() to decide whether to animate the rotor
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
 		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
-		tag.putBoolean("redstonePowered", redstonePowered);
-		tag.putString("redstoneMode", redstoneMode.name());
+		redstone.save(tag);
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
 	}
 
@@ -871,9 +839,9 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	@Override
 	public void onLoad() {
 		super.onLoad();
+		ClientTracking.track(this);
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.track(this);
 				InsulatorLookup.register(this);
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
@@ -883,10 +851,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		ClientTracking.untrack(this);
 		InsulatorIdRegistry.releaseIds(this.getInsulatorIds());
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.untrack(this);
 				InsulatorLookup.unregister(this.getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});

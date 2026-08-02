@@ -3,7 +3,6 @@ package com.dooji.electricity.block;
 import com.dooji.electricity.api.power.PvModuleSpec;
 import com.dooji.electricity.api.power.SensorSpec;
 import com.dooji.electricity.api.power.Telemetry;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.SensorCatalog;
@@ -25,12 +24,9 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 
 /**
  * The met mast's instruments, each answering at its own speed.
@@ -85,7 +81,7 @@ public class MetStationBlockEntity extends BlockEntity {
 	private double snowDistanceM = SNOW_SENSOR_HEIGHT_M;
 	private double snowHeightM = 0.0;
 
-	private long lastSyncTick = 0L;
+	private final ClientSync clientSync = new ClientSync();
 
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
 
@@ -126,7 +122,7 @@ public class MetStationBlockEntity extends BlockEntity {
 		windSpeed = SensorCatalog.WS_3.reading(windSpeed, weather.instantWind(), 1);
 		// a vane answers by turning, so it is smoothed like the rest, but across the 0/360 seam rather
 		// than through it - a wind backing from 5 degrees to 355 has turned ten degrees, not three hundred
-		windDirection = smoothBearing(windDirection, weather.direction());
+		windDirection = smoothBearing(windDirection, weather.direction(), SensorCatalog.WV_3.response(1));
 
 		double snowOnGround = Shading.snowDepthOver(serverLevel, worldPosition.below());
 		snowDistanceM = SensorCatalog.SN_50.reading(snowDistanceM, SNOW_SENSOR_HEIGHT_M - snowOnGround, 1);
@@ -137,7 +133,7 @@ public class MetStationBlockEntity extends BlockEntity {
 				moduleTempC, windSpeed, windDirection, snowDistanceM, snowHeightM, diffuseFraction(),
 				sky.clearnessIndex(), sky.sun().elevationDeg(), sky.sun().azimuthDeg()));
 
-		maybeSync(serverLevel);
+		clientSync.throttled(this);
 	}
 
 	/**
@@ -176,9 +172,18 @@ public class MetStationBlockEntity extends BlockEntity {
 	}
 
 	/** A first-order lag on a bearing, taken the short way round the compass. */
-	private static double smoothBearing(double previous, double target) {
+	/**
+	 * A first-order lag on a bearing, taken the short way round the circle.
+	 *
+	 * The same lag every other instrument gets, and it has to be here rather than in {@link SensorSpec}
+	 * because a bearing does not interpolate: a wind backing from 5 degrees to 355 has turned ten
+	 * degrees and not three hundred, so the step is taken on the signed difference and the result
+	 * wrapped back. Everything else about it - where the speed comes from and what it means - belongs to
+	 * the vane's own datasheet.
+	 */
+	private static double smoothBearing(double previous, double target, double response) {
 		double delta = ((target - previous + 540.0) % 360.0) - 180.0;
-		double stepped = previous + delta * 0.15;
+		double stepped = previous + delta * response;
 		return (stepped % 360.0 + 360.0) % 360.0;
 	}
 
@@ -257,17 +262,6 @@ public class MetStationBlockEntity extends BlockEntity {
 
 	// ---- persistence and syncing ----
 
-	private void maybeSync(ServerLevel serverLevel) {
-		long now = serverLevel.getGameTime();
-		if (now - lastSyncTick < 10L) return;
-
-		lastSyncTick = now;
-		setChanged();
-		if (level != null) {
-			level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
-		}
-	}
-
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);
@@ -330,16 +324,12 @@ public class MetStationBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
-		}
+		ClientTracking.track(this);
 	}
 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
-		}
+		ClientTracking.untrack(this);
 	}
 }

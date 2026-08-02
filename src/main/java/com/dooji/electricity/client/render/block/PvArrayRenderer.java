@@ -85,9 +85,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		}
 
 		cleanupCache(BUFFER_CACHE, seen);
-		if (!AZIMUTH_CACHE.isEmpty() && !seen.isEmpty()) {
-			AZIMUTH_CACHE.keySet().removeIf(pos -> !seen.contains(pos));
-		}
+		cleanupAngles(AZIMUTH_CACHE, seen);
 	}
 
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,

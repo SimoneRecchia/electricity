@@ -54,6 +54,11 @@ public class PvArrayBlockItem extends BlockItem {
 				format("%.0f W", module.ratedPowerW()),
 				format("%.1f%%", module.efficiency() * 100.0),
 				format("%.2f %%/K", module.powerCoefficient() * 100.0)).withStyle(ChatFormatting.GRAY));
+		tooltip.add(Component.translatable("tooltip.electricity.pv.laminate",
+				format("%.0f", module.widthM() * 1000.0),
+				format("%.0f", module.heightM() * 1000.0),
+				format("%.0f", module.depthM() * 1000.0),
+				format("%.1f", module.massKg())).withStyle(ChatFormatting.DARK_GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.pv.strings",
 				spec.strings(),
 				spec.modulesPerString(),
