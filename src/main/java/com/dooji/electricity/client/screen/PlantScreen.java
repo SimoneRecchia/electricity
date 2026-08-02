@@ -31,6 +31,15 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * for a monitor watching a whole site.
  */
 public abstract class PlantScreen extends Screen {
+	/**
+	 * Side of the sheet the panel textures are drawn into.
+	 *
+	 * Not the two hundred and fifty-six a vanilla GUI assumes, because a panel with two columns of a
+	 * label and a right-aligned value needs to be wider than that - so the size has to be passed to the
+	 * blit rather than left to the overload that guesses it. The generator writes this same figure.
+	 */
+	protected static final int PANEL_SHEET = 512;
+
 	protected static final int MARGIN = 8;
 	/** Left edge of the bar wells, matching what the texture generator cuts. */
 	protected static final int BAR_X = 12;
@@ -98,7 +107,7 @@ public abstract class PlantScreen extends Screen {
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		renderBackground(graphics);
-		graphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight);
+		graphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight, PANEL_SHEET, PANEL_SHEET);
 
 		if (blockEntity() != null) {
 			drawPanel(graphics);

@@ -34,17 +34,26 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  */
 public class MetStationScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/met_station.png");
-	private static final int WIDTH = 224;
-	private static final int HEIGHT = 196;
+	private static final int WIDTH = 288;
+	private static final int HEIGHT = 208;
 
 	private static final int FIRST_SEPARATOR_Y = 20;
-	private static final int SECOND_SEPARATOR_Y = 178;
+	private static final int SECOND_SEPARATOR_Y = 176;
 
-	/** The two columns, and where each one's value is right-aligned to. */
+	/**
+	 * The two columns, and where each one's value is right-aligned to.
+	 *
+	 * A hundred and thirty each, which is not a round number chosen for looks: it is what the widest
+	 * label and the widest value in each column actually measure, plus a gap. At ninety-eight the labels
+	 * drew straight through their own values - "Plane of array" and a four-digit irradiance came out as
+	 * "Plane of arr@yW/m²" - and nothing reported it, because a collision between two strings is a
+	 * property of the font rather than of the code. {@code tools/check_gui_fits.py} measures the real
+	 * glyphs against these numbers now.
+	 */
 	private static final int LEFT_LABEL_X = 10;
-	private static final int LEFT_VALUE_X = 108;
-	private static final int RIGHT_LABEL_X = 118;
-	private static final int RIGHT_VALUE_X = 214;
+	private static final int LEFT_VALUE_X = 140;
+	private static final int RIGHT_LABEL_X = 148;
+	private static final int RIGHT_VALUE_X = 278;
 	private static final int FIRST_ROW_Y = 26;
 	private static final int ROW_HEIGHT = 11;
 
@@ -58,7 +67,7 @@ public class MetStationScreen extends PlantScreen {
 		if (station == null) return;
 
 		graphics.drawString(font, Component.translatable("screen.electricity.met_station.title"), leftPos + MARGIN, topPos + 6, VALUE_COLOUR, false);
-		String count = Component.translatable("screen.electricity.met_station.instruments", SensorCatalog.mastInstruments().size()).getString();
+		String count = Component.translatable("screen.electricity.met_station.instruments", SensorCatalog.all().size()).getString();
 		graphics.drawString(font, count, leftPos + WIDTH - MARGIN - font.width(count), topPos + 6, FAINT_COLOUR, false);
 		separator(graphics, FIRST_SEPARATOR_Y);
 
@@ -118,7 +127,14 @@ public class MetStationScreen extends PlantScreen {
 		Component text = reference == null
 				? Component.translatable("screen.electricity.met_station.no_reference")
 				: Component.translatable("screen.electricity.met_station.reference", reference.getX(), reference.getY(), reference.getZ());
-		graphics.drawString(font, text, leftPos + MARGIN, topPos + SECOND_SEPARATOR_Y + 5, FAINT_COLOUR, false);
+
+		// wrapped rather than trusted to fit: one of these two is a sentence and the other is three
+		// coordinates, and neither has any business knowing how wide the panel is
+		int y = topPos + SECOND_SEPARATOR_Y + 5;
+		for (var line : font.split(text, WIDTH - 2 * MARGIN)) {
+			graphics.drawString(font, line, leftPos + MARGIN, y, FAINT_COLOUR, false);
+			y += 10;
+		}
 	}
 
 	private MetStationBlockEntity station() {

@@ -40,7 +40,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  */
 public class PvArrayScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_array.png");
-	private static final int WIDTH = 248;
+	private static final int WIDTH = 288;
 	private static final int HEIGHT = 232;
 
 	// the wells cut into the texture by tools/gen_pv_textures.py

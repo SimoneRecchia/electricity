@@ -27,7 +27,11 @@ reports what it *could* have made, and its panel says so in as many words.
    **Electric Cabin**, then on to poles and a Power Box exactly as a turbine does.
 4. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
 
-A **Power Wrench** opens a panel on any of the three.
+A **Power Wrench** opens a panel on any of the three. The panels are 288 pixels wide, which is not
+a round number either: it is what two columns of a label and a right-aligned value actually
+measure. `tools/check_gui_fits.py` measures the real font against the real layout constants and
+fails if any label would draw through its own value — which is how the mast's panel came to read
+"Plane of arr@yW/m²" and stay that way through a review that read every line of the code.
 
 There is no cable to draw between an array and its inverter, and that is also how a real
 plant looks: the only overhead line on a solar farm is the one leaving it.

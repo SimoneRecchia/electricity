@@ -533,15 +533,22 @@ def item_met():
 # numbers - so if a bar moves here it moves there.
 
 PANELS = {
-    'pv_inverter': dict(width=248, height=232, bar_x=12, bar_width=224, bars=(70, 98, 126), separators=(40, 142)),
-    'pv_array': dict(width=248, height=232, bar_x=12, bar_width=224, bars=(70, 98, 126), separators=(40, 142)),
-    'met_station': dict(width=224, height=196, bar_x=12, bar_width=200, bars=(), separators=(20, 178)),
+    'pv_inverter': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
+    'pv_array': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
+    'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
 }
+
+
+# Side of the sheet each panel is drawn into.  Five hundred and twelve rather than the two hundred
+# and fifty-six a vanilla GUI uses, because two columns of a label and a right-aligned value need
+# more width than that and the alternative was abbreviations nobody would read.  PlantScreen blits
+# with the texture size passed explicitly, so this only has to be a power of two.
+PANEL_SHEET = 512
 
 
 def panel(spec):
     """A vanilla-looking dialog: the raised body, the bevel, and the wells for the bars."""
-    c = Canvas(256, 256)
+    c = Canvas(PANEL_SHEET, PANEL_SHEET)
     w, h = spec['width'], spec['height']
 
     body = (198, 198, 198, 255)
