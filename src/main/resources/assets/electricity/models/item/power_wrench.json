@@ -1,6 +1,6 @@
 {
-  "parent": "minecraft:item/generated",
+  "parent": "minecraft:item/handheld",
   "textures": {
-    "layer0": "electricity:item/crowbar"
+    "layer0": "electricity:item/power_wrench"
   }
 }

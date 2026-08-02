@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "electricity:item/metal_casing"
+    "layer0": "electricity:item/turbine_tower"
   }
 }

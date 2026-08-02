@@ -63,6 +63,29 @@ class Canvas:
                 if (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius:
                     self.set(x, y, colour)
 
+    def stroke(self, x0, y0, x1, y1, colour, width=1.0):
+        """A thick line between two points, ends included.
+
+        Every pixel within half the width of the segment, which draws a capsule rather than a
+        chain of squares - a stepped diagonal is what makes a hand tool look like a staircase at
+        sixteen pixels.  Colour may be transparent, which is how a jaw gets its mouth cut out.
+        """
+        dx, dy = x1 - x0, y1 - y0
+        length = max(1e-6, (dx * dx + dy * dy) ** 0.5)
+        half = width / 2.0
+        lo_x = int(min(x0, x1) - half - 1)
+        hi_x = int(max(x0, x1) + half + 2)
+        lo_y = int(min(y0, y1) - half - 1)
+        hi_y = int(max(y0, y1) + half + 2)
+
+        for y in range(max(0, lo_y), min(self.h, hi_y)):
+            for x in range(max(0, lo_x), min(self.w, hi_x)):
+                px, py = x + 0.5, y + 0.5
+                t = max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / (length * length)))
+                near_x, near_y = x0 + t * dx, y0 + t * dy
+                if (px - near_x) ** 2 + (py - near_y) ** 2 <= half * half:
+                    self.set(x, y, colour)
+
     def write(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         raw = bytearray()
@@ -514,15 +537,134 @@ def item_inverter():
     return c
 
 
-def item_met():
+STEEL = ((96, 100, 106, 255), (158, 163, 170, 255), (212, 216, 222, 255))
+GRIP = ((104, 26, 24, 255), (172, 48, 42, 255), (214, 92, 78, 255))
+INSTRUMENT = ((150, 154, 160, 255), (226, 229, 234, 255), (255, 255, 255, 255))
+
+
+def limb(c, start, end, width, palette):
+    """A shaded bar: shadow underneath, body over it, highlight along the top-left edge.
+
+    Three passes rather than one, because a flat silhouette at sixteen pixels reads as a cut-out
+    and a tool wants to look like metal.  The light comes from the top left, which is where
+    Minecraft's own item sprites put it.
+    """
+    dark, mid, light = palette
+    x0, y0 = start
+    x1, y1 = end
+    c.stroke(x0 + 0.5, y0 + 0.5, x1 + 0.5, y1 + 0.5, dark, width + 1.4)
+    c.stroke(x0, y0, x1, y1, mid, width)
+    c.stroke(x0 - 0.55, y0 - 0.55, x1 - 0.55, y1 - 0.55, light, max(1.0, width - 2.0))
+
+
+def item_wrench():
+    """An insulated adjustable spanner, laid on the diagonal a handheld model grips.
+
+    Drawn corner to corner because {@code item/handheld} rotates a sprite about its lower left and
+    expects the working end at the upper right - a tool drawn upright is held like a sheet of paper,
+    which is exactly how this one used to look.  The insulated grip is not decoration either: a
+    wrench for live electrical work has one, and this mod is about electricity.
+    """
     c = Canvas(16, 16)
-    c.rect(7, 3, 9, 15, (146, 150, 154, 255))
-    c.rect(5, 14, 11, 15, (146, 150, 154, 255))
-    c.rect(9, 6, 14, 7, (146, 150, 154, 255))
-    c.disc(12, 5, 1, (230, 232, 236, 255))
-    c.rect(4, 9, 8, 10, (230, 232, 236, 255))
-    for dx, dy in ((-3, -1), (3, -1), (0, 2)):
-        c.disc(8 + dx, 2 + dy, 1, (230, 232, 236, 255))
+
+    limb(c, (3.2, 13.0), (7.4, 8.8), 4.0, GRIP)
+    # the ferrule where the moulding ends and the forging begins
+    limb(c, (7.2, 9.0), (7.9, 8.3), 4.2, STEEL)
+    limb(c, (7.8, 8.4), (10.6, 5.6), 3.0, STEEL)
+    # the head, wider than the shank the way a forged one is
+    limb(c, (10.0, 6.0), (13.4, 2.6), 6.4, STEEL)
+    # the mouth, cut along the handle's own axis and out through the corner: what is left either
+    # side of it is the two jaws, and the cut sits off centre because on an adjustable wrench the
+    # fixed jaw is the heavier of the two
+    c.stroke(16.2, -0.2, 12.3, 3.7, (0, 0, 0, 0), 2.6)
+    # the worm screw that adjusts them, on the side of the head a thumb reaches
+    c.stroke(11.4, 7.2, 13.2, 5.4, STEEL[0], 1.8)
+    c.stroke(11.7, 6.9, 12.9, 5.7, (128, 132, 138, 255), 1.0)
+    # the loop in the end of the grip, so it can hang on a board
+    c.set(2, 14, GRIP[0])
+    c.set(3, 14, GRIP[1])
+    return c
+
+
+def item_tower():
+    """One section of tubular tower: a taper, a flange at each end, and the bolts through it.
+
+    A tower is stacked by hand in this mod, so the item is a *section* and not a tower - which is
+    why the flanges are the thing the sprite leads with.  It used to be drawn as a generic lump of
+    metal casing, which said nothing about what it was for.
+    """
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+
+    for y in range(2, 14):
+        # the taper: eight pixels across at the base, six at the top, which is about the ratio
+        # a real tower section is built to
+        half = 4.0 - 1.0 * (13 - y) / 11.0
+        x0 = int(round(8 - half))
+        x1 = int(round(8 + half))
+        # four tones across the width, which is what makes a flat strip read as a tube
+        c.rect(x0, y, x1, y + 1, mid)
+        c.rect(x0, y, x0 + 1, y + 1, light)
+        c.rect(x0 + 1, y, x0 + 2, y + 1, shade(light, -18))
+        c.rect(x1 - 1, y, x1, y + 1, dark)
+        c.rect(x1 - 2, y, x1 - 1, y + 1, shade(dark, 26))
+
+    for y, half in ((1, 4.6), (13, 5.0)):
+        x0, x1 = int(round(8 - half)), int(round(8 + half))
+        c.rect(x0, y, x1, y + 2, mid)
+        c.rect(x0, y, x1, y + 1, light)
+        c.rect(x0, y + 1, x1, y + 2, dark)
+        # the bolts through the flange, on its lit face where they can be seen
+        for x in range(x0 + 1, x1 - 1, 2):
+            c.set(x, y, (72, 76, 80, 255))
+
+    return c
+
+
+def item_met():
+    """The mast, with the three instruments that identify it.
+
+    Redrawn with mass in it: the old sprite was a one-pixel mast and three pale dots, which at
+    sixteen pixels was a smudge.  What makes a met mast recognisable is the cup anemometer on top,
+    a radiation shield on one side and a radiometer on a boom on the other, so those three are the
+    ones drawn and the rest of the instruments are left to the block.
+    """
+    c = Canvas(16, 16)
+    steel_dark, steel_mid, steel_light = STEEL
+    shield_dark, shield_mid, shield_light = INSTRUMENT
+
+    # the mast: two pixels, lit down the left edge
+    c.rect(7, 3, 9, 14, steel_mid)
+    c.rect(7, 3, 8, 14, steel_light)
+    c.rect(8, 3, 9, 14, steel_dark)
+
+    # a splayed footing, because a ten-metre mast needs one
+    c.rect(5, 13, 11, 15, steel_mid)
+    c.rect(5, 13, 11, 14, steel_light)
+    c.rect(5, 14, 11, 15, steel_dark)
+    c.stroke(6.0, 13.0, 4.5, 15.0, steel_mid, 1.4)
+    c.stroke(10.0, 13.0, 11.5, 15.0, steel_mid, 1.4)
+
+    # the anemometer: a hub with three cups on it, on arms thin enough to leave gaps between them
+    c.rect(7, 2, 9, 3, steel_dark)
+    c.stroke(4.6, 1.6, 8.0, 2.4, steel_mid, 1.0)
+    c.stroke(11.4, 1.6, 8.0, 2.4, steel_mid, 1.0)
+    for cx, cy in ((3, 1), (12, 1), (8, 0)):
+        c.disc(cx, cy, 1.2, shield_mid)
+        c.set(cx - 1, cy - 1, shield_light)
+
+    # the radiometer on its boom, held out clear of the mast's own shadow
+    c.rect(9, 6, 13, 7, steel_mid)
+    c.rect(11, 5, 15, 6, shield_mid)
+    c.disc(13, 4, 1.4, (198, 224, 246, 255))
+    c.set(12, 3, shield_light)
+
+    # the radiation shield: a stack of plates with air between them
+    for i in range(3):
+        y = 7 + i * 2
+        c.rect(2, y, 7, y + 1, shield_light if i == 0 else shield_mid)
+        c.rect(2, y + 1, 7, y + 2, shield_dark)
+    c.rect(6, 7, 7, 12, steel_dark)
     return c
 
 
@@ -599,6 +741,8 @@ BLOCK_TEXTURES = {
 }
 
 ITEM_TEXTURES = {
+    'power_wrench': item_wrench,
+    'turbine_tower': item_tower,
     'pv_flat': item_flat,
     'pv_tilt': item_tilt,
     'pv_track': item_track,
