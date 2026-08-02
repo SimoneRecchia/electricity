@@ -3,6 +3,7 @@ package com.dooji.electricity.main.power;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.api.power.PowerDeliveryEvent;
 import com.dooji.electricity.main.network.ElectricityNetworking;
@@ -93,6 +94,8 @@ public class PowerNetwork {
 			typeMatches = true;
 		} else if ("power_box".equals(blockType) && blockEntity instanceof PowerBoxBlockEntity) {
 			typeMatches = true;
+		} else if ("pv_inverter".equals(blockType) && blockEntity instanceof PvInverterBlockEntity) {
+			typeMatches = true;
 		}
 
 		if (!typeMatches) {
@@ -121,12 +124,17 @@ public class PowerNetwork {
 		nodeEvents.clear();
 
 		for (PowerNode node : powerNodes.values()) {
-			if (!(node.blockEntity instanceof WindTurbineBlockEntity)) continue;
+			if (!node.isGenerator()) continue;
 
 			double generatedPower = node.getOutputPower();
 			if (generatedPower <= 0) continue;
 
-			PowerDeliveryEvent generatorEvent = createGeneratorEvent((WindTurbineBlockEntity) node.blockEntity);
+			// only a turbine can put a disturbance on the network: an inverter has no rotor for a gust to
+			// hit and holds a clean waveform whatever the sun is doing, so a solar plant contributes
+			// generation without contributing surges
+			PowerDeliveryEvent generatorEvent = node.blockEntity instanceof WindTurbineBlockEntity turbine
+					? createGeneratorEvent(turbine)
+					: PowerDeliveryEvent.none();
 			Map<Integer, Double> powerDistribution = distributePower(node.insulatorId, generatedPower, new HashSet<>(), true, node.hasLocalSurge(), generatorEvent, nodeEvents);
 			for (Map.Entry<Integer, Double> entry : powerDistribution.entrySet()) {
 				nodePower.merge(entry.getKey(), entry.getValue(), Double::sum);
@@ -148,9 +156,9 @@ public class PowerNetwork {
 		if (startNode == null) return distribution;
 
 		double totalPower = availablePower;
-		if (!generationAlreadyIncluded && startNode.blockEntity instanceof WindTurbineBlockEntity turbine) {
-			totalPower += Math.max(0.0, turbine.getGeneratedPower());
-			surgeActive = surgeActive || turbine.isSurging();
+		if (!generationAlreadyIncluded && startNode.isGenerator()) {
+			totalPower += Math.max(0.0, startNode.getOutputPower());
+			surgeActive = surgeActive || startNode.hasLocalSurge();
 		}
 
 		boolean localSurge = surgeActive || startNode.hasLocalSurge();
@@ -394,6 +402,9 @@ public class PowerNetwork {
 		if (blockEntity == null) return;
 		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
 			turbine.setCurrentPower(power);
+		} else if (blockEntity instanceof PvInverterBlockEntity) {
+			// nothing to tell it: an inverter's output is what it makes rather than what reaches it, and
+			// the figure a panel shows comes off its own conversion instead of off the network
 		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
 			cabin.setCurrentPower(power);
 		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
@@ -417,8 +428,14 @@ public class PowerNetwork {
 			this.blockEntity = blockEntity;
 		}
 
+		/** Whether this node is a source rather than something the power passes through. */
+		boolean isGenerator() {
+			return blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof PvInverterBlockEntity;
+		}
+
 		double getOutputPower() {
 			if (blockEntity instanceof WindTurbineBlockEntity turbine) return turbine.getGeneratedPower();
+			if (blockEntity instanceof PvInverterBlockEntity inverter) return inverter.getGeneratedPower();
 			return power;
 		}
 
@@ -429,6 +446,7 @@ public class PowerNetwork {
 		boolean hasLocalSurge() {
 			return blockEntity instanceof WindTurbineBlockEntity turbine && turbine.isSurging();
 		}
+
 
 		void setEvent(PowerDeliveryEvent event) {
 			this.event = event != null ? event : PowerDeliveryEvent.none();
@@ -473,8 +491,14 @@ public class PowerNetwork {
 		BlockEntity a = from.blockEntity;
 		BlockEntity b = to.blockEntity;
 
+		// both generators feed a cabin, and either may be daisy-chained through another of its own kind -
+		// which is how a row of turbines or a bank of inverters shares one run of wire back to the cabin
 		if (a instanceof WindTurbineBlockEntity) {
 			return b instanceof ElectricCabinBlockEntity || b instanceof WindTurbineBlockEntity;
+		}
+
+		if (a instanceof PvInverterBlockEntity) {
+			return b instanceof ElectricCabinBlockEntity || b instanceof PvInverterBlockEntity;
 		}
 
 		if (a instanceof ElectricCabinBlockEntity) {

@@ -6,12 +6,19 @@ import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.client.TrackedBlockEntities;
+import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
+import com.dooji.electricity.client.render.obj.ObjModel;
+import com.dooji.electricity.client.wire.InsulatorLookup;
+import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.compat.energy.EnergyBridge;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.InverterCatalog;
+import com.dooji.electricity.main.registry.ObjBlockDefinition;
+import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.power.SolarTelemetrySimulator;
+import com.dooji.electricity.wire.InsulatorIdRegistry;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -21,6 +28,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.LongTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -31,12 +39,14 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.DistExecutor;
+import org.joml.Vector3f;
 
 /**
  * The inverter: the whole electrical side of a photovoltaic plant, in one block.
@@ -122,6 +132,16 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private long lastSyncTick = 0L;
 
+	/**
+	 * The wire fitting on top of the cabinet.
+	 *
+	 * One, because an inverter has one alternating-current output and a plant joins the grid at exactly
+	 * one place. The arrays behind it are wired with direct-current cable that is not drawn, which is
+	 * also how a real plant looks: the only overhead line on a solar farm is the one leaving it.
+	 */
+	private Vec3[] wirePositions;
+	private int[] insulatorIds;
+
 	private final SolarTelemetrySimulator telemetrySimulator = new SolarTelemetrySimulator();
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
 	/** The reference array's readings, which are the plant's as far as its SCADA is concerned. */
@@ -131,6 +151,8 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	public PvInverterBlockEntity(BlockPos pos, BlockState state) {
 		super(Electricity.PV_INVERTER_BLOCK_ENTITY.get(), pos, state);
 		this.activePowerLimitKw = spec().acPowerKw();
+		ensureArraySizes();
+		generateInsulatorIds();
 	}
 
 	/** Which machine this is. Read off the block, so there is no saved model id to migrate. */
@@ -140,10 +162,132 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return InverterCatalog.fallback();
 	}
 
+	// ---- the wire fitting ----
+
+	private ObjBlockDefinition definition() {
+		return ObjDefinitions.get(getBlockState().getBlock());
+	}
+
+	private String insulatorName(int index) {
+		ObjBlockDefinition definition = definition();
+		if (definition != null && index < definition.insulators().size()) return definition.insulators().get(index);
+
+		return null;
+	}
+
+	private void ensureArraySizes() {
+		ObjBlockDefinition definition = definition();
+		int count = definition == null ? 0 : definition.insulators().size();
+
+		if (wirePositions == null || wirePositions.length != count) {
+			wirePositions = new Vec3[count];
+		}
+
+		if (insulatorIds == null || insulatorIds.length != count) {
+			insulatorIds = new int[count];
+		}
+	}
+
+	private void generateInsulatorIds() {
+		ensureArraySizes();
+		for (int i = 0; i < insulatorIds.length; i++) {
+			if (insulatorIds[i] == 0) {
+				insulatorIds[i] = InsulatorIdRegistry.claimId();
+			}
+		}
+	}
+
+	public Vec3 getWirePosition(int index) {
+		ensureArraySizes();
+		return index >= 0 && index < wirePositions.length ? wirePositions[index] : null;
+	}
+
+	public void setWirePosition(int index, Vec3 position) {
+		ensureArraySizes();
+		if (index >= 0 && index < wirePositions.length) {
+			wirePositions[index] = position;
+		}
+	}
+
+	public int getInsulatorId(int index) {
+		ensureArraySizes();
+		return index >= 0 && index < insulatorIds.length ? insulatorIds[index] : -1;
+	}
+
+	public int[] getInsulatorIds() {
+		ensureArraySizes();
+		return insulatorIds.clone();
+	}
+
+	/**
+	 * Where the fitting is in the world, with the cabinet's own scale applied.
+	 *
+	 * The scale is the part that would otherwise go wrong: the model is authored at the commercial
+	 * cabinet's size and drawn smaller for the residential machine, so a fitting placed from the raw
+	 * geometry would float above a small one and a wire would attach to nothing.
+	 */
+	public Vec3 calculateOrientedInsulatorCenter(int index) {
+		ensureArraySizes();
+		if (index < 0 || index >= wirePositions.length) return null;
+
+		String groupName = insulatorName(index);
+		if (groupName == null) return null;
+
+		ObjModel.BoundingBox boundingBox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groupName);
+		if (boundingBox == null) return null;
+
+		Vector3f centre = boundingBox.center;
+		double scale = renderScale(spec());
+		Vec3 local = new Vec3(centre.x() * scale, centre.y() * scale, centre.z() * scale);
+
+		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(rotateVector(local, getBlockState().getValue(PvInverterBlock.FACING)));
+	}
+
+	/**
+	 * How large this machine is drawn, restated from the renderer.
+	 *
+	 * Stated twice because the renderer is client-only and this runs on a dedicated server too, which is
+	 * the same reason the turbine restates its tower offset in two places. Both copies are one line and
+	 * both say they are a copy, which is the least bad of the arrangements available.
+	 */
+	private static double renderScale(InverterSpec spec) {
+		if (spec.acPowerKw() >= 1000.0) return 1.0;
+		if (spec.acPowerKw() <= 30.0) return 0.62;
+
+		return 0.92;
+	}
+
+	private static Vec3 rotateVector(Vec3 vector, Direction facing) {
+		double degrees = switch (facing) {
+			case WEST -> 90.0;
+			case SOUTH -> 180.0;
+			case EAST -> 270.0;
+			default -> 0.0;
+		};
+
+		if (degrees == 0.0) return vector;
+
+		double cos = Math.cos(Math.toRadians(degrees));
+		double sin = Math.sin(Math.toRadians(degrees));
+		return new Vec3(vector.x * cos + vector.z * sin, vector.y, -vector.x * sin + vector.z * cos);
+	}
+
+	private void updateWirePositions() {
+		ensureArraySizes();
+		for (int i = 0; i < wirePositions.length; i++) {
+			Vec3 calculated = calculateOrientedInsulatorCenter(i);
+			if (calculated != null) {
+				wirePositions[i] = calculated;
+			}
+		}
+	}
+
 	// ---- the tick ----
 
 	public void serverTick() {
 		if (!(level instanceof ServerLevel serverLevel)) return;
+
+		updateWirePositions();
 
 		InverterSpec spec = spec();
 		if (--rescanCountdown <= 0) {
@@ -552,6 +696,30 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW;
 	}
 
+	/**
+	 * What the wire network may carry away this tick, in kW.
+	 *
+	 * Everything produced, less whatever another mod's cables already claimed. The subtraction is what
+	 * stops the same Joule being spent twice, because the wire network reads a generator without ever
+	 * debiting it - the same arrangement the turbines are under.
+	 */
+	public double getGeneratedPower() {
+		return Math.max(0.0, acPowerKw - budget.claimed() / EnergyBridge.JOULES_PER_KW);
+	}
+
+	/**
+	 * Whether this generator is putting a disturbance onto the network.
+	 *
+	 * Never, and that is worth stating rather than leaving as an unimplemented method. A turbine surges
+	 * because a gust arrives at a rotor with tonnes of inertia and a gearbox behind it; an inverter has no
+	 * moving parts at all and its whole purpose is to hold a clean waveform whatever the array does. A
+	 * cloud crossing a solar plant is a smooth ramp rather than a shock, which is one of the few things
+	 * photovoltaics are unambiguously better at than rotating machines.
+	 */
+	public boolean isSurging() {
+		return false;
+	}
+
 	@Override
 	public double getAvailableJoules() {
 		if (level == null || level.isClientSide() || !ElectricityServerConfig.externalEnergyEnabled()) return 0.0;
@@ -642,6 +810,31 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 
 		tag.put("arrays", positions);
+
+		// an entry is empty whenever the insulator's bounding box could not be found, and on a dedicated
+		// server that is always: every method that fills ObjBoundingBoxRegistry is client-only, so it is
+		// permanently empty there. A placeholder keeps the list index-aligned with the array, which is
+		// what the cabin and the power box already do
+		ListTag wires = new ListTag();
+		for (Vec3 pos : wirePositions) {
+			CompoundTag entry = new CompoundTag();
+			if (pos != null) {
+				entry.putDouble("x", pos.x);
+				entry.putDouble("y", pos.y);
+				entry.putDouble("z", pos.z);
+			}
+
+			wires.add(entry);
+		}
+
+		tag.put("wirePositions", wires);
+
+		ListTag ids = new ListTag();
+		for (int id : insulatorIds) {
+			ids.add(IntTag.valueOf(id));
+		}
+
+		tag.put("insulatorIds", ids);
 	}
 
 	@Override
@@ -679,6 +872,28 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		for (int i = 0; i < positions.size(); i++) {
 			arrays.add(BlockPos.of(((LongTag) positions.get(i)).getAsLong()));
 		}
+
+		ensureArraySizes();
+		if (tag.contains("wirePositions")) {
+			ListTag wires = tag.getList("wirePositions", 10);
+			for (int i = 0; i < Math.min(wires.size(), wirePositions.length); i++) {
+				CompoundTag entry = wires.getCompound(i);
+				if (entry.contains("x")) {
+					wirePositions[i] = new Vec3(entry.getDouble("x"), entry.getDouble("y"), entry.getDouble("z"));
+				}
+			}
+		}
+
+		if (tag.contains("insulatorIds")) {
+			ListTag ids = tag.getList("insulatorIds", 3);
+			for (int i = 0; i < Math.min(ids.size(), insulatorIds.length); i++) {
+				insulatorIds[i] = ids.getInt(i);
+				InsulatorIdRegistry.registerExistingId(insulatorIds[i]);
+			}
+		}
+
+		generateInsulatorIds();
+		updateWirePositions();
 	}
 
 	@Override
@@ -703,15 +918,25 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	public void onLoad() {
 		super.onLoad();
 		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+				TrackedBlockEntities.track(this);
+				updateWirePositions();
+				InsulatorLookup.register(this, getInsulatorIds());
+				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
+			});
 		}
 	}
 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		InsulatorIdRegistry.releaseIds(getInsulatorIds());
 		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
+			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+				TrackedBlockEntities.untrack(this);
+				InsulatorLookup.unregister(getInsulatorIds());
+				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
+			});
 		}
 
 		if (level != null && !level.isClientSide()) {

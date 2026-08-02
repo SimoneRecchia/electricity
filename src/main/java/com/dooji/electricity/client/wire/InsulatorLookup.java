@@ -2,6 +2,7 @@ package com.dooji.electricity.client.wire;
 
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import java.lang.ref.WeakReference;
@@ -68,6 +69,8 @@ public final class InsulatorLookup {
 			return powerBox.getInsulatorIds();
 		} else if (blockEntity instanceof WindTurbineBlockEntity turbine) {
 			return turbine.getInsulatorIds();
+		} else if (blockEntity instanceof PvInverterBlockEntity inverter) {
+			return inverter.getInsulatorIds();
 		}
 
 		return null;
