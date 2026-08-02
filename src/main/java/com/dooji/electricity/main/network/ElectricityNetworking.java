@@ -1,11 +1,14 @@
 package com.dooji.electricity.main.network;
 
+import com.dooji.electricity.block.PvArrayBlockEntity;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.ElectricityClient;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
+import com.dooji.electricity.main.network.payloads.SolarControlPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.network.payloads.UpdateUtilityPoleConfigPayload;
@@ -115,6 +118,36 @@ public class ElectricityNetworking {
 					context.setPacketHandled(true);
 				}).add();
 
+		INSTANCE.messageBuilder(SolarControlPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(SolarControlPayload::write).decoder(SolarControlPayload::read)
+				.consumerNetworkThread((msg, contextSupplier) -> {
+					var context = contextSupplier.get();
+
+					if (context.getDirection().getReceptionSide().isServer()) {
+						context.enqueueWork(() -> {
+							var player = context.getSender();
+							if (player == null) return;
+
+							var world = player.serverLevel();
+							var pos = msg.blockPos();
+
+							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
+							if (!world.mayInteract(player, pos)) return;
+							// a plain distance check, unlike the turbine's: an array and an inverter are one
+							// block each, so there is no structure to stand anywhere along
+							if (player.distanceToSqr(Vec3.atCenterOf(pos)) > MAX_CONTROL_DISTANCE_SQ) return;
+
+							var blockEntity = world.getBlockEntity(pos);
+							if (blockEntity instanceof PvInverterBlockEntity inverter) {
+								applyInverterControl(inverter, msg);
+							} else if (blockEntity instanceof PvArrayBlockEntity array) {
+								applyArrayControl(array, msg);
+							}
+						});
+					}
+
+					context.setPacketHandled(true);
+				}).add();
+
 		INSTANCE.messageBuilder(WireConnectionPayload.class, id++, NetworkDirection.PLAY_TO_CLIENT).encoder(WireConnectionPayload::write).decoder(WireConnectionPayload::read)
 				.consumerNetworkThread((msg, contextSupplier) -> {
 					var context = contextSupplier.get();
@@ -173,6 +206,39 @@ public class ElectricityNetworking {
 			case TOGGLE_RUNNING -> turbine.setStoppedByPlayer(!turbine.isStoppedByPlayer());
 			case CYCLE_REDSTONE_MODE -> turbine.setRedstoneMode(turbine.getRedstoneMode().next());
 			case SET_POWER_LIMIT -> turbine.setActivePowerLimit(msg.value());
+		}
+	}
+
+	/**
+	 * Applies one command from an inverter's panel.
+	 *
+	 * The array actions are ignored rather than rejected, which is the right way round: one payload
+	 * serves both node kinds, and a command aimed at a tracker arriving at a cabinet is a mistake in the
+	 * client rather than an attack.
+	 */
+	private static void applyInverterControl(PvInverterBlockEntity inverter, SolarControlPayload msg) {
+		switch (msg.action()) {
+			case INVERTER_TOGGLE_RUNNING -> inverter.setStoppedByPlayer(!inverter.isStoppedByPlayer());
+			case INVERTER_CYCLE_REDSTONE_MODE -> inverter.setRedstoneMode(inverter.getRedstoneMode().next());
+			case INVERTER_SET_POWER_LIMIT -> inverter.setActivePowerLimit(msg.value());
+			case INVERTER_SET_POWER_FACTOR -> inverter.setPowerFactor(msg.value());
+			default -> {
+			}
+		}
+	}
+
+	/** Applies one command from an array's panel. Nothing here is trusted; the setters clamp. */
+	private static void applyArrayControl(PvArrayBlockEntity array, SolarControlPayload msg) {
+		switch (msg.action()) {
+			case ARRAY_CYCLE_TRACKER_MODE -> array.setTrackerMode(array.trackerMode().next());
+			case ARRAY_SET_TRACKER_ANGLE -> {
+				// a hand angle only means anything in hand mode, so asking for one asks for the mode too:
+				// setting the angle and leaving the controller tracking would have the next tick undo it
+				array.setTrackerMode(com.dooji.electricity.api.power.TrackerMode.MANUAL);
+				array.setManualRotation(msg.value());
+			}
+			default -> {
+			}
 		}
 	}
 

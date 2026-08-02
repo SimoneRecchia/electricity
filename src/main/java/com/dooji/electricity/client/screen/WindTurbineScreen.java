@@ -11,11 +11,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * The control panel at the foot of a wind turbine.
@@ -32,49 +32,33 @@ import net.minecraft.util.Mth;
  * worth knowing while standing at it. Everything shown is read from the client's copy
  * of the block entity, all of which arrives in its update tag already, so the panel
  * needs no traffic of its own in that direction. It only sends the three commands.
+ *
+ * The bevel, the bar geometry, the six colours and the label-and-value rhythm come from
+ * {@link PlantScreen}, which is shared with the three photovoltaic panels so that all four
+ * read alike rather than each having to be learned.
  */
-public class WindTurbineScreen extends Screen {
+public class WindTurbineScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
 	// 240 wide rather than the vanilla 176: the nameplate lines are the longest thing
 	// here and at 200 the cut-out speed ran off the right edge
 	private static final int IMAGE_WIDTH = 240;
 	private static final int IMAGE_HEIGHT = 190;
-	private static final int MARGIN = 8;
 
-	// mirrors the wells cut into the texture by gen_gui.py
-	private static final int BAR_X = 12;
-	private static final int BAR_WIDTH = 216;
+	// mirrors the wells cut into the texture by the panel generator
 	private static final int POWER_BAR_Y = 69;
 	private static final int WIND_BAR_Y = 97;
-	private static final int BAR_HEIGHT = 10;
 
-	private static final int LABEL_COLOUR = 0x404040;
-	private static final int VALUE_COLOUR = 0x202020;
-	private static final int FAINT_COLOUR = 0x707070;
-	private static final int SEPARATOR_COLOUR = 0xFF8B8B8B;
-
-	private static final int GREEN = 0xFF4CAF50;
-	private static final int AMBER = 0xFFCE9B18;
-	private static final int RED = 0xFFB33A2E;
-	private static final int BLUE = 0xFF3E7CB1;
-	private static final int GHOST = 0xFF6E6E6E;
-
-	private final BlockPos targetPos;
-	private int leftPos;
-	private int topPos;
 	private Button stopButton;
 	private Button redstoneButton;
 	private LimitSlider limitSlider;
 
 	public WindTurbineScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.wind_turbine.title"));
-		this.targetPos = targetPos.immutable();
+		super(Component.translatable("screen.electricity.wind_turbine.title"), TEXTURE, IMAGE_WIDTH, IMAGE_HEIGHT, targetPos);
 	}
 
 	@Override
 	protected void init() {
-		leftPos = (width - IMAGE_WIDTH) / 2;
-		topPos = (height - IMAGE_HEIGHT) / 2;
+		super.init();
 
 		WindTurbineBlockEntity turbine = turbine();
 		double limitFraction = turbine == null ? 1.0 : turbine.getActivePowerLimit() / turbine.spec().ratedPowerKw();
@@ -91,12 +75,9 @@ public class WindTurbineScreen extends Screen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (turbine() == null) {
-			onClose();
-			return;
+		if (turbine() != null) {
+			refreshWidgets();
 		}
-
-		refreshWidgets();
 	}
 
 	/**
@@ -128,20 +109,15 @@ public class WindTurbineScreen extends Screen {
 	}
 
 	@Override
-	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		renderBackground(graphics);
-		graphics.blit(TEXTURE, leftPos, topPos, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-
+	protected void drawPanel(GuiGraphics graphics) {
 		WindTurbineBlockEntity turbine = turbine();
-		if (turbine != null) {
-			drawNameplate(graphics, turbine);
-			drawStatus(graphics, turbine);
-			drawPower(graphics, turbine);
-			drawWind(graphics, turbine);
-			drawTower(graphics, turbine);
-		}
+		if (turbine == null) return;
 
-		super.render(graphics, mouseX, mouseY, partialTick);
+		drawNameplate(graphics, turbine);
+		drawStatus(graphics, turbine);
+		drawPower(graphics, turbine);
+		drawWind(graphics, turbine);
+		drawTower(graphics, turbine);
 	}
 
 	private void drawNameplate(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
@@ -150,7 +126,7 @@ public class WindTurbineScreen extends Screen {
 		graphics.drawString(font, TurbineCatalog.fullName(spec), leftPos + 8, topPos + 6, VALUE_COLOUR, false);
 		if (!spec.iecClass().isEmpty()) {
 			String iec = Component.translatable("screen.electricity.wind_turbine.iec", spec.iecClass()).getString();
-			graphics.drawString(font, iec, leftPos + IMAGE_WIDTH - MARGIN - font.width(iec), topPos + 6, FAINT_COLOUR, false);
+			faintValue(graphics, iec, 6);
 		}
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.geometry",
@@ -158,7 +134,7 @@ public class WindTurbineScreen extends Screen {
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.curve",
 				fmt("%.1f", spec.cutInSpeed()), fmt("%.1f", spec.ratedSpeed()), fmt("%.0f", spec.cutOutSpeed())), leftPos + 8, topPos + 27, LABEL_COLOUR, false);
 
-		separator(graphics, topPos + 40);
+		separator(graphics, 40);
 	}
 
 	/**
@@ -192,8 +168,7 @@ public class WindTurbineScreen extends Screen {
 			colour = GREEN;
 		}
 
-		graphics.fill(leftPos + 8, topPos + 47, leftPos + 12, topPos + 51, colour);
-		graphics.drawString(font, Component.translatable(key), leftPos + 16, topPos + 46, VALUE_COLOUR, false);
+		state(graphics, Component.translatable(key), colour, 46);
 	}
 
 	/**
@@ -209,21 +184,15 @@ public class WindTurbineScreen extends Screen {
 		double potential = Math.max(produced, turbine.getUncappedPower());
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.power"), leftPos + 8, topPos + 58, LABEL_COLOUR, false);
-		String value = TurbineBlockItem.formatPower(produced) + " / " + TurbineBlockItem.formatPower(rated);
-		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - MARGIN - font.width(value), topPos + 58, VALUE_COLOUR, false);
+		value(graphics, TurbineBlockItem.formatPower(produced) + " / " + TurbineBlockItem.formatPower(rated), 58);
 
-		int potentialWidth = barWidth(potential / rated);
-		int producedWidth = barWidth(produced / rated);
 		// the potential goes down first so the produced bar sits on top of it: what is left
 		// showing behind is exactly what the machine is giving up
-		fillBar(graphics, POWER_BAR_Y, potentialWidth, GHOST);
-		fillBar(graphics, POWER_BAR_Y, producedWidth, produced >= rated * 0.999 ? GREEN : BLUE);
+		fillBar(graphics, POWER_BAR_Y, barWidth(potential / rated), GHOST);
+		fillBar(graphics, POWER_BAR_Y, barWidth(produced / rated), produced >= rated * 0.999 ? GREEN : BLUE);
 
 		// the curtailment setpoint, as a notch on the same scale it limits
-		int limit = barWidth(turbine.getActivePowerLimit() / rated);
-		if (limit < BAR_WIDTH) {
-			graphics.fill(leftPos + BAR_X + limit, topPos + POWER_BAR_Y - 1, leftPos + BAR_X + limit + 1, topPos + POWER_BAR_Y + BAR_HEIGHT + 1, 0xFF202020);
-		}
+		notch(graphics, POWER_BAR_Y, barWidth(turbine.getActivePowerLimit() / rated), 0xFF202020);
 	}
 
 	/**
@@ -244,8 +213,7 @@ public class WindTurbineScreen extends Screen {
 		double wind = turbine.getMeanWindSpeed();
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 86, LABEL_COLOUR, false);
-		String value = fmt("%.1f / %.1f m/s", wind, turbine.getGustWindSpeed());
-		graphics.drawString(font, value, leftPos + IMAGE_WIDTH - MARGIN - font.width(value), topPos + 86, VALUE_COLOUR, false);
+		value(graphics, fmt("%.1f / %.1f m/s", wind, turbine.getGustWindSpeed()), 86);
 
 		int cutIn = barWidth(spec.cutInSpeed() / scale);
 		int rated = barWidth(spec.ratedSpeed() / scale);
@@ -254,13 +222,13 @@ public class WindTurbineScreen extends Screen {
 		zone(graphics, WIND_BAR_Y, 0, cutIn, 0xFF5A5A5A);        // nothing to be had
 		zone(graphics, WIND_BAR_Y, cutIn, rated, 0xFF2F6E3A);    // climbing the curve
 		zone(graphics, WIND_BAR_Y, rated, storm, GREEN);         // on the plateau
-		zone(graphics, WIND_BAR_Y, storm, BAR_WIDTH, RED);       // shedding output
+		zone(graphics, WIND_BAR_Y, storm, barSpan, RED);        // shedding output
 
 		// the gust first, so the mean draws over it where the two coincide
-		needle(graphics, barWidth(turbine.getGustWindSpeed() / scale), 0x80F0F0F0);
-		needle(graphics, barWidth(wind / scale), 0xFFF0F0F0);
+		needle(graphics, WIND_BAR_Y, barWidth(turbine.getGustWindSpeed() / scale), 0x80F0F0F0);
+		needle(graphics, WIND_BAR_Y, barWidth(wind / scale), 0xFFF0F0F0);
 
-		separator(graphics, topPos + 112);
+		separator(graphics, 112);
 	}
 
 	/**
@@ -295,30 +263,6 @@ public class WindTurbineScreen extends Screen {
 		}
 	}
 
-	/** A two-pixel mark standing across the wind gauge, clamped so it stays inside the bar. */
-	private void needle(GuiGraphics graphics, int at, int colour) {
-		graphics.fill(leftPos + BAR_X + Mth.clamp(at - 1, 0, BAR_WIDTH - 2), topPos + WIND_BAR_Y - 2,
-				leftPos + BAR_X + Mth.clamp(at + 1, 2, BAR_WIDTH), topPos + WIND_BAR_Y + BAR_HEIGHT + 2, colour);
-	}
-
-	private void separator(GuiGraphics graphics, int y) {
-		graphics.fill(leftPos + 11, y, leftPos + IMAGE_WIDTH - 11, y + 1, SEPARATOR_COLOUR);
-	}
-
-	private int barWidth(double fraction) {
-		return (int) Math.round(Mth.clamp(fraction, 0.0, 1.0) * BAR_WIDTH);
-	}
-
-	private void fillBar(GuiGraphics graphics, int y, int width, int colour) {
-		if (width <= 0) return;
-		graphics.fill(leftPos + BAR_X, topPos + y, leftPos + BAR_X + width, topPos + y + BAR_HEIGHT, colour);
-	}
-
-	private void zone(GuiGraphics graphics, int y, int from, int to, int colour) {
-		if (to <= from) return;
-		graphics.fill(leftPos + BAR_X + from, topPos + y, leftPos + BAR_X + to, topPos + y + BAR_HEIGHT, colour);
-	}
-
 	private WindTurbineBlockEntity turbine() {
 		if (minecraft == null || minecraft.level == null) return null;
 		if (minecraft.level.getBlockEntity(targetPos) instanceof WindTurbineBlockEntity turbine) return turbine;
@@ -326,17 +270,13 @@ public class WindTurbineScreen extends Screen {
 		return null;
 	}
 
+	@Override
+	protected BlockEntity blockEntity() {
+		return turbine();
+	}
+
 	private void send(TurbineControlPayload.Action action) {
 		ElectricityNetworking.INSTANCE.sendToServer(TurbineControlPayload.of(targetPos, action));
-	}
-
-	private static String fmt(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
-	}
-
-	@Override
-	public boolean isPauseScreen() {
-		return false;
 	}
 
 	/**

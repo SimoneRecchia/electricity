@@ -320,9 +320,9 @@ def item_met():
 # numbers - so if a bar moves here it moves there.
 
 PANELS = {
-    'pv_inverter': dict(width=248, height=208, bar_x=12, bar_width=224, bars=(76, 104, 132), separators=(44, 150)),
-    'pv_array': dict(width=248, height=208, bar_x=12, bar_width=224, bars=(76, 104, 132), separators=(44, 150)),
-    'met_station': dict(width=224, height=190, bar_x=12, bar_width=200, bars=(), separators=(30, 156)),
+    'pv_inverter': dict(width=248, height=232, bar_x=12, bar_width=224, bars=(70, 98, 126), separators=(40, 142)),
+    'pv_array': dict(width=248, height=232, bar_x=12, bar_width=224, bars=(70, 98, 126), separators=(40, 142)),
+    'met_station': dict(width=224, height=196, bar_x=12, bar_width=200, bars=(), separators=(20, 178)),
 }
 
 
