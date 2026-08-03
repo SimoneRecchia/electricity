@@ -4,117 +4,91 @@ Self-approved on the user's standing instruction to work autonomously. **Every i
 none is dropped, none is deferred, and this line is the reminder that says so.** Anything I find I
 cannot do, I finish everything else and say plainly what is left and why.
 
-The order is chosen so the cheap, self-contained work lands first and the crafting tree - which is the
-largest item by far - is built on top of a codebase that has already been audited and cleaned.
+Status as of the end of the night: **all seven done.** One of them is written and compiled but could not
+be run, and that is called out where it happens rather than at the bottom.
 
-## 1. Turbine inventory sprites
+## 1. Turbine inventory sprites — done
 
-Every turbine gets its own 16x16 sprite, and it is the **nacelle and rotor only** - no tower, because
-`turbine_tower` already has its own sprite and a turbine item that repeated it would read as the same
-object twice in the hotbar. The 3D models stay as they are.
+Every turbine had the same inherited 128-pixel line drawing, which at inventory size was a smudge, so all
+six machines looked identical in a hotbar. Each has its own now, nacelle and rotor and no tower, since the
+tower is a separate item with a sprite of its own.
 
-- One sprite per product in `TurbineCatalog`, drawn from that machine's own proportions: rotor
-  diameter against hub height, three blades, the nacelle's own shape.
-- Small turbines read differently from large ones in reality - a 5 kW machine is a bare nacelle with a
-  tail vane, a 15 MW machine is a bus-sized housing - so the sprites differ the same way rather than
-  being one drawing scaled.
-- Written into `tools/gen_pv_textures.py`'s sprite family (`sprite()`, `limb()`, the palettes), so they
-  are reproducible in a diff like everything else.
+One drawing parameterised, and the parameters carry the catalogue's own story: the nacelle grows with
+nameplate, the blades slim as the rotor-to-nameplate ratio rises, the C90 and the C112 share a nacelle
+because they share a generator, and the small-wind machine has a tail vane because it has no yaw motor.
 
-## 2. A hitbox for every block that is missing one
+## 2. A hitbox for every block that was missing one — done
 
-The cabinet, the combiner, the met mast, the turbine tower and anything else whose OBJ stands taller or
-wider than the block it occupies: the model is a metre of machine and the collision is one cube, so a
-player walks through most of it.
+The electric cabin is drawn 1.0 by 2.7 by 2.2 blocks and collided with one cube; the utility pole is six
+blocks tall and did the same. An oversized `VoxelShape` does not fix that and it is worth knowing why:
+collisions are gathered from the block positions overlapping an entity's own box grown by one, so a shape
+three blocks tall hanging off a block three below a player is never consulted.
 
-- Audit: for every block with an OBJ definition, compare the model's own bounding box against the
-  block's `getShape`/`getCollisionShape`. A script, so it cannot go stale - `tools/check_hitboxes.py`.
-- Give each one a shape built from the model's real extents, in the block's four facings.
-- Multi-block-tall machines need the blocks above them to collide too, or the shape has to be capped at
-  the block boundary and the rest given to a companion. Decide per machine, and say which in the doc.
+So `MachineShellBlock` — invisible, solid, never an item, and mining any of it mines the machine. It finds
+its machine by searching rather than remembering, so a shell can never point at something that has gone.
+The cells are measured off the models: the cabin's roof reaches 0.627 into the cell above and its ends
+0.657 into the cells beside it, which is the ten-pixel slab; the pole's mast is 0.494 across, which is the
+post. The power box's shape was a whole cube round a cabinet that hangs on one side of its block, and is
+now four shapes, one per facing.
 
-## 3. Texture and model audit of everything we added since the fork
+`tools/check_hitboxes.py` reads every model and every claim. Two rules rather than one, and the second is
+why it works: volume catches a cabin, and a mast fills a quarter of every cell it passes through, which is
+under any threshold worth having.
 
-Only ours: the PV family, the DC cabling, the met mast, the combiner, the cabinet, the electric cab,
-the power box, the utility pole. Not the turbines' own inherited assets.
+Verified against a running server through `tools/rcon.py`: placement, removal, all four facings, and an
+orphaned shell removing itself.
 
-Three classes of defect to hunt, all of which have already bitten once:
+## 3. Texture and model audit — done
 
-- **Off-centre or sub-sampled pictures.** A bordered texture drawn onto a face with `uv_scale` under
-  one takes a slice out of the middle of the frame. The rule that came out of it: a texture with a
-  frame needs a face that gives it the whole image, otherwise draw it as a repeating pattern.
-- **A picture repeated on faces that want their own.** The pair texture on the side of a cable, the
-  cell pattern on a module's edge, a lid's bolt grid on a face one pixel tall.
-- **Overlaps that read badly**: two coplanar exposed faces (which flicker), and solids sharing a volume
-  where the seam shows.
+Three real faults, all in `docs/model-audit.md`: a rack's laminates shared a plane with the frame they are
+clamped to (a third of a block of flicker), the inverter's cooling grille was buried inside the cabinet
+wall with a fan turning in front of nothing, and the combiner's cable riser shared its volume with the hub
+at the foot of the post.
 
-Then, per the user's own words: anything not up to standard gets **redrawn at a higher resolution**,
-and surfaces get **more polygons** where roundness is what is missing - the turbine nacelle and the
-cabinet are the two he named as the standard to match, so a cylinder at eight sides becomes twelve or
-sixteen where it is close enough to be seen.
+`tools/check_model_textures.py` now finds all four classes mechanically — coplanar faces that both show,
+geometry inside other geometry, bordered pictures sub-sampled, pictures worn on all six faces of a box —
+and had to be taught two things that are *not* faults: a glass dome's side is meant to take the middle of
+its texture, and a cylinder cap's quads each take a wedge of the whole thing by design.
 
-Deliverables: `tools/check_model_textures.py` for the mechanical part of it, the previewer
-(`tools/preview_models.py`, added with the cabling work) for the part only eyes can do, and a written
-list of what was found and what was done about each.
+Resolution: every drawing unchanged, every structural feature in it multiplied by `DETAIL`. Modules at
+256, the sheet metals at 128, end caps at 64. The per-pixel grain deliberately does not scale, because
+grain that stays one pixel across is what turns a speckled tile into smooth metal at four times the size.
+Geometry: prisms are twelve sides by default and sixteen for the three a player walks up to.
 
-## 4. Crafting for every item, researched against how these are really made
+## 4. The crafting tree — done
 
-The largest item. It gets its own research pass first, then a tree.
+Thirty-two new parts in three tiers, and everything in the mod is craftable. Raw stock at a vanilla bench
+or in a furnace, because a player has to be able to start; everything else at the mod's own workbench,
+which is what makes the workbench the gate.
 
-**Research** (what a real supply chain looks like, so the recipes are not invented):
-- A PV module: polysilicon to ingot to wafer to cell to laminate - glass, EVA, backsheet, an aluminium
-  frame, a junction box with bypass diodes, MC4 connectors.
-- An inverter: IGBT or SiC power modules, DC-link capacitors, magnetics (chokes, transformers), a
-  control board, a DC section with fuses and a switch, a sheet-steel enclosure with a fan.
-- A turbine: cast hub, pitch bearings and drives, blades (glass or carbon fibre in epoxy over a spar),
-  main shaft and bearing, gearbox or a direct-drive permanent-magnet generator, a yaw drive and
-  bearing, a converter cabinet, a tower section rolled from plate and flanged.
-- A combiner box: gPV fuse holders, a DC load-break switch, a Type 2 surge arrester, busbar, an IP66
-  enclosure, glands.
-- The met station: pyranometers, an anemometer and vane, an RTD, a data logger, a mast.
-- Cable: tinned copper conductor, XLPO insulation, a jacket; a trunk adds armour.
+The spine rule holds: every array is three laminates over a mounting, every inverter is bridges over an
+enclosure, every combiner is fuse ways over an enclosure, every turbine is three blades over a drivetrain
+— and two models differ only where the real machines do. `tools/gen_crafting.py` is the whole tree in one
+table and refuses to write it if two recipes share a grid, if a part has no recipe, or if a part is made
+and never used.
 
-**Intermediates** - the "pezzi di supporto" the user asked for, not placeable and not usable, only
-inputs to other recipes. Grouped in tiers so a turbine is genuinely a long road:
-- Tier 1, from vanilla: copper wire, steel plate, steel section, insulator, resin, glass sheet.
-- Tier 2: printed circuit board, power semiconductor module, capacitor bank, magnetic core, bearing,
-  gear set, servo drive, sensor head, solar cell, tempered glass pane.
-- Tier 3: control board, converter module, generator stator, generator rotor, gearbox, pitch assembly,
-  yaw assembly, blade, laminate, DC section, enclosure.
+## 5. The coherence pass — done
 
-**The rule the user set, and it decides the shape of the whole tree**: recipes for different products
-of the same *kind* stay close to each other, and differ only where the real machines differ. So every
-inverter shares a spine and the central machine adds busbars and a bigger enclosure; every array
-shares a laminate and a mounting and the tracked ones add a drive; every turbine shares nacelle,
-generator and blades and the direct-drive ones swap the gearbox for a bigger stator.
+`docs/items.md`: two power chains, what every item is for, what makes it, what it connects to. The last
+section is the one worth reading — six gaps, none of them a bug, from an inverter whose AC terminals are
+not drawn anywhere on the cabinet to the fact that nothing consumes the met station's readings but its own
+panel.
 
-Every intermediate needs its **own sprite**, drawn in the same family as the rest.
+## 6. Dead code — done
 
-## 5. A coherence pass over every item, written down
+Three imports nothing used, and one real piece of duplication: eight renderers each carried their own
+four-case switch turning a facing into an angle, seven of them the same three lines in a different order.
+What differs between them is one fact — which way the geometry was authored facing — so that fact is the
+argument now and the arithmetic lives once. The utility pole keeps its switch and says why: its model is
+mirrored rather than merely turned, and a shared helper with an exception in it would be worse.
 
-A `docs/items.md` with a diagram of everything a player can do: what each item is, what makes it, what
-it goes into, what it connects to, and what reads it in the physics. Written to answer the four
-questions asked - does everything work, does everything make sense, is everything usable, does
-everything match reality and connect the right way - and to surface what is *missing*, which is the
-real reason for writing it.
+## 7. A real previewer — done, and untested
 
-## 6. Code review: delete what is not earning its place
+Nothing off the shelf can do it, and the reason decides the answer: almost nothing here is a vanilla JSON
+block model, and every existing renderer reads vanilla JSON. So the mod renders itself — `PreviewStage`
+builds a stage, steps a camera through five views and calls the same screenshot the F2 key does, either
+from `/preview <block> [pair]` or unattended from `-Delectricity.preview=all`.
 
-Dead code, superseded helpers, fields nothing reads, comments describing something that no longer
-exists. The mod has been through several redesigns in this branch alone - the radius scan that the DC
-walk replaced, the harness geometry that three rounds of feedback rewrote - and each one leaves
-sediment.
-
-## 7. Then, and only then: a proper model previewer
-
-The user's closing question. What exists now (`tools/preview_models.py`) is flat-coloured SVG with no
-textures and a painter's sort - useful, and not the same as seeing it in game.
-
-- Search first for something already built: a headless Minecraft block/model renderer, an MCP server
-  that renders MC assets, or one of the resource-pack model viewers.
-- If nothing fits: the honest options are (a) render the OBJ *with* its textures and a real depth
-  buffer, which catches z-fighting and mapping errors and needs no game, or (b) drive the game itself
-  from a dev mod - a command that places one block, points the camera at it from a list of angles and
-  writes screenshots, which is the only way to see exactly what a player sees, because it *is* the
-  game's renderer.
-- Report which, why, and what it costs before building it.
+**It has not been run.** It compiles, the dedicated server starts with it on the classpath, and the client
+cannot be launched on this machine at the moment: the display is asleep, GLFW reports no primary monitor,
+and the game exits before Forge loads. The first `/preview` is the test.
