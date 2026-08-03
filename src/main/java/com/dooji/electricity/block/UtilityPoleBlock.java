@@ -17,6 +17,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -80,6 +82,18 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	@Nullable @Override
 	public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
 		return new UtilityPoleBlockEntity(pos, state);
+	}
+
+	/**
+	 * A pole has nothing of its own to tick, and this is not for it.
+	 *
+	 * It is here so that a pole planted before the mast had any collision gets it: six blocks of steel
+	 * with one block of collision at the bottom does not fix itself, because it was placed long ago and
+	 * placement is the only other thing that fills the cells.
+	 */
+	@Nullable @Override
+	public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
+		return (lvl, pos, blockState, blockEntity) -> MachineShell.heal(lvl, pos, blockState);
 	}
 
 	@Override

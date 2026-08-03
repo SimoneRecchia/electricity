@@ -42,6 +42,14 @@ public interface MachineShell {
 	 * A machine hemmed in by terrain gets the collision it has room for rather than being refused
 	 * placement: refusing would mean a substation could not be put against a hillside, which is where
 	 * substations go.
+	 *
+	 * Called on placement and again while the machine ticks, which is not belt and braces - it is the
+	 * only thing that makes a machine placed before any of this existed solid. A world full of cabins
+	 * that are one block of collision under three blocks of steel does not fix itself at placement,
+	 * because they were placed long ago. Cheap enough to repeat: it only writes a cell that is empty.
+	 *
+	 * Chunks are checked before they are touched. Reaching into an unloading chunk is what stopped a world
+	 * from finishing its save once already, and a cabin's cells reach into the chunk next door.
 	 */
 	static void place(Level level, BlockPos pos, BlockState state) {
 		if (level.isClientSide || !(state.getBlock() instanceof MachineShell machine)) return;
@@ -50,7 +58,7 @@ public interface MachineShell {
 		Direction facing = machine.shellFacing(state);
 		for (Cell cell : machine.shellCells()) {
 			BlockPos target = pos.offset(turned(new BlockPos(cell.x(), cell.y(), cell.z()), facing));
-			if (!level.getBlockState(target).canBeReplaced()) continue;
+			if (!level.hasChunkAt(target) || !level.getBlockState(target).canBeReplaced()) continue;
 
 			level.setBlock(target, shell.setValue(MachineShellBlock.FILL, cell.fill().turned(facing)), Block.UPDATE_ALL);
 		}
@@ -63,10 +71,26 @@ public interface MachineShell {
 		Direction facing = machine.shellFacing(state);
 		for (Cell cell : machine.shellCells()) {
 			BlockPos target = pos.offset(turned(new BlockPos(cell.x(), cell.y(), cell.z()), facing));
-			if (level.getBlockState(target).getBlock() instanceof MachineShellBlock) {
+			if (level.hasChunkAt(target) && level.getBlockState(target).getBlock() instanceof MachineShellBlock) {
 				level.removeBlock(target, false);
 			}
 		}
+	}
+
+	/**
+	 * How often a ticking machine checks that its cells are still there, in ticks.
+	 *
+	 * Two seconds. Slow enough to cost nothing and fast enough that a player who has just loaded an old
+	 * world does not notice the gap - and it is only ever eight state reads, because a cell that is
+	 * already filled is not written again.
+	 */
+	int HEAL_INTERVAL = 40;
+
+	/** Fills any cell that has gone missing, for a machine that ticks. */
+	static void heal(Level level, BlockPos pos, BlockState state) {
+		if (level.isClientSide || level.getGameTime() % HEAL_INTERVAL != 0) return;
+
+		place(level, pos, state);
 	}
 
 	/**

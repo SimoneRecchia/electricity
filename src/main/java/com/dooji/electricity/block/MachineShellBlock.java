@@ -71,7 +71,14 @@ public class MachineShellBlock extends Block {
 		SLAB_NORTH("slab_north", Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 10.0)),
 		SLAB_SOUTH("slab_south", Block.box(0.0, 0.0, 6.0, 16.0, 16.0, 16.0)),
 		SLAB_WEST("slab_west", Block.box(0.0, 0.0, 0.0, 10.0, 16.0, 16.0)),
-		SLAB_EAST("slab_east", Block.box(6.0, 0.0, 0.0, 16.0, 16.0, 16.0));
+		SLAB_EAST("slab_east", Block.box(6.0, 0.0, 0.0, 16.0, 16.0, 16.0)),
+		// The corners of an overhanging roof: low *and* trimmed on one side, which a single slab cannot
+		// be. Without these the four cells at the corners of a cabin's roof were whole cells low, so a
+		// player standing on the roof stood a third of a block out past the eave, on air.
+		EAVE_NORTH("eave_north", Block.box(0.0, 0.0, 0.0, 16.0, 10.0, 10.0)),
+		EAVE_SOUTH("eave_south", Block.box(0.0, 0.0, 6.0, 16.0, 10.0, 16.0)),
+		EAVE_WEST("eave_west", Block.box(0.0, 0.0, 0.0, 10.0, 10.0, 16.0)),
+		EAVE_EAST("eave_east", Block.box(6.0, 0.0, 0.0, 16.0, 10.0, 16.0));
 
 		private final String name;
 		private final VoxelShape shape;
@@ -85,18 +92,22 @@ public class MachineShellBlock extends Block {
 			return shape;
 		}
 
-		/** The same fill on a machine turned to face another way. Only the sideways slabs move. */
+		/** The same fill on a machine turned to face another way. Only the sideways ones move. */
 		public Fill turned(Direction facing) {
 			return switch (this) {
-				case SLAB_NORTH -> of(MachineShell.turned(Direction.NORTH, facing));
-				case SLAB_SOUTH -> of(MachineShell.turned(Direction.SOUTH, facing));
-				case SLAB_WEST -> of(MachineShell.turned(Direction.WEST, facing));
-				case SLAB_EAST -> of(MachineShell.turned(Direction.EAST, facing));
+				case SLAB_NORTH -> slab(MachineShell.turned(Direction.NORTH, facing));
+				case SLAB_SOUTH -> slab(MachineShell.turned(Direction.SOUTH, facing));
+				case SLAB_WEST -> slab(MachineShell.turned(Direction.WEST, facing));
+				case SLAB_EAST -> slab(MachineShell.turned(Direction.EAST, facing));
+				case EAVE_NORTH -> eave(MachineShell.turned(Direction.NORTH, facing));
+				case EAVE_SOUTH -> eave(MachineShell.turned(Direction.SOUTH, facing));
+				case EAVE_WEST -> eave(MachineShell.turned(Direction.WEST, facing));
+				case EAVE_EAST -> eave(MachineShell.turned(Direction.EAST, facing));
 				default -> this;
 			};
 		}
 
-		private static Fill of(Direction side) {
+		private static Fill slab(Direction side) {
 			return switch (side) {
 				case NORTH -> SLAB_NORTH;
 				case SOUTH -> SLAB_SOUTH;
@@ -104,6 +115,15 @@ public class MachineShellBlock extends Block {
 				case EAST -> SLAB_EAST;
 				case DOWN -> SLAB_DOWN;
 				case UP -> SLAB_UP;
+			};
+		}
+
+		private static Fill eave(Direction side) {
+			return switch (side) {
+				case NORTH -> EAVE_NORTH;
+				case SOUTH -> EAVE_SOUTH;
+				case WEST -> EAVE_WEST;
+				default -> EAVE_EAST;
 			};
 		}
 
