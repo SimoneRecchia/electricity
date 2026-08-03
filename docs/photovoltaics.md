@@ -85,8 +85,29 @@ there is no edge to run a lead along — it gets a short tail out of the corner 
 cable running the length of a panel runs *across cells* and a cable across a cell is a cell out of the
 string. A **rack** and a **tracked row** have ground underneath to cross, so theirs run the length: the
 rack's along its side, the tracked row's down the middle, since its flanks are under modules that turn
-through sixty degrees. The tracked row also gets the drag loop that rotation demands, and a **dual-axis
-frame** the service coil an azimuth drive is given.
+through sixty degrees.
+
+On a table the leads are **let into the glass**, not laid on it: the modules stop a pixel short of the
+block's edge and the pair lies in that channel with its own top face level with the cells — which is where
+a table's leads are in the first place, clipped into the frame under the module lip. A **rack**'s go on the
+same line, out at the edge, because a third of the way in is where its legs are.
+
+A **tracked row** carries the run and nothing else. Real trackers have more than that — a drag loop for the
+sixty degrees of roll, a service coil round an azimuth column — and at a block to ten metres both read as a
+knot of cable sitting in the one span the row keeps clear. Its run goes boundary to boundary instead, and
+because that is the block's own axis, a laid run meets it head on with nothing to turn.
+
+Everything else has to turn, and the row draws the turn: a run of cable arrives down the **middle** of the
+block and a fixed row's leads are out at its **edge**, so where copper has been laid up to a table or a
+rack it runs along the boundary to the corner the leads are on, and steps up onto the glass if that is
+where they are. Only where copper has actually been laid — a row fed by the row next door has nothing to
+turn, since the two already meet edge to edge.
+
+The one asymmetry left is the plug on a tracked row, and it is placement that forces it. A tracker's tube
+is turned north-south whichever way the player was facing, so half the rows in a field are chained the
+other way round: a plug only ever at one end would be at the wrong end of half of them. So both ends have
+one, an uncabled row next to a cabled one shows the plug at that end, and a cabled row — whose run already
+reaches both boundaries — shows neither.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

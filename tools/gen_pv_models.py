@@ -244,6 +244,18 @@ def lead(mesh, name, lo, hi, face='up', rot=None):
     clad_box(mesh, name, lo, hi, {face: 'dc_cable', '*': 'dc_jacket'}, rot=rot)
 
 
+# What a run laid across the ground is: two pixels across and one tall, which is the figure
+# gen_cable_models.py writes and every machine's cable entry copies.  Restated here because the one place
+# an array draws at that width is where a laid run continues straight into it.
+LAID = 2 * LEAD
+
+# Where a row's own lead runs on a fixed mounting: hard against the block's edge, so its outer face *is*
+# the boundary.  Not a hand-picked inset - a table's modules are pulled back to exactly this line so the
+# lead can lie flush with the glass instead of on top of it, and putting the rack's lead on the same line
+# keeps a mixed field reading as one plant.
+EDGE = 0.50 - LEAD
+
+
 def row_lead(mesh, x0, height, start=-0.44):
     """The lead out of one end of a row, and nothing on the other sides.
 
@@ -263,19 +275,54 @@ def row_lead(mesh, x0, height, start=-0.44):
     lead(mesh, 'harness', (x0, height, start), (x0 + LEAD, height + LEAD, 0.50))
 
 
-def row_socket(mesh, x0, height):
+def row_socket(mesh, x0, height, name='harness_input', end=-1, width=LEAD):
     """Where the row behind plugs in, at the other end of that same edge.
 
     Its own group, because it is drawn only when there is something to plug into it: a row with nothing
     behind it has no input, and a socket sitting on every panel whether or not anything feeds it is the
     difference between a plant that reads as wired through and one that reads as a warehouse of parts.
+
+    The pair's own cross-section rather than a box round it, and that is what makes it fit anywhere the
+    lead fits - a table's leads lie in a channel one pixel wide, and a socket even slightly fatter than
+    the cable would have stood proud of the glass again.  What says *connector* is the material and the
+    threaded nose on the end, not the size.
+
+    ``end`` is which end of the row it sits at.  Both exist on a tracked row, because a tracker's tube is
+    forced north-south whichever way the player was facing, so half the rows in a field are chained the
+    other way round and a socket only ever at the north end would be at the wrong end of half of them.
     """
-    lo = (x0 - 0.02, height, -0.50)
-    hi = (x0 + LEAD + 0.02, height + 0.05, -0.44)
-    clad_box(mesh, 'harness_input', lo, hi, {'up': 'cabinet_top', '*': 'cabinet'})
-    steel = mesh.faces('harness_input', 'steel')
-    cylinder(mesh, steel, (x0 + LEAD / 2, height + 0.025, -0.515), 'z', 0.022, 0.018, sides=8,
+    z0, z1 = (-0.50, -0.44) if end < 0 else (0.44, 0.50)
+    steel = mesh.faces(name, 'steel')
+    box(mesh, steel, (x0, height, z0), (x0 + width, height + LEAD, z1), uv_scale=0.25)
+    nose = z0 - 0.015 if end < 0 else z1 + 0.015
+    cylinder(mesh, steel, (x0 + width / 2, height + LEAD / 2, nose), 'z', 0.022, 0.018, sides=8,
              uv_scale=0.3, caps=steel)
+
+
+def row_entry(mesh, x0, height, end=-1):
+    """The turn a laid run makes to reach the edge a row is wired on.
+
+    A run of cable arrives down the middle of the block, because that is where a laid run sits, and a
+    fixed row's leads are out at its edge.  Left to themselves the two stop a third of a block apart and
+    the plant reads as a cable pointing at a panel rather than plugged into one.  So the row grows the
+    turn itself: along the boundary at ground level to the corner the lead is on, and up to it if the lead
+    is up on the glass.
+
+    Drawn only where a run has actually been laid, and it is why the two ends are separate groups: a row
+    with copper laid to one end and a row behind it on the other must show a turn at one end and nothing
+    at all at the other.
+
+    The run along the boundary is authored end-on and turned a quarter, the same trick the machines' cable
+    entries use: this file maps a face's texture along the box's own x and z, so a length *written* along x
+    comes out with its conductors running across it instead of along it.
+    """
+    name = 'harness_entry_north' if end < 0 else 'harness_entry_south'
+    z0, z1 = (-0.50, -EDGE) if end < 0 else (EDGE, 0.50)
+    lead(mesh, name, (z0, 0.0, -x0), (z1, LEAD, LEAD), rot=((0.0, 0.0, 0.0), 'y', 270.0))
+    if height > 0.0:
+        # the elbow up to a lead lying on the glass, which is only a table: on a rack the lead is already
+        # on the ground and the turn is flat
+        lead(mesh, name, (x0, 0.0, z0), (x0 + LEAD, height, z1))
 
 
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None):
@@ -429,16 +476,25 @@ def flat_table():
     box(mesh, frame, (-0.46, 0.035, -0.40), (-0.40, 0.075, 0.40), uv_scale=0.4)
     box(mesh, frame, (0.40, 0.035, -0.40), (0.46, 0.075, 0.40), uv_scale=0.4)
 
-    # two modules with a gap between them, which is where a real table's rails run
-    clad_box(mesh, 'modules', (-0.46, 0.075, -0.46), (-0.02, 0.11, 0.46), LAMINATE)
-    clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (0.46, 0.11, 0.46), LAMINATE)
+    # two modules with a gap between them, which is where a real table's rails run.  They stop at EDGE
+    # rather than at the frame's own line, and that is the channel the leads lie in: a lead *on* the glass
+    # stands a pixel proud of it, and a lead flush with the glass with the laminate still under it would
+    # have its top face on the same plane as the cells - two coplanar faces, which flicker
+    glass = 0.11
+    clad_box(mesh, 'modules', (-EDGE, 0.075, -0.46), (-0.02, glass, 0.46), LAMINATE)
+    clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (EDGE, glass, 0.46), LAMINATE)
 
     # The harness: a short tail out of the corner and a socket on the far edge, and that is all.  A table's
     # whole footprint is glass, so there is no edge to run a lead along - the last version ran one the
     # length of the panel and it crossed the cells, which is a cable shading the thing it is wired to.
-    glass = 0.11
-    row_lead(mesh, 0.36, glass, start=0.38)
-    row_socket(mesh, 0.36, glass)
+    #
+    # Let into the channel rather than laid on top: the lead's own top face is the glass's, which is what
+    # a table's leads look like - clipped into the frame under the module lip, not draped over the cells.
+    row_lead(mesh, EDGE, glass - LEAD, start=0.38)
+    row_socket(mesh, EDGE, glass - LEAD)
+    for end in (-1, 1):
+        row_entry(mesh, EDGE, glass - LEAD, end=end)
+
     return mesh
 
 
@@ -504,8 +560,14 @@ def tilted_rack():
     # The harness: the same pair as a table's, on the ground rather than on the modules.  A rack stands off
     # the ground on legs, so the run crosses to the next row underneath it - and that is not tidiness, a
     # cable lying across a cell is a cell out of the string.
-    row_lead(mesh, 0.36, 0.0)
-    row_socket(mesh, 0.36, 0.0)
+    #
+    # Out at the block's edge rather than a third of the way in, which is where the legs are: the run used
+    # to pass straight through both of the front posts.
+    row_lead(mesh, EDGE, 0.0)
+    row_socket(mesh, EDGE, 0.0)
+    for end in (-1, 1):
+        row_entry(mesh, EDGE, 0.0, end=end)
+
     return mesh
 
 
@@ -567,24 +629,35 @@ def single_axis():
         for x0, x1 in ((-0.42, -0.36), (-0.16, -0.10), (0.10, 0.16), (0.36, 0.42)):
             box(mesh, rails, (x0, axis_y + 0.02, z0), (x1, axis_y + 0.045, z1), uv_scale=0.3)
 
-    # The harness, drawn for a row that turns.  Everything is inside the drive bay - the one span with no
-    # module over it, which is where a real independent row keeps its controller - and the interesting
-    # part is the drag loop: a tracked row's string cable has to take sixty degrees of rotation twice a
-    # day, so it is left slack in a loop under the tube rather than pulled tight, and a loop is the one
-    # detail that says at a glance this row moves.
-    # down the middle rather than along an edge, because a tracked row has no edge to run along: the
-    # modules above it turn through sixty degrees and a cable on the flank would be under them
-    row_lead(mesh, -LEAD / 2, 0.0)
-    row_socket(mesh, -LEAD / 2, 0.0)
-    clad_box(mesh, 'harness', (0.065, 0.05, -0.075), (0.235, 0.28, 0.075),
-             {'up': 'cabinet_top', '*': 'cabinet'})
-    lead(mesh, 'harness', (LEAD / 2, 0.0, -LEAD / 2), (0.21, LEAD, LEAD / 2))
-    # up the pier, then the slack loop under the tube
-    # each length runs half a lead into the next, so no two of them end on the same plane
-    lead(mesh, 'harness', (0.13, 0.24, -LEAD / 2), (0.13 + LEAD, axis_y - 0.10 + LEAD / 2, LEAD / 2), face='south')
-    lead(mesh, 'harness', (0.02, axis_y - 0.10, -LEAD / 2), (0.13 + LEAD / 2, axis_y - 0.10 + LEAD, LEAD / 2))
-    lead(mesh, 'harness', (0.02, axis_y - 0.10 + LEAD / 2, -LEAD / 2), (0.02 + LEAD, axis_y - 0.04, LEAD / 2), face='south')
+    row_harness(mesh)
     return mesh
+
+
+def row_harness(mesh):
+    """A tracked row's harness: a run along the ground down the middle, and nothing else.
+
+    Down the middle rather than along an edge because a tracked row has no edge to run along - the modules
+    above it turn through sixty degrees and a cable on the flank would spend half the day underneath them.
+    Which puts it on the block's own axis, exactly where a laid run sits, so a run of cable meets it head
+    on with nothing to turn and no entry to draw.
+
+    It ran up the pier to a box and round a drag loop before this, which is what a real tracker carries and
+    what a real tracker carries is not the same as what reads well at a block to ten metres: at that scale
+    a loop of slack is a knot of cable sitting where the row's one uncluttered span is.  The run alone.
+
+    A plug at each end, and only one of them is ever drawn: whether the row is cabled decides which.  A
+    cabled row runs from boundary to boundary and needs no plug; an uncabled row next to a cabled one shows
+    the plug at that end and nothing more, which is the piece that makes the pair read as joined.
+
+    The one place the row's own pair is drawn at a *laid* run's full two pixels rather than the one a
+    panel's leads get, and being collinear is the reason: a laid run continues straight into this one, so
+    the two are seen end to end and a run that halves in width where the block boundary happens to be
+    reads as a mistake.  Where a table or a rack is wired the join is a right angle into the middle of the
+    run instead, which reads as what it is - a lead tapped off it.
+    """
+    lead(mesh, 'harness', (-LAID / 2, 0.0, -0.50), (LAID / 2, LEAD, 0.50))
+    for end, side in ((-1, 'north'), (1, 'south')):
+        row_socket(mesh, -LAID / 2, 0.0, name='harness_plug_%s' % side, end=end, width=LAID)
 
 
 # ------------------------------------------------------ dual-axis pedestal
@@ -617,8 +690,11 @@ def dual_axis():
     pivot_y = top + 0.1975
 
     pedestal = mesh.add_object('pedestal', 'steel')
-    box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.06, 0.20), uv_scale=0.5)
-    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.03, 0.0), 'y', 0.085, top / 2.0 - 0.03, uv_scale=0.4,
+    # the base plate at the same 0.05 as a tracker's pier, and it is the harness that decides that: the
+    # run crosses the plate at ground level, and at 0.06 the plate stood a hundredth *under* the cable's
+    # own top - close enough that the run read as broken where it crossed rather than as laid over it
+    box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.05, 0.20), uv_scale=0.5)
+    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.025, 0.0), 'y', 0.085, top / 2.0 - 0.025, uv_scale=0.4,
              caps=mesh.faces('pedestal', 'steel_end'))
 
     pivot(mesh, 'azimuth', (0.0, top + 0.05, 0.0))
@@ -649,25 +725,11 @@ def dual_axis():
         clad_box(mesh, 'rotate_elevation_modules', (0.02, pivot_y - 0.0025, z0), (0.44, pivot_y + 0.0275, z1), LAMINATE)
 
 
-    # The harness, drawn for a frame that turns about two axes rather than one.  A single loop is enough
-    # slack for sixty degrees of roll; a pedestal that also spins needs a service coil, which is a couple
-    # of turns left round the column so the cable can wind and unwind without being dragged.  Two turns
-    # is what a real azimuth drive is given, and they are stacked rather than side by side because that
-    # is how they sit when the frame is at rest.
-    # down the middle, the same as a single-axis row and for the same reason
-    row_lead(mesh, -LEAD / 2, 0.0)
-    row_socket(mesh, -LEAD / 2, 0.0)
-    clad_box(mesh, 'harness', (0.065, 0.05, -0.075), (0.235, 0.30, 0.075),
-             {'up': 'cabinet_top', '*': 'cabinet'})
-    lead(mesh, 'harness', (LEAD / 2, 0.0, -LEAD / 2), (0.21, LEAD, LEAD / 2))
-    # low round the column rather than high up it: the elevation frame sweeps a sphere about its axis at
-    # 0.7475 and reaches down to about 0.30, so anything above that line is something the frame grinds
-    # through - which check_pv_clearance.py said, at the first attempt, in so many words
-    for y in (0.105, 0.105 + 2 * LEAD):
-        for z in (-0.085, 0.085):
-            lead(mesh, 'harness', (-0.085, y, z - LEAD / 2), (0.085, y + LEAD, z + LEAD / 2))
-        for x in (-0.085, 0.085):
-            lead(mesh, 'harness', (x - LEAD / 2, y, -0.085), (x + LEAD / 2, y + LEAD, 0.085), face='east')
+    # The harness: the run along the ground and nothing else, the same as a single-axis row.  It had a
+    # service coil round the column - a couple of turns left slack so a pedestal that spins can wind and
+    # unwind - and that is what a real azimuth drive is given, but at this scale it read as a knot of cable
+    # round the post rather than as slack.
+    row_harness(mesh)
     return mesh
 
 

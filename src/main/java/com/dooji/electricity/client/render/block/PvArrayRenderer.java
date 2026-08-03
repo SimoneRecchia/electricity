@@ -93,13 +93,13 @@ public class PvArrayRenderer extends ObjRendererBase {
 	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
 			int packedLight, PvArrayBlockEntity array) {
 		boolean harnessed = array.harnessed();
-		boolean fed = fedFromBehind(array);
+		Ends ends = ends(array);
 
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
 			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE,
-					groupName -> drawn(groupName, harnessed, fed));
+					groupName -> drawn(groupName, harnessed, ends));
 			return;
 		}
 
@@ -112,7 +112,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 			poseSingleAxis(model, poseStack, poses, rotation);
 		}
 
-		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, fed));
+		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, ends));
 
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
 	}
@@ -130,6 +130,38 @@ public class PvArrayRenderer extends ObjRendererBase {
 	}
 
 	/**
+	 * What is at each end of the row's own axis.
+	 *
+	 * {@code fed} is anything at all - the row alongside with its leads in, or copper laid up to that
+	 * edge. {@code cable} is only the copper, because the two want different things drawn: a row next
+	 * door meets this one edge to edge and needs a plug, while a run of cable arrives down the middle of
+	 * the block and needs the turn out to the edge the leads are on.
+	 *
+	 * North and south are the model's own ends, not the world's. The model is authored with its input at
+	 * the north end and the base rotation maps that onto the block's facing, so north here means the
+	 * facing and south means the way the leads leave.
+	 */
+	private record Ends(boolean fedNorth, boolean fedSouth, boolean cableNorth, boolean cableSouth) {
+	}
+
+	private static Ends ends(PvArrayBlockEntity array) {
+		if (array.getLevel() == null) return new Ends(false, false, false, false);
+
+		Direction north = drawnFacing(array.getBlockState());
+		Direction south = north.getOpposite();
+		return new Ends(fedFrom(array, north), fedFrom(array, south),
+				cableArrives(array.getLevel(), array.getBlockPos(), north),
+				cableArrives(array.getLevel(), array.getBlockPos(), south));
+	}
+
+	private static boolean fedFrom(PvArrayBlockEntity array, Direction direction) {
+		BlockPos beside = array.getBlockPos().relative(direction);
+		if (PvArrayBlock.harnessed(array.getLevel().getBlockState(beside))) return true;
+
+		return cableArrives(array.getLevel(), array.getBlockPos(), direction);
+	}
+
+	/**
 	 * Whether one group of an array's model is drawn.
 	 *
 	 * Nothing of a row's own harness until a reel of cable has been worked in - so plugging an array in is
@@ -139,29 +171,26 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * than to this row, so it appears as soon as the row behind has an output pointing at it whether or not
 	 * this one has been cabled yet. Which is the right way round - a socket is where a cable arrives, and a
 	 * cable arriving does not wait for the thing it is arriving at.
+	 *
+	 * A tracked row's plugs are the other way about: its run goes the whole length of the block, so a
+	 * cabled row needs no plug at either end and an uncabled one shows the plug at whichever end has
+	 * something at it. Which is a rule the fixed mountings do not need and a tracker cannot do without -
+	 * placement forces a tracker's tube north-south whichever way the player was facing, so half the rows
+	 * in a field are chained the other way round, and a plug only ever at the north end is at the wrong end
+	 * of half of them.
+	 *
+	 * The entries are drawn for laid copper only. A row that is fed by the row next door has nothing to
+	 * turn: the two meet edge to edge already.
 	 */
-	private static boolean drawn(String groupName, boolean harnessed, boolean fed) {
+	private static boolean drawn(String groupName, boolean harnessed, Ends ends) {
 		if (!isHarness(groupName)) return true;
-		if (groupName.startsWith("harness_input")) return fed;
+		if (groupName.startsWith("harness_plug_north")) return !harnessed && ends.fedNorth();
+		if (groupName.startsWith("harness_plug_south")) return !harnessed && ends.fedSouth();
+		if (groupName.startsWith("harness_input")) return ends.fedNorth();
+		if (groupName.startsWith("harness_entry_north")) return harnessed && ends.cableNorth();
+		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.cableSouth();
 
 		return harnessed;
-	}
-
-	/**
-	 * Whether anything is feeding this row's input.
-	 *
-	 * The row behind it, or a run of cable laid to that side. Behind means towards the block's own facing,
-	 * because the model is authored with its input at the north end and the facing is what north is turned
-	 * into - so the row in front of this one, whose output points back at it, is the one at that offset.
-	 */
-	private static boolean fedFromBehind(PvArrayBlockEntity array) {
-		if (array.getLevel() == null) return false;
-
-		Direction facing = drawnFacing(array.getBlockState());
-		BlockPos behind = array.getBlockPos().relative(facing);
-		if (PvArrayBlock.harnessed(array.getLevel().getBlockState(behind))) return true;
-
-		return cableArrives(array.getLevel(), array.getBlockPos(), facing);
 	}
 
 	/**
