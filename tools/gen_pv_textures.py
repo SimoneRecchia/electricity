@@ -20,6 +20,7 @@ classes: the wells cut into the background are at the coordinates the Java const
 name, and if one moves the other has to.
 """
 
+import math
 import os
 import struct
 import zlib
@@ -992,6 +993,124 @@ def item_met():
     return c
 
 
+# A turbine's own colours: the paint really is off-white, and it is off-white for a reason - a machine
+# that has to be seen by aircraft and not seen by everybody else.  RAL 9010 with grey in the shadow.
+#
+# The shadow tone is darker than the other palettes here on purpose.  These sprites are nearly white on
+# an inventory slot that is mid grey, so a blade whose shadow is only a little darker than its body has
+# no edge at all and reads as a whisker.
+PAINT = ((104, 110, 120, 255), (200, 207, 215, 255), (243, 246, 250, 255))
+
+
+def blade(c, hub, direction, length, root, palette):
+    """One blade: a taper from root to tip, with the light along its leading edge.
+
+    Drawn as a run of discs rather than a stroke, because a blade is not a bar - it is nearly three
+    pixels at the root and one at the tip, and that taper is most of what says *blade* at this size.
+    Three passes, the same order everything else here uses: shadow low and right, body, then a thinner
+    highlight up and left.
+    """
+    dark, mid, light = palette
+    dx, dy = direction
+    steps = max(6, int(length * 4))
+    # the shadow pass reaches a pixel past the body rather than sitting under it, which is what gives a
+    # blade an edge against a light background instead of fading into it
+    for offset, colour, thinner in ((0.0, dark, -0.9), (0.0, mid, 0.0), (-0.6, light, 0.9)):
+        for i in range(steps + 1):
+            along = i / steps
+            radius = root * (1.0 - 0.66 * along) / 2.0 - thinner
+            if radius < 0.35:
+                continue
+
+            c.disc(hub[0] + dx * length * along + offset, hub[1] + dy * length * along + offset,
+                   radius, colour)
+
+
+def item_turbine(rotor, length, height, hub, root, vane=False, cooler=True):
+    """A machine's own nacelle and rotor, and no tower.
+
+    The tower is a separate item with a separate sprite, so a turbine drawn with one would be two
+    pictures of the same thing in one hotbar.  What is left is the part that differs between machines,
+    and the six of them differ the way the real ones do: a small-wind machine is a bare nacelle with a
+    tail vane behind it, and the C line is a boxed generator with a cooler on the roof.
+
+    Not to scale, and it cannot be: a C130's blade is sixty-five metres against a twelve-metre nacelle,
+    so a rotor drawn to scale beside a legible nacelle would be four times the sprite.  What *is* kept
+    is the ordering - a wider rotor really is drawn wider - and the one relation that tells the
+    catalogue's own story, which is that the C90 and the C112 share a nacelle because they share a
+    generator, and only the blades differ.
+    """
+    c = Canvas(32, 32)
+    dark, mid, light = PAINT
+    # A three-blade rotor reaches a full radius above its hub and half a radius below it, so a hub at the
+    # middle of the canvas leaves the bottom quarter empty.  Dropping it by a quarter of the radius puts
+    # the drawing in the middle of the frame, which is where an item sprite has to sit.
+    centre = (16.0, 15.0 + 0.22 * rotor)
+
+    # the nacelle first, because the rotor turns in front of it
+    x0 = int(centre[0]) + 1
+    x1 = int(centre[0] + 1 + length)
+    top = int(centre[1] - height / 2.0)
+    bottom = int(centre[1] + height / 2.0)
+    c.rect(x0, top, x1, bottom, mid)
+    c.rect(x0, top, x1, top + 1, light)
+    c.rect(x0, bottom - 1, x1, bottom, dark)
+    c.rect(x1 - 1, top, x1, bottom, dark)
+    # the shell closes over the yaw deck at the back, so the corners come off rather than the whole end
+    # being rounded - a disc there read as a ball stuck on the back of the machine
+    for y in (top, bottom - 1):
+        c.set(x1 - 1, y, (0, 0, 0, 0))
+        c.set(x1 - 2, y, dark)
+
+    if cooler:
+        # the radiator, and it is on the roof of the rear half where a real one is - forward of that is
+        # gearbox and main bearing, with nothing to cool
+        c.rect(x0 + 4, top - 2, x1 - 2, top, shade(mid, -34))
+        c.rect(x0 + 4, top - 2, x1 - 2, top - 1, shade(mid, -8))
+        c.rect(x0 + 4, top - 2, x0 + 5, top, dark)
+
+    if vane:
+        # a tail boom and fin: how a small machine yaws, having no motor anywhere on it
+        boom = int(centre[1])
+        c.rect(x1 - 1, boom - 1, x1 + 4, boom + 1, mid)
+        c.rect(x1 - 1, boom - 1, x1 + 4, boom, light)
+        for i in range(5):
+            half = 1.6 + i * 1.1
+            x = x1 + 3 + i
+            c.rect(x, int(boom - half), x + 1, int(boom + half + 1), mid)
+            c.set(x, int(boom - half), light)
+
+    # the blades: one straight up and two down at a hundred and twenty degrees off it, which is where a
+    # three-blade rotor's own geometry puts them.  Turned so the sprite is filled rather than so the
+    # picture is tidy - the down-right blade crosses the nacelle, and a rotor really does pass in front
+    for angle in (-90.0, 30.0, 150.0):
+        radians = math.radians(angle)
+        blade(c, centre, (math.cos(radians), math.sin(radians)), rotor, root, PAINT)
+
+    # the hub over the blade roots, so they meet inside it rather than crossing in the open. A spinner
+    # cone, which is what is actually there: bright where it faces the light, dark round the rim
+    c.disc(centre[0], centre[1], hub, dark)
+    c.disc(centre[0] - 0.3, centre[1] - 0.4, hub - 0.6, mid)
+    c.disc(centre[0] - 0.9, centre[1] - 1.0, hub - 1.4, light)
+    return c
+
+
+# One entry per machine in TurbineCatalog, keyed by the item's registry name - the C130 keeps the
+# original {@code wind_turbine} name, which is why that one is not called c130_40.
+#
+# The figures are the drawing's, not the datasheet's, but they are ordered by the datasheet's: rotor
+# grows with rotor diameter, nacelle with nameplate, and the blades of a machine with a high rotor to
+# nameplate ratio come out slimmer, which is what a low-wind rotor really looks like.
+TURBINES = {
+    'sw_10': dict(rotor=10.5, length=5.0, height=4.0, hub=1.8, root=2.8, vane=True, cooler=False),
+    'c52_085': dict(rotor=13.0, length=8.0, height=6.0, hub=2.3, root=4.0),
+    'c80_20': dict(rotor=13.5, length=10.0, height=7.0, hub=2.5, root=3.6),
+    'c90_30': dict(rotor=14.0, length=11.0, height=8.0, hub=2.7, root=3.5),
+    'c112_30': dict(rotor=15.0, length=11.0, height=8.0, hub=2.7, root=2.9),
+    'wind_turbine': dict(rotor=15.0, length=12.0, height=9.0, hub=2.9, root=3.2),
+}
+
+
 # ------------------------------------------------------------- panel layouts
 #
 # These are the contract with the screen classes.  Each entry is the panel's size and
@@ -1090,6 +1209,10 @@ ITEM_TEXTURES = {
     'pv_inverter': item_inverter,
     'met_station': item_met,
 }
+
+# one per machine, built from the same drawing so a line of turbines in the inventory reads as a line
+# of one maker's products
+ITEM_TEXTURES.update({name: (lambda s=spec: item_turbine(**s)) for name, spec in TURBINES.items()})
 
 
 def main():

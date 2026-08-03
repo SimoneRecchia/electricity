@@ -1,6 +1,7 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.main.Electricity;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,9 +23,29 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class ElectricCabinBlock extends Block implements EntityBlock {
+public class ElectricCabinBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 	private static final VoxelShape SHAPE = Shapes.block();
+
+	/**
+	 * The rest of the cabin, measured off cab.obj.
+	 *
+	 * The body is 1.02 wide, 2.67 tall and 2.21 deep, so it stands in nine cells and only one of them
+	 * was solid. Three of the eight are the roof, which reaches 0.627 into the cell above - a ten pixel
+	 * slab, which is what {@link MachineShellBlock.Fill#SLAB_DOWN} is - and the four beside it reach
+	 * 0.657 in, which is the same slab stood on its side.
+	 *
+	 * Authored facing north like the model, and turned with it.
+	 */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, -1, MachineShellBlock.Fill.SLAB_SOUTH),
+			new Cell(0, 0, 1, MachineShellBlock.Fill.SLAB_NORTH),
+			new Cell(0, 1, 0, MachineShellBlock.Fill.FULL),
+			new Cell(0, 1, -1, MachineShellBlock.Fill.SLAB_SOUTH),
+			new Cell(0, 1, 1, MachineShellBlock.Fill.SLAB_NORTH),
+			new Cell(0, 2, 0, MachineShellBlock.Fill.SLAB_DOWN),
+			new Cell(0, 2, -1, MachineShellBlock.Fill.SLAB_DOWN),
+			new Cell(0, 2, 1, MachineShellBlock.Fill.SLAB_DOWN));
 
 	public ElectricCabinBlock(Properties properties) {
 		super(properties);
@@ -71,8 +92,25 @@ public class ElectricCabinBlock extends Block implements EntityBlock {
 	}
 
 	@Override
+	public List<Cell> shellCells() {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+		super.onPlace(state, level, pos, oldState, movedByPiston);
+		MachineShell.place(level, pos, state);
+	}
+
+	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock())) {
+			MachineShell.clear(level, pos, state);
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel) {
 				BlockEntity blockEntity = level.getBlockEntity(pos);
 				if (blockEntity instanceof ElectricCabinBlockEntity cabin) {

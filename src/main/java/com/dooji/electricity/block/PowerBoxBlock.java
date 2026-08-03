@@ -1,6 +1,7 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.main.Electricity;
+import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,12 +20,26 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class PowerBoxBlock extends Block implements EntityBlock {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-	private static final VoxelShape SHAPE = Shapes.block();
+	/**
+	 * The cabinet, where it actually is.
+	 *
+	 * This was a whole cube, and the box is not: measured off power_box.obj it is 0.29 across, 0.75 tall
+	 * and 0.51 deep, and it hangs against one side of the block rather than sitting in the middle of it.
+	 * So three quarters of the cube a player could not walk through was empty air, and the quarter that
+	 * is the box was in a different place depending on which way the thing was turned.
+	 *
+	 * One entry per facing rather than one shape rotated at runtime, because the four are known at
+	 * compile time and the rotation is the same quarter turns the renderer applies to the model.
+	 */
+	private static final Map<Direction, VoxelShape> SHAPES = Map.of(
+			Direction.NORTH, Block.box(0.0, 0.0, 3.9, 4.0, 10.3, 12.2),
+			Direction.SOUTH, Block.box(12.0, 0.0, 3.8, 16.0, 10.3, 12.1),
+			Direction.WEST, Block.box(3.9, 0.0, 12.0, 12.2, 10.3, 16.0),
+			Direction.EAST, Block.box(3.8, 0.0, 0.0, 12.1, 10.3, 4.0));
 
 	public PowerBoxBlock(Properties properties) {
 		super(properties);
@@ -43,7 +58,7 @@ public class PowerBoxBlock extends Block implements EntityBlock {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return SHAPES.get(state.getValue(FACING));
 	}
 
 	@Override

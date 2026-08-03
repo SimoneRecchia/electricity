@@ -11,6 +11,7 @@ import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ElectricLampBlock;
 import com.dooji.electricity.block.ElectricLampBlockEntity;
+import com.dooji.electricity.block.MachineShellBlock;
 import com.dooji.electricity.block.MetStationBlock;
 import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
@@ -67,6 +68,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.common.MinecraftForge;
@@ -111,6 +113,18 @@ public class Electricity {
 	public static final RegistryObject<Block> WIND_TURBINE_BLOCK = BLOCKS.register("wind_turbine", () -> new WindTurbineBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion(), TurbineCatalog.C130_40));
 	public static final RegistryObject<Block> ELECTRIC_LAMP_BLOCK = BLOCKS.register("electric_lamp", () -> new ElectricLampBlock(Block.Properties.of().strength(0.3f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Block> WORKBENCH_BLOCK = BLOCKS.register("workbench", () -> new WorkbenchBlock(Block.Properties.of().strength(2.0f).requiresCorrectToolForDrops().noOcclusion()));
+
+	/**
+	 * The rest of a machine that is bigger than its own block: invisible, solid, and never an item.
+	 *
+	 * Same strength as the machines it stands for, so mining a cabin's roof takes as long as mining its
+	 * base - and mining any of it mines the machine. No loot table, because it never drops: the machine
+	 * it belongs to drops instead. Pistons are refused, since a shell pushed away from its machine would
+	 * be a hole in the middle of one.
+	 */
+	public static final RegistryObject<Block> MACHINE_SHELL_BLOCK = BLOCKS.register("machine_shell",
+			() -> new MachineShellBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops()
+					.noOcclusion().noLootTable().pushReaction(PushReaction.BLOCK)));
 
 	public static final RegistryObject<Item> WIRE_ITEM = ITEMS.register("wire", ItemWire::new);
 	public static final RegistryObject<Item> POWER_WRENCH_ITEM = ITEMS.register("power_wrench", PowerWrenchItem::new);
