@@ -65,3 +65,34 @@ six are the ones small enough that nobody can tell: a cable gland, a switch boss
 | `check_hitboxes.py` | every cell a machine's body fills has something solid in it |
 | `check_gui_fits.py` | no two lines of a panel overlap, and no line is behind a widget |
 | `preview_models.py` | draws the geometry from three angles, for the half no rule can decide |
+
+## Rendering with the game itself
+
+`tools/preview_models.py` draws flat-coloured geometry, which answers where things are and not what they
+look like. The only thing that can answer the second question is the game, and the reason is worth stating
+because it decides what is possible: **almost nothing in this mod is a vanilla JSON block model.** An
+array is an OBJ drawn by Java with a matrix per group, groups that appear only once a reel of cable has
+been worked in, a tracker angle computed from the sun, and a per-product scale. Every off-the-shelf
+renderer — `minecraft-render`, deepslate, Blockbench and its MCP server, the browser viewers — reads
+vanilla JSON models. None of them runs that Java, so none of them draws the object a player sees.
+
+So the mod renders itself. `PreviewStage` is a client-only dev tool that builds a stage, steps the camera
+round it and calls the same screenshot the F2 key does:
+
+```
+/preview electricity:pv_tilt_530 pair
+```
+
+`pair` puts a second machine behind the subject and a run of cable in front of it, which is where half
+the questions live. Five views come out per machine — front, side, three-quarter, plan, and the eye level
+of somebody walking past, which is where anything floating or sunk shows up — into `run/screenshots/`.
+
+For a whole catalogue unattended, which is what makes it usable from a terminal:
+
+```bash
+JAVA_TOOL_OPTIONS="-Delectricity.preview=all" ./gradlew runClient
+```
+
+Two things it needs: a world with cheats on (it works by sending commands), and a display. It is a
+*client* tool, so a machine whose screen is asleep cannot run it — GLFW has no monitor to open a window
+on, and the game will not start at all.
