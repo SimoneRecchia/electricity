@@ -4,7 +4,6 @@ import com.dooji.electricity.api.power.PvModuleSpec;
 import com.dooji.electricity.api.power.SensorSpec;
 import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.SensorCatalog;
 import com.dooji.electricity.main.weather.Atmosphere;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;

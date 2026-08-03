@@ -77,6 +77,14 @@ public class UtilityPoleRenderer extends ObjRendererBase {
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), insulatorBoxes);
 	}
 
+	/**
+	 * The one mapping in the mod that is not a quarter turn of an authored facing.
+	 *
+	 * Every other renderer here now calls {@link ObjRendererBase#rotationFrom}, which takes the facing the
+	 * geometry was modelled at and works the rest out. This one cannot: north and south come out swapped
+	 * against that arithmetic, so the pole's model is mirrored rather than merely turned. Left as a switch
+	 * and said out loud, because the alternative is a shared helper with an exception in it.
+	 */
 	private static float rotationForPole(Direction facing) {
 		return switch (facing) {
 			case EAST -> 180.0f;

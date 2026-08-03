@@ -110,7 +110,7 @@ public abstract class ObjRendererBase {
 	protected static Set<String> cableEntries(BlockGetter level, BlockPos pos, Direction facing, String prefix) {
 		Set<String> live = new HashSet<>();
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
-			if (!arrivesFrom(level, pos, direction)) continue;
+			if (!cableArrives(level, pos, direction)) continue;
 
 			int offset = (2 + direction.get2DDataValue() - facing.get2DDataValue() + 4) % 4;
 			live.add(prefix + "_" + Direction.from2DDataValue(offset).getName());
@@ -126,10 +126,6 @@ public abstract class ObjRendererBase {
 	 * up, and a step down. The cable itself is asked, so this cannot drift from what the plant counts.
 	 */
 	protected static boolean cableArrives(BlockGetter level, BlockPos pos, Direction direction) {
-		return arrivesFrom(level, pos, direction);
-	}
-
-	private static boolean arrivesFrom(BlockGetter level, BlockPos pos, Direction direction) {
 		BlockPos beside = pos.relative(direction);
 		for (BlockPos candidate : new BlockPos[]{beside, beside.above(), beside.below()}) {
 			BlockState state = level.getBlockState(candidate);
@@ -168,6 +164,22 @@ public abstract class ObjRendererBase {
 	 * The fallback keeps a model with a renamed marker visibly wrong rather than invisible, which is the
 	 * easier failure to notice.
 	 */
+	/**
+	 * How far to turn a model authored facing one way so that it faces another.
+	 *
+	 * Every renderer here had its own copy of this as a four-case switch, and seven of the eight were the
+	 * same three lines with the cases in a different order - which is a thing that reads as deliberate and
+	 * is not. What actually differs between them is one fact: which way the geometry was authored facing.
+	 * The mod's own models face north, because that is the default facing and the physics reads a plane's
+	 * bearing off it; the inherited ones face whichever way they happened to be modelled.
+	 *
+	 * So that fact is now the argument, and the arithmetic is here once. Quarter turns, anticlockwise seen
+	 * from above, which is what {@code Axis.YP} does with a positive angle.
+	 */
+	protected static float rotationFrom(Direction authored, Direction facing) {
+		return ((authored.get2DDataValue() - facing.get2DDataValue() + 4) % 4) * 90.0f;
+	}
+
 	protected static Vec3 pivot(ObjModel model, String name, Vec3 fallback) {
 		return groupCentre(model, "pivot_" + name, fallback);
 	}

@@ -185,11 +185,6 @@ public class PvInverterRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForFacing(Direction facing) {
-		return switch (facing) {
-			case WEST -> 90.0f;
-			case SOUTH -> 180.0f;
-			case EAST -> 270.0f;
-			default -> 0.0f;
-		};
+		return rotationFrom(Direction.NORTH, facing);
 	}
 }

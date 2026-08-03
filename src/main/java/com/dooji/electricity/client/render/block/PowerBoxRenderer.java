@@ -86,12 +86,7 @@ public class PowerBoxRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForPowerBox(Direction facing) {
-		return switch (facing) {
-			case EAST -> 0.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 180.0f;
-			default -> 90.0f;
-		};
+		return rotationFrom(Direction.EAST, facing);
 	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {

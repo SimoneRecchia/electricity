@@ -17,7 +17,6 @@ import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -305,11 +304,6 @@ public class PvArrayRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForFacing(Direction facing) {
-		return switch (facing) {
-			case WEST -> 90.0f;
-			case SOUTH -> 180.0f;
-			case EAST -> 270.0f;
-			default -> 0.0f;
-		};
+		return rotationFrom(Direction.NORTH, facing);
 	}
 }

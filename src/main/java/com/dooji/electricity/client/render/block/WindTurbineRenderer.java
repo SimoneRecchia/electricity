@@ -312,12 +312,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForTurbine(Direction facing) {
-		return switch (facing) {
-			case EAST -> 90.0f;
-			case SOUTH -> 0.0f;
-			case WEST -> 270.0f;
-			default -> 180.0f;
-		};
+		return rotationFrom(Direction.SOUTH, facing);
 	}
 
 	private static float smoothYaw(BlockPos pos, float target, float base) {
