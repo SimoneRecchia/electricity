@@ -170,6 +170,9 @@ RECIPES = [
     #
     # Three laminates over a mounting with connectors under it, every time. What changes between them is
     # the mounting and nothing else - which is exactly what changes between the real ones.
+    # the FT-415 keeps the solar_panel registry name from before the catalogue existed, and it is the
+    # entry-level table: the same three laminates on a rack, without the ballast trays the 430 carries
+    ('solar_panel', 1, WORKBENCH, ['LLL', ' T ', 'jSj']),
     ('pv_flat_430', 1, WORKBENCH, ['LLL', 'PTP', 'jSj']),
     ('pv_tilt_530', 1, WORKBENCH, ['LLL', 'STS', 'jSj']),
     # the 580 W module is the large-format one, so it is the same rack with a fourth laminate of silicon

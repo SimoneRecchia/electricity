@@ -1,18 +1,25 @@
 {
   "type": "electricity:workbench",
   "pattern": [
-    "GGG",
-    "CRC",
-    "MMM"
+    "LLL",
+    " T ",
+    "jSj"
   ],
   "key": {
-    "G": { "item": "minecraft:glass_pane" },
-    "C": { "item": "electricity:circuit_board" },
-    "R": { "item": "minecraft:redstone_block" },
-    "M": { "item": "electricity:metal_casing" }
+    "L": {
+      "item": "electricity:pv_laminate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "T": {
+      "item": "electricity:mounting_rack"
+    },
+    "j": {
+      "item": "electricity:mc4_connector"
+    }
   },
   "result": {
-    "item": "electricity:solar_panel",
-    "count": 2
+    "item": "electricity:solar_panel"
   }
 }
