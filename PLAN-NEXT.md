@@ -17,26 +17,35 @@ One drawing parameterised, and the parameters carry the catalogue's own story: t
 nameplate, the blades slim as the rotor-to-nameplate ratio rises, the C90 and the C112 share a nacelle
 because they share a generator, and the small-wind machine has a tail vane because it has no yaw motor.
 
-## 2. A hitbox for every block that was missing one — done
+## 2. A hitbox for every block that was missing one — done, then done properly
 
 The electric cabin is drawn 1.0 by 2.7 by 2.2 blocks and collided with one cube; the utility pole is six
 blocks tall and did the same. An oversized `VoxelShape` does not fix that and it is worth knowing why:
 collisions are gathered from the block positions overlapping an entity's own box grown by one, so a shape
 three blocks tall hanging off a block three below a player is never consulted.
 
-So `MachineShellBlock` — invisible, solid, never an item, and mining any of it mines the machine. It finds
-its machine by searching rather than remembering, so a shell can never point at something that has gone.
-The cells are measured off the models: the cabin's roof reaches 0.627 into the cell above and its ends
-0.657 into the cells beside it, which is the ten-pixel slab; the pole's mast is 0.494 across, which is the
-post. The power box's shape was a whole cube round a cabinet that hangs on one side of its block, and is
-now four shapes, one per facing.
+So `MachineShellBlock` — invisible, solid, never an item, and mining, picking or using any of it reaches
+the machine instead. The first version of it filled cells with whole cubes, then with slabs rounded to
+eight pixels, and both are wrong the same way: the player collides with air. **The cells now carry the
+exact geometry**, cut out of the OBJ by `tools/check_hitboxes.py --java` — the cabin's roof stops at 10.03
+pixels because that is where the steel stops, the cells beside its body are filled to 6.34 because that is
+how far the body reaches, and the pole's crossarms are three-pixel plates because that is what a crossarm
+is. Two thresholds decide what is worth keeping: a pixel inside the machine's own block, where a box is
+free, and two pixels to claim a cell from the player, who can no longer build in it.
 
-`tools/check_hitboxes.py` reads every model and every claim. Two rules rather than one, and the second is
-why it works: volume catches a cabin, and a mast fills a quarter of every cell it passes through, which is
-under any threshold worth having.
+A cell holds no shape of its own — it holds the way back to its machine, and asks. That is what lets the
+model stay the single authority, and it is what mends a world built with an older version: a cell that is
+standing but wrong is replaced, not only an empty one.
 
-Verified against a running server through `tools/rcon.py`: placement, removal, all four facings, and an
-orphaned shell removing itself.
+`tools/check_hitboxes.py` now compares both directions to a hundredth of a pixel — geometry that nothing
+collides with, and collision where the model draws nothing.
+
+Verified against a running server through `tools/rcon.py`: 22 cells holding exactly the right state,
+fourteen dropped probes landing on the model's own surfaces to six decimal places (the roof at 92.626875,
+the insulator on it at 93.0, nothing at all half a pixel past the eave), all four facings including the
+shapes turning inside their cells, a cell belonging to nothing mended within three seconds, an orphan
+removing itself, two machines built into each other not fighting over the cell between them, and a cell
+blocked by terrain left as terrain.
 
 ## 3. Texture and model audit — done
 

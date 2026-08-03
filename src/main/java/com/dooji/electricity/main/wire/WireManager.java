@@ -1,6 +1,7 @@
 package com.dooji.electricity.main.wire;
 
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
+import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
@@ -44,7 +45,8 @@ public class WireManager {
 		if (player == null) return InteractionResult.FAIL;
 
 		Level level = context.getLevel();
-		BlockPos clickedPos = context.getClickedPos();
+		// the same reading of the click the client made: a collision cell means the machine it belongs to
+		BlockPos clickedPos = MachineShell.hostOr(level, context.getClickedPos());
 
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 

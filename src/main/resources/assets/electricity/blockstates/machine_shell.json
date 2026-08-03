@@ -1,12 +1,5 @@
 {
-  "variants": {
-    "fill=full": { "model": "electricity:block/metal_particle" },
-    "fill=post": { "model": "electricity:block/metal_particle" },
-    "fill=slab_down": { "model": "electricity:block/metal_particle" },
-    "fill=slab_up": { "model": "electricity:block/metal_particle" },
-    "fill=slab_north": { "model": "electricity:block/metal_particle" },
-    "fill=slab_south": { "model": "electricity:block/metal_particle" },
-    "fill=slab_west": { "model": "electricity:block/metal_particle" },
-    "fill=slab_east": { "model": "electricity:block/metal_particle" }
-  }
+  "multipart": [
+    { "apply": { "model": "electricity:block/metal_particle" } }
+  ]
 }

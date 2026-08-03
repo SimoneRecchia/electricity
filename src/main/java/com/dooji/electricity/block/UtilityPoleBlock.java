@@ -25,34 +25,61 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 
 public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-	/**
-	 * The mast, rather than the block round it.
-	 *
-	 * A cube was both too big and in mostly the wrong place: the pole is 0.494 of a block across and six
-	 * blocks tall, so the block a player could not walk through was the one place the pole barely fills,
-	 * and the five above it - the whole of the pole - were air.
-	 */
-	private static final VoxelShape SHAPE = MachineShellBlock.Fill.POST.shape();
 
 	/**
-	 * The mast above the block it was planted in, one cell per block, measured off utility_pole.obj.
+	 * The whole pole as collision, cell by cell, cut from utility_pole.obj.
 	 *
-	 * The crossarms are deliberately not here. They are two bars a fifth of a block thick reaching four
-	 * blocks across at the top, and a cell of collision each would be an invisible floor in the sky four
-	 * blocks wide - so a player can walk under the arms, which is what a player does under a real one.
+	 * A cube was both too big and in mostly the wrong place: the mast is 0.494 of a block across and six
+	 * blocks tall, so the one block a player could not walk through was the place the pole barely fills,
+	 * and the five above it - the whole of the pole - were air.
+	 *
+	 * The mast is here as the 7.92 pixels it actually is, up to the 2.92 pixels of it that reach the
+	 * seventh block. So are the two crossarms, which are three pixels thick and reach four blocks across,
+	 * and the eight insulators standing on them, which are 2.2 across. That is a change of mind: the arms
+	 * were left out when a cell of collision meant a whole cell, because an invisible floor in the sky
+	 * four blocks wide is worse than no floor at all. A three-pixel plate where the plate is drawn is not
+	 * that - it is the arm, and a player can still walk under it.
+	 *
+	 * Written by {@code tools/check_hitboxes.py --java}. The model is symmetric about both of its
+	 * horizontal axes, which is the one thing that lets the renderer mirror it while the cells only turn.
 	 */
 	private static final List<Cell> CELLS = List.of(
-			new Cell(0, 1, 0, MachineShellBlock.Fill.POST),
-			new Cell(0, 2, 0, MachineShellBlock.Fill.POST),
-			new Cell(0, 3, 0, MachineShellBlock.Fill.POST),
-			new Cell(0, 4, 0, MachineShellBlock.Fill.POST),
-			new Cell(0, 5, 0, MachineShellBlock.Fill.POST));
+			new Cell(0, 0, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
+			new Cell(0, 1, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
+			new Cell(0, 2, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
+			new Cell(0, 3, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
+			new Cell(0, 4, 0, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
+					Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96))),
+			new Cell(0, 4, -1, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
+					Block.box(6.91, 14.48, 10.27, 9.09, 16.00, 12.45))),
+			new Cell(0, 4, 1, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
+					Block.box(6.91, 14.48, 3.55, 9.09, 16.00, 5.73))),
+			new Cell(0, 4, -2, Shapes.or(Block.box(3.10, 11.51, 6.62, 12.90, 14.51, 16.00),
+					Block.box(6.91, 14.48, 13.93, 9.09, 16.00, 16.00))),
+			new Cell(0, 4, 2, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 9.38),
+					Block.box(6.91, 14.48, 0.00, 9.09, 16.00, 2.07))),
+			new Cell(0, 5, 0, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
+					Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96))),
+			new Cell(0, 5, -1, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
+					Block.box(6.91, 0.00, 10.27, 9.09, 2.49, 12.45),
+					Block.box(6.91, 13.65, 3.83, 9.09, 16.00, 6.01),
+					Block.box(6.91, 13.65, 13.07, 9.09, 16.00, 15.25))),
+			new Cell(0, 5, 1, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
+					Block.box(6.91, 0.00, 3.55, 9.09, 2.49, 5.73),
+					Block.box(6.91, 13.65, 0.75, 9.09, 16.00, 2.93),
+					Block.box(6.91, 13.65, 9.99, 9.09, 16.00, 12.17))),
+			new Cell(0, 5, -2, Shapes.or(Block.box(3.10, 10.70, 13.16, 12.90, 13.70, 16.00),
+					Block.box(6.91, 0.00, 13.93, 9.09, 2.49, 16.00))),
+			new Cell(0, 5, 2, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 2.84),
+					Block.box(6.91, 0.00, 0.00, 9.09, 2.49, 2.07))),
+			new Cell(0, 6, 0, Block.box(4.04, 0.00, 4.04, 11.96, 2.92, 11.96)));
 
 	public UtilityPoleBlock(Properties properties) {
 		super(properties);
@@ -71,7 +98,7 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
 	}
 
 	@Override

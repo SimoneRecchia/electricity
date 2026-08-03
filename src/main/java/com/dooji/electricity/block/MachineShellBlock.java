@@ -1,9 +1,13 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.item.ItemWire;
+import com.dooji.electricity.main.Electricity;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -13,9 +17,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.PathComputationType;
-import net.minecraft.core.Direction;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -25,127 +30,102 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * <h2>Why this has to exist</h2>
  *
- * Several of these machines are drawn far past their own block - an electric cabin is three blocks tall
- * and two and a bit deep, a utility pole is six tall - and a block's collision was one cube at the
- * bottom of it. So the machine you could see was a machine you walked through, and stood on the air
- * above.
+ * Several of these machines are drawn far past their own block - an electric cabin is two and a half
+ * blocks tall and two and a bit deep, a utility pole is six tall with four-block arms - and a block's
+ * collision was one cube at the bottom of it. So the machine you could see was a machine you walked
+ * through, and stood on the air above.
  *
  * An oversized {@link VoxelShape} is the obvious fix and it does not work past one block. Collisions
  * are gathered from the block positions overlapping the entity's own box grown by one, so a shape three
  * blocks tall hanging off a block three below a player is never consulted: they fall through the roof.
  * The only thing the game will reliably collide with at a position is a block at that position, which
- * is what this is - invisible, drawn by nothing, and solid.
+ * is what this is - invisible, drawn by nothing, and shaped exactly like the part of the machine that
+ * reaches into it.
+ *
+ * <h2>Where its shape comes from</h2>
+ *
+ * From the machine, every time it is asked. A cell holds no shape of its own: it holds the way back to
+ * its machine, and the machine's table says what that cell contains
+ * ({@link MachineShell#shellCells()}). That is what makes {@link #hasDynamicShape()} true, and it is
+ * worth the cost - the alternative is a fixed catalogue of slabs and corners in here, which is how the
+ * collision came to disagree with the models in the first place.
  *
  * <h2>What it does not do</h2>
  *
  * It does not occlude: the machine above it is drawn by a renderer rather than by the block, so a shell
  * that culled its neighbours' faces would leave holes in the world. It blocks no light for the same
- * reason. And it is never an item: it is placed by its machine and it goes when the machine goes.
- *
- * <h2>Finding the machine it belongs to</h2>
- *
- * By searching, rather than by remembering. A shell could carry the offset to its machine in its state,
- * and then a machine moved by anything at all would leave shells pointing at nothing. So a shell asks
- * the small box of positions around it which of them holds a machine that claims this cell -
- * {@link MachineShell#hostOf} - and if none does, it stops being able to survive and the ordinary
- * neighbour update takes it away. Self-healing, and no state to get out of step.
+ * reason. It is never an item. And it never handles a click itself - mining it, picking it and using it
+ * all reach past it to the machine, because a player pointing at the middle of a cabin means the cabin.
  */
 public class MachineShellBlock extends Block {
-	public static final EnumProperty<Fill> FILL = EnumProperty.create("fill", Fill.class);
-
 	/**
-	 * How much of the cell a machine's body actually fills.
+	 * The way back to the machine, as the offset from it to this cell.
 	 *
-	 * A whole cell for anything solid; a ten-pixel slab against one face for the cells a body only
-	 * reaches part way into, which is what the top of a cabin and the ends of its roof are; and a post
-	 * for a pole, where the mast is half a block across and standing a pixel off it would be wrong.
+	 * Carried in the state rather than searched for, because the shape is needed on every collision test
+	 * and a search of the box a machine could occupy is sixty-odd block reads. Carried rather than
+	 * trusted: {@link MachineShell#hostOf} checks that the machine at the far end still claims this
+	 * cell, so a machine that has been broken or turned leaves orphans that take themselves away.
 	 *
-	 * Ten pixels rather than eight, and that is measured rather than chosen: the cabin's roof is 0.627
-	 * of a block into the cell above it and its ends reach 0.657 into the cells beside it.
+	 * A property cannot hold a negative number, so the two horizontal offsets are stored shifted by
+	 * {@link MachineShell#REACH_SIDE} and read back the same way.
 	 */
-	public enum Fill implements StringRepresentable {
-		FULL("full", Shapes.block()),
-		POST("post", Block.box(4.0, 0.0, 4.0, 12.0, 16.0, 12.0)),
-		SLAB_DOWN("slab_down", Block.box(0.0, 0.0, 0.0, 16.0, 10.0, 16.0)),
-		SLAB_UP("slab_up", Block.box(0.0, 6.0, 0.0, 16.0, 16.0, 16.0)),
-		SLAB_NORTH("slab_north", Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 10.0)),
-		SLAB_SOUTH("slab_south", Block.box(0.0, 0.0, 6.0, 16.0, 16.0, 16.0)),
-		SLAB_WEST("slab_west", Block.box(0.0, 0.0, 0.0, 10.0, 16.0, 16.0)),
-		SLAB_EAST("slab_east", Block.box(6.0, 0.0, 0.0, 16.0, 16.0, 16.0)),
-		// The corners of an overhanging roof: low *and* trimmed on one side, which a single slab cannot
-		// be. Without these the four cells at the corners of a cabin's roof were whole cells low, so a
-		// player standing on the roof stood a third of a block out past the eave, on air.
-		EAVE_NORTH("eave_north", Block.box(0.0, 0.0, 0.0, 16.0, 10.0, 10.0)),
-		EAVE_SOUTH("eave_south", Block.box(0.0, 0.0, 6.0, 16.0, 10.0, 16.0)),
-		EAVE_WEST("eave_west", Block.box(0.0, 0.0, 0.0, 10.0, 10.0, 16.0)),
-		EAVE_EAST("eave_east", Block.box(6.0, 0.0, 0.0, 16.0, 10.0, 16.0));
-
-		private final String name;
-		private final VoxelShape shape;
-
-		Fill(String name, VoxelShape shape) {
-			this.name = name;
-			this.shape = shape;
-		}
-
-		public VoxelShape shape() {
-			return shape;
-		}
-
-		/** The same fill on a machine turned to face another way. Only the sideways ones move. */
-		public Fill turned(Direction facing) {
-			return switch (this) {
-				case SLAB_NORTH -> slab(MachineShell.turned(Direction.NORTH, facing));
-				case SLAB_SOUTH -> slab(MachineShell.turned(Direction.SOUTH, facing));
-				case SLAB_WEST -> slab(MachineShell.turned(Direction.WEST, facing));
-				case SLAB_EAST -> slab(MachineShell.turned(Direction.EAST, facing));
-				case EAVE_NORTH -> eave(MachineShell.turned(Direction.NORTH, facing));
-				case EAVE_SOUTH -> eave(MachineShell.turned(Direction.SOUTH, facing));
-				case EAVE_WEST -> eave(MachineShell.turned(Direction.WEST, facing));
-				case EAVE_EAST -> eave(MachineShell.turned(Direction.EAST, facing));
-				default -> this;
-			};
-		}
-
-		private static Fill slab(Direction side) {
-			return switch (side) {
-				case NORTH -> SLAB_NORTH;
-				case SOUTH -> SLAB_SOUTH;
-				case WEST -> SLAB_WEST;
-				case EAST -> SLAB_EAST;
-				case DOWN -> SLAB_DOWN;
-				case UP -> SLAB_UP;
-			};
-		}
-
-		private static Fill eave(Direction side) {
-			return switch (side) {
-				case NORTH -> EAVE_NORTH;
-				case SOUTH -> EAVE_SOUTH;
-				case WEST -> EAVE_WEST;
-				default -> EAVE_EAST;
-			};
-		}
-
-		@Override
-		public String getSerializedName() {
-			return name;
-		}
-	}
+	public static final IntegerProperty HOST_X = IntegerProperty.create("host_x", 0, 2 * MachineShell.REACH_SIDE);
+	public static final IntegerProperty HOST_Y = IntegerProperty.create("host_y", 0, MachineShell.REACH_UP);
+	public static final IntegerProperty HOST_Z = IntegerProperty.create("host_z", 0, 2 * MachineShell.REACH_SIDE);
 
 	public MachineShellBlock(Properties properties) {
 		super(properties);
-		registerDefaultState(stateDefinition.any().setValue(FILL, Fill.FULL));
+		registerDefaultState(stateDefinition.any()
+				.setValue(HOST_X, MachineShell.REACH_SIDE).setValue(HOST_Y, 0).setValue(HOST_Z, MachineShell.REACH_SIDE));
 	}
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(FILL);
+		builder.add(HOST_X, HOST_Y, HOST_Z);
 	}
 
+	/** The state a cell at {@code cell} takes for the machine at {@code host}. */
+	public static BlockState pointingAt(BlockPos host, BlockPos cell) {
+		BlockPos offset = cell.subtract(host);
+		return Electricity.MACHINE_SHELL_BLOCK.get().defaultBlockState()
+				.setValue(HOST_X, offset.getX() + MachineShell.REACH_SIDE)
+				.setValue(HOST_Y, offset.getY())
+				.setValue(HOST_Z, offset.getZ() + MachineShell.REACH_SIDE);
+	}
+
+	/** Where the machine is, according to the cell itself. Whether it is still there is another question. */
+	public static BlockPos pointsAt(BlockPos pos, BlockState state) {
+		return pos.offset(MachineShell.REACH_SIDE - state.getValue(HOST_X),
+				-state.getValue(HOST_Y),
+				MachineShell.REACH_SIDE - state.getValue(HOST_Z));
+	}
+
+	/**
+	 * The part of the machine that reaches into this cell.
+	 *
+	 * A whole block if the machine cannot be found, which happens for a heartbeat while a chunk loads
+	 * and for good once a machine has been broken. Solid is the safe answer to give in the meantime: a
+	 * player standing on a cabin's roof keeps standing on it, and an orphan is gone on the next update.
+	 */
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return state.getValue(FILL).shape();
+		BlockPos host = pointsAt(pos, state);
+		BlockState hostState = level.getBlockState(host);
+		if (!(hostState.getBlock() instanceof MachineShell machine)) return Shapes.block();
+
+		Direction facing = machine.shellFacing(hostState);
+		BlockPos offset = pos.subtract(host);
+		for (MachineShell.Cell cell : machine.shellCells()) {
+			if (cell.at(facing).equals(offset)) return cell.shape(facing);
+		}
+
+		return Shapes.block();
+	}
+
+	/** Because the shape is the machine's, and the machine is at another position. */
+	@Override
+	public boolean hasDynamicShape() {
+		return true;
 	}
 
 	@Override
@@ -163,7 +143,7 @@ public class MachineShellBlock extends Block {
 		return false;
 	}
 
-	/** Whatever the machine is, so middle-clicking its upper half picks the machine. */
+	/** Whatever the machine is, so middle-clicking any part of it picks the machine. */
 	@Override
 	public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
 		BlockPos host = MachineShell.hostOf(level, pos);
@@ -171,14 +151,29 @@ public class MachineShellBlock extends Block {
 	}
 
 	/**
-	 * Mining any part of a machine mines the machine.
+	 * Using any part of a machine uses the machine.
 	 *
-	 * Which is what a player means by it: they are hitting the cabin, and the fact that the block their
-	 * cursor is on is a shell rather than the machine's own base is an implementation detail they should
-	 * never have to know.
+	 * Which is what a player means by it: they are right-clicking the pole, and the fact that the block
+	 * their cursor is on is a cell rather than the machine's own base is an implementation detail they
+	 * should never have to know. Without this, a pole opened its panel from the bottom metre only.
+	 *
+	 * Except for a wire, which is aimed at an insulator rather than at the machine. A block's use runs
+	 * before the item in hand gets a look, so forwarding here would mean a pole answering every wire
+	 * click with its own panel - and its insulators stand on the crossarms, which is to say behind these
+	 * cells. So the cell stands aside and lets {@code ItemWire} have the click.
 	 */
 	@Override
-	public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, net.minecraft.world.level.material.FluidState fluid) {
+	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+		BlockPos host = MachineShell.hostOf(level, pos);
+		if (host == null || player.getItemInHand(hand).getItem() instanceof ItemWire) return InteractionResult.PASS;
+
+		return level.getBlockState(host).use(level, player, hand,
+				new BlockHitResult(hit.getLocation(), hit.getDirection(), host, hit.isInside()));
+	}
+
+	/** And mining any part of a machine mines the machine, for the same reason. */
+	@Override
+	public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
 		BlockPos host = MachineShell.hostOf(level, pos);
 		if (host != null) {
 			level.destroyBlock(host, !player.isCreative(), player);

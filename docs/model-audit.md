@@ -62,7 +62,7 @@ six are the ones small enough that nobody can tell: a cable gland, a switch boss
 |---|---|
 | `check_model_textures.py` | no coplanar faces that both show, no geometry inside other geometry, no bordered picture sub-sampled, no picture on all six faces of a box; and prints texel density per face |
 | `check_pv_clearance.py` | no moving part can pass through a fixed one at any angle |
-| `check_hitboxes.py` | every cell a machine's body fills has something solid in it |
+| `check_hitboxes.py` | every machine collides with exactly the shape it draws — no cell of it walk-through, no collision where it draws nothing — to a hundredth of a pixel, and prints the tables the blocks declare |
 | `check_gui_fits.py` | no two lines of a panel overlap, and no line is behind a widget |
 | `preview_models.py` | draws the geometry from three angles, for the half no rule can decide |
 
