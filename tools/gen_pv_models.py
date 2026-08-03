@@ -396,8 +396,13 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None):
         mesh.quad(faces, pts, normal, uvs)
 
 
-def cylinder(mesh, faces, centre, axis, radius, half_length, sides=8, uv_scale=1.0, caps=None):
-    """A prism standing in for a tube: eight sides reads as round at this scale.
+def cylinder(mesh, faces, centre, axis, radius, half_length, sides=12, uv_scale=1.0, caps=None):
+    """A prism standing in for a tube: twelve sides reads as round rather than as a pencil.
+
+    Eight was the first number here and it shows on anything a player stands next to - a torque tube and a
+    pedestal column are the width of a car at this scale, and an octagon that size has flats you can see.
+    Twelve costs four quads and the difference is the whole of what "smoother" means for geometry. The
+    parts that keep fewer are the ones small enough that nobody can tell: a cable gland, a switch boss.
 
     ``caps`` closes both ends into that face list, which is not decoration: without them a
     mast is a hole when you look down it, and a radiometer has no dome to catch the light.
@@ -554,8 +559,12 @@ def tilted_rack():
         uv_scale=0.5, rot=(pivot, 'x', -tilt))
 
     top = pivot_y + frame_half + module_thickness
-    clad_box(mesh, 'modules', (-0.46, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
-    clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (0.46, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
+    # the laminates stop short of the frame they are clamped to, which is both what a rack looks like -
+    # the rails stand proud of the glass - and what keeps their side faces off the frame's own plane. At
+    # 0.46 the two were coplanar over a third of a block of area, and coplanar faces flicker
+    module_half = 0.44
+    clad_box(mesh, 'modules', (-module_half, pivot_y + frame_half, -depth), (-0.02, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
+    clad_box(mesh, 'modules', (0.02, pivot_y + frame_half, -depth), (module_half, top, depth), LAMINATE, rot=(pivot, 'x', -tilt))
 
     # The harness: the same pair as a table's, on the ground rather than on the modules.  A rack stands off
     # the ground on legs, so the run crosses to the next row underneath it - and that is not tidiness, a
@@ -615,7 +624,9 @@ def single_axis():
     pivot(mesh, 'tube', (0.0, axis_y, 0.0))
 
     tube = mesh.add_object('rotate_tube', 'steel')
-    cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, uv_scale=0.5,
+    # sixteen sides: the tube is the one part of a tracker a player walks up to, and at 0.045 of a block
+    # radius it is nearly a metre across in this mod's scale
+    cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.48, sides=16, uv_scale=1.0,
              caps=mesh.faces('rotate_tube', 'steel_end'))
 
     # two bays of modules, two rows deep, which is the 2-up portrait layout a real
@@ -694,8 +705,8 @@ def dual_axis():
     # run crosses the plate at ground level, and at 0.06 the plate stood a hundredth *under* the cable's
     # own top - close enough that the run read as broken where it crossed rather than as laid over it
     box(mesh, pedestal, (-0.20, 0.0, -0.20), (0.20, 0.05, 0.20), uv_scale=0.5)
-    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.025, 0.0), 'y', 0.085, top / 2.0 - 0.025, uv_scale=0.4,
-             caps=mesh.faces('pedestal', 'steel_end'))
+    cylinder(mesh, pedestal, (0.0, top / 2.0 + 0.025, 0.0), 'y', 0.085, top / 2.0 - 0.025, sides=16,
+             uv_scale=1.0, caps=mesh.faces('pedestal', 'steel_end'))
 
     pivot(mesh, 'azimuth', (0.0, top + 0.05, 0.0))
     pivot(mesh, 'elevation', (0.0, pivot_y, 0.0))
@@ -764,18 +775,23 @@ def inverter():
     clad_box(mesh, 'display', (-0.28, 0.62, -0.345), (0.06, 0.80, -0.335),
              {'north': 'display', '*': 'cabinet'})
 
-    pivot(mesh, 'fan', (0.46, 0.68, 0.0))
+    pivot(mesh, 'fan', (0.475, 0.68, 0.0))
 
     fan = mesh.add_object('rotate_fan', 'steel')
-    # a five-bladed impeller behind a grille on the right-hand side
+    # a five-bladed impeller in front of the grille on the right-hand side
     for i in range(5):
         angle = i * 72.0
-        box(mesh, fan, (0.455, 0.68 - 0.015, -0.015), (0.47, 0.68 + 0.015, 0.15),
-            uv_scale=0.2, rot=((0.46, 0.68, 0.0), 'x', angle))
+        box(mesh, fan, (0.47, 0.68 - 0.015, -0.015), (0.485, 0.68 + 0.015, 0.15),
+            uv_scale=0.2, rot=((0.475, 0.68, 0.0), 'x', angle))
 
-    # the grille's slats face outwards, so only the outward face carries them
-    clad_box(mesh, 'grille', (0.44, 0.52, -0.16), (0.455, 0.84, 0.16),
-             {'east': 'vent', '*': 'cabinet'}, uv_scale=0.4)
+    # The grille, on the outside of the cabinet's face rather than a pixel inside it.
+    #
+    # It used to span 0.44 to 0.455 against a cabinet whose own face is at 0.46, so the whole panel was
+    # buried in the side sheet and the machine had a fan turning in front of nothing. It also took four
+    # tenths of its texture, which for a louvre panel with a frame drawn round it means the frame is cut
+    # off - so it gets the whole picture now, on a face the whole picture's shape.
+    clad_box(mesh, 'grille', (0.46, 0.52, -0.16), (0.4675, 0.84, 0.16),
+             {'east': 'vent', '*': 'cabinet'})
 
     insulator = mesh.add_object('insulator', 'instrument')
     cylinder(mesh, insulator, (0.30, 1.03, 0.0), 'y', 0.045, 0.05, uv_scale=0.3,
@@ -860,7 +876,9 @@ def combiner():
     # thickness halfway is the one thing a player's eye lands on
     # flush with the outer face of the run it continues rather than half a pixel proud of it, which is
     # small and is exactly the sort of small a player's eye finds
-    clad_box(mesh, 'post', (-0.0625, 0.02, 0.0), (0.0625, box_y0 + 0.01, 0.0625),
+    # from the top of the hub rather than from the ground: the two used to share a volume at the foot of
+    # the post, which put four faces on the same planes there, and both of them are in plain sight
+    clad_box(mesh, 'post', (-0.0625, LEAD, 0.0), (0.0625, box_y0 + 0.015, 0.0625),
              {'south': 'dc_cable', '*': 'dc_jacket'})
 
     # the handle: a stub off the door with a bar on it, drawn once and turned by the renderer
@@ -898,7 +916,7 @@ def met_mast():
     snow_y = 0.20
 
     mast = mesh.add_object('mast', 'steel')
-    cylinder(mesh, mast, (0.0, 0.48, 0.0), 'y', 0.035, 0.48, uv_scale=0.3,
+    cylinder(mesh, mast, (0.0, 0.48, 0.0), 'y', 0.035, 0.48, sides=16, uv_scale=1.0,
              caps=mesh.faces('mast', 'steel_end'))
     # the base plate: seen from above far more than from any side, so it gets the lid
     clad_box(mesh, 'mast', (-0.12, 0.0, -0.12), (0.12, 0.04, 0.12),
@@ -915,13 +933,13 @@ def met_mast():
              caps=mesh.faces('pyranometer', 'instrument'))
     # the dome is glass and is looked down on, so it is glass and it is capped
     cylinder(mesh, mesh.faces('pyranometer', 'dome'), (0.0, radiometer_y + 0.065, 0.16), 'y', 0.028, 0.015,
-             uv_scale=0.3, caps=mesh.faces('pyranometer', 'dome'))
+             uv_scale=1.0, caps=mesh.faces('pyranometer', 'dome'))
 
     diffuse = mesh.add_object('diffuse', 'instrument')
     cylinder(mesh, diffuse, (0.0, radiometer_y + 0.035, 0.30), 'y', 0.05, 0.02, uv_scale=0.4,
              caps=mesh.faces('diffuse', 'instrument'))
     cylinder(mesh, mesh.faces('diffuse', 'dome'), (0.0, radiometer_y + 0.065, 0.30), 'y', 0.026, 0.014,
-             uv_scale=0.3, caps=mesh.faces('diffuse', 'dome'))
+             uv_scale=1.0, caps=mesh.faces('diffuse', 'dome'))
     # the shadow ring, which is what makes it a diffuse instrument at all
     box(mesh, diffuse, (-0.075, radiometer_y + 0.06, 0.295), (0.075, radiometer_y + 0.075, 0.305), uv_scale=0.2)
 
@@ -929,10 +947,10 @@ def met_mast():
     cylinder(mesh, albedometer, (0.0, radiometer_y + 0.035, 0.40), 'y', 0.045, 0.018, uv_scale=0.4,
              caps=mesh.faces('albedometer', 'instrument'))
     cylinder(mesh, mesh.faces('albedometer', 'dome'), (0.0, radiometer_y + 0.065, 0.40), 'y', 0.024, 0.013,
-             uv_scale=0.3, caps=mesh.faces('albedometer', 'dome'))
+             uv_scale=1.0, caps=mesh.faces('albedometer', 'dome'))
     # the downward-looking half: an albedometer is two pyranometers, one of them upside down
     cylinder(mesh, mesh.faces('albedometer', 'dome'), (0.0, radiometer_y - 0.005, 0.40), 'y', 0.024, 0.013,
-             uv_scale=0.3, caps=mesh.faces('albedometer', 'dome'))
+             uv_scale=1.0, caps=mesh.faces('albedometer', 'dome'))
 
     shield = mesh.add_object('shield', 'instrument')
     # a naturally aspirated radiation shield: a stack of plates with air between them
