@@ -1,0 +1,25 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " Z ",
+    "BCB",
+    " P "
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "C": {
+      "item": "electricity:circuit_board"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "Z": {
+      "item": "electricity:silicon_wafer"
+    }
+  },
+  "result": {
+    "item": "electricity:power_module"
+  }
+}

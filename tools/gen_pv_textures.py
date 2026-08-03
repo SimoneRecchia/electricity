@@ -1232,6 +1232,545 @@ BLOCK_TEXTURES = {
     'pv_dome': dome,
 }
 
+
+# ------------------------------------------------------------- the parts a machine is made of
+#
+# Thirty-two sprites for the crafting tree, drawn from one vocabulary rather than one at a time.  That is
+# not a shortcut: a bill of materials wants to *read* as a family - a player picking through a chest of
+# parts is sorting by silhouette and colour before they read a single name - so a plate looks like a
+# plate wherever it appears, everything in copper is copper, and every silicon thing is the same
+# blue-grey.  What tells two parts apart is the shape and the one mark on it that says what it is for.
+
+COPPER = ((116, 62, 30, 255), (186, 108, 58, 255), (228, 156, 100, 255))
+GLASS = ((84, 118, 138, 255), (152, 198, 216, 255), (218, 242, 250, 255))
+POLYMER = ((78, 60, 34, 255), (154, 122, 66, 255), (214, 186, 128, 255))
+SILICON = ((46, 50, 64, 255), (104, 112, 132, 255), (170, 180, 200, 255))
+CELL = ((14, 20, 46, 255), (34, 46, 100, 255), (92, 112, 176, 255))
+CIRCUIT = ((16, 58, 38, 255), (34, 108, 64, 255), (104, 180, 118, 255))
+DARK = ((22, 24, 28, 255), (52, 56, 62, 255), (96, 102, 110, 255))
+BRASS = ((124, 96, 30, 255), (192, 158, 62, 255), (232, 206, 120, 255))
+
+
+def plate(c, x0, y0, x1, y1, palette, lip=2):
+    """A sheet seen at a slight angle: face, a lit top edge, a dark near edge."""
+    dark, mid, light = palette
+    c.rect(x0, y0, x1, y1, mid)
+    c.rect(x0, y0, x1, y0 + lip, light)
+    c.rect(x0, y1 - lip, x1, y1, dark)
+    c.rect(x1 - lip, y0, x1, y1, shade(mid, -22))
+
+
+def stack_lines(c, x0, y0, x1, y1, step, colour):
+    for y in range(y0, y1, step):
+        c.rect(x0, y, x1, y + 1, colour)
+
+
+def item_steel_plate():
+    """Rolled sheet, stacked: two plates offset, which is how sheet is stored and how it reads."""
+    c = Canvas(16, 16)
+    plate(c, 2, 7, 13, 12, STEEL)
+    plate(c, 4, 4, 15, 9, STEEL)
+    return c
+
+
+def item_steel_section():
+    """An angle in profile: two webs at right angles, which is what a section is."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.rect(2, 3, 6, 14, mid)
+    c.rect(2, 3, 4, 14, light)
+    c.rect(2, 11, 14, 14, mid)
+    c.rect(2, 11, 14, 12, light)
+    c.rect(2, 13, 14, 14, dark)
+    c.rect(5, 3, 6, 12, dark)
+    return c
+
+
+def item_tempered_glass():
+    """A pane on edge: glass, and the one thing that says glass is what you can see through it."""
+    c = Canvas(16, 16)
+    dark, mid, light = GLASS
+    c.rect(3, 2, 13, 14, (mid[0], mid[1], mid[2], 150))
+    c.rect(3, 2, 13, 3, light)
+    c.rect(3, 13, 13, 14, dark)
+    c.rect(3, 2, 4, 14, light)
+    c.rect(12, 2, 13, 14, dark)
+    # the highlight across it, which is the whole trick for drawing glass at this size
+    c.stroke(5.0, 11.0, 11.0, 4.0, (235, 250, 255, 210), 1.6)
+    return c
+
+
+def item_resin():
+    """A roll of encapsulant film, wound on a core."""
+    c = Canvas(16, 16)
+    dark, mid, light = POLYMER
+    c.rect(2, 5, 14, 12, mid)
+    c.rect(2, 5, 14, 6, light)
+    c.rect(2, 11, 14, 12, dark)
+    for x in range(3, 13, 3):
+        c.rect(x, 6, x + 1, 11, shade(mid, -26))
+    # the loose end hanging off it
+    c.stroke(13.5, 8.0, 15.0, 13.0, mid, 1.4)
+    return c
+
+
+def item_copper_coil():
+    """Magnet wire wound on a bobbin: turns you can count, in copper."""
+    c = Canvas(16, 16)
+    dark, mid, light = COPPER
+    c.rect(3, 3, 13, 13, mid)
+    for y in range(3, 13, 2):
+        c.rect(3, y, 13, y + 1, light)
+        c.rect(3, y + 1, 13, y + 2, dark)
+    # the bobbin flanges
+    c.rect(2, 2, 4, 14, STEEL[1])
+    c.rect(12, 2, 14, 14, STEEL[0])
+    return c
+
+
+def item_silicon_ingot():
+    """A cast ingot: a bar with the crystal sheen silicon has."""
+    c = Canvas(16, 16)
+    dark, mid, light = SILICON
+    c.rect(2, 6, 14, 12, mid)
+    c.rect(2, 6, 14, 8, light)
+    c.rect(2, 11, 14, 12, dark)
+    c.rect(3, 4, 13, 7, shade(mid, 18))
+    c.rect(3, 4, 13, 5, light)
+    for x in range(4, 13, 4):
+        c.rect(x, 8, x + 1, 11, shade(mid, -20))
+    return c
+
+
+def item_silicon_wafer():
+    """A wafer: a thin square with its corners taken off, which is what a pseudo-square is."""
+    c = Canvas(16, 16)
+    dark, mid, light = SILICON
+    c.rect(3, 3, 13, 13, mid)
+    for x, y in ((3, 3), (11, 3), (3, 11), (11, 11)):
+        c.rect(x, y, x + 2, y + 2, (0, 0, 0, 0))
+        c.set(x + (1 if x < 8 else 0), y + (1 if y < 8 else 0), dark)
+    c.rect(3, 3, 13, 4, light)
+    c.rect(3, 12, 13, 13, dark)
+    c.stroke(5.0, 10.0, 10.0, 5.0, shade(light, 20), 1.2)
+    return c
+
+
+def item_busbar():
+    """Drawn copper bar with the bolt holes a bar is joined through."""
+    c = Canvas(16, 16)
+    dark, mid, light = COPPER
+    c.rect(1, 6, 15, 11, mid)
+    c.rect(1, 6, 15, 7, light)
+    c.rect(1, 10, 15, 11, dark)
+    for x in (3, 8, 12):
+        c.disc(x, 8, 1.2, shade(dark, -20))
+    return c
+
+
+def item_solar_cell():
+    """A cell: dark blue silicon with two busbars and the fingers between them."""
+    c = Canvas(16, 16)
+    dark, mid, light = CELL
+    c.rect(2, 2, 14, 14, mid)
+    for x, y in ((2, 2), (13, 2), (2, 13), (13, 13)):
+        c.set(x, y, (0, 0, 0, 0))
+    for x in (5, 10):
+        c.rect(x, 2, x + 1, 14, (198, 202, 210, 255))
+    for y in range(3, 14, 3):
+        c.rect(2, y, 14, y + 1, shade(mid, 26))
+    c.rect(2, 2, 14, 3, light)
+    return c
+
+
+def item_bypass_diode():
+    """A glass-bodied diode: a barrel, a band at the cathode, a lead each end."""
+    c = Canvas(16, 16)
+    c.rect(1, 8, 15, 9, STEEL[1])
+    c.rect(4, 5, 12, 12, DARK[1])
+    c.rect(4, 5, 12, 6, DARK[2])
+    c.rect(4, 11, 12, 12, DARK[0])
+    c.rect(9, 5, 11, 12, (206, 206, 210, 255))
+    return c
+
+
+def item_mc4_connector():
+    """The plug and socket of a string connection, one of each."""
+    c = Canvas(16, 16)
+    dark, mid, light = DARK
+    # the socket
+    c.rect(2, 3, 8, 8, mid)
+    c.rect(2, 3, 8, 4, light)
+    c.rect(6, 5, 10, 7, STEEL[1])
+    # the plug, and its lead
+    c.rect(6, 9, 12, 14, mid)
+    c.rect(6, 9, 12, 10, light)
+    c.rect(3, 11, 7, 13, STEEL[0])
+    c.stroke(2.0, 12.0, 0.5, 14.0, GRIP[1], 1.6)
+    return c
+
+
+def item_junction_box():
+    """A module's junction box: a lid, the gland, and the pair of leads out of it."""
+    c = Canvas(16, 16)
+    dark, mid, light = DARK
+    c.rect(3, 3, 13, 11, mid)
+    c.rect(3, 3, 13, 4, light)
+    c.rect(3, 10, 13, 11, dark)
+    for x in range(5, 12, 3):
+        c.rect(x, 5, x + 2, 9, shade(mid, -18))
+    for x, colour in ((5, GRIP[1]), (9, DARK[0])):
+        c.rect(x, 11, x + 2, 13, STEEL[0])
+        c.stroke(x + 1.0, 13.0, x + 1.0, 15.5, colour, 1.6)
+    return c
+
+
+def item_power_module():
+    """A power module: dies on a substrate under a moulded lid, with the terminals out of the top."""
+    c = Canvas(16, 16)
+    dark, mid, light = DARK
+    c.rect(2, 5, 14, 13, mid)
+    c.rect(2, 5, 14, 6, light)
+    c.rect(2, 12, 14, 13, dark)
+    for x in (4, 8, 11):
+        c.rect(x, 7, x + 3, 11, SILICON[1])
+        c.rect(x, 7, x + 3, 8, SILICON[2])
+    for x in (3, 12):
+        c.rect(x, 2, x + 2, 6, COPPER[1])
+        c.rect(x, 2, x + 2, 3, COPPER[2])
+    return c
+
+
+def item_capacitor_bank():
+    """Three film capacitors in a row, banded, on a busbar."""
+    c = Canvas(16, 16)
+    for i, x in enumerate((2, 7, 11)):
+        c.rect(x, 3, x + 4, 12, (56, 74, 120, 255))
+        c.rect(x, 3, x + 4, 4, (96, 122, 176, 255))
+        c.rect(x, 11, x + 4, 12, (34, 46, 78, 255))
+        c.rect(x, 6, x + 4, 7, (206, 208, 214, 255))
+    c.rect(1, 12, 15, 14, COPPER[1])
+    c.rect(1, 13, 15, 14, COPPER[0])
+    return c
+
+
+def item_magnetic_core():
+    """An E-core with a winding through the middle: laminations, and copper where the flux does work."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.rect(2, 3, 14, 13, mid)
+    c.rect(2, 3, 14, 4, light)
+    c.rect(2, 12, 14, 13, dark)
+    stack_lines(c, 2, 4, 14, 12, 2, shade(mid, -22))
+    c.rect(5, 3, 11, 13, COPPER[1])
+    for y in range(3, 13, 2):
+        c.rect(5, y, 11, y + 1, COPPER[2])
+    return c
+
+
+def item_control_board():
+    """A populated board: a processor, a header, and the traces between them."""
+    c = Canvas(16, 16)
+    dark, mid, light = CIRCUIT
+    c.rect(1, 2, 15, 14, mid)
+    c.rect(1, 2, 15, 3, light)
+    c.rect(1, 13, 15, 14, dark)
+    c.rect(4, 5, 10, 11, DARK[1])
+    c.rect(4, 5, 10, 6, DARK[2])
+    for x in range(5, 10, 2):
+        c.rect(x, 4, x + 1, 5, BRASS[1])
+        c.rect(x, 11, x + 1, 12, BRASS[1])
+    for y in (4, 12):
+        c.rect(11, y, 14, y + 1, BRASS[1])
+    c.rect(11, 6, 14, 10, DARK[0])
+    return c
+
+
+def item_bearing():
+    """A bearing from the end: an outer race, the balls, an inner race."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.disc(8, 8, 7.0, mid)
+    c.disc(8, 8, 7.0, mid)
+    c.disc(7.4, 7.4, 6.4, light)
+    c.disc(8, 8, 5.4, shade(mid, -30))
+    for i in range(8):
+        angle = i * math.pi / 4.0
+        c.disc(8 + 4.4 * math.cos(angle), 8 + 4.4 * math.sin(angle), 1.1, light)
+    c.disc(8, 8, 2.8, mid)
+    c.disc(8, 8, 1.6, (0, 0, 0, 0))
+    return c
+
+
+def item_gear_set():
+    """Two gears in mesh, which is the least a set can be."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+
+    def gear(cx, cy, radius, teeth):
+        c.disc(cx, cy, radius, mid)
+        c.disc(cx - 0.6, cy - 0.6, radius - 1.0, light)
+        c.disc(cx, cy, radius - 2.0, shade(mid, -26))
+        for i in range(teeth):
+            angle = i * 2.0 * math.pi / teeth
+            c.disc(cx + radius * math.cos(angle), cy + radius * math.sin(angle), 1.0, mid)
+        c.disc(cx, cy, 1.2, dark)
+
+    gear(5.5, 6.0, 4.2, 8)
+    gear(11.5, 11.0, 3.4, 7)
+    return c
+
+
+def item_gpv_fuse():
+    """A photovoltaic fuse: a barrel with a metal cap at each end and the element behind glass."""
+    c = Canvas(16, 16)
+    c.rect(2, 6, 14, 11, (222, 216, 200, 255))
+    c.rect(2, 6, 14, 7, (244, 240, 230, 255))
+    c.rect(2, 10, 14, 11, (186, 178, 160, 255))
+    for x in (1, 12):
+        c.rect(x, 5, x + 3, 12, STEEL[1])
+        c.rect(x, 5, x + 3, 6, STEEL[2])
+        c.rect(x, 11, x + 3, 12, STEEL[0])
+    c.stroke(4.5, 8.5, 11.5, 8.5, (150, 120, 70, 255), 1.2)
+    return c
+
+
+def item_load_break_switch():
+    """The switch itself: a moulded body, the handle, and the terminals it breaks between."""
+    c = Canvas(16, 16)
+    dark, mid, light = DARK
+    c.rect(3, 5, 13, 14, mid)
+    c.rect(3, 5, 13, 6, light)
+    c.rect(3, 13, 13, 14, dark)
+    for x in (4, 10):
+        c.rect(x, 12, x + 2, 15, COPPER[1])
+    # the handle, red because a load-break handle is red
+    c.rect(7, 1, 10, 6, GRIP[1])
+    c.rect(7, 1, 10, 2, GRIP[2])
+    c.rect(6, 5, 11, 7, shade(mid, -20))
+    return c
+
+
+def item_sensor_head():
+    """A glass-domed element on a machined body, which is what every radiometer looks like."""
+    c = Canvas(16, 16)
+    dark, mid, light = INSTRUMENT
+    c.rect(3, 8, 13, 13, mid)
+    c.rect(3, 8, 13, 9, light)
+    c.rect(3, 12, 13, 13, dark)
+    stack_lines(c, 3, 9, 13, 12, 2, shade(mid, -30))
+    c.disc(8, 7, 4.2, GLASS[0])
+    c.disc(8, 7, 3.4, GLASS[1])
+    c.disc(6.6, 5.6, 1.4, GLASS[2])
+    c.rect(2, 13, 14, 15, STEEL[0])
+    return c
+
+
+def item_pv_laminate():
+    """A module: cells behind glass in a frame, seen face on."""
+    c = Canvas(16, 16)
+    c.rect(1, 1, 15, 15, STEEL[1])
+    c.rect(2, 2, 14, 14, CELL[1])
+    for x in range(3, 14, 3):
+        c.rect(x, 2, x + 1, 14, shade(CELL[1], -22))
+    for y in range(4, 14, 3):
+        c.rect(2, y, 14, y + 1, shade(CELL[1], 22))
+    c.rect(2, 7, 14, 8, (188, 194, 204, 255))
+    c.rect(1, 1, 15, 2, STEEL[2])
+    c.rect(1, 14, 15, 15, STEEL[0])
+    return c
+
+
+def item_enclosure():
+    """A sealed cabinet: a door with a gasket line round it and a quarter-turn latch."""
+    c = Canvas(16, 16)
+    dark, mid, light = ((150, 154, 160, 255), (198, 202, 208, 255), (226, 230, 236, 255))
+    c.rect(2, 1, 14, 15, mid)
+    c.rect(2, 1, 14, 2, light)
+    c.rect(2, 14, 14, 15, dark)
+    c.outline(3, 3, 13, 13, shade(mid, -30))
+    c.rect(12, 7, 14, 10, shade(mid, -50))
+    c.rect(12, 7, 14, 8, light)
+    for y in (4, 11):
+        c.rect(1, y, 3, y + 2, dark)
+    return c
+
+
+def item_dc_section():
+    """A fuse way assembly: carriers in a row on a busbar, with the switch at the end."""
+    c = Canvas(16, 16)
+    c.rect(1, 2, 15, 14, (196, 200, 206, 255))
+    c.rect(1, 2, 15, 3, (226, 230, 236, 255))
+    c.rect(1, 13, 15, 14, (150, 154, 160, 255))
+    for x in range(2, 11, 3):
+        c.rect(x, 4, x + 2, 10, (222, 216, 200, 255))
+        c.rect(x, 4, x + 2, 5, BRASS[1])
+        c.rect(x, 9, x + 2, 10, STEEL[1])
+    c.rect(1, 11, 15, 13, COPPER[1])
+    c.rect(12, 3, 15, 10, DARK[1])
+    c.rect(13, 4, 14, 7, GRIP[1])
+    return c
+
+
+def item_inverter_bridge():
+    """Power modules bolted to a heatsink, with the DC link over them."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    # the heatsink, which is what a bridge is mostly made of
+    c.rect(1, 8, 15, 15, mid)
+    for x in range(1, 15, 2):
+        c.rect(x, 8, x + 1, 15, light)
+        c.rect(x + 1, 8, x + 2, 15, shade(mid, -34))
+    c.rect(1, 8, 15, 9, light)
+    for x in (2, 6, 10):
+        c.rect(x, 5, x + 4, 9, DARK[1])
+        c.rect(x, 5, x + 4, 6, DARK[2])
+    c.rect(2, 1, 14, 5, (56, 74, 120, 255))
+    c.rect(2, 1, 14, 2, (96, 122, 176, 255))
+    c.rect(2, 3, 14, 4, COPPER[1])
+    return c
+
+
+def item_mounting_rack():
+    """Rails on posts: the frame an array is bolted to, seen from the end."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.stroke(1.5, 11.0, 14.5, 4.0, mid, 2.6)
+    c.stroke(1.5, 10.0, 14.5, 3.0, light, 1.0)
+    for x, top in ((4.0, 9.5), (11.0, 6.0)):
+        c.rect(int(x), int(top), int(x) + 2, 15, mid)
+        c.rect(int(x), int(top), int(x) + 1, 15, light)
+    c.rect(2, 14, 14, 15, dark)
+    return c
+
+
+def item_torque_tube():
+    """A tube with a bearing on it, which is the whole of what a torque tube is."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.rect(0, 6, 16, 11, mid)
+    c.rect(0, 6, 16, 7, light)
+    c.rect(0, 10, 16, 11, dark)
+    for x in (3, 10):
+        c.rect(x, 4, x + 3, 13, shade(mid, -26))
+        c.rect(x, 4, x + 3, 5, light)
+        c.rect(x, 12, x + 3, 13, dark)
+    return c
+
+
+def item_slew_drive():
+    """A geared ring with a motor on it: what turns a tracker and what yaws a nacelle."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.disc(7, 9, 6.4, mid)
+    c.disc(6.4, 8.4, 5.6, light)
+    c.disc(7, 9, 4.2, shade(mid, -30))
+    for i in range(10):
+        angle = i * 2.0 * math.pi / 10.0
+        c.disc(7 + 6.4 * math.cos(angle), 9 + 6.4 * math.sin(angle), 0.9, mid)
+    c.disc(7, 9, 1.8, dark)
+    # the motor, off to one side where it drives the ring
+    c.rect(10, 1, 15, 7, DARK[1])
+    c.rect(10, 1, 15, 2, DARK[2])
+    c.rect(11, 6, 14, 8, STEEL[0])
+    return c
+
+
+def item_generator_set():
+    """A generator: a finned frame with the shaft out of one end and the terminal box on top."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.rect(2, 4, 14, 13, mid)
+    c.rect(2, 4, 14, 5, light)
+    c.rect(2, 12, 14, 13, dark)
+    for x in range(3, 14, 2):
+        c.rect(x, 5, x + 1, 12, shade(mid, -28))
+    c.rect(0, 7, 3, 10, STEEL[0])
+    c.rect(5, 1, 11, 5, DARK[1])
+    c.rect(5, 1, 11, 2, DARK[2])
+    c.rect(6, 13, 10, 15, dark)
+    return c
+
+
+def item_gearbox():
+    """A gearbox housing: a split casing on its feet, with the input shaft showing."""
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    c.rect(2, 3, 14, 13, mid)
+    c.rect(2, 3, 14, 4, light)
+    c.rect(2, 12, 14, 13, dark)
+    c.rect(2, 7, 14, 8, shade(mid, -40))
+    for x in (3, 7, 11):
+        c.disc(x + 0.5, 5.5, 0.9, shade(mid, -52))
+        c.disc(x + 0.5, 10.5, 0.9, shade(mid, -52))
+    c.rect(14, 6, 16, 9, STEEL[0])
+    for x in (2, 11):
+        c.rect(x, 13, x + 3, 15, dark)
+    return c
+
+
+def blade_sprite(long_blade):
+    """A blade laid corner to corner: wide at the root, thin at the tip, with the spar showing.
+
+    The long one is the same aerofoil carried further, which is what a longer blade is - so the two read
+    as the same product in two lengths rather than as two different things.
+    """
+    c = Canvas(16, 16)
+    dark, mid, light = PAINT
+    root = (2.5, 13.5)
+    tip = (13.5, 2.5) if long_blade else (11.0, 5.0)
+    steps = 26
+    for offset, colour, thinner in ((0.0, dark, -0.8), (0.0, mid, 0.0), (-0.6, light, 0.9)):
+        for i in range(steps + 1):
+            along = i / steps
+            radius = (3.4 if long_blade else 3.0) * (1.0 - 0.78 * along) / 2.0 - thinner
+            if radius < 0.35:
+                continue
+            c.disc(root[0] + (tip[0] - root[0]) * along + offset,
+                   root[1] + (tip[1] - root[1]) * along + offset, radius, colour)
+
+    # the root flange, which is the end that bolts to the hub
+    c.disc(root[0], root[1], 2.4, STEEL[1])
+    c.disc(root[0] - 0.6, root[1] - 0.6, 1.6, STEEL[2])
+    return c
+
+
+PARTS = {
+    'steel_plate': item_steel_plate,
+    'steel_section': item_steel_section,
+    'tempered_glass': item_tempered_glass,
+    'resin': item_resin,
+    'copper_coil': item_copper_coil,
+    'silicon_ingot': item_silicon_ingot,
+    'silicon_wafer': item_silicon_wafer,
+    'busbar': item_busbar,
+    'solar_cell': item_solar_cell,
+    'bypass_diode': item_bypass_diode,
+    'mc4_connector': item_mc4_connector,
+    'junction_box': item_junction_box,
+    'power_module': item_power_module,
+    'capacitor_bank': item_capacitor_bank,
+    'magnetic_core': item_magnetic_core,
+    'control_board': item_control_board,
+    'bearing': item_bearing,
+    'gear_set': item_gear_set,
+    'gpv_fuse': item_gpv_fuse,
+    'load_break_switch': item_load_break_switch,
+    'sensor_head': item_sensor_head,
+    'pv_laminate': item_pv_laminate,
+    'enclosure': item_enclosure,
+    'dc_section': item_dc_section,
+    'inverter_bridge': item_inverter_bridge,
+    'mounting_rack': item_mounting_rack,
+    'torque_tube': item_torque_tube,
+    'slew_drive': item_slew_drive,
+    'generator_set': item_generator_set,
+    'gearbox': item_gearbox,
+    'turbine_blade': lambda: blade_sprite(False),
+    'long_blade': lambda: blade_sprite(True),
+}
+
+
 ITEM_TEXTURES = {
     'pv_combiner': item_combiner,
     'dc_string_cable': item_string_cable,
@@ -1249,6 +1788,8 @@ ITEM_TEXTURES = {
 # one per machine, built from the same drawing so a line of turbines in the inventory reads as a line
 # of one maker's products
 ITEM_TEXTURES.update({name: (lambda s=spec: item_turbine(**s)) for name, spec in TURBINES.items()})
+# and the parts, which are a family of their own
+ITEM_TEXTURES.update(PARTS)
 
 
 def main():

@@ -1,0 +1,20 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " S ",
+    "SPS",
+    " S "
+  ],
+  "key": {
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:gear_set",
+    "count": 2
+  }
+}

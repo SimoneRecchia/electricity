@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " G ",
+    " E ",
+    " b "
+  ],
+  "key": {
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "G": {
+      "item": "electricity:inverter_bridge"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    }
+  },
+  "result": {
+    "item": "electricity:inverter_10"
+  }
+}

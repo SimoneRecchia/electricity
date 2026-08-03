@@ -1,0 +1,19 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "II",
+    "WW"
+  ],
+  "key": {
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "W": {
+      "item": "electricity:wire"
+    }
+  },
+  "result": {
+    "item": "electricity:mc4_connector",
+    "count": 4
+  }
+}

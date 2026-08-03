@@ -46,6 +46,7 @@ import com.dooji.electricity.main.registry.CableCatalog;
 import com.dooji.electricity.main.registry.CombinerCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.main.registry.PartCatalog;
 import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.network.ElectricityNetworking;
@@ -141,6 +142,26 @@ public class Electricity {
 	public static final RegistryObject<Item> INSULATOR_ITEM = ITEMS.register("insulator", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.insulator"));
 	public static final RegistryObject<Item> METAL_CASING_ITEM = ITEMS.register("metal_casing", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.metal_casing"));
 	public static final RegistryObject<Item> MOTOR_CORE_ITEM = ITEMS.register("motor_core", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.motor_core"));
+
+	/**
+	 * Every part in {@link PartCatalog}, registered from the catalogue rather than one line each.
+	 *
+	 * They are all the same kind of thing - an item that does nothing in a hand and exists to be an
+	 * ingredient - so a loop is honest here in a way it would not be for the machines, which each have
+	 * their own block, block entity and panel. The tooltip key is derived from the id, so a part cannot be
+	 * registered without one.
+	 */
+	public static final Map<String, RegistryObject<Item>> PART_ITEMS = registerParts();
+
+	private static Map<String, RegistryObject<Item>> registerParts() {
+		Map<String, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (PartCatalog.Part part : PartCatalog.all()) {
+			items.put(part.id(), ITEMS.register(part.id(),
+					() -> new TooltipItem(new Item.Properties(), "tooltip." + MOD_ID + "." + part.id())));
+		}
+
+		return items;
+	}
 
 	/**
 	 * One block of turbine tower.
@@ -399,6 +420,10 @@ public class Electricity {
 				output.accept(INSULATOR_ITEM.get());
 				output.accept(METAL_CASING_ITEM.get());
 				output.accept(MOTOR_CORE_ITEM.get());
+				// the parts, in the order they are made: stock, then components, then assemblies
+				for (PartCatalog.Part part : PartCatalog.all()) {
+					output.accept(PART_ITEMS.get(part.id()).get());
+				}
 			}).build());
 
 	public static RegistryObject<BlockEntityType<UtilityPoleBlockEntity>> UTILITY_POLE_BLOCK_ENTITY;

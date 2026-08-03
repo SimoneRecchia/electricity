@@ -1,0 +1,19 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "S S",
+    "SSS",
+    "P P"
+  ],
+  "key": {
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:mounting_rack"
+  }
+}

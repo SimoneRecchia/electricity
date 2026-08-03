@@ -1,0 +1,21 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " U ",
+    "CWC"
+  ],
+  "key": {
+    "C": {
+      "item": "electricity:circuit_board"
+    },
+    "U": {
+      "item": "electricity:cpu"
+    },
+    "W": {
+      "item": "electricity:wire"
+    }
+  },
+  "result": {
+    "item": "electricity:control_board"
+  }
+}

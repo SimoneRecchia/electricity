@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "www",
+    "kbk",
+    "BeB"
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    },
+    "e": {
+      "item": "electricity:magnetic_core"
+    },
+    "k": {
+      "item": "electricity:capacitor_bank"
+    },
+    "w": {
+      "item": "electricity:power_module"
+    }
+  },
+  "result": {
+    "item": "electricity:inverter_bridge"
+  }
+}

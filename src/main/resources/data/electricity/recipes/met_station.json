@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " p ",
+    "pbp",
+    "SSS"
+  ],
+  "key": {
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    },
+    "p": {
+      "item": "electricity:sensor_head"
+    }
+  },
+  "result": {
+    "item": "electricity:met_station"
+  }
+}

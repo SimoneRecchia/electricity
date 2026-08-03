@@ -1,0 +1,21 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "SSS",
+    "YPY"
+  ],
+  "key": {
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "Y": {
+      "item": "electricity:bearing"
+    }
+  },
+  "result": {
+    "item": "electricity:torque_tube"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "LLL",
+    "tut",
+    "jbj"
+  ],
+  "key": {
+    "L": {
+      "item": "electricity:pv_laminate"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    },
+    "j": {
+      "item": "electricity:mc4_connector"
+    },
+    "t": {
+      "item": "electricity:torque_tube"
+    },
+    "u": {
+      "item": "electricity:slew_drive"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_track_700"
+  }
+}

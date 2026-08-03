@@ -1,0 +1,19 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "WWW",
+    "FFF"
+  ],
+  "key": {
+    "F": {
+      "item": "electricity:resin"
+    },
+    "W": {
+      "item": "electricity:wire"
+    }
+  },
+  "result": {
+    "item": "electricity:dc_string_cable",
+    "count": 6
+  }
+}

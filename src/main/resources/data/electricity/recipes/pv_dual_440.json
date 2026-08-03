@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "LLL",
+    "uSu",
+    "jbj"
+  ],
+  "key": {
+    "L": {
+      "item": "electricity:pv_laminate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    },
+    "j": {
+      "item": "electricity:mc4_connector"
+    },
+    "u": {
+      "item": "electricity:slew_drive"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_dual_440"
+  }
+}

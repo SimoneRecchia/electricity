@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "yay",
+    " B "
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "a": {
+      "item": "minecraft:sand"
+    },
+    "y": {
+      "item": "minecraft:glass_pane"
+    }
+  },
+  "result": {
+    "item": "electricity:gpv_fuse",
+    "count": 4
+  }
+}

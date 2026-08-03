@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "AFA",
+    "VVV",
+    "SJS"
+  ],
+  "key": {
+    "A": {
+      "item": "electricity:tempered_glass"
+    },
+    "F": {
+      "item": "electricity:resin"
+    },
+    "J": {
+      "item": "electricity:junction_box"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "V": {
+      "item": "electricity:solar_cell"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_laminate"
+  }
+}

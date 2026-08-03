@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "GGG",
+    "DED",
+    "KbK"
+  ],
+  "key": {
+    "D": {
+      "item": "electricity:dc_section"
+    },
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "G": {
+      "item": "electricity:inverter_bridge"
+    },
+    "K": {
+      "item": "electricity:motor_core"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    }
+  },
+  "result": {
+    "item": "electricity:inverter_350"
+  }
+}

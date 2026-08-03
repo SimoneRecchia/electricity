@@ -1,25 +1,31 @@
 {
   "type": "electricity:workbench",
   "pattern": [
-    "CPC",
-    "KTK",
-    "MMM"
+    "zzz",
+    "XxY",
+    "ubE"
   ],
   "key": {
-    "C": {
-      "item": "electricity:circuit_board"
+    "E": {
+      "item": "electricity:enclosure"
     },
-    "K": {
-      "item": "electricity:motor_core"
+    "X": {
+      "item": "electricity:gearbox"
     },
-    "M": {
-      "item": "electricity:metal_casing"
+    "Y": {
+      "item": "electricity:bearing"
     },
-    "P": {
-      "item": "electricity:cpu"
+    "b": {
+      "item": "electricity:control_board"
     },
-    "T": {
-      "item": "electricity:c52_085"
+    "u": {
+      "item": "electricity:slew_drive"
+    },
+    "x": {
+      "item": "electricity:generator_set"
+    },
+    "z": {
+      "item": "electricity:long_blade"
     }
   },
   "result": {

@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "AAA",
+    "FSF",
+    "AAA"
+  ],
+  "key": {
+    "A": {
+      "item": "electricity:tempered_glass"
+    },
+    "F": {
+      "item": "electricity:resin"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:turbine_blade"
+  }
+}

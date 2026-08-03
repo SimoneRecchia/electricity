@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "mh"
+  ],
+  "key": {
+    "h": {
+      "item": "minecraft:honeycomb"
+    },
+    "m": {
+      "item": "minecraft:slime_ball"
+    }
+  },
+  "result": {
+    "item": "electricity:resin",
+    "count": 2
+  }
+}

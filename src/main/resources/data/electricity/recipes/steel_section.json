@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "P",
+    "P"
+  ],
+  "key": {
+    "P": {
+      "item": "electricity:steel_plate"
+    }
+  },
+  "result": {
+    "item": "electricity:steel_section",
+    "count": 2
+  }
+}
