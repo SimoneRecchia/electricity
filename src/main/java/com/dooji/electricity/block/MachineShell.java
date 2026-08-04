@@ -27,11 +27,16 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  *
  * <h2>Turning</h2>
  *
- * The cells are declared in the model's own frame - authored facing north, exactly as the geometry is -
- * and turned onto the machine's facing here, both the offset and the shape inside it. That is not
- * tidiness: the cabin's body is three cells deep in one axis and one in the other, so a rotation
- * applied to the model but not to the cells would put the solid part beside the machine rather than
- * inside it.
+ * The cells are declared in the model's own frame and turned onto the machine's facing here, both the
+ * offset and the shape inside it. That is not tidiness: the cabin's body is three cells deep in one axis
+ * and one in the other, so a rotation applied to the model but not to the cells would put the solid part
+ * beside the machine rather than inside it.
+ *
+ * <b>Which way the model's own frame points is the machine's to say</b>, through
+ * {@link #shellAuthored()}. Assuming north cost a rewrite: the cabin's geometry is modelled facing east,
+ * so its collision stood at a right angle to the cabin for as long as this class has existed. The same
+ * fact is what the renderer turns the model by, and it is declared once, on the block, so the two cannot
+ * drift apart again - {@code tools/check_hitboxes.py} fails if a renderer works it out for itself.
  *
  * @see MachineShellBlock for why the cells have to be blocks rather than one oversized shape
  */
@@ -51,20 +56,20 @@ public interface MachineShell {
 
 		public Cell(int x, int y, int z, VoxelShape shape) {
 			this.offset = new BlockPos(x, y, z);
-			for (Direction facing : Direction.Plane.HORIZONTAL) {
-				this.turnedOffset[facing.get2DDataValue()] = MachineShell.turned(offset, facing);
-				this.turned[facing.get2DDataValue()] = MachineShell.turned(shape, facing);
+			for (int quarters = 0; quarters < 4; quarters++) {
+				this.turnedOffset[quarters] = MachineShell.turned(offset, quarters);
+				this.turned[quarters] = MachineShell.turned(shape, quarters);
 			}
 		}
 
-		/** Where this cell is, relative to the machine, once the machine faces this way. */
-		public BlockPos at(Direction facing) {
-			return turnedOffset[facing.get2DDataValue()];
+		/** Where this cell is, relative to the machine, after that many quarter turns. */
+		public BlockPos at(int quarters) {
+			return turnedOffset[quarters];
 		}
 
 		/** What the machine fills this cell with, turned the same way. */
-		public VoxelShape shape(Direction facing) {
-			return turned[facing.get2DDataValue()];
+		public VoxelShape shape(int quarters) {
+			return turned[quarters];
 		}
 
 		/** Whether this is the machine's own cell, which is the one that never becomes a shell. */
@@ -84,11 +89,32 @@ public interface MachineShell {
 	/** Which way this machine's model has been turned. */
 	Direction shellFacing(BlockState state);
 
+	/**
+	 * Which way this machine's geometry was modelled, which is not always the way it is placed.
+	 *
+	 * The mod's own models face north, because that is the default facing. The inherited ones face
+	 * whichever way they happened to be modelled - the cabin and the power box east - and the renderer
+	 * turns them from there. The cells have to be turned from the same place, and this is that place: the
+	 * block says it once and the renderer reads it, rather than each working it out.
+	 */
+	Direction shellAuthored();
+
+	/**
+	 * How many quarter turns anticlockwise take this machine's model onto the world, for this state.
+	 *
+	 * The renderer's own arithmetic, kept here so the collision cannot come out at a right angle to the
+	 * machine again: quarter turns from the facing the geometry was authored at to the facing it is placed
+	 * at, which is what {@code ObjRendererBase.rotationFrom} divides by ninety.
+	 */
+	default int shellTurns(BlockState state) {
+		return (shellAuthored().get2DDataValue() - shellFacing(state).get2DDataValue() + 4) % 4;
+	}
+
 	/** The machine's own block's shape, which is the one cell of its table that stays a machine. */
 	default VoxelShape shellShape(BlockState state) {
-		Direction facing = shellFacing(state);
+		int quarters = shellTurns(state);
 		for (Cell cell : shellCells()) {
-			if (cell.own()) return cell.shape(facing);
+			if (cell.own()) return cell.shape(quarters);
 		}
 
 		return Shapes.block();
@@ -114,11 +140,11 @@ public interface MachineShell {
 	static void place(Level level, BlockPos pos, BlockState state) {
 		if (level.isClientSide || !(state.getBlock() instanceof MachineShell machine)) return;
 
-		Direction facing = machine.shellFacing(state);
+		int quarters = machine.shellTurns(state);
 		for (Cell cell : machine.shellCells()) {
 			if (cell.own()) continue;
 
-			BlockPos target = pos.offset(cell.at(facing));
+			BlockPos target = pos.offset(cell.at(quarters));
 			if (!level.hasChunkAt(target)) continue;
 
 			BlockState want = MachineShellBlock.pointingAt(pos, target);
@@ -152,11 +178,11 @@ public interface MachineShell {
 	static void clear(Level level, BlockPos pos, BlockState state) {
 		if (level.isClientSide || !(state.getBlock() instanceof MachineShell machine)) return;
 
-		Direction facing = machine.shellFacing(state);
+		int quarters = machine.shellTurns(state);
 		for (Cell cell : machine.shellCells()) {
 			if (cell.own()) continue;
 
-			BlockPos target = pos.offset(cell.at(facing));
+			BlockPos target = pos.offset(cell.at(quarters));
 			if (level.hasChunkAt(target) && pos.equals(hostOf(level, target))) {
 				level.removeBlock(target, false);
 			}
@@ -212,9 +238,9 @@ public interface MachineShell {
 
 	/** Whether a machine at {@code host} says the cell at {@code pos} is one of its own. */
 	private static boolean claims(MachineShell machine, BlockState state, BlockPos host, BlockPos pos) {
-		Direction facing = machine.shellFacing(state);
+		int quarters = machine.shellTurns(state);
 		for (Cell cell : machine.shellCells()) {
-			if (!cell.own() && host.offset(cell.at(facing)).equals(pos)) return true;
+			if (!cell.own() && host.offset(cell.at(quarters)).equals(pos)) return true;
 		}
 
 		return false;
@@ -225,16 +251,16 @@ public interface MachineShell {
 	int REACH_SIDE = 2;
 
 	/**
-	 * A model-space offset turned onto a facing.
+	 * A model-space offset turned by quarter turns.
 	 *
-	 * The same quarter turns the renderers use: north is no rotation, because that is the facing the
-	 * geometry is authored at, and the rest follow round.
+	 * Anticlockwise seen from above, which is what {@code Axis.YP} does with a positive angle, and so what
+	 * the renderer does to the geometry.
 	 */
-	static BlockPos turned(BlockPos offset, Direction facing) {
-		return switch (facing) {
-			case SOUTH -> new BlockPos(-offset.getX(), offset.getY(), -offset.getZ());
-			case WEST -> new BlockPos(offset.getZ(), offset.getY(), -offset.getX());
-			case EAST -> new BlockPos(-offset.getZ(), offset.getY(), offset.getX());
+	static BlockPos turned(BlockPos offset, int quarters) {
+		return switch (quarters) {
+			case 1 -> new BlockPos(offset.getZ(), offset.getY(), -offset.getX());
+			case 2 -> new BlockPos(-offset.getX(), offset.getY(), -offset.getZ());
+			case 3 -> new BlockPos(-offset.getZ(), offset.getY(), offset.getX());
 			default -> offset;
 		};
 	}
@@ -246,14 +272,14 @@ public interface MachineShell {
 	 * centres onto cell centres - so within a cell it is a quarter turn about that cell's own centre,
 	 * which is all this has to do.
 	 */
-	static VoxelShape turned(VoxelShape shape, Direction facing) {
-		if (facing == Direction.NORTH) return shape;
+	static VoxelShape turned(VoxelShape shape, int quarters) {
+		if (quarters == 0) return shape;
 
 		VoxelShape result = Shapes.empty();
 		for (AABB box : shape.toAabbs()) {
-			result = Shapes.or(result, switch (facing) {
-				case SOUTH -> Shapes.box(1.0 - box.maxX, box.minY, 1.0 - box.maxZ, 1.0 - box.minX, box.maxY, 1.0 - box.minZ);
-				case WEST -> Shapes.box(box.minZ, box.minY, 1.0 - box.maxX, box.maxZ, box.maxY, 1.0 - box.minX);
+			result = Shapes.or(result, switch (quarters) {
+				case 1 -> Shapes.box(box.minZ, box.minY, 1.0 - box.maxX, box.maxZ, box.maxY, 1.0 - box.minX);
+				case 2 -> Shapes.box(1.0 - box.maxX, box.minY, 1.0 - box.maxZ, 1.0 - box.minX, box.maxY, 1.0 - box.minZ);
 				default -> Shapes.box(1.0 - box.maxZ, box.minY, box.minX, 1.0 - box.minZ, box.maxY, box.maxX);
 			});
 		}

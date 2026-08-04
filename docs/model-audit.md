@@ -56,6 +56,30 @@ up to — a tracker's torque tube, a dual-axis pedestal column, the met mast —
 scale those are the width of a car, and an octagon that size has flats you can see. The parts that keep
 six are the ones small enough that nobody can tell: a cable gland, a switch boss.
 
+## Which way a model faces, and the three places that have to agree
+
+The mod's own models face north. The inherited ones do not: the cabin and the power box face **east**, the
+turbine **south**, and the pole's mapping is not a quarter turn of anything because its model is mirrored.
+
+Three separate pieces of code turn geometry by that fact — the renderer, the block entity that places the
+wire anchors, and the collision cells — and for a while only two of them knew it. The cabin's cells were
+built assuming north, so a cabin's collision stood at a right angle to the cabin: you walked into air a
+metre from the wall and through the wall itself. The power box had the same fault written out as four
+hand-rotated boxes, each a quarter turn from where its cabinet is drawn.
+
+It is now declared once, as `AUTHORED` on the block, and the renderer reads it from there.
+`check_hitboxes.py` fails if a renderer works it out for itself again, and cross-checks the angles the
+block entity turns its wire anchors by against the same constant — those are still four copies of the
+arithmetic, one per machine, and they all agree today.
+
+**Still open, and known:** the met station, the combiner and the inverter each declare one fixed shape that
+does not turn at all, while their models are not the same after a quarter turn. So for two of the four
+facings their collision is across the model rather than on it — a couple of pixels on the combiner and the
+inverter, whose cabinets are wider than they are deep, and the met station's instrument booms have no
+collision at any facing. The inverter is the awkward one: its model is scaled per product, so a single
+table cannot describe all three sizes. `check_hitboxes.py` prints the line for each of them rather than
+letting it be forgotten.
+
 ## What the checkers cover now
 
 | script | what it proves |

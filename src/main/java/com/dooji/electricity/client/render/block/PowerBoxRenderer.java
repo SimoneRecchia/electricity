@@ -86,7 +86,7 @@ public class PowerBoxRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForPowerBox(Direction facing) {
-		return rotationFrom(Direction.EAST, facing);
+		return rotationFrom(PowerBoxBlock.AUTHORED, facing);
 	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {

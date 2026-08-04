@@ -86,7 +86,7 @@ public class ElectricCabinRenderer extends ObjRendererBase {
 	}
 
 	private static float rotationForCabin(Direction facing) {
-		return rotationFrom(Direction.EAST, facing);
+		return rotationFrom(ElectricCabinBlock.AUTHORED, facing);
 	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {

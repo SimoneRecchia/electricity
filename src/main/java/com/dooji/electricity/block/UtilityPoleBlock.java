@@ -34,6 +34,16 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
 	/**
+	 * The facing utility_pole.obj was modelled at, as far as the cells need to care.
+	 *
+	 * East, the same as the other inherited models. The renderer's own mapping is not quite a quarter turn
+	 * from east - it comes out half a turn the other way for east and west, because the pole's model is
+	 * mirrored rather than merely turned - and that difference cannot show here: the pole's geometry and
+	 * the table below are both unchanged by a half turn, mast, arms and every insulator on them.
+	 */
+	public static final Direction AUTHORED = Direction.EAST;
+
+	/**
 	 * The whole pole as collision, cell by cell, cut from utility_pole.obj.
 	 *
 	 * A cube was both too big and in mostly the wrong place: the mast is 0.494 of a block across and six
@@ -47,8 +57,8 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	 * four blocks wide is worse than no floor at all. A three-pixel plate where the plate is drawn is not
 	 * that - it is the arm, and a player can still walk under it.
 	 *
-	 * Written by {@code tools/check_hitboxes.py --java}. The model is symmetric about both of its
-	 * horizontal axes, which is the one thing that lets the renderer mirror it while the cells only turn.
+	 * Written by {@code tools/check_hitboxes.py --java}, in the model's own frame, facing
+	 * {@link #AUTHORED}.
 	 */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
@@ -145,6 +155,11 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	@Override
 	public Direction shellFacing(BlockState state) {
 		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Override

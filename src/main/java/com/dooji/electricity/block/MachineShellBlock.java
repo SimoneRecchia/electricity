@@ -113,10 +113,10 @@ public class MachineShellBlock extends Block {
 		BlockState hostState = level.getBlockState(host);
 		if (!(hostState.getBlock() instanceof MachineShell machine)) return Shapes.block();
 
-		Direction facing = machine.shellFacing(hostState);
+		int quarters = machine.shellTurns(hostState);
 		BlockPos offset = pos.subtract(host);
 		for (MachineShell.Cell cell : machine.shellCells()) {
-			if (cell.at(facing).equals(offset)) return cell.shape(facing);
+			if (cell.at(quarters).equals(offset)) return cell.shape(quarters);
 		}
 
 		return Shapes.block();

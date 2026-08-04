@@ -45,6 +45,7 @@ import sys
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block')
+RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
 
 # Groups that are a marker or a moving part rather than a body.
 MOVING = ('pivot_', 'rotate_')
@@ -285,6 +286,87 @@ def show(box):
     return 'x %.2f..%.2f y %.2f..%.2f z %.2f..%.2f' % box
 
 
+# get2DDataValue, the order the game numbers the horizontal facings in and the order every quarter-turn
+# in the mod is worked out from.
+FACING_ORDER = {'SOUTH': 0, 'WEST': 1, 'NORTH': 2, 'EAST': 3}
+
+# Machines whose parts are not a quarter turn of an authored facing, and why. Their mappings are checked
+# modulo half a turn, which is all a model symmetric about both horizontal axes can express.
+MIRRORED = {
+    'utility_pole':
+        'the pole model is mirrored rather than turned, so its renderer and its wire anchors come out '
+        'half a turn from east for east and west - which neither the geometry nor the cells can show',
+}
+
+
+def turn(authored, facing):
+    """The angle the geometry is turned by to face this way, the way every renderer here works it out."""
+    return ((FACING_ORDER[authored] - FACING_ORDER[facing]) % 4) * 90
+
+
+def implied(mapping):
+    """The facing a table of angles says the geometry was modelled at, or None if it is not a turn of one."""
+    for authored in FACING_ORDER:
+        if all(turn(authored, facing) == angle for facing, angle in mapping.items()):
+            return authored
+
+    return None
+
+
+def anchor_turns(text):
+    """The angles a block entity turns its wire anchors by, read out of its own switch."""
+    match = re.search(r'case EAST -> ([\d.]+)f;\s*case SOUTH -> ([\d.]+)f;\s*'
+                      r'case WEST -> ([\d.]+)f;\s*default -> ([\d.]+)f;', text)
+    if match is None:
+        return None
+
+    return dict(zip(('EAST', 'SOUTH', 'WEST', 'NORTH'), (int(float(value)) for value in match.groups())))
+
+
+def facing_faults(name, block, java):
+    """Everything that has to agree about which way a machine's geometry was modelled, and whether it does.
+
+    The fault this catches happened: the renderer knew the cabin's model faces east, the collision assumed
+    north, and so a cabin's cells stood at a right angle to the cabin for as long as they existed. Three
+    places hold this one fact - the renderer that turns the model, the block entity that turns the wire
+    anchors, and the cells - so the block declares it and the others have to be reading the same thing.
+    """
+    faults = []
+    match = re.search(r'AUTHORED = Direction\.(\w+)', java)
+    if match is None:
+        return ['no AUTHORED on the block, so its cells cannot know which way its model faces']
+
+    authored = match.group(1)
+    renderer = os.path.join(RENDERERS, block.replace('Block', 'Renderer') + '.java')
+    if os.path.exists(renderer):
+        text = open(renderer).read()
+        if ('rotationFrom(%s.AUTHORED' % block) not in text and name not in MIRRORED:
+            faults.append('the renderer works the authored facing out for itself rather than reading '
+                          '%s.AUTHORED, so the two can drift apart' % block)
+
+    entity = os.path.join(BLOCKS, block.replace('Block', 'BlockEntity') + '.java')
+    if os.path.exists(entity):
+        mapping = anchor_turns(open(entity).read())
+        if mapping is not None:
+            said = implied(mapping)
+            allowed = [authored] if name not in MIRRORED else [authored, None]
+            if said not in allowed:
+                faults.append('the wire anchors are turned as though the model faced %s, and the block '
+                              'says %s' % (said or 'no facing at all', authored))
+            elif said is None and any(turn(authored, facing) % 180 != angle % 180 for facing, angle in mapping.items()):
+                faults.append('the wire anchors are turned more than half a turn from %s, which the '
+                              'model cannot hide' % authored)
+
+    return faults
+
+
+def square(boxes):
+    """Whether a cell's contents are the same after a quarter turn, and so cannot be turned wrongly."""
+    turned = sorted(tuple(round(v, 2) for v in (16.0 - box[3], 16.0 - box[2], box[4], box[5], box[0], box[1]))
+                    for box in boxes)
+    return turned == sorted(boxes)
+
+
 def reach():
     """How far from its machine a cell is allowed to be, read off the interface that stores the offset."""
     text = open(os.path.join(BLOCKS, 'MachineShell.java')).read()
@@ -315,7 +397,8 @@ def main():
             print('    not compared: %s' % SWEPT[name])
             continue
 
-        have = declared(open(os.path.join(BLOCKS, block + '.java')).read())
+        java = open(os.path.join(BLOCKS, block + '.java')).read()
+        have = declared(java)
         if not have:
             outside = [cell for cell in cells if cell != (0, 0, 0)]
             if outside:
@@ -325,9 +408,12 @@ def main():
             else:
                 hand_written.append(name)
                 print('    one cell, shape declared by hand: not compared, --java prints what the model says')
+                if not square(cells[(0, 0, 0)]):
+                    print('        and the model is not the same after a quarter turn, so a shape that '
+                          'does not turn cannot match it at every facing - see docs/model-audit.md')
             continue
 
-        for fault in differences(cells, have):
+        for fault in differences(cells, have) + facing_faults(name, block, java):
             faults += 1
             print('    %s' % fault)
 

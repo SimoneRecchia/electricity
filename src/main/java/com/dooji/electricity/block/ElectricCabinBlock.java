@@ -27,6 +27,15 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
 	/**
+	 * The facing cab.obj was modelled at, which is not north.
+	 *
+	 * An inherited model, and it faces east. Declared here because two things have to agree about it - the
+	 * renderer, which turns the geometry, and the cells below, which turn with it - and when only the
+	 * renderer knew, the cabin's collision stood at a right angle to the cabin.
+	 */
+	public static final Direction AUTHORED = Direction.EAST;
+
+	/**
 	 * The whole cabin as collision, cell by cell, cut from cab.obj rather than guessed.
 	 *
 	 * The machine stands in nine cells and exactly one of them used to be solid. The numbers, in the
@@ -41,7 +50,8 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	 * rounded to the nearest eight pixels, is a third of a block of air the player cannot walk through.
 	 *
 	 * Written by {@code tools/check_hitboxes.py --java}, which also fails the build's check if the model
-	 * and this table ever drift apart. Authored facing north like the model, and turned with it.
+	 * and this table ever drift apart. In the model's own frame, facing {@link #AUTHORED}, and turned with
+	 * the geometry.
 	 *
 	 * What is left out is what is thinner than a pixel: the roof's 0.054 overhang past the block beside
 	 * it, and the door leaf standing 0.05 past the east wall. Claiming a cell for either would cost the
@@ -117,6 +127,11 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	@Override
 	public Direction shellFacing(BlockState state) {
 		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Override

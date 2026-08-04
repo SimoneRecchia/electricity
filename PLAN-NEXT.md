@@ -37,8 +37,16 @@ A cell holds no shape of its own — it holds the way back to its machine, and a
 model stay the single authority, and it is what mends a world built with an older version: a cell that is
 standing but wrong is replaced, not only an empty one.
 
+And then the whole lot was a quarter turn out, which is the second thing a screenshot caught. The cabin's
+model is authored facing **east**, not north — an inherited model — and the renderer knew, the wire anchors
+knew, the cells did not. So the collision stood at a right angle to the cabin: air a metre from the wall,
+and no wall. The power box had the same fault, written out as four hand-rotated boxes. That fact now lives
+on the block as `AUTHORED`, the renderer reads it from there, and the checker fails if anything works it
+out for itself again.
+
 `tools/check_hitboxes.py` now compares both directions to a hundredth of a pixel — geometry that nothing
-collides with, and collision where the model draws nothing.
+collides with, and collision where the model draws nothing — and cross-checks the authored facing against
+the renderer and the wire anchors.
 
 Verified against a running server through `tools/rcon.py`: 22 cells holding exactly the right state,
 fourteen dropped probes landing on the model's own surfaces to six decimal places (the roof at 92.626875,
