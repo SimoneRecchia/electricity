@@ -482,9 +482,7 @@ def flat_table():
     box(mesh, frame, (0.40, 0.035, -0.40), (0.46, 0.075, 0.40), uv_scale=0.4)
 
     # two modules with a gap between them, which is where a real table's rails run.  They stop at EDGE
-    # rather than at the frame's own line, and that is the channel the leads lie in: a lead *on* the glass
-    # stands a pixel proud of it, and a lead flush with the glass with the laminate still under it would
-    # have its top face on the same plane as the cells - two coplanar faces, which flicker
+    # rather than at the frame's own line, so the frame's lip shows all the way round
     glass = 0.11
     clad_box(mesh, 'modules', (-EDGE, 0.075, -0.46), (-0.02, glass, 0.46), LAMINATE)
     clad_box(mesh, 'modules', (0.02, 0.075, -0.46), (EDGE, glass, 0.46), LAMINATE)
@@ -493,12 +491,13 @@ def flat_table():
     # whole footprint is glass, so there is no edge to run a lead along - the last version ran one the
     # length of the panel and it crossed the cells, which is a cable shading the thing it is wired to.
     #
-    # Let into the channel rather than laid on top: the lead's own top face is the glass's, which is what
-    # a table's leads look like - clipped into the frame under the module lip, not draped over the cells.
-    row_lead(mesh, EDGE, glass - LEAD, start=0.38)
-    row_socket(mesh, EDGE, glass - LEAD)
+    # On the ground, like every other row's.  They sat up at the glass line for a while, which read as a
+    # cable ending in mid-air half a metre above the sand: a lead has to meet the next table's socket and
+    # the laid run between them, and all three are on the ground.
+    row_lead(mesh, EDGE, 0.0, start=0.38)
+    row_socket(mesh, EDGE, 0.0)
     for end in (-1, 1):
-        row_entry(mesh, EDGE, glass - LEAD, end=end)
+        row_entry(mesh, EDGE, 0.0, end=end)
 
     return mesh
 
