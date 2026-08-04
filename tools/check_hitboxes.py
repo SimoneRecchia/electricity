@@ -79,7 +79,6 @@ BLOCK_CLASS = {
     'power_box': 'PowerBoxBlock',
     'electric_cabin': 'ElectricCabinBlock',
     'met_station': 'MetStationBlock',
-    'electric_lamp': 'ElectricLampBlock',
     'wind_turbine': 'WindTurbineBlock',
     'pv_array': 'PvArrayBlock',
     'pv_inverter': 'PvInverterBlock',
@@ -102,12 +101,9 @@ MODEL_TABLE = {
     'pv_dual': 'DUAL_CELLS',
 }
 
-# Machines with no facing at all, and why. Nothing about them can be turned wrongly.
-NO_FACING = {
-    'electric_lamp':
-        'a post-top luminaire is symmetric about its own column, so the block has no facing property '
-        'and nothing to declare a modelled one against',
-}
+# Machines with no facing at all, and why. Nothing about them can be turned wrongly. Empty as it stands:
+# every machine in the mod is placed facing somewhere.
+NO_FACING = {}
 
 # One model, several products: the directory name is not the block's name.
 MODEL_BLOCK = {

@@ -1,5 +1,5 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "q",
     "r",

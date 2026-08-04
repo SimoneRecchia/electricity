@@ -1,13 +1,17 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "CCC",
     "N N",
     "CCC"
   ],
   "key": {
-    "C": { "item": "minecraft:copper_ingot" },
-    "N": { "item": "minecraft:iron_nugget" }
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
+    }
   },
   "result": {
     "item": "electricity:wire",

@@ -64,28 +64,149 @@ public class DcCableBlock extends Block implements DcTerminal {
 	private static final Map<Direction, EnumProperty<RedstoneSide>> SIDES = sides();
 
 	/**
-	 * A surface run's outline, cut to the pair rather than to the block.
+	 * A run's outline, cut to what is drawn rather than to the block.
 	 *
-	 * It was a slab the whole width of the block and two pixels tall, and the model is a pair two pixels
-	 * across and one tall: so pointing anywhere in the block picked out the cable, and the highlight box a
-	 * player saw was eight times the width of the thing they were pointing at. This is the hub, an arm for
-	 * each side that is connected, and the climb where a run goes up a wall - the same figures
-	 * {@code tools/gen_cable_models.py} writes the model from.
+	 * It was a slab the whole width of the block and two pixels tall: so pointing anywhere in the block
+	 * picked out the cable, and the highlight box a player saw was eight times the width of the thing they
+	 * were pointing at.
+	 *
+	 * The string cable's tables are printed by {@code tools/gen_cable_models.py --java} from the very parts
+	 * the model is built from, one box per part - a core's three round steps are one cable as far as
+	 * pointing at it goes. The middle of the block depends on the *set* of sides that connect, which is why
+	 * {@link #STRING_HUBS} is keyed by a bitmask: a bend is a different shape from a crossing, and drawing
+	 * one while claiming the other is exactly the mismatch this mod checks for everywhere else.
+	 *
+	 * The trunk cable is still the old painted bar, so it keeps the old figures until it is redrawn too.
 	 *
 	 * A few pixels of outline is the right answer for a cable and not a compromise: the collision is still
 	 * nothing at all, so a player does not catch a boot on every metre of their own plant.
 	 */
-	private static final VoxelShape HUB = Block.box(7.0, 0.0, 7.0, 9.0, 1.0, 9.0);
-	private static final Map<Direction, VoxelShape> ARMS = Map.of(
+	private static final VoxelShape TRUNK_HUB = Block.box(7.0, 0.0, 7.0, 9.0, 1.0, 9.0);
+	private static final Map<Direction, VoxelShape> TRUNK_ARMS = Map.of(
 			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 1.0, 7.0),
 			Direction.SOUTH, Block.box(7.0, 0.0, 9.0, 9.0, 1.0, 16.0),
 			Direction.WEST, Block.box(0.0, 0.0, 7.0, 7.0, 1.0, 9.0),
 			Direction.EAST, Block.box(9.0, 0.0, 7.0, 16.0, 1.0, 9.0));
-	private static final Map<Direction, VoxelShape> CLIMBS = Map.of(
+	private static final Map<Direction, VoxelShape> TRUNK_CLIMBS = Map.of(
 			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 16.0, 1.0),
 			Direction.SOUTH, Block.box(7.0, 0.0, 15.0, 9.0, 16.0, 16.0),
 			Direction.WEST, Block.box(0.0, 0.0, 7.0, 1.0, 16.0, 9.0),
 			Direction.EAST, Block.box(15.0, 0.0, 7.0, 16.0, 16.0, 9.0));
+
+	private static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(
+			Map.entry(0b0000, Shapes.or(Block.box(5.90, 0.00, 2.50, 7.90, 2.00, 8.00),
+					Block.box(5.85, 0.00, 8.00, 7.95, 3.10, 9.30),
+					Block.box(5.85, 0.00, 9.30, 7.95, 3.10, 12.20),
+					Block.box(6.10, 0.00, 12.20, 7.70, 3.10, 13.00),
+					Block.box(8.10, 0.00, 2.50, 10.10, 2.00, 8.00),
+					Block.box(8.05, 0.00, 8.00, 10.15, 3.10, 9.30),
+					Block.box(8.05, 0.00, 9.30, 10.15, 3.10, 12.20),
+					Block.box(8.30, 0.00, 12.20, 9.90, 3.10, 13.00))),
+			Map.entry(0b0001, Shapes.or(Block.box(5.90, 0.00, 5.50, 7.90, 2.00, 8.00),
+					Block.box(5.85, 0.00, 8.00, 7.95, 3.10, 9.30),
+					Block.box(5.85, 0.00, 9.30, 7.95, 3.10, 12.20),
+					Block.box(6.10, 0.00, 12.20, 7.70, 3.10, 13.00),
+					Block.box(8.10, 0.00, 5.50, 10.10, 2.00, 8.00),
+					Block.box(8.05, 0.00, 8.00, 10.15, 3.10, 9.30),
+					Block.box(8.05, 0.00, 9.30, 10.15, 3.10, 12.20),
+					Block.box(8.30, 0.00, 12.20, 9.90, 3.10, 13.00))),
+			Map.entry(0b0010, Shapes.or(Block.box(8.00, 0.00, 5.90, 10.50, 2.00, 7.90),
+					Block.box(6.70, 0.00, 5.85, 8.00, 3.10, 7.95),
+					Block.box(3.80, 0.00, 5.85, 6.70, 3.10, 7.95),
+					Block.box(3.00, 0.00, 6.10, 3.80, 3.10, 7.70),
+					Block.box(8.00, 0.00, 8.10, 10.50, 2.00, 10.10),
+					Block.box(6.70, 0.00, 8.05, 8.00, 3.10, 10.15),
+					Block.box(3.80, 0.00, 8.05, 6.70, 3.10, 10.15),
+					Block.box(3.00, 0.00, 8.30, 3.80, 3.10, 9.90))),
+			Map.entry(0b0011, Shapes.or(Block.box(8.10, 0.00, 5.50, 10.10, 2.00, 7.90),
+					Block.box(10.10, 0.00, 5.90, 10.50, 2.00, 7.90),
+					Block.box(5.90, 0.00, 5.50, 7.90, 2.00, 10.10),
+					Block.box(7.90, 0.00, 8.10, 10.50, 2.00, 10.10))),
+			Map.entry(0b0100, Shapes.or(Block.box(8.10, 0.00, 8.00, 10.10, 2.00, 10.50),
+					Block.box(8.05, 0.00, 6.70, 10.15, 3.10, 8.00),
+					Block.box(8.05, 0.00, 3.80, 10.15, 3.10, 6.70),
+					Block.box(8.30, 0.00, 3.00, 9.90, 3.10, 3.80),
+					Block.box(5.90, 0.00, 8.00, 7.90, 2.00, 10.50),
+					Block.box(5.85, 0.00, 6.70, 7.95, 3.10, 8.00),
+					Block.box(5.85, 0.00, 3.80, 7.95, 3.10, 6.70),
+					Block.box(6.10, 0.00, 3.00, 7.70, 3.10, 3.80))),
+			Map.entry(0b0101, Shapes.or(Block.box(5.90, 0.00, 5.50, 7.90, 2.00, 10.50),
+					Block.box(8.10, 0.00, 5.50, 10.10, 2.00, 10.50),
+					Block.box(5.50, 0.00, 7.20, 5.90, 2.00, 8.80),
+					Block.box(10.10, 0.00, 7.20, 10.50, 2.00, 8.80),
+					Block.box(5.50, 2.00, 7.20, 10.50, 2.70, 8.80))),
+			Map.entry(0b0110, Shapes.or(Block.box(8.10, 0.00, 8.10, 10.50, 2.00, 10.10),
+					Block.box(8.10, 0.00, 10.10, 10.10, 2.00, 10.50),
+					Block.box(5.90, 0.00, 5.90, 10.50, 2.00, 7.90),
+					Block.box(5.90, 0.00, 7.90, 7.90, 2.00, 10.50))),
+			Map.entry(0b0111, Block.box(5.50, 0.00, 5.50, 10.50, 3.60, 10.50)),
+			Map.entry(0b1000, Shapes.or(Block.box(5.50, 0.00, 8.10, 8.00, 2.00, 10.10),
+					Block.box(8.00, 0.00, 8.05, 9.30, 3.10, 10.15),
+					Block.box(9.30, 0.00, 8.05, 12.20, 3.10, 10.15),
+					Block.box(12.20, 0.00, 8.30, 13.00, 3.10, 9.90),
+					Block.box(5.50, 0.00, 5.90, 8.00, 2.00, 7.90),
+					Block.box(8.00, 0.00, 5.85, 9.30, 3.10, 7.95),
+					Block.box(9.30, 0.00, 5.85, 12.20, 3.10, 7.95),
+					Block.box(12.20, 0.00, 6.10, 13.00, 3.10, 7.70))),
+			Map.entry(0b1001, Shapes.or(Block.box(5.50, 0.00, 5.90, 7.90, 2.00, 7.90),
+					Block.box(5.90, 0.00, 5.50, 7.90, 2.00, 5.90),
+					Block.box(5.50, 0.00, 8.10, 10.10, 2.00, 10.10),
+					Block.box(8.10, 0.00, 5.50, 10.10, 2.00, 8.10))),
+			Map.entry(0b1010, Shapes.or(Block.box(5.50, 0.00, 5.90, 10.50, 2.00, 7.90),
+					Block.box(5.50, 0.00, 8.10, 10.50, 2.00, 10.10),
+					Block.box(7.20, 0.00, 5.50, 8.80, 2.00, 5.90),
+					Block.box(7.20, 0.00, 10.10, 8.80, 2.00, 10.50),
+					Block.box(7.20, 2.00, 5.50, 8.80, 2.70, 10.50))),
+			Map.entry(0b1011, Block.box(5.50, 0.00, 5.50, 10.50, 3.60, 10.50)),
+			Map.entry(0b1100, Shapes.or(Block.box(5.90, 0.00, 8.10, 7.90, 2.00, 10.50),
+					Block.box(5.50, 0.00, 8.10, 5.90, 2.00, 10.10),
+					Block.box(8.10, 0.00, 5.90, 10.10, 2.00, 10.50),
+					Block.box(5.50, 0.00, 5.90, 8.10, 2.00, 7.90))),
+			Map.entry(0b1101, Block.box(5.50, 0.00, 5.50, 10.50, 3.60, 10.50)),
+			Map.entry(0b1110, Block.box(5.50, 0.00, 5.50, 10.50, 3.60, 10.50)),
+			Map.entry(0b1111, Block.box(5.50, 0.00, 5.50, 10.50, 3.60, 10.50)));
+
+	private static final Map<Direction, VoxelShape> STRING_ARMS = Map.of(
+			Direction.NORTH, Shapes.or(Block.box(5.90, 0.00, 0.00, 7.90, 2.00, 5.50),
+					Block.box(8.10, 0.00, 0.00, 10.10, 2.00, 5.50)),
+			Direction.EAST, Shapes.or(Block.box(10.50, 0.00, 5.90, 16.00, 2.00, 7.90),
+					Block.box(10.50, 0.00, 8.10, 16.00, 2.00, 10.10)),
+			Direction.SOUTH, Shapes.or(Block.box(8.10, 0.00, 10.50, 10.10, 2.00, 16.00),
+					Block.box(5.90, 0.00, 10.50, 7.90, 2.00, 16.00)),
+			Direction.WEST, Shapes.or(Block.box(0.00, 0.00, 8.10, 5.50, 2.00, 10.10),
+					Block.box(0.00, 0.00, 5.90, 5.50, 2.00, 7.90)));
+
+	private static final Map<Direction, VoxelShape> STRING_ARMS_UP = Map.of(
+			Direction.NORTH, Shapes.or(Block.box(5.90, 0.00, 2.00, 7.90, 2.00, 5.50),
+					Block.box(8.10, 0.00, 2.00, 10.10, 2.00, 5.50)),
+			Direction.EAST, Shapes.or(Block.box(10.50, 0.00, 5.90, 14.00, 2.00, 7.90),
+					Block.box(10.50, 0.00, 8.10, 14.00, 2.00, 10.10)),
+			Direction.SOUTH, Shapes.or(Block.box(8.10, 0.00, 10.50, 10.10, 2.00, 14.00),
+					Block.box(5.90, 0.00, 10.50, 7.90, 2.00, 14.00)),
+			Direction.WEST, Shapes.or(Block.box(2.00, 0.00, 8.10, 5.50, 2.00, 10.10),
+					Block.box(2.00, 0.00, 5.90, 5.50, 2.00, 7.90)));
+
+	private static final Map<Direction, VoxelShape> STRING_CLIMBS = Map.of(
+			Direction.NORTH, Shapes.or(Block.box(5.90, 0.00, 0.00, 7.90, 2.00, 2.00),
+					Block.box(8.10, 0.00, 0.00, 10.10, 2.00, 2.00),
+					Block.box(5.90, 2.00, 0.00, 7.90, 16.00, 2.00),
+					Block.box(8.10, 2.00, 0.00, 10.10, 16.00, 2.00)),
+			Direction.EAST, Shapes.or(Block.box(14.00, 0.00, 5.90, 16.00, 2.00, 7.90),
+					Block.box(14.00, 0.00, 8.10, 16.00, 2.00, 10.10),
+					Block.box(14.00, 2.00, 5.90, 16.00, 16.00, 7.90),
+					Block.box(14.00, 2.00, 8.10, 16.00, 16.00, 10.10)),
+			Direction.SOUTH, Shapes.or(Block.box(8.10, 0.00, 14.00, 10.10, 2.00, 16.00),
+					Block.box(5.90, 0.00, 14.00, 7.90, 2.00, 16.00),
+					Block.box(8.10, 2.00, 14.00, 10.10, 16.00, 16.00),
+					Block.box(5.90, 2.00, 14.00, 7.90, 16.00, 16.00)),
+			Direction.WEST, Shapes.or(Block.box(0.00, 0.00, 8.10, 2.00, 2.00, 10.10),
+					Block.box(0.00, 0.00, 5.90, 2.00, 2.00, 7.90),
+					Block.box(0.00, 2.00, 8.10, 2.00, 16.00, 10.10),
+					Block.box(0.00, 2.00, 5.90, 2.00, 16.00, 7.90)));
+
+	/** Which side is which bit of {@link #STRING_HUBS}'s key, in the order the generator numbers them. */
+	private static final Direction[] MASK_ORDER = {Direction.NORTH, Direction.EAST, Direction.SOUTH,
+			Direction.WEST};
 
 	/**
 	 * One shape per state, worked out once when the block is made.
@@ -108,28 +229,58 @@ public class DcCableBlock extends Block implements DcTerminal {
 				.setValue(WEST, RedstoneSide.NONE)
 				.setValue(BURIED, false));
 
+		boolean pair = spec.id().getPath().equals("dc_string_cable");
 		for (BlockState state : stateDefinition.getPossibleStates()) {
-			shapes.put(state, shapeOf(state));
+			shapes.put(state, pair ? stringShapeOf(state) : trunkShapeOf(state));
 		}
 	}
 
 	/**
-	 * The run as it is drawn in this state: the hub, the arms it has, and any climb.
+	 * The string cable as it is drawn in this state: the middle its pattern gets, the arms, any climb.
 	 *
-	 * A buried run is the whole block because it has taken a block of ground out of the world and the
-	 * trench model really does fill the cell.
+	 * The middle comes out of {@link #STRING_HUBS} by the same bitmask the model's blockstate chooses it
+	 * by, so a bend claims the bend and a crossing claims the junction box. A buried run is the whole
+	 * block, because it has taken a block of ground out of the world and the trench model really does
+	 * fill the cell.
 	 */
-	private static VoxelShape shapeOf(BlockState state) {
+	private static VoxelShape stringShapeOf(BlockState state) {
 		if (state.getValue(BURIED)) return Shapes.block();
 
-		VoxelShape shape = HUB;
+		int mask = 0;
+		for (int i = 0; i < MASK_ORDER.length; i++) {
+			if (state.getValue(SIDES.get(MASK_ORDER[i])) != RedstoneSide.NONE) {
+				mask |= 1 << i;
+			}
+		}
+
+		VoxelShape shape = STRING_HUBS.get(mask);
 		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
 			RedstoneSide connection = state.getValue(side.getValue());
 			if (connection == RedstoneSide.NONE) continue;
 
-			shape = Shapes.or(shape, ARMS.get(side.getKey()));
 			if (connection == RedstoneSide.UP) {
-				shape = Shapes.or(shape, CLIMBS.get(side.getKey()));
+				shape = Shapes.or(shape, STRING_ARMS_UP.get(side.getKey()),
+						STRING_CLIMBS.get(side.getKey()));
+			} else {
+				shape = Shapes.or(shape, STRING_ARMS.get(side.getKey()));
+			}
+		}
+
+		return shape;
+	}
+
+	/** The trunk cable, still one painted bar: a hub, an arm a side, and a climb up a wall. */
+	private static VoxelShape trunkShapeOf(BlockState state) {
+		if (state.getValue(BURIED)) return Shapes.block();
+
+		VoxelShape shape = TRUNK_HUB;
+		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
+			RedstoneSide connection = state.getValue(side.getValue());
+			if (connection == RedstoneSide.NONE) continue;
+
+			shape = Shapes.or(shape, TRUNK_ARMS.get(side.getKey()));
+			if (connection == RedstoneSide.UP) {
+				shape = Shapes.or(shape, TRUNK_CLIMBS.get(side.getKey()));
 			}
 		}
 
@@ -158,7 +309,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return shapes.getOrDefault(state, HUB);
+		return shapes.getOrDefault(state, TRUNK_HUB);
 	}
 
 	/**

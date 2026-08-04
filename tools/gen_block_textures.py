@@ -55,7 +55,7 @@ COPPER = (168, 96, 48, 255)
 # ------------------------------------------------------------------ the laminate
 
 def pv_module():
-    """The sun side of a laminate: 144 half-cut cells, three ribbons apiece, under glass.
+    """The sun side of a laminate: 144 half-cut cells on nine round wires apiece, under glass.
 
     Six columns of twenty-four half-cells with a bus gap across the middle, which is a 2278 by
     1134 module - the size nearly every utility-scale product has settled on.  The texture is
@@ -67,16 +67,36 @@ def pv_module():
     because a real laminate's cells are sorted by current and not by shade; the fingers are
     hairlines rather than pixels; and there is a broad soft reflection across it, which is the
     one thing every photograph of a panel has and no drawing of one did.
+
+    Why it is darker than it was
+    ---------------------------
+    A field of these read as a pale grey-blue grid rather than as glass, and measuring the tile said
+    why: it averaged (108, 113, 134), where a module in a photograph is nearer (34, 40, 66).  Three
+    things were bright, and every one of them was bright because it was drawn to a *2016* module -
+    three flat 1.6 mm ribbons a cell, a 2 mm backsheet lane, and fingers lifted thirty levels.
+
+    Every product in this catalogue is a 2020s module, and those carry nine to sixteen *round* wires
+    0.3 mm across instead of three flat ribbons.  So the wires are now nine hairlines, which is both
+    what the datasheets say and a third of the silver: a module is dark because almost all of its
+    front is cell.  The lane between cells came down to what a real stringer leaves, and the glass
+    reflection at the top - the part a player reads as "white" first, because it is what the sky
+    lands on - lost a third of its strength.
     """
     size = 1024
     c = Canvas(size, size, CELL)
     frame_w = size * 0.030
-    gap = size * 0.006                # the white lane between cells, which is backsheet showing
+    # The lane between two cells: what a stringer actually leaves, which is about 2 mm on a 190 mm
+    # cell - a fiftieth, not a twenty-fifth.  It reads as much wider than it is because it is the
+    # brightest thing on the module.
+    gap = size * 0.0034
     cols, rows = 6, 24
 
-    # the backsheet the cells sit on, seen in the lanes between them
+    # The backsheet the cells sit on, seen in the lanes between them.  Not the paper white it is on
+    # the roll: this is the white seen *through* three millimetres of low-iron glass and a sheet of
+    # encapsulant, which takes it down and blues it - and it is a sixth of the module's area, so a
+    # backsheet drawn at its own brightness is most of why a field of these looked whitewashed.
     back = Canvas(size, size)
-    powder(back, (238, 239, 241, 255), salt=7, peel=4)
+    powder(back, (204, 210, 220, 255), salt=7, peel=4)
     c.each(lambda x, y: back.get(x, y))
 
     inner0 = frame_w + gap
@@ -108,23 +128,36 @@ def pv_module():
             for i in range(int(span_y)):
                 t = i / max(1.0, span_y)
                 c.aa_rect(x0, y0 + i, x1, y0 + i + 1, shade(base, -3 + t * 6), alpha=0.5)
-            # the fine fingers: many, hairline, and slightly brighter than the cell
+            # The fingers and the wires, both drawn to the area they really cover.
+            #
+            # This is the whole of why the module used to read white, and it is an arithmetic mistake
+            # rather than a drawing one.  A cell here is 158 pixels wide standing for 190 millimetres,
+            # so one pixel is 1.2 mm - and a busbar wire is 0.3 mm and a finger 40 microns.  Both are
+            # *sub-pixel*.  Drawn a whole pixel wide at full strength, nine wires covered 15% of the
+            # cell instead of 1.4% and twenty-two fingers covered 65% of it instead of 1%, so most of
+            # the front of the module was silver paint.
+            #
+            # A camera resolves a quarter-pixel wire as a quarter-strength pixel, so that is what is
+            # drawn: a thin line at the alpha its real width earns.  It still reads as a fine grating
+            # up close, and at any distance it reads as what it is - a dark cell with a sheen on it.
             fingers = 22
             for f in range(1, fingers):
                 fy = y0 + (y1 - y0) * f / fingers
-                c.aa_rect(x0 + span_x * 0.02, fy, x1 - span_x * 0.02, fy + size * 0.0012,
-                          shade(base, 30), alpha=0.55)
-            # three interconnect ribbons down the cell, tinned copper, catching the light
-            for r in (0.2, 0.5, 0.8):
-                rx = x0 + (x1 - x0) * r
-                w = size * 0.0035
-                c.aa_rect(rx - w, y0 - gap, rx + w, y1 + gap, (206, 210, 216, 255), alpha=0.92)
-                c.aa_rect(rx - w * 0.35, y0 - gap, rx + w * 0.35, y1 + gap, (238, 242, 248, 255), alpha=0.8)
+                c.aa_rect(x0 + span_x * 0.02, fy, x1 - span_x * 0.02, fy + size * 0.0009,
+                          shade(base, 22), alpha=0.16)
+            # nine round wires: a round wire throws most of what hits it sideways rather than back, so
+            # even at full width it would not be as bright as the flat ribbon it replaced
+            for k in range(9):
+                rx = x0 + (x1 - x0) * (k + 0.5) / 9.0
+                w = size * 0.0006
+                c.aa_rect(rx - w, y0 - gap, rx + w, y1 + gap, (168, 174, 186, 255), alpha=0.5)
 
-    # the two bus bars the strings are joined by, across the middle and along each end
+    # The bus bars the strings are joined by, across the middle and along each end.  These stay wide
+    # because they really are - 6 mm of flat tinned ribbon - but they are three lines on the module
+    # rather than eighteen a cell, so their brightness costs nothing.
     for y in (size * 0.5, inner0 - gap * 0.5, inner1 + gap * 0.5):
-        c.aa_rect(inner0 - gap, y - size * 0.005, inner1 + gap, y + size * 0.005, (198, 203, 210, 255))
-        c.aa_rect(inner0 - gap, y - size * 0.0018, inner1 + gap, y + size * 0.0018, (232, 236, 242, 255),
+        c.aa_rect(inner0 - gap, y - size * 0.0042, inner1 + gap, y + size * 0.0042, (188, 194, 202, 255))
+        c.aa_rect(inner0 - gap, y - size * 0.0015, inner1 + gap, y + size * 0.0015, (222, 227, 234, 255),
                   alpha=0.7)
 
     # The glass: a broad soft reflection of the sky, brighter at the top, plus the faint bloom of
@@ -135,10 +168,14 @@ def pv_module():
         if base[3] == 0:
             return base
         down = y / size
-        sky = (1.0 - down) ** 2 * 0.13 + sheen.at(x, y) * 0.05
+        # The sky landing on the glass, strongest at the top of the module - which is the part a
+        # player reads as "white" before anything else, because it is the part angled at the sky.
+        # A third weaker than it was: at full strength the top band of every panel in a field went
+        # to the reflection's own colour and the cells under it stopped showing through at all.
+        sky = (1.0 - down) ** 2 * 0.085 + sheen.at(x, y) * 0.035
         # a long diagonal highlight, the one a pane of glass outdoors always has
-        band = math.exp(-(((x - y * 0.55) / size - 0.24) ** 2) / 0.010) * 0.16
-        return mix(base, (188, 214, 240, 255), sky + band)
+        band = math.exp(-(((x - y * 0.55) / size - 0.24) ** 2) / 0.010) * 0.115
+        return mix(base, (176, 202, 230, 255), sky + band)
 
     c.over(glaze)
 
@@ -661,27 +698,197 @@ def pv_switch():
 
 
 # ------------------------------------------------------------------ cable
+#
+# What a string cable is, and why the ones here are black
+# -------------------------------------------------------
+# A photovoltaic string is wired with two *single-core* cables, one per pole - H1Z2Z2-K to EN 50618,
+# which is a flexible tinned-copper conductor under two layers of cross-linked polyolefin, rated
+# 1500 V d.c. and -40 to +90 degrees.  A 6 mm2 one is 6.9 mm across: a 3.0 mm conductor, 0.7 mm of
+# insulation and 0.8 mm of sheath.  They are clipped in pairs along the racking, bent on a radius of
+# four diameters at worst, and terminated in MC4 connectors.
+#
+# And the cable is black.  Not a convention worth arguing with - the sheath is carbon-black loaded
+# because that is what survives twenty-five years of ultraviolet, and EN 50618 cable is sold black.
+# Red and black singles exist for small systems; a plant uses black and marks the poles at the
+# connectors.
+#
+# Which is lucky, because a red core and a black one *cannot* be drawn on this block.  A run is built
+# from an arm per side and a piece in the middle, and the arms are one model turned by quarters - so
+# the core on the west of a north arm is the core on the north of an east arm.  Go round a bend and
+# the outer core of the turn is the other arm's inner one; put four bends together and every core is
+# identified with every other.  There is no assignment of two colours that survives it, and the
+# version this replaces showed the proof: a corner drew red meeting black.
+#
+# So both cores are black, the polarity is on the connectors where the real one carries it, and the
+# detail that used to go into a paint scheme goes into the shape instead.
 
-CONDUCTOR_RED = (146, 44, 38, 255)
-CONDUCTOR_BLACK = (32, 32, 36, 255)
+JACKET = (26, 27, 31, 255)             # carbon-black cross-linked polyolefin
+CLEAT_STEEL = (154, 158, 164, 255)     # a stainless cable clip
+CONNECTOR_BODY = (38, 39, 43, 255)     # glass-filled polyamide, the MC4 shell
+CONNECTOR_RED = (150, 42, 36, 255)     # the collar that marks the positive pole
+ENCLOSURE = (188, 192, 196, 255)       # a small polycarbonate junction box
+
+
+def _round_core(transpose=False):
+    """One core seen across its width: the shading that makes an axis-aligned box read as round.
+
+    This is the whole trick of the cable, and it is needed because of what the format can do.  A
+    vanilla block model has no rotation, so a cable is a stack of square-edged boxes, and the game
+    shades a face by which way it points - every upward face at one brightness, whatever is under it.
+    So a stepped box lit that way is flat from above however many steps it has.
+
+    The roundness therefore has to be in the texture, and it has to run *across* the cable: bright
+    along the crown, falling to nearly black at the two edges, with the highlight pushed off centre
+    towards the light every other surface in this mod is lit from.  ``gen_cable_models.py`` maps the
+    across-the-cable coordinate of every face onto the full width of this tile, so a face taking the
+    crown gets the bright part and a flank gets the edge.
+
+    ``transpose`` writes the same drawing with the gradient down the tile instead of across it, for
+    the cores running east and west: a face's u is its own first axis, which is x for a face on top,
+    so a tile drawn one way serves runs along z and the transpose serves runs along x.
+    """
+    size = 128
+    c = Canvas(size, size)
+    rubber(c, JACKET, salt=277, sheen=16)
+
+    # the crown, and the two edges falling away from it: a cylinder lit from one side, so the peak
+    # sits at about a third across rather than in the middle
+    peak = 0.38
+    for i in range(size):
+        t = i / (size - 1.0)
+        # the cosine of the angle round the cylinder, which is what a diffuse round surface returns
+        lit = math.cos((t - peak) * math.pi * 1.05)
+        tone = -22 + max(0.0, lit) * 96
+        # The narrow specular line a glossy sheath carries just off the crown, and it earns its
+        # strength: the cable is nearly black, so the highlight is the only thing that says it is round
+        # rather than a bar - a black cable in sunlight is mostly reflection.
+        gloss = math.exp(-((t - peak + 0.06) ** 2) / 0.0016) * 0.46
+        for j in range(size):
+            x, y = (j, i) if transpose else (i, j)
+            base = shade(c.get(x, y), tone)
+            c.set(x, y, mix(base, (188, 196, 206, 255), gloss))
+
+    # the extruder's die marks, along the cable: fine, and the one thing that says which way it runs
+    marks = stretched(size, along=size * 2.0, across=size / 30.0, octaves=2, salt=281)
+    # stretched() lays its long axis along x, so a core running down the tile takes it swapped
+    c.over(lambda x, y, base: shade(base, marks.signed(*((x, y) if transpose else (y, x))) * 7))
+    return c
+
+
+def dc_core():
+    """A core running north and south, so the shading runs across the tile."""
+    return _round_core()
+
+
+def dc_core_turn():
+    """The same core running east and west, so the shading runs down the tile."""
+    return _round_core(transpose=True)
+
+
+def dc_cleat():
+    """The stainless clip that holds a run down, once a block, the way a real one is cleated.
+
+    A cable cleat is a strap over the cable into a foot with one screw through it, and it is the only
+    thing on a run that is not cable - so it is what gives a hundred metres of pair a rhythm.  Brushed
+    rather than galvanised: these are 304 stainless with a nylon liner, because a clip on a plant is
+    replaced never and rusting one would mark the cable it holds.
+    """
+    size = 128
+    c = Canvas(size, size)
+    brushed(c, CLEAT_STEEL, grain=9, blotch=8, salt=283, horizontal=False)
+    # the rolled edges of the strap, top and bottom
+    c.aa_rect(0, 0, size, size * 0.10, shade(CLEAT_STEEL, 22))
+    c.aa_rect(0, size * 0.90, size, size, shade(CLEAT_STEEL, -30))
+    # the black nylon liner showing at the strap's lip, which is what keeps it off the sheath
+    c.aa_rect(0, size * 0.80, size, size * 0.90, (34, 34, 38, 255), alpha=0.8)
+    # the screw through the foot
+    screw(c, size * 0.5, size * 0.5, size * 0.15, shade(CLEAT_STEEL, -6))
+    grime(c, salt=289, amount=0.14, colour=(74, 72, 68, 255))
+    return c
+
+
+def _connector(positive):
+    """An MC4 connector: the plug every string cable in the world ends in.
+
+    Glass-filled polyamide, about eighteen millimetres across and sixty-five long, in two pieces that
+    latch - and what is drawn is the outside of one: the knurled gland nut that seals onto the sheath,
+    the barrel, the latch window, and the collar.  The collar is where the polarity is: red for the
+    positive pole and black for the negative, which is how a plant marks a cable that is black for its
+    whole length.
+    """
+    size = 128
+    c = Canvas(size, size)
+    rubber(c, CONNECTOR_BODY, salt=293, sheen=22)
+
+    # the knurled gland nut: axial ribs, which is what a nut meant to be turned by hand carries
+    for i in range(16):
+        x = size * (0.02 + i * 0.0615)
+        c.aa_rect(x, size * 0.62, x + size * 0.030, size, shade(CONNECTOR_BODY, 26))
+        c.aa_rect(x + size * 0.030, size * 0.62, x + size * 0.042, size, shade(CONNECTOR_BODY, -22))
+    # the shoulder between the nut and the barrel
+    c.aa_rect(0, size * 0.58, size, size * 0.62, shade(CONNECTOR_BODY, -34))
+    c.aa_rect(0, size * 0.555, size, size * 0.58, shade(CONNECTOR_BODY, 20))
+
+    # the latch window, and the tongue of the locking clip in it
+    c.aa_rect(size * 0.30, size * 0.24, size * 0.70, size * 0.44, (18, 18, 20, 255))
+    c.aa_rect(size * 0.34, size * 0.27, size * 0.66, size * 0.36, shade(CONNECTOR_BODY, 30))
+
+    # the collar that says which pole this is
+    collar = CONNECTOR_RED if positive else shade(CONNECTOR_BODY, -12)
+    c.aa_rect(0, size * 0.06, size, size * 0.18, collar)
+    c.aa_rect(0, size * 0.06, size, size * 0.09, shade(collar, 24), alpha=0.8)
+    grime(c, salt=307, amount=0.12, colour=(70, 66, 60, 255))
+    return c
+
+
+def dc_connector_plus():
+    return _connector(True)
+
+
+def dc_connector_minus():
+    return _connector(False)
+
+
+def dc_jbox():
+    """A small junction box: where more than two runs meet, because a bare cross cannot exist.
+
+    Two cables can pass each other and two can turn a corner, but a third leg has to be *joined* to
+    something - and what joins direct-current strings is a box with glands in it, IP68 polycarbonate
+    with a screwed lid.  So the model puts one where four runs meet and this is its lid: the sheet,
+    the four lid screws, and the moulded rib round the gasket.
+    """
+    size = 128
+    c = Canvas(size, size)
+    powder(c, ENCLOSURE, salt=311, peel=5)
+    # the gasket rib inside the lid's edge, which is the one line a moulded lid always shows
+    c.aa_rect(size * 0.10, size * 0.10, size * 0.90, size * 0.90, shade(ENCLOSURE, -12), alpha=0.5)
+    c.aa_rect(size * 0.13, size * 0.13, size * 0.87, size * 0.87, shade(ENCLOSURE, 10), alpha=0.4)
+    for x, y in ((0.06, 0.06), (0.94, 0.06), (0.06, 0.94), (0.94, 0.94)):
+        screw(c, size * x, size * y, size * 0.045, shade(ENCLOSURE, -8))
+    grime(c, salt=313, amount=0.18, colour=(96, 94, 88, 255))
+    return c
 
 
 def _pair(c, y0, y1, armoured=False, salt=271):
-    """Two conductors side by side down a face: the pair every direct-current run is."""
+    """Two cores side by side down a face, for the stubs the machines' own models carry.
+
+    The OBJ machines draw a short length of cable where a run leaves them, and one face there takes a
+    whole texture - so this is the pair laid out to fill whatever band it is given, rather than the
+    across-the-cable gradient the block models sample.
+    """
     size = c.w
     span = y1 - y0
-    for i, colour in enumerate((CONDUCTOR_BLACK, CONDUCTOR_RED)):
-        a = y0 + span * (0.03 + i * 0.49)
-        b = y0 + span * (0.48 + i * 0.49)
+    for i in range(2):
+        a = y0 + span * (0.04 + i * 0.49)
+        b = y0 + span * (0.47 + i * 0.49)
         strand = Canvas(size, size)
-        rubber(strand, colour, salt=salt + i, sheen=26)
+        rubber(strand, JACKET, salt=salt + i, sheen=18)
         for y in range(int(a), int(b)):
             t = min(1.0, max(0.0, (y - a) / max(1.0, b - a)))
-            lit = math.sin(t * math.pi) ** 1.4
+            # the same cylinder as a core's own tile, so a stub and the run it feeds are lit alike
+            lit = max(0.0, math.cos((t - 0.38) * math.pi * 1.05))
             for x in range(size):
-                c.blend(x, y, shade(strand.get(x, y), -14 + lit * 30), 1.0)
-        # the moulded rib down a twin cable's back
-        c.aa_rect(0, a + (b - a) * 0.46, size, a + (b - a) * 0.54, (0, 0, 0, 255), alpha=0.18)
+                c.blend(x, y, shade(strand.get(x, y), -40 + lit * 70), 1.0)
     if armoured:
         # the armour bands a heavy cable carries, which is how the trunk is told from the string
         for i in range(6):
@@ -715,6 +922,9 @@ def dc_jacket():
 def _line_tile(armoured=False):
     """A cable texture for the vanilla JSON models, whose faces sample it in sixteenths.
 
+    This is the *trunk*'s tile, and the string cable no longer uses it: the string is drawn from round
+    cores that sample ``dc_core`` across their own width, and the trunk is still one painted bar.
+
     Which sixteenths is not a matter of taste - ``gen_cable_models.py`` writes the uv rectangles
     and there are nine distinct ones.  The band it draws the run's top from is **x 7 to 9 over the
     whole height**, so the pair has to run *down* this tile and not across it; the flanks come off
@@ -727,17 +937,17 @@ def _line_tile(armoured=False):
     c = Canvas(size, size)
     rubber(c, (26, 27, 31, 255), salt=287, sheen=12)
 
-    # the pair, running down the tile: one conductor a sixteenth wide, the pair two
-    for i, colour in enumerate((CONDUCTOR_BLACK, CONDUCTOR_RED)):
+    # the pair, running down the tile: one core a sixteenth wide, the pair two
+    for i in range(2):
         x0 = (7 + i) * unit
         x1 = x0 + unit
         strand = Canvas(size, size)
-        rubber(strand, colour, salt=283 + i, sheen=26)
+        rubber(strand, JACKET, salt=283 + i, sheen=22)
         for x in range(int(x0), int(x1)):
             t = min(1.0, max(0.0, (x - x0) / unit))
-            lit = math.sin(t * math.pi) ** 1.4
+            lit = max(0.0, math.cos((t - 0.38) * math.pi * 1.05))
             for y in range(size):
-                c.blend(x, y, shade(strand.get(x, y), -16 + lit * 34), 1.0)
+                c.blend(x, y, shade(strand.get(x, y), -42 + lit * 72), 1.0)
 
     if armoured:
         # the armour bands, which is how a trunk is told from a string at a glance
@@ -950,212 +1160,6 @@ def warning():
     return c
 
 
-# ------------------------------------------------------------------ the lamp
-
-LAMP_BODY = (142, 146, 152, 255)
-
-
-def electric_lamp_body():
-    """A cast aluminium luminaire housing: a finned heat sink, seen from the side.
-
-    A pattern rather than a picture, and that is a constraint rather than a preference: it goes on all
-    six faces of the head and on the small bosses and gasket frames round it, at whatever fraction of
-    itself each of those takes.  So the fins run the whole height of the tile with no band across
-    either end - the bands this had were what made a sixth of the texture read as a frame with its
-    edges cut off.
-    """
-    size = 512
-    c = Canvas(size, size)
-    brushed(c, LAMP_BODY, grain=9, blotch=12, salt=439, horizontal=False)
-    # the fins, edge to edge so the tile joins itself whichever part of it a face takes
-    for i in range(10):
-        x = size * (i * 0.10)
-        c.aa_rect(x, 0, x + size * 0.048, size, shade(LAMP_BODY, 15))
-        c.aa_rect(x + size * 0.048, 0, x + size * 0.066, size, shade(LAMP_BODY, -34))
-    grime(c, salt=449, amount=0.20, colour=(84, 82, 78, 255))
-    return c
-
-
-def electric_lamp_top():
-    """The luminaire from above: the heat sink, seen down its fins."""
-    size = 512
-    c = Canvas(size, size)
-    brushed(c, shade(LAMP_BODY, -8), grain=8, blotch=10, salt=457)
-    for i in range(13):
-        y = size * (0.04 + i * 0.074)
-        c.aa_rect(size * 0.06, y, size * 0.94, y + size * 0.030, shade(LAMP_BODY, 20))
-        c.aa_rect(size * 0.06, y + size * 0.030, size * 0.94, y + size * 0.046, shade(LAMP_BODY, -44))
-    # the gland where the supply comes in
-    dome(c, size * 0.5, size * 0.5, size * 0.075, (52, 54, 58, 255), lift=34, drop=26)
-    grime(c, salt=461, amount=0.34, colour=(80, 78, 72, 255))
-    return c
-
-
-# What each of the lamp's six states does to the light it makes. Colour, how bright the glass is,
-# and how much of the diode array shows through - a dim lamp shows its diodes, a bright one is a
-# sheet of light and you cannot see them at all.
-LAMP_STATES = {
-    'off': dict(colour=(214, 220, 226, 255), glow=0.00, diodes=1.00),
-    'dim': dict(colour=(198, 158, 92, 255), glow=0.30, diodes=0.85),
-    'warm': dict(colour=(240, 198, 128, 255), glow=0.55, diodes=0.60),
-    'bright': dict(colour=(252, 240, 206, 255), glow=0.82, diodes=0.32),
-    'overdrive': dict(colour=(255, 254, 244, 255), glow=1.00, diodes=0.12),
-    'burnt': dict(colour=(96, 92, 88, 255), glow=0.00, diodes=1.00),
-}
-
-
-def lamp_lens(state):
-    """The lens: a diode array behind flat glass, at one of the six brightnesses.
-
-    Drawn rather than tinted: the diodes are on a white board behind a pane, so what changes
-    between states is how much light comes off the board and how far it bleeds across the glass.
-    A burnt lamp is the one state where the board itself changes - the diodes go dark grey and
-    the glass is sooted.
-    """
-    spec = LAMP_STATES[state]
-    size = 512
-    c = Canvas(size, size)
-    board = (238, 240, 242, 255) if state != 'burnt' else (74, 70, 66, 255)
-    powder(c, board, salt=463, peel=4)
-
-    rows = cols = 6
-    inset = size * 0.10
-    span = (size - 2 * inset) / cols
-    for row in range(rows):
-        for col in range(cols):
-            cx = inset + span * (col + 0.5)
-            cy = inset + span * (row + 0.5)
-            r = span * 0.30
-            if state == 'burnt':
-                dome(c, cx, cy, r, (44, 42, 40, 255), lift=18, drop=14)
-                continue
-            # the diode: a phosphor square under a lens, which is yellow when it is off
-            base = mix((216, 196, 92, 255), spec['colour'], spec['glow'])
-            c.aa_rect(cx - r, cy - r, cx + r, cy + r, base)
-            dome(c, cx, cy, r * 1.05, base, lift=int(30 + 70 * spec['glow']), drop=20,
-                 alpha=spec['diodes'])
-            if spec['glow'] > 0.0:
-                # the halo each diode throws onto the glass, which is what makes an array read
-                # as one panel of light once it is bright
-                for k in range(3):
-                    c.aa_disc(cx, cy, r * (1.5 + k * 0.9), spec['colour'],
-                              alpha=spec['glow'] * 0.16 / (k + 1))
-
-    # the frame the pane sits in
-    c.aa_rect(0, 0, size, inset * 0.55, shade(LAMP_BODY, -10))
-    c.aa_rect(0, size - inset * 0.55, size, size, shade(LAMP_BODY, -16))
-    c.aa_rect(0, 0, inset * 0.55, size, shade(LAMP_BODY, -12))
-    c.aa_rect(size - inset * 0.55, 0, size, size, shade(LAMP_BODY, -14))
-    for x, y in ((0.06, 0.06), (0.94, 0.06), (0.06, 0.94), (0.94, 0.94)):
-        screw(c, size * x, size * y, size * 0.020, shade(LAMP_BODY, 6))
-
-    # the glass over all of it: a diagonal glare, and soot if the lamp has burnt out
-    for y in range(size):
-        for x in range(size):
-            band = math.exp(-(((x - y * 0.7) / size - 0.30) ** 2) / 0.012)
-            if band > 0.02:
-                c.blend(x, y, (226, 236, 246, 255), band * (0.16 if spec['glow'] < 0.5 else 0.07))
-    if state == 'burnt':
-        grime(c, salt=467, amount=0.5, colour=(24, 22, 20, 255))
-    return c
-
-
-# ------------------------------------------------------------------ the workbench
-
-BENCH_STEEL = (78, 92, 112, 255)      # the blue-grey every workshop cabinet in Europe is
-
-
-def workbench_top():
-    """The bench's working surface: a steel-clad top, marked by everything done on it.
-
-    The wear is the point.  A clean plate reads as a texture; a plate with a scribed grid, a
-    burn where an iron was stood, scratches that all run the way a hand pulls, and four bolts
-    holding the vice on reads as a bench somebody works at.
-    """
-    size = 512
-    c = Canvas(size, size)
-    brushed(c, (152, 156, 162, 255), grain=10, blotch=14, salt=479)
-    # the scribed rule along the front edge
-    c.aa_rect(0, size * 0.90, size, size * 0.93, shade((152, 156, 162, 255), -30), alpha=0.7)
-    for i in range(17):
-        x = size * i / 16.0
-        long = i % 4 == 0
-        c.aa_rect(x, size * (0.86 if long else 0.88), x + size * 0.004, size * 0.90,
-                  (56, 58, 62, 255), alpha=0.8)
-    # the vice's bolt pattern, at the left front corner where a vice goes
-    for x, y in ((0.12, 0.16), (0.26, 0.16), (0.12, 0.30), (0.26, 0.30)):
-        c.aa_disc(size * x, size * y, size * 0.030, shade((152, 156, 162, 255), -34), alpha=0.6)
-        hex_head(c, size * x, size * y, size * 0.024, (128, 132, 138, 255), salt=487)
-    # scratches, all running the way a hand drags
-    for i in range(70):
-        x0 = size * hash01(i, 13, 491)
-        y0 = size * hash01(i, 14, 499)
-        length = size * (0.03 + hash01(i, 15, 503) * 0.22)
-        skew = (hash01(i, 16, 509) - 0.5) * 0.5
-        c.aa_line(x0, y0, x0 + length, y0 + length * skew, (206, 210, 216, 255),
-                  width=size * 0.0025, alpha=0.35)
-    # a burn ring and an oil patch
-    c.aa_disc(size * 0.68, size * 0.34, size * 0.075, (92, 84, 74, 255), alpha=0.35)
-    c.aa_disc(size * 0.68, size * 0.34, size * 0.075, (58, 52, 44, 255), alpha=0.4, inner=size * 0.058)
-    oil = Field(size, cell=size / 5.0, octaves=3, salt=521)
-    c.over(lambda x, y, base: mix(base, (44, 42, 40, 255), max(0.0, oil.at(x, y) - 0.70) * 0.8))
-    grime(c, salt=523, amount=0.16, colour=(70, 68, 64, 255))
-    return c
-
-
-def workbench_front():
-    """The bench's drawer stack: three fronts, their handles, and a label on each."""
-    size = 512
-    c = Canvas(size, size)
-    powder(c, BENCH_STEEL, salt=541, peel=7)
-    for i in range(3):
-        y0 = size * (0.06 + i * 0.30)
-        y1 = y0 + size * 0.26
-        c.aa_rect(size * 0.05, y0, size * 0.95, y1, shade(BENCH_STEEL, 8))
-        bevel(c, size * 0.05, y0, size * 0.95, y1, size * 0.014, lift=24, drop=32)
-        # the handle: a pressed channel across the front, which is what a tool cabinet has
-        hy = y0 + (y1 - y0) * 0.62
-        c.aa_rect(size * 0.22, hy, size * 0.78, hy + size * 0.055, shade(BENCH_STEEL, -34))
-        c.aa_rect(size * 0.22, hy, size * 0.78, hy + size * 0.018, shade(BENCH_STEEL, 26))
-        plate_label(c, size * 0.28, y0 + (y1 - y0) * 0.16, size * 0.72, y0 + (y1 - y0) * 0.42,
-                    shade(BENCH_STEEL, 30), lines=2, ink=(24, 26, 30, 255))
-    grime(c, salt=547, amount=0.18, colour=(28, 34, 42, 255))
-    return c
-
-
-def workbench_side():
-    """The bench's flank: plain sheet with a swage line and the frame showing through it."""
-    size = 512
-    c = Canvas(size, size)
-    powder(c, BENCH_STEEL, salt=557, peel=7)
-    groove(c, 0, size * 0.36, size, 0, size * 0.018, dark=34, light=20)
-    groove(c, 0, size * 0.68, size, 0, size * 0.018, dark=34, light=20)
-    for i in range(4):
-        y = size * (0.12 + i * 0.26)
-        for x in (size * 0.06, size * 0.94):
-            screw(c, x, y, size * 0.017, shade(BENCH_STEEL, -40))
-    grime(c, salt=563, amount=0.22, colour=(26, 32, 40, 255))
-    return c
-
-
-def workbench_back():
-    """The tool board behind the bench: perforated steel with the shadows of what hangs on it."""
-    size = 512
-    c = Canvas(size, size)
-    powder(c, shade(BENCH_STEEL, 12), salt=569, peel=6)
-    step = size / 14.0
-    y = step * 0.6
-    while y < size - step * 0.4:
-        x = step * 0.6
-        while x < size - step * 0.4:
-            c.aa_disc(x, y, size * 0.011, (26, 30, 36, 255))
-            c.aa_disc(x - size * 0.003, y - size * 0.003, size * 0.010, (18, 20, 24, 255))
-            x += step
-        y += step
-    grime(c, salt=571, amount=0.20, colour=(24, 30, 38, 255))
-    return c
-
-
 # ------------------------------------------------------------------ the register
 
 TEXTURES = {
@@ -1177,9 +1181,14 @@ TEXTURES = {
     'pv_instrument': pv_instrument,
     'pv_dome': pv_dome,
     'pv_switch': pv_switch,
+    'dc_core': dc_core,
+    'dc_core_turn': dc_core_turn,
+    'dc_cleat': dc_cleat,
+    'dc_connector_plus': dc_connector_plus,
+    'dc_connector_minus': dc_connector_minus,
+    'dc_jbox': dc_jbox,
     'dc_harness': dc_harness,
     'dc_jacket': dc_jacket,
-    'dc_string_line': dc_string_line,
     'dc_trunk_line': dc_trunk_line,
     'dc_trench': dc_trench,
     'pole_concrete': pole_concrete,
@@ -1190,15 +1199,7 @@ TEXTURES = {
     'box_sheet': box_sheet,
     'box_plinth': box_plinth,
     'warning': warning,
-    'electric_lamp_body': electric_lamp_body,
-    'electric_lamp_top': electric_lamp_top,
-    'workbench_top': workbench_top,
-    'workbench_front': workbench_front,
-    'workbench_side': workbench_side,
-    'workbench_back': workbench_back,
 }
-
-TEXTURES.update({'electric_lamp_%s' % state: (lambda s=state: lamp_lens(s)) for state in LAMP_STATES})
 
 
 def main():

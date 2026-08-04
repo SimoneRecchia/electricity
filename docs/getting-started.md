@@ -4,26 +4,25 @@
 
 ## The items
 
-Everything except the Electric Workbench is crafted **at** the Electric Workbench. The
-workbench itself comes from a normal crafting table. Recipes show up in JEI, or in the
-workbench's own UI.
+Everything is crafted at a normal crafting table or smelted in a furnace. What gates a
+power station is the depth of the tree, not a special bench: a tracker wants a torque tube
+and a slew drive, the slew drive wants a gear set and a motor core round a bearing, and the
+bearing comes back down to plate and nuggets. Recipes show up in JEI.
 
-| Item | Where | What it is for |
-|---|---|---|
-| **Electric Workbench** | Crafting table | Crafts every other component |
-| **Wire** | Workbench | Connects two insulators |
-| **Power Wrench** | Workbench | Live diagnostics on any electric block |
-| **Wind Turbine** | Workbench | Generation. Six models, 10 kW to 4 MW |
-| **Turbine Tower** | Workbench | Stack it; the turbine goes on top |
-| **Electric Cabin** | Workbench | Collects from generators |
-| **Utility Pole** | Workbench | Carries power across distance |
-| **Power Box** | Workbench | Distributes in a radius, bridges to Forge Energy |
-| **Electric Lamp** | Workbench | Example consumer |
-| **Photovoltaic Array** | Workbench | 18 kW of flat modules. Five more products are creative-only for now |
-| **Inverter** | — | Turns an array's direct current into grid power. An array without one makes nothing |
-| **Meteorological Mast** | — | Nine instruments measuring the sky. Measures; does not generate |
-| **Weather Tablet** | Workbench | Weather map — not functional yet |
-| Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core | Workbench | Components for the above |
+| Item | What it is for |
+|---|---|
+| **Wire** | Connects two insulators |
+| **Power Wrench** | Live diagnostics on any electric block |
+| **Wind Turbine** | Generation. Six models, 10 kW to 4 MW |
+| **Turbine Tower** | Stack it; the turbine goes on top |
+| **Electric Cabin** | Collects from generators |
+| **Utility Pole** | Carries power across distance |
+| **Power Box** | Distributes in a radius, bridges to Forge Energy |
+| **Photovoltaic Array** | 18 kW of flat modules. Five more products are creative-only for now |
+| **Inverter** | Turns an array's direct current into grid power. An array without one makes nothing |
+| **Meteorological Mast** | Nine instruments measuring the sky. Measures; does not generate |
+| **Weather Tablet** | Weather map — not functional yet |
+| Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core | Components for the above |
 
 ## Building your first grid
 
@@ -65,9 +64,9 @@ The Power Box's insulator is **underneath** it.
 
 ### 4. Consumers
 
-Place Electric Lamps within the Power Box's radius — 5 blocks by default, set by
-`powerBoxRadius`. The lamp reacts to power quality: it has wear, dims under a brownout,
-and can burn out.
+Anything in the Power Box's radius — 5 blocks by default, set by `powerBoxRadius` — that
+takes Forge Energy is fed from it. The box also publishes a power field any block
+implementing the mod's own consumer capability can read.
 
 ## Wire losses
 
@@ -118,9 +117,9 @@ up about 2.5%.
 
 ## Wind surges
 
-In rough air a turbine can put surges down the line. Only Electric Lamps react — they go
-into overdrive and eventually burn out. Other blocks ignore surges, because the surge
-system is not exposed to other mods yet.
+In rough air a turbine can put surges down the line. Nothing in the mod reacts to one yet:
+the severity, duration and brownout factor reach every consumer in the delivery event, and
+a consumer is free to act on them, but no block here does.
 
 There is no game rule for this; it is always on. A `/gamerule electricityWindSurges` was
 documented here for a while and never existed.

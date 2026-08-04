@@ -1,9 +1,0 @@
-{
-  "multipart": [
-    {
-      "apply": {
-        "model": "electricity:block/glass_particle"
-      }
-    }
-  ]
-}

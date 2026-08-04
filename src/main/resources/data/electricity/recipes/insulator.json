@@ -1,13 +1,17 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "N N",
     "NGN",
     "N N"
   ],
   "key": {
-    "G": { "item": "minecraft:glass" },
-    "N": { "item": "minecraft:iron_nugget" }
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
+    }
   },
   "result": {
     "item": "electricity:insulator",

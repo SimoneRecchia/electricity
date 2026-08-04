@@ -36,12 +36,6 @@ public final class ObjDefinitions {
 				"insulator_porcelain"
 		)));
 
-		// The lamp draws itself from OBJ like the machines rather than from a JSON cube, because its
-		// column is round and the vanilla format cannot express a cylinder at all. No wire fitting: a
-		// lamp is fed by the power field in a radius, not by a line.
-		ALL.add(new ObjBlockDefinition(Electricity.ELECTRIC_LAMP_BLOCK.get(),
-				new ResourceLocation(Electricity.MOD_ID, "models/electric_lamp/electric_lamp.obj"), List.of()));
-
 		ALL.add(new ObjBlockDefinition(Electricity.ELECTRIC_CABIN_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/electric_cab/cab.obj"), List.of(
 				"insulator_input_Material.065",
 				"insulatoroutput_Material.044"

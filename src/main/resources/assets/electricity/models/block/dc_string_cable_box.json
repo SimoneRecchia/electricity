@@ -1,0 +1,70 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "#core",
+    "box": "electricity:block/dc_jbox",
+    "core": "electricity:block/dc_core"
+  },
+  "elements": [
+    {
+      "from": [
+        5.5,
+        0.0,
+        5.5
+      ],
+      "to": [
+        10.5,
+        3.6,
+        10.5
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            5.5,
+            5.5,
+            10.5,
+            10.5
+          ],
+          "texture": "#box"
+        },
+        "north": {
+          "uv": [
+            5.5,
+            12.4,
+            10.5,
+            16.0
+          ],
+          "texture": "#box"
+        },
+        "south": {
+          "uv": [
+            5.5,
+            12.4,
+            10.5,
+            16.0
+          ],
+          "texture": "#box"
+        },
+        "east": {
+          "uv": [
+            5.5,
+            12.4,
+            10.5,
+            16.0
+          ],
+          "texture": "#box"
+        },
+        "west": {
+          "uv": [
+            5.5,
+            12.4,
+            10.5,
+            16.0
+          ],
+          "texture": "#box"
+        }
+      }
+    }
+  ],
+  "ambientocclusion": false
+}

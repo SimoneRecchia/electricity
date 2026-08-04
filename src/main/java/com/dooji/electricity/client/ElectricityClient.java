@@ -6,14 +6,12 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
-import com.dooji.electricity.client.render.block.ElectricLampRenderer;
 import com.dooji.electricity.client.render.block.PowerBoxRenderer;
 import com.dooji.electricity.client.render.block.PvArrayRenderer;
 import com.dooji.electricity.client.render.block.PvCombinerRenderer;
 import com.dooji.electricity.client.render.block.PvInverterRenderer;
 import com.dooji.electricity.client.render.block.UtilityPoleRenderer;
 import com.dooji.electricity.client.render.block.WindTurbineRenderer;
-import com.dooji.electricity.client.screen.WorkbenchScreen;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
@@ -21,7 +19,6 @@ import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -44,7 +41,6 @@ public class ElectricityClient {
 		MinecraftForge.EVENT_BUS.addListener(ElectricityClient::onClientDisconnect);
 
 		setupRenderers();
-		event.enqueueWork(() -> MenuScreens.register(Electricity.WORKBENCH_MENU.get(), WorkbenchScreen::new));
 	}
 
 	private static void setupRenderers() {
@@ -56,7 +52,6 @@ public class ElectricityClient {
 		PvInverterRenderer.init();
 		PvCombinerRenderer.init();
 		MetStationRenderer.init();
-		ElectricLampRenderer.init();
 	}
 
 	private static void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {

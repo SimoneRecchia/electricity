@@ -19,9 +19,10 @@ import java.util.List;
  *
  * <h2>What a tier means</h2>
  *
- * {@link Tier#RAW} parts are made at a vanilla bench or in a furnace, because a player has to be able to
- * start. Everything above that is made at the mod's own workbench, which is therefore the gate between
- * "I have iron and quartz" and "I am building a power station".
+ * A tier is how deep in the tree a part sits, not where it is made - all of it is crafted at a vanilla bench
+ * or in a furnace. {@link Tier#RAW} is what a player can make straight out of the ground: steel, copper bar,
+ * wafers. A {@link Tier#COMPONENT} is made from those and an {@link Tier#ASSEMBLY} from components, so the
+ * depth of the tree is the gate between "I have iron and quartz" and "I am building a power station".
  *
  * <h2>What is not here</h2>
  *
@@ -30,11 +31,11 @@ import java.util.List;
  */
 public final class PartCatalog {
 	public enum Tier {
-		/** Made at a vanilla crafting table or in a furnace: the way into the tree. */
+		/** Made out of ore and stock: the way into the tree. */
 		RAW,
-		/** Made at the workbench from raw parts: the pieces a machine is assembled from. */
+		/** Made from raw parts: the pieces a machine is assembled from. */
 		COMPONENT,
-		/** Made at the workbench from components: an assembly that goes straight into a machine. */
+		/** Made from components: an assembly that goes straight into a machine. */
 		ASSEMBLY
 	}
 

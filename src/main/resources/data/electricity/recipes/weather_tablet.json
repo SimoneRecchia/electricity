@@ -1,14 +1,22 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "SP",
     "CI"
   ],
   "key": {
-    "S": { "item": "electricity:screen" },
-    "P": { "item": "electricity:cpu" },
-    "C": { "item": "electricity:circuit_board" },
-    "I": { "item": "minecraft:iron_ingot" }
+    "S": {
+      "item": "electricity:screen"
+    },
+    "P": {
+      "item": "electricity:cpu"
+    },
+    "C": {
+      "item": "electricity:circuit_board"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
   },
   "result": {
     "item": "electricity:weather_tablet"

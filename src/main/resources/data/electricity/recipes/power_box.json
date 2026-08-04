@@ -1,15 +1,23 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "MMM",
     "PCP",
     "MIM"
   ],
   "key": {
-    "M": { "item": "electricity:metal_casing" },
-    "I": { "item": "electricity:insulator" },
-    "P": { "item": "electricity:circuit_board" },
-    "C": { "item": "electricity:cpu" }
+    "M": {
+      "item": "electricity:metal_casing"
+    },
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "P": {
+      "item": "electricity:circuit_board"
+    },
+    "C": {
+      "item": "electricity:cpu"
+    }
   },
   "result": {
     "item": "electricity:power_box"

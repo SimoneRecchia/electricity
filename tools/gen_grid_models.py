@@ -53,12 +53,7 @@ MATERIALS = {
     'vent': 'pv_vent.png',
     'frame': 'pv_frame.png',
     'plinth': 'box_plinth.png',
-    'body': 'electric_lamp_body.png',
-    'top': 'electric_lamp_top.png',
 }
-# one material per glow state, resolving to that state's own lens texture
-MATERIALS.update({'glass_%s' % state: 'electric_lamp_%s.png' % state
-                  for state in ('off', 'dim', 'warm', 'bright', 'overdrive', 'burnt')})
 
 
 # ------------------------------------------------------------------ the utility pole
@@ -276,79 +271,8 @@ def power_box():
     return mesh
 
 
-# ------------------------------------------------------------------ the lamp
-
-# The lamp's six glow states, in the order the block declares them.  Each is its own object with its
-# own material, and the renderer draws the one the block state names - which is how a texture is
-# swapped in a pipeline that binds one texture per material.
-LAMP_STATES = ('off', 'dim', 'warm', 'bright', 'overdrive', 'burnt')
-
-
-def electric_lamp():
-    """A post-top LED area light: a base, a round column, and a square head with a glass bowl.
-
-    Why this shape and not a lantern: the block has no facing, so nothing can point - which rules out
-    the arm every road light has - and the lens textures are a diode array on a white board, which is
-    what a modern luminaire's underside actually is.  A post-top head with the array facing down and
-    a clear bowl round it is a real product, it is symmetric, and it reads as *lit* from the side as
-    well as from below, which matters for the one block in the mod whose job is to be seen.
-
-    The column and the base are eighty-sided, which is the turbine's own number and what the round
-    parts of every model here now carry.  The head is a box because a luminaire's housing is a box:
-    it is a die casting with fins on it, and fins are flat.
-    """
-    mesh = Mesh()
-    # the column is galvanised steel and only the head is a casting, which is what tells them apart:
-    # the finned texture belongs on the housing that has fins, and a column wearing it read as
-    # corrugated
-    column = mesh.faces('column', 'steel')
-    plate = mesh.faces('base', 'plate')
-
-    # the base: a cast foot on a levelling plate, tapering into the column
-    box(mesh, plate, (-0.135, 0.0, -0.135), (0.135, 0.018, 0.135), uv_scale=0.7)
-    for x in (-0.105, 0.075):
-        for z in (-0.105, 0.075):
-            bolt(mesh, plate, (x + 0.030, 0.018, z + 0.030), 'y', 0.008, 0.016, uv_scale=0.12)
-    # the cone's foot two thousandths inside the plate, rather than exactly on its face
-    cylinder(mesh, mesh.faces('base', 'steel'), (0.0, 0.046, 0.0), 'y', 0.098, 0.030, sides=ROUND,
-             uv_scale=0.5, taper=0.62, caps=mesh.faces('base', 'steel'), cap_ends=(1,))
-
-    # the column
-    cylinder(mesh, column, (0.0, 0.35, 0.0), 'y', 0.048, 0.275, sides=ROUND, uv_scale=1.0,
-             uv_along=3.0, taper=0.94)
-    # the collar under the head, where a real one is bolted on
-    cylinder(mesh, column, (0.0, 0.638, 0.0), 'y', 0.072, 0.026, sides=ROUND, uv_scale=0.4,
-             caps=column)
-
-    # the head: a die-cast housing, fins on top, and the four bolts that close it
-    clad_box(mesh, 'head', (-0.265, 0.700, -0.265), (0.265, 0.782, 0.265),
-             {'up': 'top', '*': 'body'}, uv_scale=1.0)
-    head = mesh.faces('head', 'body')
-    for x in (-0.235, 0.205):
-        for z in (-0.235, 0.205):
-            bolt(mesh, head, (x + 0.030, 0.782, z + 0.030), 'y', 0.007, 0.014, uv_scale=0.1)
-    # the vent boss on top, which is how a sealed luminaire breathes
-    cylinder(mesh, head, (0.0, 0.799, 0.16), 'y', 0.026, 0.017, sides=FITTING, uv_scale=0.2,
-             caps=head)
-    # the gasket frame the bowl seals against
-    clad_box(mesh, 'head', (-0.255, 0.686, -0.255), (0.255, 0.702, 0.255), {'*': 'body'},
-             uv_scale=0.4)
-
-    # the glass bowl, once per state: the array on its underside and a lit band round its edge.
-    # Only one of the six is ever drawn, and the renderer picks it off the block state.
-    for state in LAMP_STATES:
-        material = 'glass_%s' % state
-        clad_box(mesh, 'lens_%s' % state, (-0.245, 0.634, -0.245), (0.245, 0.692, 0.245),
-                 {'down': material, 'up': 'body', '*': material},
-                 uv={'down': (0.0, 0.0, 1.0, 1.0), '*': (0.0, 0.42, 1.0, 0.58)})
-
-    return mesh
-
-
 MODELS = [
     ('utility_pole', utility_pole, ('concrete', 'steel', 'plate', 'porcelain', 'sign')),
-    ('electric_lamp', electric_lamp,
-     ('body', 'top', 'plate', 'steel') + tuple('glass_%s' % state for state in LAMP_STATES)),
     ('power_box', power_box, ('plinth', 'plate', 'cabinet', 'cabinet_top', 'door', 'leaf', 'sheet',
                               'frame', 'steel', 'vent', 'porcelain')),
 ]

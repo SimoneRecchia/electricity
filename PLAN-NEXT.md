@@ -74,9 +74,9 @@ Geometry: prisms are twelve sides by default and sixteen for the three a player 
 
 ## 4. The crafting tree — done
 
-Thirty-two new parts in three tiers, and everything in the mod is craftable. Raw stock at a vanilla bench
-or in a furnace, because a player has to be able to start; everything else at the mod's own workbench,
-which is what makes the workbench the gate.
+Thirty-two new parts in three tiers, and everything in the mod is craftable at a vanilla bench or in a
+furnace. What gates a power station is the depth of the tree rather than a table: a player who wants a
+tracker works down to iron and back up.
 
 The spine rule holds: every array is three laminates over a mounting, every inverter is bridges over an
 enclosure, every combiner is fuse ways over an enclosure, every turbine is three blades over a drivetrain

@@ -39,10 +39,10 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'te
 # Models the mod draws itself. The inherited ones - the turbine, the cabin, the pole, the power box - are
 # a modelling package's output with a 1024 pixel atlas, and none of the four faults below can be fixed
 # from here without redrawing them from scratch.
-# Every model the mod generates for itself, which is now every model it has: the pole, the kiosk and
-# the lamp were inherited art and are generated too.
+# Every model the mod generates for itself, which is now every model it has: the pole and the kiosk were
+# inherited art and are generated too.
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
-        'utility_pole', 'power_box', 'electric_lamp')
+        'utility_pole', 'power_box')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting. A shared edge is
 # not a fault; a shared area is.
@@ -51,27 +51,12 @@ OVERLAP = 1e-4
 # Pairs of parts that are never drawn at the same time, so sharing a plane costs nothing. A tracked row's
 # run and its end plugs are the case: the run is drawn when the row is cabled and the plug when it is not,
 # and the renderer's drawn() is where that is decided.
-EXCLUSIVE = (('harness', 'harness_plug'),
-             # the lamp carries its glass bowl six times over, one per glow state, in the same place -
-             # the renderer draws exactly one of them, which is how a texture is swapped in a pipeline
-             # that binds one texture per material
-             ('lens_off', 'lens_dim'), ('lens_off', 'lens_warm'), ('lens_off', 'lens_bright'),
-             ('lens_off', 'lens_overdrive'), ('lens_off', 'lens_burnt'),
-             ('lens_dim', 'lens_warm'), ('lens_dim', 'lens_bright'), ('lens_dim', 'lens_overdrive'),
-             ('lens_dim', 'lens_burnt'), ('lens_warm', 'lens_bright'),
-             ('lens_warm', 'lens_overdrive'), ('lens_warm', 'lens_burnt'),
-             ('lens_bright', 'lens_overdrive'), ('lens_bright', 'lens_burnt'),
-             ('lens_overdrive', 'lens_burnt'))
+EXCLUSIVE = (('harness', 'harness_plug'),)
 # Below this fraction of a texture's own size, a face is sub-sampling it.
 SUBSAMPLE = 0.98
 # Textures a face is *meant* to take the middle out of. A glass dome is a circle drawn on a light ground,
 # and the side of the dome wants the glass rather than the circle - so sampling the middle is the point.
-# The lamp's lens is the same case: the bowl's underside takes the whole picture - the diode array in its
-# frame - and its four sides take a *strip* out of the middle of it on purpose, which is a lit band round
-# the edge of the glass and not a frame with its corners cut off.
-FRAME_EXEMPT = {'pv_dome.png', 'electric_lamp_off.png', 'electric_lamp_dim.png',
-                'electric_lamp_warm.png', 'electric_lamp_bright.png',
-                'electric_lamp_overdrive.png', 'electric_lamp_burnt.png'}
+FRAME_EXEMPT = {'pv_dome.png'}
 # Pixels of texture per block of surface, under which a face is stretched enough to look soft. A block is
 # ten metres in this mod, so this is not a vanilla figure: 16 would be one texel per 60 centimetres.
 DENSITY = 48.0
@@ -407,8 +392,7 @@ def report(name):
     for (obj, material), used in sorted(sides.items()):
         texture = texture_of.get(material)
         # a texture in FRAME_EXEMPT is one whose middle is meant to be sampled, which is the same reason
-        # it is allowed on every side: the lamp's bowl takes the whole diode array underneath and a strip
-        # of the middle of it round the edge, and both are the drawing's intent
+        # it is allowed on every side: a dome's side wants the glass the circle is drawn on
         if texture in FRAME_EXEMPT:
             continue
         if texture and len(used) >= 5 and bordered(os.path.join(TEXTURES, texture)):
