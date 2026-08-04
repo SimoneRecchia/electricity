@@ -152,9 +152,17 @@ public class PvArrayRenderer extends ObjRendererBase {
 				midRun(array, north), midRun(array, south));
 	}
 
+	/**
+	 * Whether something at this end has its own cable up against this row.
+	 *
+	 * Asked of {@link PvArrayBlock#gives} rather than worked out here, because that is the same method
+	 * {@link PvStrings} wires the plant by: a row whose lead reaches this boundary feeds this one, and a
+	 * row whose lead is at its other end does not, harness or no harness. So what is drawn and what is
+	 * counted cannot disagree - they are one rule read twice.
+	 */
 	private static boolean fedFrom(PvArrayBlockEntity array, Direction direction) {
 		BlockPos beside = array.getBlockPos().relative(direction);
-		if (PvArrayBlock.harnessed(array.getLevel().getBlockState(beside))) return true;
+		if (PvArrayBlock.gives(array.getLevel().getBlockState(beside), direction.getOpposite())) return true;
 
 		return cableArrives(array.getLevel(), array.getBlockPos(), direction);
 	}
@@ -188,13 +196,18 @@ public class PvArrayRenderer extends ObjRendererBase {
 	/**
 	 * Whether one group of an array's model is drawn.
 	 *
-	 * Nothing of a row's own harness until a reel of cable has been worked in - so plugging an array in is
-	 * visible from across the field.
+	 * Two halves, and which half a group is in decides everything about it.
 	 *
-	 * The socket is the exception, and deliberately: it belongs to whatever is *feeding* this row rather
-	 * than to this row, so it appears as soon as the row behind has an output pointing at it whether or not
-	 * this one has been cabled yet. Which is the right way round - a socket is where a cable arrives, and a
-	 * cable arriving does not wait for the thing it is arriving at.
+	 * The <b>input</b> half is the socket and the turn on the same end. It appears when something arrives
+	 * at that end - copper, or the row behind with its lead out - and it does not care whether this row
+	 * has a reel of cable in it, because a socket is where a cable arrives and a cable arriving does not
+	 * wait for the thing it is arriving at. It is also exactly what makes the row wired: see
+	 * {@link PvArrayBlock#takes}.
+	 *
+	 * The <b>output</b> half is the row's own lead and the turn at that end, and it appears once a reel has
+	 * been worked in, because that is what a harness is - the leads that reach the row behind. So plugging
+	 * an array in is visible from across the field, which is the only way a player finds the one row they
+	 * forgot.
 	 *
 	 * A tracked row's plugs are the other way about: its run goes the whole length of the block, so a
 	 * cabled row needs no plug at either end and an uncabled one shows the plug at whichever end has
@@ -203,16 +216,18 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * in a field are chained the other way round, and a plug only ever at the north end is at the wrong end
 	 * of half of them.
 	 *
-	 * The entries are drawn for whatever meets this row in the middle of an edge - laid copper, or a
-	 * tracked row, whose harness runs down the middle of its own block. A fixed row next door needs no
-	 * turn: the two meet corner to corner already.
+	 * The entries are the turns out to the corner the leads are on, drawn for whatever meets this row in
+	 * the middle of an edge - laid copper, or a tracked row, whose harness runs down the middle of its own
+	 * block. Each belongs to the half its end belongs to: the one at the socket end appears with the
+	 * socket, the one at the lead end with the lead. A fixed row next door needs neither, since those two
+	 * meet corner to corner already.
 	 */
 	private static boolean drawn(String groupName, boolean harnessed, Ends ends) {
 		if (!isHarness(groupName)) return true;
 		if (groupName.startsWith("harness_plug_north")) return !harnessed && ends.fedNorth();
 		if (groupName.startsWith("harness_plug_south")) return !harnessed && ends.fedSouth();
 		if (groupName.startsWith("harness_input")) return ends.fedNorth();
-		if (groupName.startsWith("harness_entry_north")) return harnessed && ends.midNorth();
+		if (groupName.startsWith("harness_entry_north")) return ends.midNorth();
 		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.midSouth();
 
 		return harnessed;

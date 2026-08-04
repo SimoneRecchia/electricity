@@ -669,7 +669,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	 * other end up.
 	 */
 	public boolean claim(BlockPos candidate, DcNetwork.Reach run, DcCableSpec through) {
-		if (level == null || !harnessed()) return false;
+		if (level == null) return false;
 		if (collectorPos != null && !collectorPos.equals(candidate) && runMetres <= run.metres()) return false;
 
 		collectorPos = candidate.immutable();

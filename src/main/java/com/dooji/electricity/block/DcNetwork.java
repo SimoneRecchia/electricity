@@ -43,8 +43,18 @@ public final class DcNetwork {
 	 */
 	private static final int MAX_RUNS = 4096;
 
-	/** A machine the walk got to, and the run it took to get there. */
-	public record Reach(BlockPos pos, int runs, int buried) {
+	/** One block of a run the walk still has to follow. */
+	private record Step(BlockPos pos, int runs, int buried) {
+	}
+
+	/**
+	 * A machine the walk got to, and the run it took to get there.
+	 *
+	 * {@code from} is the machine's own face the run arrived at, because for some machines that decides
+	 * whether the arrival is a connection at all: a row of modules has its leads at its two ends and
+	 * nothing along its flanks, so copper up against a flank reaches it and wires nothing.
+	 */
+	public record Reach(BlockPos pos, int runs, int buried, Direction from) {
 		/**
 		 * Length of the run in metres.
 		 *
@@ -86,7 +96,7 @@ public final class DcNetwork {
 		List<Reach> found = new ArrayList<>();
 		Set<BlockPos> visited = new HashSet<>();
 		Set<BlockPos> claimed = new HashSet<>();
-		Deque<Reach> frontier = new ArrayDeque<>();
+		Deque<Step> frontier = new ArrayDeque<>();
 		int budget = Math.min(MAX_RUNS, Math.max(1, maxRuns));
 
 		for (BlockPos start : reaching(level, origin, cable)) {
@@ -94,7 +104,7 @@ public final class DcNetwork {
 		}
 
 		while (!frontier.isEmpty() && visited.size() <= budget) {
-			Reach at = frontier.poll();
+			Step at = frontier.poll();
 			BlockState state = level.getBlockState(at.pos());
 			if (!(state.getBlock() instanceof DcCableBlock run)) continue;
 
@@ -110,7 +120,9 @@ public final class DcNetwork {
 					continue;
 				}
 
-				if (wanted.test(there) && claimed.add(target)) found.add(new Reach(target, at.runs(), at.buried()));
+				if (wanted.test(there) && claimed.add(target)) {
+					found.add(new Reach(target, at.runs(), at.buried(), arrivedAt(at.pos(), target)));
+				}
 			}
 		}
 
@@ -118,9 +130,20 @@ public final class DcNetwork {
 	}
 
 	/** One more block of run, counting whether it was in the ground. */
-	private static Reach step(Level level, BlockPos pos, int runs, int buried) {
+	private static Step step(Level level, BlockPos pos, int runs, int buried) {
 		boolean inGround = level.getBlockState(pos).getValue(DcCableBlock.BURIED);
-		return new Reach(pos, runs + 1, buried + (inGround ? 1 : 0));
+		return new Step(pos, runs + 1, buried + (inGround ? 1 : 0));
+	}
+
+	/**
+	 * Which face of the machine the run came up against.
+	 *
+	 * Horizontally, because that is the only part that matters: a run climbing a bank onto a machine
+	 * still arrives at one of its four sides, and the side is what a machine's own leads are arranged
+	 * about. Null if the two are stacked, which no reaching run is.
+	 */
+	private static Direction arrivedAt(BlockPos cable, BlockPos machine) {
+		return Direction.fromDelta(cable.getX() - machine.getX(), 0, cable.getZ() - machine.getZ());
 	}
 
 	/**

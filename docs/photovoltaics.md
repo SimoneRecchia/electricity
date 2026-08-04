@@ -18,11 +18,10 @@ reports what it *could* have made, and its panel says so in as many words.
 ## 1. Building one
 
 1. Place an **inverter**. Everything else is decided by which one.
-2. Place **arrays**.
-3. **Right-click each array with a reel of string cable.** That fits its leads, and the array grows
-   a junction box at the middle of the block that you can see from across the field. Until then its
-   strings go nowhere and its panel says so — a string with no leads on it is not connected to
-   anything.
+2. Place **arrays**, in lines, each facing the way the copper will come from.
+3. **Right-click an array with a reel of string cable** if you want another array *after* it. That fits
+   the row's outgoing leads and you can see them from across the field. The last row of a line needs
+   none — see [How a plant is wired](#how-a-plant-is-wired), which is the one rule worth reading first.
 4. **Lay string cable from the array to the inverter**, the way you lay redstone. It turns corners,
    steps up and down, and climbs the wall of a block to reach a run on top of it. Sneak on ground a
    shovel would move and it digs itself in instead: the spoil comes back, the run lies flush, and you
@@ -38,6 +37,36 @@ so does one whose string voltage falls outside the machine's tracking window.
 The central machine takes **nothing** here however much cable you lay to it. It has bare busbars
 rather than fused string terminals, which is what a central inverter is, and what fills the gap is a
 combiner box.
+
+## How a plant is wired
+
+**Two things are connected when the cables drawn between them meet.** That is the whole rule, and it is
+the rule rather than a description of one: the renderer and `PvStrings` read the same two methods, so a
+plant that looks wired is wired.
+
+What a row has drawn at each of its two ends:
+
+| end | what is there | when |
+|---|---|---|
+| the end it faces | its **socket** | always — it is what something else plugs into |
+| the other end | its own **lead** | only once a reel of cable has been worked in |
+| either end of a **tracked** row | plug, or the run itself | its tube is forced north-south, so those are its ends whichever way it was placed |
+| its flanks | nothing | ever |
+
+So:
+
+- Lay a cable, put a table against it **facing it**, and the table is connected with nothing fitted —
+  the way redstone is. Its socket is there and the copper meets it.
+- Put that table down the other way round and it is not, until you fit a reel: then its own lead reaches
+  the copper, which is a connection just as good.
+- A **reel of cable is what carries the connection on to the next row.** A line of six tables off one
+  cable takes five reels, not six, and the sixth is the end of the string. That is what a harness is: a
+  row's outgoing leads.
+- Copper along a row's **flank** wires nothing, because nothing is drawn there. A string has two ends.
+
+Every row crossed costs its **ten metres** like any other ten metres of cable, so a long line pays the
+volt drop a long run pays — it is the same conductor. A row at the end of two chains counts down the
+shorter of them, which is the pair with less resistance in it.
 
 ### The combiner box
 

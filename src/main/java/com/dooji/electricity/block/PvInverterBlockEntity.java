@@ -514,8 +514,8 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private List<DcNetwork.Reach> reachableArrays(ServerLevel serverLevel, InverterSpec spec) {
 		if (!spec.stringTerminals() && integrated == null) return List.of();
 
-		return DcNetwork.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
-				PvArrayBlock::harnessed, ElectricityServerConfig.maxCableRun());
+		return PvStrings.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
+				ElectricityServerConfig.maxCableRun());
 	}
 
 	/** Every combiner box a run of trunk cable reaches, shortest run first. */

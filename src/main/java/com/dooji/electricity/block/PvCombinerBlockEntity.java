@@ -135,8 +135,8 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		double currentCeiling = outputCeiling(spec);
 		double currentConnected = 0.0;
 
-		for (DcNetwork.Reach reach : DcNetwork.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
-				PvArrayBlock::harnessed, ElectricityServerConfig.maxCableRun())) {
+		for (DcNetwork.Reach reach : PvStrings.reachable(serverLevel, worldPosition, CableCatalog.STRING_6,
+				ElectricityServerConfig.maxCableRun())) {
 			PvArrayBlockEntity array = LoadedBlockEntities.find(serverLevel, reach.pos(), PvArrayBlockEntity.class);
 			if (array == null) continue;
 

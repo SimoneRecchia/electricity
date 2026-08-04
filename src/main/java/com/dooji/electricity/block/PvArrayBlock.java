@@ -92,17 +92,21 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	}
 
 	/**
-	 * String cable only, once the leads are on, and only at the two ends of the row.
+	 * String cable only, and only where the row has something for it to land on.
 	 *
 	 * A string has two ends. They are where the next row's string arrives and where this one's leaves, so
 	 * a run of cable joins a row there and not down its flank - which is both what a real plant looks like
-	 * and the reason the model has one lead along one edge instead of a run round all four. The axis is
-	 * the block's own facing, so it turns with the panel; a tracker's is forced north-south, which is the
-	 * axis its torque tube runs on and therefore the axis its rows chain along.
+	 * and the reason the model has one lead along one edge instead of a run round all four.
+	 *
+	 * Which end takes what is {@link #meets}, the same method the plant is wired by and the models are
+	 * drawn from. It used to require the leads to be on at either end, and that was the fault behind the
+	 * question this all came from: a run laid to a bare row's *socket* refused to point at it, so a panel
+	 * put down against a cable was connected to nothing until it had a reel of cable in it. A socket is
+	 * for arriving at.
 	 */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
-		return !cable.trunk() && state.getValue(HARNESSED) && side.getAxis() == state.getValue(FACING).getAxis();
+		return !cable.trunk() && meets(state, side);
 	}
 
 	/**
@@ -122,6 +126,65 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	/** Whether this array has its leads, asked of the state so the client can ask it too. */
 	public static boolean harnessed(BlockState state) {
 		return state.getBlock() instanceof PvArrayBlock && state.getValue(HARNESSED);
+	}
+
+	/** Whether a block is one of these rows at all. */
+	public static boolean row(BlockState state) {
+		return state.getBlock() instanceof PvArrayBlock;
+	}
+
+	/**
+	 * Whether a connection can arrive at this face of the row.
+	 *
+	 * <h2>The rule the whole plant is wired by</h2>
+	 *
+	 * Two things are connected when the cables drawn at the boundary between them meet. Nothing else,
+	 * and that is on purpose: a plant that looks wired and is not would be the worst thing this could
+	 * be, so the picture is the rule rather than a description of it. {@link PvArrayRenderer} decides
+	 * what to draw from these same two methods.
+	 *
+	 * What is drawn to be plugged into is the socket, and it is always there: a table or a rack has one
+	 * on the end it faces, and a tracked row has one on each of the two ends its tube runs to, since
+	 * placement forces that tube north-south whichever way the player was looking.
+	 *
+	 * So a row whose socket end faces a run of copper is wired with no harness in it at all. That is the
+	 * answer to the question this was written for - place a cable, then a panel against it, and the panel
+	 * is connected, the way redstone is.
+	 */
+	public static boolean takes(BlockState state, @Nullable Direction face) {
+		if (face == null || !(state.getBlock() instanceof PvArrayBlock array)) return false;
+		if (array.spec().tracked()) return face.getAxis() == Direction.Axis.Z;
+
+		return face == state.getValue(FACING);
+	}
+
+	/**
+	 * Whether the row's own cable leaves by this face, which is the whole of what a harness is for.
+	 *
+	 * A reel of cable fits a row's *outgoing* leads. So a row with no harness can be fed and cannot pass
+	 * anything on, and the last row of a string needs none - while every row before it does, because
+	 * that is the cable reaching the row behind.
+	 *
+	 * A table's and a rack's lead is on the end away from the socket. A tracked row's run goes the whole
+	 * length of the block, so it leaves by both ends, and which one is the way on depends on which one it
+	 * was fed at.
+	 */
+	public static boolean gives(BlockState state, @Nullable Direction face) {
+		if (face == null || !harnessed(state) || !(state.getBlock() instanceof PvArrayBlock array)) return false;
+		if (array.spec().tracked()) return face.getAxis() == Direction.Axis.Z;
+
+		return face == state.getValue(FACING).getOpposite();
+	}
+
+	/**
+	 * Whether a row has anything at all at this face for something to meet.
+	 *
+	 * Its socket, or its own outgoing lead. Everything that has an opinion about whether two things are
+	 * connected asks this one method - the cable, which will not point anywhere else; {@link PvStrings},
+	 * which wires the plant; and the renderer, which draws it - so the three cannot disagree.
+	 */
+	public static boolean meets(BlockState state, @Nullable Direction face) {
+		return takes(state, face) || gives(state, face);
 	}
 
 	/**

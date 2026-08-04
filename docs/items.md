@@ -28,10 +28,13 @@ graph LR
   MET -.-> T
 ```
 
-**DC side.** An array does nothing until a reel of string cable is worked into it — right-click it, and
-it grows a junction box and the leads to prove it. From there a run of cable reaches either a combiner
-box or an inverter with fused string terminals, and `DcNetwork` follows the copper rather than a radius,
-so what a player sees connected is what the plant counts. Length costs what copper costs: 200 m of
+**DC side.** A row is connected when a run of copper meets what it has drawn at one of its two ends: its
+socket, which is always there, or its own lead, which exists once a reel of string cable has been worked
+in. So the reel is what carries the connection on to the *next* row — a line of six tables off one cable
+takes five of them — and the row at the end of the line needs none. From there a run of cable reaches
+either a combiner box or an inverter with fused string terminals, and `DcNetwork` follows the copper
+rather than a radius while `PvStrings` follows the harnesses, so what a player sees connected is what the
+plant counts. Length costs what copper costs: 200 m of
 6 mm² at a string's own current is 2.8% lost, and the same strings paralleled into one 240 mm² trunk is
 1.0%. That difference is the reason a combiner box exists, and the panel says so.
 

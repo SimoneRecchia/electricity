@@ -146,12 +146,10 @@ public class PvArrayScreen extends PlantScreen {
 		if (array.snowDepthM() > 0.0 && array.effectiveIrradiance() <= 1.0) {
 			key = "screen.electricity.pv_array.state.snow";
 			colour = RED;
-		} else if (!array.harnessed()) {
-			// the two ways of not being connected, said apart, because the fixes are different: one wants
-			// a reel of cable on the array and the other wants the cable run somewhere
-			key = "screen.electricity.pv_array.state.no_harness";
-			colour = RED;
 		} else if (!array.wired()) {
+			// one state rather than two: a row with no harness is not a fault, it is the last row of a
+			// string. What is a fault is nothing reaching this one, whatever the reason
+
 			key = "screen.electricity.pv_array.state.no_collector";
 			colour = RED;
 		} else if (array.obstructionFraction() < 0.5) {
