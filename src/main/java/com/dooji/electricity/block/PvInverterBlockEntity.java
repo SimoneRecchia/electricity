@@ -249,7 +249,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		double scale = renderScale(spec());
 		Vec3 local = new Vec3(centre.x() * scale, centre.y() * scale, centre.z() * scale);
 
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(rotateVector(local, getBlockState().getValue(PvInverterBlock.FACING)));
+		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(ModelFacing.turned(local, PvInverterBlock.AUTHORED, getBlockState().getValue(PvInverterBlock.FACING)));
 	}
 
 	/**
@@ -266,16 +266,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return 0.92;
 	}
 
-	private static Vec3 rotateVector(Vec3 vector, Direction facing) {
-		double degrees = switch (facing) {
-			case WEST -> 90.0;
-			case SOUTH -> 180.0;
-			case EAST -> 270.0;
-			default -> 0.0;
-		};
-
-		return vector.yRot((float) Math.toRadians(degrees));
-	}
 
 	private void updateWirePositions() {
 		ensureArraySizes();

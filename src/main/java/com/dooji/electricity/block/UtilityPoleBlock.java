@@ -36,12 +36,30 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	/**
 	 * The facing utility_pole.obj was modelled at, as far as the cells need to care.
 	 *
-	 * East, the same as the other inherited models. The renderer's own mapping is not quite a quarter turn
-	 * from east - it comes out half a turn the other way for east and west, because the pole's model is
-	 * mirrored rather than merely turned - and that difference cannot show here: the pole's geometry and
-	 * the table below are both unchanged by a half turn, mast, arms and every insulator on them.
+	 * East, the same as the other inherited models - but see {@link #rotation}: this model is mirrored
+	 * rather than merely turned, so the turn it actually takes is half a turn from east for east and west.
+	 * That difference cannot show in the cells, because the pole's geometry and the table below are both
+	 * unchanged by a half turn: mast, arms and every insulator on them.
 	 */
 	public static final Direction AUTHORED = Direction.EAST;
+
+	/**
+	 * How far to turn this model to face a given way, which is the one mapping in the mod that
+	 * {@link ModelFacing} cannot give.
+	 *
+	 * The pole's geometry is mirrored, not turned: north and south come out swapped against the quarter
+	 * turns from {@link #AUTHORED}, so it keeps a table of its own. Said once, here, and read by both the
+	 * renderer and the block entity that hangs the wires - they had a copy each, and a copy each is how
+	 * the collision came to disagree with the model in the first place.
+	 */
+	public static float rotation(Direction facing) {
+		return switch (facing) {
+			case EAST -> 180.0f;
+			case SOUTH -> 270.0f;
+			case WEST -> 0.0f;
+			default -> 90.0f;
+		};
+	}
 
 	/**
 	 * The whole pole as collision, cell by cell, cut from utility_pole.obj.

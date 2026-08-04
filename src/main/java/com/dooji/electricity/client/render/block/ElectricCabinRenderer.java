@@ -18,7 +18,6 @@ import java.util.HashSet;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -49,7 +48,7 @@ public class ElectricCabinRenderer extends ObjRendererBase {
 		for (ElectricCabinBlockEntity cabin : TrackedBlockEntities.ofType(ElectricCabinBlockEntity.class)) {
 			seen.add(cabin.getBlockPos());
 			ObjRenderUtil.withAlignedPose(cabin, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(ElectricCabinBlock.FACING),
-					ElectricCabinRenderer::rotationForCabin,
+					turnedFrom(ElectricCabinBlock.AUTHORED),
 					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), cabin.getBlockPos()));
 		}
 
@@ -85,9 +84,6 @@ public class ElectricCabinRenderer extends ObjRendererBase {
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), insulatorBoxes);
 	}
 
-	private static float rotationForCabin(Direction facing) {
-		return rotationFrom(ElectricCabinBlock.AUTHORED, facing);
-	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {
 		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);

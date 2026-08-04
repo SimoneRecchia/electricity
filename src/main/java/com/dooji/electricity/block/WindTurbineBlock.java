@@ -27,6 +27,14 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class WindTurbineBlock extends Block implements EntityBlock {
+	/**
+	 * The facing wind_turbine.obj was modelled at: an inherited model, and it faces south.
+	 *
+	 * Declared here because more than one thing has to agree about it - the renderer turns the model
+	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	 */
+	public static final Direction AUTHORED = Direction.SOUTH;
+
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
 	/** Nacelle height in the authored model, in blocks, at the scale the C130 draws it. */

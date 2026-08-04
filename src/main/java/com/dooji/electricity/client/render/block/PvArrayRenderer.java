@@ -81,7 +81,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		for (PvArrayBlockEntity array : TrackedBlockEntities.ofType(PvArrayBlockEntity.class)) {
 			seen.add(array.getBlockPos());
 			ObjRenderUtil.withAlignedPose(array, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					PvArrayRenderer::drawnFacing, PvArrayRenderer::rotationForFacing,
+					PvArrayRenderer::drawnFacing, turnedFrom(PvArrayBlock.AUTHORED),
 					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), array));
 		}
 
@@ -344,7 +344,4 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * {@link PvArrayBlock#planeAzimuthDeg} reads the plane's bearing off the same facing - so north
 	 * needs no rotation and the rest follow round.
 	 */
-	private static float rotationForFacing(Direction facing) {
-		return rotationFrom(Direction.NORTH, facing);
-	}
 }

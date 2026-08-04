@@ -99,15 +99,9 @@ public interface MachineShell {
 	 */
 	Direction shellAuthored();
 
-	/**
-	 * How many quarter turns anticlockwise take this machine's model onto the world, for this state.
-	 *
-	 * The renderer's own arithmetic, kept here so the collision cannot come out at a right angle to the
-	 * machine again: quarter turns from the facing the geometry was authored at to the facing it is placed
-	 * at, which is what {@code ObjRendererBase.rotationFrom} divides by ninety.
-	 */
+	/** How many quarter turns take this machine's model onto the world, for this state. */
 	default int shellTurns(BlockState state) {
-		return (shellAuthored().get2DDataValue() - shellFacing(state).get2DDataValue() + 4) % 4;
+		return ModelFacing.quarters(shellAuthored(), shellFacing(state));
 	}
 
 	/** The machine's own block's shape, which is the one cell of its table that stays a machine. */

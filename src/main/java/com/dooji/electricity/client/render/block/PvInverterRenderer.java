@@ -79,7 +79,7 @@ public class PvInverterRenderer extends ObjRendererBase {
 		for (PvInverterBlockEntity inverter : TrackedBlockEntities.ofType(PvInverterBlockEntity.class)) {
 			seen.add(inverter.getBlockPos());
 			ObjRenderUtil.withAlignedPose(inverter, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(PvInverterBlock.FACING), PvInverterRenderer::rotationForFacing,
+					state -> state.getValue(PvInverterBlock.FACING), turnedFrom(PvInverterBlock.AUTHORED),
 					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), inverter));
 		}
 
@@ -98,7 +98,7 @@ public class PvInverterRenderer extends ObjRendererBase {
 		Vec3 hub = pivot(model, "fan", new Vec3(0.46, 0.68, 0.0));
 		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
 		Set<String> entries = inverter.getLevel() == null ? Set.of()
-				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), facing, "entry");
+				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), PvInverterBlock.AUTHORED, facing, "entry");
 		boolean section = PvInverterBlock.hasCombiner(inverter.getBlockState());
 		Map<String, Matrix4f> poses = new HashMap<>();
 
@@ -184,7 +184,4 @@ public class PvInverterRenderer extends ObjRendererBase {
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
 	}
 
-	private static float rotationForFacing(Direction facing) {
-		return rotationFrom(Direction.NORTH, facing);
-	}
 }

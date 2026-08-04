@@ -44,6 +44,14 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * mod that a player can perform with their hands.
  */
 public class PvCombinerBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+	/**
+	 * The facing pv_combiner.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
+	 *
+	 * Declared here because more than one thing has to agree about it - the renderer turns the model
+	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	 */
+	public static final Direction AUTHORED = Direction.NORTH;
+
 	/** The output load-break switch, open. */
 	public static final BooleanProperty ISOLATED = BooleanProperty.create("isolated");
 

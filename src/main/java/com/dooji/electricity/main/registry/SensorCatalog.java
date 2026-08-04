@@ -157,15 +157,6 @@ public final class SensorCatalog {
 		return List.copyOf(BY_ID.values());
 	}
 
-	/**
-	 * The seven instruments a met mast carries, in bus order.
-	 *
-	 * Derived from where each instrument belongs rather than listed again, so the mast cannot come to
-	 * disagree with {@link SensorSpec.Instrument#onArray}.
-	 */
-	public static List<SensorSpec> mastInstruments() {
-		return BY_ID.values().stream().filter(spec -> !spec.instrument().onArray()).toList();
-	}
 
 	/** Full designation as a calibration certificate prints it, e.g. {@code Kelvinsen SP-11}. */
 	public static String fullName(SensorSpec spec) {

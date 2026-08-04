@@ -593,7 +593,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
-		Vec3 rotatedCenter = rotateVector(localCenter, facing);
+		Vec3 rotatedCenter = ModelFacing.turned(localCenter, WindTurbineBlock.AUTHORED, facing);
 		// The machine is the top block of the structure and the wire fitting is at the foot of
 		// the tower, so the connection point drops by the whole tower.
 		//
@@ -603,17 +603,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
-	private Vec3 rotateVector(Vec3 vector, Direction facing) {
-		float facingRotation = switch (facing) {
-			case EAST -> 90.0f;
-			case SOUTH -> 0.0f;
-			case WEST -> 270.0f;
-			default -> 180.0f;
-		};
-
-		// negated, because this model's angles are measured the other way round from Vec3's
-		return vector.yRot((float) -Math.toRadians(facingRotation));
-	}
 
 	public void tick() {
 		updateWirePositions();

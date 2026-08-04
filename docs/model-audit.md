@@ -67,10 +67,16 @@ built assuming north, so a cabin's collision stood at a right angle to the cabin
 metre from the wall and through the wall itself. The power box had the same fault written out as four
 hand-rotated boxes, each a quarter turn from where its cabinet is drawn.
 
-It is now declared once, as `AUTHORED` on the block, and the renderer reads it from there.
-`check_hitboxes.py` fails if a renderer works it out for itself again, and cross-checks the angles the
-block entity turns its wire anchors by against the same constant — those are still four copies of the
-arithmetic, one per machine, and they all agree today.
+It is now declared once, as `AUTHORED` on each block, and everything reads it from there: the renderer
+poses by it, the block entity turns its wire anchors by it, the collision cells turn with it, and the
+cable entries are named from it. The arithmetic itself is `ModelFacing` and exists once — it was five
+copies of a four-case switch in the block entities and seven one-line methods in the renderers, all
+saying the same thing in a slightly different order.
+
+`check_hitboxes.py` prints each machine's authored facing and fails if a renderer works it out for
+itself instead of reading its block's constant. The one machine that cannot use the shared arithmetic is
+the utility pole, whose model is mirrored rather than turned; its table lives on its own block as
+`UtilityPoleBlock.rotation` and both the renderer and the wire anchors read that.
 
 **Still open, and known:** the met station, the combiner and the inverter each declare one fixed shape that
 does not turn at all, while their models are not the same after a quarter turn. So for two of the four

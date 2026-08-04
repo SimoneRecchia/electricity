@@ -43,6 +43,14 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  */
 public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
 	/**
+	 * The facing pv_inverter.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
+	 *
+	 * Declared here because more than one thing has to agree about it - the renderer turns the model
+	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	 */
+	public static final Direction AUTHORED = Direction.NORTH;
+
+	/**
 	 * A combiner box fitted inside the cabinet, giving it fused string terminals it did not have.
 	 *
 	 * A real option on a real product: a central inverter's direct-current section is a factory-fitted

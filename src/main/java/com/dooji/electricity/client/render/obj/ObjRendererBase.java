@@ -1,5 +1,6 @@
 package com.dooji.electricity.client.render.obj;
 
+import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.DcCableBlock;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -103,17 +104,17 @@ public abstract class ObjRendererBase {
 	 * grows the last stretch itself, from its own middle out to the edge the copper arrives at, at the
 	 * cross-section a laid run has - so the two meet with no seam and nothing to see through.
 	 *
-	 * The names are model-space, because that is what the model is authored in and the block's facing
-	 * has already turned it: the base rotation maps model north onto the block's facing, so a world
-	 * direction is shifted by the same offset to find the group that will end up pointing at it.
+	 * The names are model-space, because that is what the model is authored in and the block's facing has
+	 * already turned it - so the world direction the copper arrives from is read back into the model's own
+	 * frame to find the group that will end up pointing at it. Which way the model faces is the machine's
+	 * to say, exactly as it is for the pose: this used to assume north, and the assumption was invisible.
 	 */
-	protected static Set<String> cableEntries(BlockGetter level, BlockPos pos, Direction facing, String prefix) {
+	protected static Set<String> cableEntries(BlockGetter level, BlockPos pos, Direction authored, Direction facing, String prefix) {
 		Set<String> live = new HashSet<>();
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			if (!cableArrives(level, pos, direction)) continue;
 
-			int offset = (2 + direction.get2DDataValue() - facing.get2DDataValue() + 4) % 4;
-			live.add(prefix + "_" + Direction.from2DDataValue(offset).getName());
+			live.add(prefix + "_" + ModelFacing.side(direction, authored, facing).getName());
 		}
 
 		return live;
@@ -165,19 +166,20 @@ public abstract class ObjRendererBase {
 	 * easier failure to notice.
 	 */
 	/**
-	 * How far to turn a model authored facing one way so that it faces another.
+	 * The turn a model authored facing one way takes to face another, as the function a pose needs.
 	 *
 	 * Every renderer here had its own copy of this as a four-case switch, and seven of the eight were the
-	 * same three lines with the cases in a different order - which is a thing that reads as deliberate and
-	 * is not. What actually differs between them is one fact: which way the geometry was authored facing.
-	 * The mod's own models face north, because that is the default facing and the physics reads a plane's
-	 * bearing off it; the inherited ones face whichever way they happened to be modelled.
+	 * same three lines with the cases in a different order. What actually differs between them is one fact
+	 * - which way the geometry was modelled - and each machine's block declares that as its own
+	 * {@code AUTHORED}, so a renderer passes that and keeps no arithmetic at all.
 	 *
-	 * So that fact is now the argument, and the arithmetic is here once. Quarter turns, anticlockwise seen
-	 * from above, which is what {@code Axis.YP} does with a positive angle.
+	 * The arithmetic is {@link ModelFacing}, because the pose is not the only thing that needs it: the wire
+	 * anchors and the collision cells turn by the same quarter turns, and they run on a dedicated server
+	 * where nothing in this package exists. The one machine that cannot use this is the utility pole, whose
+	 * model is mirrored rather than turned; it passes its own table instead.
 	 */
-	protected static float rotationFrom(Direction authored, Direction facing) {
-		return ((authored.get2DDataValue() - facing.get2DDataValue() + 4) % 4) * 90.0f;
+	protected static FacingRotationFunction turnedFrom(Direction authored) {
+		return facing -> ModelFacing.degrees(authored, facing);
 	}
 
 	protected static Vec3 pivot(ObjModel model, String name, Vec3 fallback) {

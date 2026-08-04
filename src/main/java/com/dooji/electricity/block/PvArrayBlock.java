@@ -53,6 +53,14 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  */
 public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
 	/**
+	 * The facing the four mounting models was modelled at: the mod's own, so they face north - and the physics reads a plane's bearing off the same facing.
+	 *
+	 * Declared here because more than one thing has to agree about it - the renderer turns the model
+	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	 */
+	public static final Direction AUTHORED = Direction.NORTH;
+
+	/**
 	 * Whether the strings have leads on them.
 	 *
 	 * A block state rather than block entity data, because it decides what the cable alongside gets to

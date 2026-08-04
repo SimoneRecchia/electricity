@@ -1,5 +1,6 @@
 package com.dooji.electricity.client.render.block;
 
+import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.MetStationBlock;
 import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
@@ -74,7 +75,7 @@ public class MetStationRenderer extends ObjRendererBase {
 		for (MetStationBlockEntity station : TrackedBlockEntities.ofType(MetStationBlockEntity.class)) {
 			seen.add(station.getBlockPos());
 			ObjRenderUtil.withAlignedPose(station, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(MetStationBlock.FACING), MetStationRenderer::rotationForFacing,
+					state -> state.getValue(MetStationBlock.FACING), turnedFrom(MetStationBlock.AUTHORED),
 					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), station));
 		}
 
@@ -145,7 +146,7 @@ public class MetStationRenderer extends ObjRendererBase {
 	private static float smoothVane(BlockPos pos, float windDirection, Direction facing) {
 		// the wind heading is where the air is going; a vane's tail points back the way it came, which
 		// is what makes it read as a weather vane rather than an arrow
-		float target = Mth.wrapDegrees(-windDirection - rotationForFacing(facing) + 90.0f);
+		float target = Mth.wrapDegrees(-windDirection - ModelFacing.degrees(MetStationBlock.AUTHORED, facing) + 90.0f);
 		float current = VANE_ANGLE.getOrDefault(pos, target);
 		if (Minecraft.getInstance().isPaused()) return current;
 
@@ -162,7 +163,4 @@ public class MetStationRenderer extends ObjRendererBase {
 		}
 	}
 
-	private static float rotationForFacing(Direction facing) {
-		return rotationFrom(Direction.NORTH, facing);
-	}
 }

@@ -132,22 +132,12 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 		}
 
 		Direction facing = getBlockState().getValue(ElectricCabinBlock.FACING);
-		Vec3 rotatedCenter = rotateVector(localCenter, facing);
+		Vec3 rotatedCenter = ModelFacing.turned(localCenter, ElectricCabinBlock.AUTHORED, facing);
 
 		Vec3 worldOffset = Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0, 0.5);
 		return worldOffset.add(rotatedCenter);
 	}
 
-	private Vec3 rotateVector(Vec3 vector, Direction facing) {
-		float facingRotation = switch (facing) {
-			case EAST -> 0.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 180.0f;
-			default -> 90.0f;
-		};
-
-		return vector.yRot((float) Math.toRadians(facingRotation));
-	}
 
 	public void tick() {
 		updateWirePositions();

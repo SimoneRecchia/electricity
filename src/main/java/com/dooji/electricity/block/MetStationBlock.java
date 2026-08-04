@@ -32,6 +32,14 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * to the same data logger the mast instruments are on.
  */
 public class MetStationBlock extends HorizontalDirectionalBlock implements EntityBlock {
+	/**
+	 * The facing met_mast.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
+	 *
+	 * Declared here because more than one thing has to agree about it - the renderer turns the model
+	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	 */
+	public static final Direction AUTHORED = Direction.NORTH;
+
 	/** A mast with a boom: thin, and tall enough that the anemometer is clear of the array. */
 	private static final VoxelShape SHAPE = Block.box(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
 

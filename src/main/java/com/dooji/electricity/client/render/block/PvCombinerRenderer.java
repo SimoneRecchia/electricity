@@ -66,7 +66,7 @@ public class PvCombinerRenderer extends ObjRendererBase {
 		for (PvCombinerBlockEntity combiner : TrackedBlockEntities.ofType(PvCombinerBlockEntity.class)) {
 			seen.add(combiner.getBlockPos());
 			ObjRenderUtil.withAlignedPose(combiner, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(PvCombinerBlock.FACING), PvCombinerRenderer::rotationForFacing,
+					state -> state.getValue(PvCombinerBlock.FACING), turnedFrom(PvCombinerBlock.AUTHORED),
 					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), combiner));
 		}
 
@@ -80,7 +80,7 @@ public class PvCombinerRenderer extends ObjRendererBase {
 		float angle = advanceHandle(combiner.getBlockPos(), combiner.isolated());
 		Direction facing = combiner.getBlockState().getValue(PvCombinerBlock.FACING);
 		Set<String> entries = combiner.getLevel() == null ? Set.of()
-				: cableEntries(combiner.getLevel(), combiner.getBlockPos(), facing, "entry");
+				: cableEntries(combiner.getLevel(), combiner.getBlockPos(), PvCombinerBlock.AUTHORED, facing, "entry");
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
@@ -124,7 +124,4 @@ public class PvCombinerRenderer extends ObjRendererBase {
 		}
 	}
 
-	private static float rotationForFacing(Direction facing) {
-		return rotationFrom(Direction.NORTH, facing);
-	}
 }

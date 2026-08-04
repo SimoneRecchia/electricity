@@ -323,6 +323,12 @@ def anchor_turns(text):
     return dict(zip(('EAST', 'SOUTH', 'WEST', 'NORTH'), (int(float(value)) for value in match.groups())))
 
 
+def authored(java):
+    """The facing a block says its model was drawn at."""
+    match = re.search(r'AUTHORED = Direction\.(\w+)', java)
+    return match.group(1).lower() if match else None
+
+
 def facing_faults(name, block, java):
     """Everything that has to agree about which way a machine's geometry was modelled, and whether it does.
 
@@ -332,15 +338,15 @@ def facing_faults(name, block, java):
     anchors, and the cells - so the block declares it and the others have to be reading the same thing.
     """
     faults = []
-    match = re.search(r'AUTHORED = Direction\.(\w+)', java)
-    if match is None:
-        return ['no AUTHORED on the block, so its cells cannot know which way its model faces']
+    said = authored(java)
+    if said is None:
+        return ['no AUTHORED on the block, so nothing reading its model knows which way it faces']
 
-    authored = match.group(1)
+    authored_name = said.upper()
     renderer = os.path.join(RENDERERS, block.replace('Block', 'Renderer') + '.java')
     if os.path.exists(renderer):
         text = open(renderer).read()
-        if ('rotationFrom(%s.AUTHORED' % block) not in text and name not in MIRRORED:
+        if ('%s.AUTHORED' % block) not in text and name not in MIRRORED:
             faults.append('the renderer works the authored facing out for itself rather than reading '
                           '%s.AUTHORED, so the two can drift apart' % block)
 
@@ -348,14 +354,15 @@ def facing_faults(name, block, java):
     if os.path.exists(entity):
         mapping = anchor_turns(open(entity).read())
         if mapping is not None:
-            said = implied(mapping)
-            allowed = [authored] if name not in MIRRORED else [authored, None]
-            if said not in allowed:
+            implies = implied(mapping)
+            allowed = [authored_name] if name not in MIRRORED else [authored_name, None]
+            if implies not in allowed:
                 faults.append('the wire anchors are turned as though the model faced %s, and the block '
-                              'says %s' % (said or 'no facing at all', authored))
-            elif said is None and any(turn(authored, facing) % 180 != angle % 180 for facing, angle in mapping.items()):
+                              'says %s' % (implies or 'no facing at all', authored_name))
+            elif implies is None and any(turn(authored_name, facing) % 180 != angle % 180
+                                        for facing, angle in mapping.items()):
                 faults.append('the wire anchors are turned more than half a turn from %s, which the '
-                              'model cannot hide' % authored)
+                              'model cannot hide' % authored_name)
 
     return faults
 
@@ -388,8 +395,10 @@ def main():
             continue
 
         cells = claimed(pieces(body(obj_groups(path))))
-        print('%-16s %d cell(s), %d box(es)' % (os.path.basename(path), len(cells),
-                                                sum(len(boxes) for boxes in cells.values())))
+        java = open(os.path.join(BLOCKS, block + '.java')).read()
+        print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
+            os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),
+            authored(java) or 'nowhere in particular'))
         if printing:
             print(java(cells))
 
@@ -397,7 +406,10 @@ def main():
             print('    not compared: %s' % SWEPT[name])
             continue
 
-        java = open(os.path.join(BLOCKS, block + '.java')).read()
+        for fault in facing_faults(name, block, java):
+            faults += 1
+            print('    %s' % fault)
+
         have = declared(java)
         if not have:
             outside = [cell for cell in cells if cell != (0, 0, 0)]
@@ -413,7 +425,7 @@ def main():
                           'does not turn cannot match it at every facing - see docs/model-audit.md')
             continue
 
-        for fault in differences(cells, have) + facing_faults(name, block, java):
+        for fault in differences(cells, have):
             faults += 1
             print('    %s' % fault)
 

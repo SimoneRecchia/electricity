@@ -130,19 +130,6 @@ public record CombinerSpec(
 		return volts <= maxSystemVolts;
 	}
 
-	/**
-	 * How many strings of a given current the output switch will carry.
-	 *
-	 * The lower of the ways and the copper, which is the same shape of answer an inverter gives about
-	 * its trackers - and for the same reason: the holes in a box are cheap and the switch behind them
-	 * is not.
-	 */
-	public int stringsAccepted(double stringAmps) {
-		if (stringAmps <= 0.0) return fusedInputs;
-
-		return Math.max(0, Math.min(fusedInputs, (int) Math.floor(outputAmps / stringAmps)));
-	}
-
 	/** Self-consumption in kW, as a negative contribution the way an inverter's night draw is. */
 	public double selfConsumptionKw() {
 		return selfConsumptionW / 1000.0;
