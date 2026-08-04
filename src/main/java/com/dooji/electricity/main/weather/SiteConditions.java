@@ -6,6 +6,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
@@ -22,10 +24,12 @@ import net.minecraft.world.level.levelgen.Heightmap;
  *                            in the ground and the air, which sets both the daily temperature
  *                            swing and how cloudy the place is
  * @param biomeTemperature    the biome's own climate figure, on Minecraft's 0..2 scale
+ * @param albedo              fraction of the sunlight this ground throws back up, which is what a
+ *                            bifacial module's back lives on and what an albedometer measures
  * @param surroundingGroundY  mean ground level of the land around, or {@link Double#NaN} when
  *                            too little of it is loaded to say
  */
-public record SiteConditions(double roughness, double downfall, double biomeTemperature, double surroundingGroundY) {
+public record SiteConditions(double roughness, double downfall, double biomeTemperature, double albedo, double surroundingGroundY) {
 	/** How far out the land is measured to decide whether a site stands proud of it. */
 	private static final int EXPOSURE_RADIUS = 32;
 	/** Metres of relative elevation worth a full share of the speed-up below. */
@@ -49,6 +53,28 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 	private static final double ROCK = 0.06;
 	private static final double FOREST = 0.55;
 	private static final double DENSE_FOREST = 1.0;
+
+	/**
+	 * Albedos, and they are the published figures for the same ground the roughnesses above describe.
+	 *
+	 * Two orders of magnitude from end to end, and unlike the roughness that span is worth real money:
+	 * the back of a bifacial module lives on this, so the same array over fresh snow makes a tenth more
+	 * than over water and several percent more over sand than over grass. It is why developers gravel
+	 * the ground under bifacial plants and why an albedometer is the one instrument that only earns its
+	 * keep on a bifacial site.
+	 *
+	 * Snow is the outlier and it pulls both ways at once: it buries the modules, which costs everything,
+	 * and once shed it turns the ground into a mirror, which is the single best thing that can happen to
+	 * a bifacial array.
+	 */
+	private static final double WATER_ALBEDO = 0.07;
+	private static final double SNOW_ALBEDO = 0.80;
+	private static final double SAND_ALBEDO = 0.35;
+	private static final double BARE_GROUND_ALBEDO = 0.30;
+	private static final double ROCK_ALBEDO = 0.20;
+	private static final double GRASS_ALBEDO = 0.22;
+	private static final double FOREST_ALBEDO = 0.14;
+	private static final double DENSE_FOREST_ALBEDO = 0.12;
 
 	/**
 	 * Fraction to add to the wind aloft for a site that stands above the country around it.
@@ -85,7 +111,36 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 		var climate = biome.value().getModifiedClimateSettings();
 		double downfall = climate.downfall();
 
-		return new SiteConditions(roughnessOf(biome, downfall), downfall, biome.value().getBaseTemperature(), surveySurroundings(level, groundPos));
+		return new SiteConditions(roughnessOf(biome, downfall), downfall, biome.value().getBaseTemperature(),
+				albedoOf(level, groundPos, biome, downfall), surveySurroundings(level, groundPos));
+	}
+
+	/**
+	 * How much of the light this ground throws back up.
+	 *
+	 * Read off the same biome tags the roughness uses, because the same thing decides both - what is
+	 * growing on the ground - and then overridden by what is actually lying on it. Snow and ice are
+	 * checked in the world rather than inferred from the climate, because a snowfall is a thing that
+	 * happens rather than a property of a place, and it changes the albedo by a factor of four.
+	 */
+	private static double albedoOf(ServerLevel level, BlockPos groundPos, net.minecraft.core.Holder<Biome> biome, double downfall) {
+		BlockState surface = level.getBlockState(groundPos);
+		if (surface.is(Blocks.SNOW) || surface.is(Blocks.SNOW_BLOCK) || surface.is(Blocks.POWDER_SNOW) || surface.is(Blocks.ICE)
+				|| surface.is(Blocks.PACKED_ICE) || surface.is(Blocks.BLUE_ICE)) {
+			return SNOW_ALBEDO;
+		}
+
+		if (biome.is(BiomeTags.IS_OCEAN) || biome.is(BiomeTags.IS_DEEP_OCEAN) || biome.is(BiomeTags.IS_RIVER)) return WATER_ALBEDO;
+		if (biome.is(BiomeTags.IS_BEACH)) return SAND_ALBEDO;
+		if (biome.is(BiomeTags.IS_JUNGLE)) return DENSE_FOREST_ALBEDO;
+		if (biome.is(BiomeTags.IS_FOREST) || biome.is(BiomeTags.IS_TAIGA)) return FOREST_ALBEDO;
+		if (biome.is(BiomeTags.IS_BADLANDS)) return BARE_GROUND_ALBEDO;
+		if (biome.is(BiomeTags.IS_MOUNTAIN) || biome.is(BiomeTags.IS_HILL)) return ROCK_ALBEDO;
+		if (biome.is(BiomeTags.IS_SAVANNA)) return GRASS_ALBEDO;
+
+		// nothing claimed it, so rainfall decides again: a desert is sand and anywhere wetter is
+		// vegetation, which is darker
+		return downfall < 0.2 ? SAND_ALBEDO : GRASS_ALBEDO;
 	}
 
 	private static double roughnessOf(net.minecraft.core.Holder<Biome> biome, double downfall) {

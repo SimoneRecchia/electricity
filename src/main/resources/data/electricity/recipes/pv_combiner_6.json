@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "fff",
+    " E ",
+    " Q "
+  ],
+  "key": {
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "Q": {
+      "item": "electricity:load_break_switch"
+    },
+    "f": {
+      "item": "electricity:gpv_fuse"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_combiner_6"
+  }
+}

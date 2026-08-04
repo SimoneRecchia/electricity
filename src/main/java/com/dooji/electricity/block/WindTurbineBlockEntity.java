@@ -4,9 +4,8 @@ import com.dooji.electricity.api.WorldConditions;
 import com.dooji.electricity.api.power.IEnergyBudget;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TickBudget;
+import com.dooji.electricity.api.power.Telemetry;
 import com.dooji.electricity.api.power.TurbineSpec;
-import com.dooji.electricity.api.power.TurbineTelemetry;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
@@ -20,6 +19,7 @@ import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -96,13 +96,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * so this is the floor that keeps it honest.
 	 */
 	private static final double MINIMUM_CUT_OUT_HYSTERESIS = 3.0;
-	/**
-	 * How far past the cut-out a gust has to reach to trip the machine on its own.
-	 *
-	 * A fifth, so a machine rated to 25 m/s over ten minutes also comes off load for a 30 m/s
-	 * gust, which is the pair of limits real datasheets print.
-	 */
-	private static final double GUST_TRIP_RATIO = 1.2;
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
 
@@ -116,7 +109,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// reader would otherwise race the server thread and could mix values from two
 	// different ticks. Volatile makes the completed snapshot visible atomically.
 	private final TurbineTelemetrySimulator telemetrySimulator = new TurbineTelemetrySimulator();
-	private volatile TurbineTelemetry telemetry = TurbineTelemetry.EMPTY;
+	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
 	private double yawCableTwist = 0.0;
 	private boolean yawing = false;
 
@@ -133,8 +126,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * turbine down believing it had put it there.
 	 */
 	private volatile boolean stoppedByPlayer = false;
-	private volatile RedstoneMode redstoneMode = RedstoneMode.DISABLED;
-	private volatile boolean redstonePowered = false;
+	private final RedstoneStop redstone = new RedstoneStop();
 	private volatile double activePowerLimitKw;
 	/** What the wind alone would have produced, before curtailment. */
 	private double uncappedPower = 0.0;
@@ -217,12 +209,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		ObjBlockDefinition definition = definition();
 		if (definition != null && !definition.insulators().isEmpty()) return definition.insulators().size();
 		return 0;
-	}
-
-	private String insulatorName(int index) {
-		ObjBlockDefinition definition = definition();
-		if (definition != null && index < definition.insulators().size()) return definition.insulators().get(index);
-		return null;
 	}
 
 	private void ensureArraySizes() {
@@ -386,7 +372,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	 * wind cut-out alone.
 	 */
 	public boolean isBraked() {
-		return cutOutActive || stoppedByComputer || stoppedByPlayer || !redstoneMode.allowsRunning(redstonePowered);
+		return cutOutActive || stoppedByComputer || stoppedByPlayer || redstone.stopping();
 	}
 
 	public boolean isRunning() {
@@ -410,7 +396,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public boolean isStoppedByRedstone() {
-		return !redstoneMode.allowsRunning(redstonePowered);
+		return redstone.stopping();
 	}
 
 	public boolean isWindCutOut() {
@@ -418,7 +404,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public RedstoneMode getRedstoneMode() {
-		return redstoneMode;
+		return redstone.mode();
 	}
 
 	public double getActivePowerLimit() {
@@ -438,10 +424,9 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public void setRedstoneMode(RedstoneMode mode) {
-		if (mode == null || redstoneMode == mode) return;
-
-		redstoneMode = mode;
-		onControlChanged();
+		if (redstone.mode(mode)) {
+			onControlChanged();
+		}
 	}
 
 	/** Curtailment setpoint in kW, clamped to what the machine can actually produce. */
@@ -460,21 +445,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		syncStateToClients();
 	}
 
-	private void pollRedstone() {
-		if (level == null || level.isClientSide()) return;
-
-		boolean powered = level.hasNeighborSignal(worldPosition);
-		if (powered == redstonePowered) return;
-
-		redstonePowered = powered;
-		// only matters visually when the mode actually reacts to redstone
-		if (redstoneMode != RedstoneMode.DISABLED) {
-			onControlChanged();
-		} else {
-			setChanged();
-		}
-	}
-
 	/** Gross production before the output cap and before anything claims it, in Joules per tick. */
 	public double getGrossJoulesPerTick() {
 		return Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW;
@@ -483,7 +453,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	/**
 	 * The latest published snapshot. Safe to read from any thread; never null.
 	 */
-	public TurbineTelemetry getTelemetry() {
+	public Telemetry.Snapshot getTelemetry() {
 		return telemetry;
 	}
 
@@ -611,7 +581,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public Vec3 calculateOrientedInsulatorCenter(int index) {
 		if (index < 0 || index >= wirePositions.length) return null;
 
-		String groupName = insulatorName(index);
+		String groupName = InsulatorPartHelper.insulatorName(definition(), index);
 		if (groupName == null) return null;
 		var boundingBox = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groupName);
 		Vec3 localCenter;
@@ -623,7 +593,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
-		Vec3 rotatedCenter = rotateVector(localCenter, facing);
+		Vec3 rotatedCenter = ModelFacing.turned(localCenter, WindTurbineBlock.AUTHORED, facing);
 		// The machine is the top block of the structure and the wire fitting is at the foot of
 		// the tower, so the connection point drops by the whole tower.
 		//
@@ -633,23 +603,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
-	private Vec3 rotateVector(Vec3 vector, Direction facing) {
-		float facingRotation = switch (facing) {
-			case EAST -> 90.0f;
-			case SOUTH -> 0.0f;
-			case WEST -> 270.0f;
-			default -> 180.0f;
-		};
-
-		double radians = Math.toRadians(facingRotation);
-		double cos = Math.cos(radians);
-		double sin = Math.sin(radians);
-
-		double newX = vector.x * cos - vector.z * sin;
-		double newZ = vector.x * sin + vector.z * cos;
-
-		return new Vec3(newX, vector.y, newZ);
-	}
 
 	public void tick() {
 		updateWirePositions();
@@ -692,13 +645,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// written - 25 m/s over ten minutes, or a gust a fifth past it. Watching only the
 		// instantaneous wind would trip the machine on the first gust that touched 25 and
 		// release it a second later, which is chatter rather than protection.
-		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * GUST_TRIP_RATIO) {
+		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * WorldConditions.GUST_TRIP_RATIO) {
 			cutOutActive = true;
 		} else if (cutOutActive && meanWindSpeed <= cutOutResetSpeed(spec)) {
 			cutOutActive = false;
 		}
 
-		pollRedstone();
+		redstone.poll(this, this::onControlChanged);
 		// power first: the rotor speed reads the setpoint against what the wind was offering, so
 		// working them out in the other order would have it answering last tick's curtailment
 		updateGeneratedPower();
@@ -761,9 +714,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
 		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
-		redstonePowered = tag.getBoolean("redstonePowered");
-		RedstoneMode savedMode = RedstoneMode.byName(tag.getString("redstoneMode"));
-		redstoneMode = savedMode != null ? savedMode : RedstoneMode.DISABLED;
+		redstone.load(tag);
 		// an older turbine has no setpoint saved, so it defaults to uncurtailed rather
 		// than to a limit of zero, which would silently switch it off on load
 		activePowerLimitKw = tag.contains("activePowerLimitKw") ? tag.getDouble("activePowerLimitKw") : spec().ratedPowerKw();
@@ -846,8 +797,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		// needs every input to isBraked() to decide whether to animate the rotor
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
 		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
-		tag.putBoolean("redstonePowered", redstonePowered);
-		tag.putString("redstoneMode", redstoneMode.name());
+		redstone.save(tag);
 		tag.putDouble("activePowerLimitKw", activePowerLimitKw);
 	}
 
@@ -871,9 +821,9 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	@Override
 	public void onLoad() {
 		super.onLoad();
+		ClientTracking.track(this);
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.track(this);
 				InsulatorLookup.register(this);
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
@@ -883,10 +833,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		ClientTracking.untrack(this);
 		InsulatorIdRegistry.releaseIds(this.getInsulatorIds());
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.untrack(this);
 				InsulatorLookup.unregister(this.getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});

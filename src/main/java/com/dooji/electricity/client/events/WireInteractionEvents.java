@@ -7,6 +7,7 @@ import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlock;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.wire.WireAnchorHelper;
@@ -115,6 +116,20 @@ public class WireInteractionEvents {
 		}
 	}
 
+	/**
+	 * Whether a wire may be attached to this block at all.
+	 *
+	 * Written once rather than as a chain of instanceof tests at each end of a wire, because the list has
+	 * grown a member and would otherwise have needed adding to in two places that read identically and
+	 * are eighty characters long.
+	 */
+	@OnlyIn(Dist.CLIENT)
+	private static boolean wireable(net.minecraft.world.level.block.entity.BlockEntity entity) {
+		return entity instanceof UtilityPoleBlockEntity || entity instanceof ElectricCabinBlockEntity
+				|| entity instanceof PowerBoxBlockEntity || entity instanceof WindTurbineBlockEntity
+				|| entity instanceof PvInverterBlockEntity;
+	}
+
 	@OnlyIn(Dist.CLIENT)
 	private static boolean createWireFromInsulators(BlockPos startBlockPos, BlockPos endBlockPos, String startPartName, String endPartName) {
 		var level = Minecraft.getInstance().level;
@@ -123,8 +138,7 @@ public class WireInteractionEvents {
 		var startEntity = level.getBlockEntity(startBlockPos);
 		var endEntity = level.getBlockEntity(endBlockPos);
 
-		if (!(startEntity instanceof UtilityPoleBlockEntity || startEntity instanceof ElectricCabinBlockEntity || startEntity instanceof PowerBoxBlockEntity || startEntity instanceof WindTurbineBlockEntity)
-				|| !(endEntity instanceof UtilityPoleBlockEntity || endEntity instanceof ElectricCabinBlockEntity || endEntity instanceof PowerBoxBlockEntity || endEntity instanceof WindTurbineBlockEntity)) {
+		if (!wireable(startEntity) || !wireable(endEntity)) {
 			return false;
 		}
 

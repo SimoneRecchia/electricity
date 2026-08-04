@@ -1,0 +1,23 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "ZZZ",
+    " r ",
+    "WWW"
+  ],
+  "key": {
+    "W": {
+      "item": "electricity:wire"
+    },
+    "Z": {
+      "item": "electricity:silicon_wafer"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "electricity:solar_cell",
+    "count": 3
+  }
+}

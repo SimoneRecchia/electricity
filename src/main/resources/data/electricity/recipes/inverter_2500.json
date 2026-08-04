@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "GGG",
+    "BEB",
+    "KbK"
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "G": {
+      "item": "electricity:inverter_bridge"
+    },
+    "K": {
+      "item": "electricity:motor_core"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    }
+  },
+  "result": {
+    "item": "electricity:inverter_2500"
+  }
+}

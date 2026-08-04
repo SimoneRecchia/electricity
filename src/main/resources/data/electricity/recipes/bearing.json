@@ -1,0 +1,20 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " P ",
+    "nPn",
+    " P "
+  ],
+  "key": {
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "item": "electricity:bearing",
+    "count": 2
+  }
+}

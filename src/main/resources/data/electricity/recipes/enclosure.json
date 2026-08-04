@@ -1,0 +1,19 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "PPP",
+    "PIP",
+    "PPP"
+  ],
+  "key": {
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    }
+  },
+  "result": {
+    "item": "electricity:enclosure"
+  }
+}

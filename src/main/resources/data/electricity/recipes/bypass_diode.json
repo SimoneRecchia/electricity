@@ -1,0 +1,23 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "q",
+    "r",
+    "g"
+  ],
+  "key": {
+    "g": {
+      "item": "minecraft:gold_nugget"
+    },
+    "q": {
+      "item": "minecraft:quartz"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "electricity:bypass_diode",
+    "count": 2
+  }
+}

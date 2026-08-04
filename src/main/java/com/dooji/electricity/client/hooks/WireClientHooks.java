@@ -1,5 +1,6 @@
 package com.dooji.electricity.client.hooks;
 
+import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.wire.WireAnchorHelper;
 import com.dooji.electricity.client.wire.WireManagerClient;
@@ -22,8 +23,10 @@ public final class WireClientHooks {
 	}
 
 	public static InteractionResult handleUseOn(UseOnContext context) {
-		BlockPos clickedPos = context.getClickedPos();
 		var level = context.getLevel();
+		// most of what a player can see of a cabin or a pole is a collision cell rather than the machine
+		// itself, and an insulator sits on top of one, so the click has to be read as meaning the machine
+		BlockPos clickedPos = MachineShell.hostOr(level, context.getClickedPos());
 		BlockEntity blockEntity = level.getBlockEntity(clickedPos);
 		if (blockEntity == null) return InteractionResult.FAIL;
 

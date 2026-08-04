@@ -1,6 +1,7 @@
 package com.dooji.electricity.client.render.block;
 
 import com.dooji.electricity.api.power.TurbineSpec;
+import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.TurbineTowerBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlock;
@@ -23,7 +24,6 @@ import java.util.HashSet;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -74,14 +74,11 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		for (WindTurbineBlockEntity turbine : TrackedBlockEntities.ofType(WindTurbineBlockEntity.class)) {
 			seen.add(turbine.getBlockPos());
 			ObjRenderUtil.withAlignedPose(turbine, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(WindTurbineBlock.FACING),
-					WindTurbineRenderer::rotationForTurbine,
+					turnedFrom(WindTurbineBlock.AUTHORED),
 					(context, pose, buffers) -> renderWindTurbineWithAnimation(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), turbine));
 		}
 
-		if (!YAW_CACHE.isEmpty() && !seen.isEmpty()) {
-			YAW_CACHE.keySet().removeIf(pos -> !seen.contains(pos));
-		}
-
+		cleanupAngles(YAW_CACHE, seen);
 		cleanupCache(BUFFER_CACHE, seen);
 		renderBareTowers(mc, event, cameraPos);
 	}
@@ -128,7 +125,7 @@ public class WindTurbineRenderer extends ObjRendererBase {
 			WindTurbineBlockEntity blockEntity) {
 		float rotation1 = blockEntity.getRotation1();
 		float rotation2 = blockEntity.getRotation2();
-		float base = rotationForTurbine(blockEntity.getBlockState().getValue(WindTurbineBlock.FACING));
+		float base = ModelFacing.degrees(WindTurbineBlock.AUTHORED, blockEntity.getBlockState().getValue(WindTurbineBlock.FACING));
 		float renderYaw = smoothYaw(blockEntity.getBlockPos(), blockEntity.getYaw(), base);
 		float yawOffset = Mth.wrapDegrees(renderYaw - base);
 
@@ -314,14 +311,6 @@ public class WindTurbineRenderer extends ObjRendererBase {
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), insulatorBoxes);
 	}
 
-	private static float rotationForTurbine(Direction facing) {
-		return switch (facing) {
-			case EAST -> 90.0f;
-			case SOUTH -> 0.0f;
-			case WEST -> 270.0f;
-			default -> 180.0f;
-		};
-	}
 
 	private static float smoothYaw(BlockPos pos, float target, float base) {
 		float current = YAW_CACHE.containsKey(pos) ? YAW_CACHE.get(pos) : target;

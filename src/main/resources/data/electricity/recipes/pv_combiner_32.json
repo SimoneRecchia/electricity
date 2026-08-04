@@ -1,0 +1,28 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "fff",
+    "BEB",
+    "PQP"
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "Q": {
+      "item": "electricity:load_break_switch"
+    },
+    "f": {
+      "item": "electricity:gpv_fuse"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_combiner_32"
+  }
+}

@@ -13,6 +13,19 @@
     "electricity:c90_30",
     "electricity:c112_30",
     "electricity:turbine_tower",
-    "electricity:solar_panel"
+    "electricity:solar_panel",
+    "electricity:pv_flat_430",
+    "electricity:pv_tilt_580",
+    "electricity:pv_tilt_530",
+    "electricity:pv_track_700",
+    "electricity:pv_dual_440",
+    "electricity:inverter_10",
+    "electricity:inverter_110",
+    "electricity:inverter_350",
+    "electricity:inverter_2500",
+    "electricity:met_station",
+    "electricity:pv_combiner_6",
+    "electricity:pv_combiner_16",
+    "electricity:pv_combiner_32"
   ]
 }

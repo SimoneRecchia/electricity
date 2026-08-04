@@ -1,0 +1,5 @@
+{
+  "multipart": [
+    { "apply": { "model": "electricity:block/metal_particle" } }
+  ]
+}

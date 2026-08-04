@@ -1,0 +1,6 @@
+{
+  "textures": {
+    "particle": "electricity:block/pv_module"
+  },
+  "elements": []
+}

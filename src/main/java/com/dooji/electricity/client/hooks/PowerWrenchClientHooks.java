@@ -1,12 +1,21 @@
 package com.dooji.electricity.client.hooks;
 
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
+import com.dooji.electricity.block.MachineShell;
+import com.dooji.electricity.block.MetStationBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.PvArrayBlockEntity;
+import com.dooji.electricity.block.PvCombinerBlockEntity;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
+import com.dooji.electricity.client.screen.MetStationScreen;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
+import com.dooji.electricity.client.screen.PvArrayScreen;
+import com.dooji.electricity.client.screen.PvCombinerScreen;
+import com.dooji.electricity.client.screen.PvInverterScreen;
 import com.dooji.electricity.client.screen.WindTurbineScreen;
 import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
@@ -48,15 +57,24 @@ public final class PowerWrenchClientHooks {
 		if (mc.level == null) return false;
 
 		BlockPos target = findTargetedElectricBlock(mc, player, reach);
-		if (target == null) target = towerUnderCursor(mc);
+		if (target == null) target = solidBlockUnderCursor(mc);
 		if (target == null) return false;
 
 		target = resolveTarget(mc, target);
 
-		// a turbine has a control panel of its own; everything else still gets the plain
+		// four machines have control panels of their own; everything else still gets the plain
 		// readout, which is all there is to say about a pole or a junction box
-		if (mc.level.getBlockEntity(target) instanceof WindTurbineBlockEntity) {
+		BlockEntity blockEntity = mc.level.getBlockEntity(target);
+		if (blockEntity instanceof WindTurbineBlockEntity) {
 			mc.setScreen(new WindTurbineScreen(target));
+		} else if (blockEntity instanceof PvInverterBlockEntity) {
+			mc.setScreen(new PvInverterScreen(target));
+		} else if (blockEntity instanceof PvArrayBlockEntity) {
+			mc.setScreen(new PvArrayScreen(target));
+		} else if (blockEntity instanceof PvCombinerBlockEntity) {
+			mc.setScreen(new PvCombinerScreen(target));
+		} else if (blockEntity instanceof MetStationBlockEntity) {
+			mc.setScreen(new MetStationScreen(target));
 		} else {
 			mc.setScreen(new PowerInfoScreen(target));
 		}
@@ -103,27 +121,39 @@ public final class PowerWrenchClientHooks {
 		return result;
 	}
 
+	/**
+	 * Whether the machine's own geometry is what the player can see, rather than something in front of it.
+	 *
+	 * A machine's collision cells count as the machine. They are what stands between the eye and the wall
+	 * of a cabin at head height - the cabin's own block is at its feet - so without this a wrench worked
+	 * on the bottom metre of a machine and nowhere else.
+	 */
 	private static boolean hasLineOfSight(Minecraft mc, Player player, Vec3 start, Vec3 end, BlockPos targetPos) {
 		if (mc.level == null) return false;
 		ClipContext context = new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player);
 		BlockHitResult hitResult = mc.level.clip(context);
 		if (hitResult.getType() == HitResult.Type.MISS) return true;
-		return hitResult.getBlockPos().equals(targetPos);
+		return MachineShell.hostOr(mc.level, hitResult.getBlockPos()).equals(targetPos);
 	}
 
 	/**
-	 * A tower block under the crosshair, if that is what the player is looking at.
+	 * One of this mod's blocks under the crosshair, found by ordinary picking.
 	 *
-	 * Uses the vanilla hit result rather than the geometry scan above, because a tower has
-	 * no block entity for that scan to find and, unlike the rest of this mod's blocks, it
-	 * has real collision - so ordinary picking already knows exactly which one was clicked.
+	 * A fallback for the blocks the geometry scan above cannot help with, and there are two kinds.
+	 * A turbine tower has no block entity for that scan to find at all. And the photovoltaic blocks
+	 * have real collision that vanilla picking already resolves exactly - a flat array in particular
+	 * is three pixels tall and a ray march at that grazing angle is a poor way to find it when the
+	 * crosshair is already on it.
 	 */
 	@Nullable
-	private static BlockPos towerUnderCursor(Minecraft mc) {
+	private static BlockPos solidBlockUnderCursor(Minecraft mc) {
 		if (mc.level == null || !(mc.hitResult instanceof BlockHitResult hit)) return null;
-		if (!(mc.level.getBlockState(hit.getBlockPos()).getBlock() instanceof TurbineTowerBlock)) return null;
 
-		return hit.getBlockPos();
+		BlockPos pos = MachineShell.hostOr(mc.level, hit.getBlockPos());
+		if (mc.level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock) return pos;
+		if (isElectricBlock(mc.level.getBlockEntity(pos))) return pos;
+
+		return null;
 	}
 
 	/**
@@ -143,6 +173,7 @@ public final class PowerWrenchClientHooks {
 
 	private static boolean isElectricBlock(BlockEntity blockEntity) {
 		return blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof UtilityPoleBlockEntity
-				|| blockEntity instanceof PowerBoxBlockEntity;
+				|| blockEntity instanceof PowerBoxBlockEntity || blockEntity instanceof PvInverterBlockEntity || blockEntity instanceof PvArrayBlockEntity
+				|| blockEntity instanceof MetStationBlockEntity || blockEntity instanceof PvCombinerBlockEntity;
 	}
 }

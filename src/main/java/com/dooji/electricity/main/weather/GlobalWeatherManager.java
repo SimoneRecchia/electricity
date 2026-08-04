@@ -118,10 +118,14 @@ public final class GlobalWeatherManager {
 		// same shadow over two panels a few seconds apart instead of at the same instant
 		double cover = Atmosphere.cloudCover(seed, machinePos.getX(), machinePos.getZ(), dayTime, level.getGameTime(), site.downfall(), mean, direction,
 				raining, thundering);
-		double irradiance = Atmosphere.clearSkyIrradiance(Atmosphere.solarElevationSin(phase), pressure) * Atmosphere.cloudTransmittance(cover);
+		// the wind handed to the sky is the one at instrument height rather than at the sampled height,
+		// because what it is there for is cooling modules on the ground - a panel does not care how
+		// fast the air is moving at a hub thirteen blocks up
+		SkyConditions sky = Atmosphere.sky(Atmosphere.sunPosition(phase), pressure, cover, site.albedo(), temperature,
+				Atmosphere.windAtHeight(windAloft, WorldConditions.METRES_PER_BLOCK, site.roughness(), stability));
 
 		return new WeatherSnapshot(mean, instant, Atmosphere.gustFrom(mean, turbulence), turbulence, direction, temperature, pressure,
-				Atmosphere.airDensity(temperature, pressure), Atmosphere.profileExponent(site.roughness(), stability), cover, irradiance);
+				Atmosphere.airDensity(temperature, pressure), Atmosphere.profileExponent(site.roughness(), stability), sky);
 	}
 
 	/** Mean sea level pressure over this column, in hPa: the map itself, before any site correction. */

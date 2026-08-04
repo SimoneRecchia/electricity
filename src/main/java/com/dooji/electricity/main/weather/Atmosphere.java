@@ -43,8 +43,8 @@ import net.minecraft.util.Mth;
  * mean the same thing to the wind profile as it does to the rotor bolted on top of it.
  */
 public final class Atmosphere {
-	/** Seconds of atmosphere one tick of the day clock stands for: 86400 s over a 24000 tick day. */
-	private static final double SECONDS_PER_DAY_TICK = 3.6;
+	/** Seconds of atmosphere one tick of the day clock stands for. Shared, because a tracker drive needs it too. */
+	private static final double SECONDS_PER_DAY_TICK = WorldConditions.SECONDS_PER_DAY_TICK;
 	/** Horizontal scale of the pressure map. Only the pressure map: heights are in the mod's own metres. */
 	private static final double MAP_METRES_PER_BLOCK = 400.0;
 	/** One high-and-low pair across, in blocks. 2400 km at the scale above. */
@@ -369,8 +369,42 @@ public final class Atmosphere {
 	 */
 	private static final double CLEAR_AIR_TRANSMITTANCE = 0.70;
 	private static final double AIR_MASS_EXPONENT = 0.678;
-	/** Global horizontal over beam horizontal under a clear sky: the tenth the sky itself adds. */
-	private static final double DIFFUSE_FACTOR = 1.10;
+	/**
+	 * Liu & Jordan's clear-sky diffuse: the sky's own contribution as a share of what arrives above
+	 * the atmosphere, less a share of what got through as beam.
+	 *
+	 * The pair replaces a flat {@code DIFFUSE_FACTOR = 1.10} that used to stand in for the whole of
+	 * it. The factor was not far wrong at the zenith - it put the diffuse at a tenth of the global,
+	 * and this puts it at 88 of 1041 W/m2, which is nine percent - but a constant ratio cannot be
+	 * right at two elevations at once, and more importantly it left the beam and the diffuse
+	 * indistinguishable. Everything about shading depends on telling them apart.
+	 */
+	private static final double CLEAR_SKY_DIFFUSE_SHARE = 0.271;
+	private static final double CLEAR_SKY_DIFFUSE_BEAM_OFFSET = 0.294;
+
+	/**
+	 * Angular loss coefficient for a glass module front, from Martin & Ruiz.
+	 *
+	 * How much of the beam is reflected away rather than reaching the cells, as a function of the
+	 * angle it arrives at. Measured values run 0.08 to 0.25 for flat-plate modules and 0.16 is the
+	 * middle of that, which is an anti-reflection coated glass front. It costs about two percent at
+	 * 60 degrees and a third at 80, so it is negligible in the middle of the day and it is most of
+	 * why a tracker's plateau is not quite flat at its ends.
+	 */
+	private static final double ANGULAR_LOSS_COEFFICIENT = 0.16;
+
+	/** Air mass the spectrum is defined at: AM1.5, which is what every module is rated under. */
+	private static final double REFERENCE_AIR_MASS = 1.5;
+	/** Diffuse fraction under the clear sky that reference spectrum assumes. */
+	private static final double REFERENCE_DIFFUSE_FRACTION = 0.20;
+	/** Output lost per air mass of extra path, for a module of the reference spectral sensitivity. */
+	private static final double SPECTRAL_AIR_MASS_SLOPE = 0.020;
+	/** Output gained per unit of extra diffuse fraction, for the same module. */
+	private static final double SPECTRAL_DIFFUSE_SLOPE = 0.030;
+	/** Spectral sensitivity the two slopes above are quoted for: crystalline silicon's. */
+	private static final double REFERENCE_SPECTRAL_SENSITIVITY = 0.20;
+	/** How far the spectral correction is allowed to run either way. Real measured swings are inside this. */
+	private static final double SPECTRAL_LIMIT = 0.12;
 
 	/** Size of a fair weather cumulus, in blocks. Real ones run 0.5 to 2 km, at ten metres a block. */
 	private static final double CUMULUS_BLOCKS = 110.0;
@@ -398,18 +432,28 @@ public final class Atmosphere {
 	private static final double CUMULUS_TICKS = 6000.0;
 
 	/**
-	 * Sine of the sun's elevation, or 0 at night.
+	 * Where the sun is at a point in the day.
 	 *
-	 * Minecraft's sun rises due east, passes through the zenith and sets due west, every day
-	 * of the year: the world has no axial tilt and no latitude, so every day is an equinox at
-	 * the equator. Two things follow that are worth stating rather than discovering. A panel
-	 * wants no tilt at all, because the sun comes overhead - so a block of ground can be
-	 * covered edge to edge, with none of the row spacing a real array needs to keep from
-	 * shading itself. And the yields here are equatorial ones, near 20% of nameplate over the
-	 * year, rather than the 11% a temperate country manages.
+	 * The day runs from sunrise at phase 0 to sunset at 0.5, so the sun travels a half turn in that
+	 * time and the elevation is the arcsine of where it has got to - zero at both ends, ninety at
+	 * 0.25. Taking the arcsine rather than the angle itself is the whole of it: the angle keeps
+	 * climbing past noon and the elevation has to come back down.
+	 *
+	 * The bearing is due east until noon and due west after. See {@link SunPosition} for what having
+	 * no axial tilt does to everything downstream.
+	 *
+	 * At night the elevation comes out negative rather than clamped to zero, because the difference
+	 * between the sun being down and the sun being on the horizon is what a tracker decides its night
+	 * stow on.
 	 */
-	public static double solarElevationSin(double dayPhase) {
-		return dayPhase >= 0.5 ? 0.0 : Math.sin(dayPhase * 2.0 * Math.PI);
+	public static SunPosition sunPosition(double dayPhase) {
+		double elevation = Math.toDegrees(Math.asin(Math.sin(dayPhase * 2.0 * Math.PI)));
+		return new SunPosition(elevation, dayPhase < 0.25 || dayPhase >= 0.75 ? SunPosition.EAST : SunPosition.WEST);
+	}
+
+	/** Solar irradiance above the atmosphere, W/m2. Constant here, because this world has no orbit to be eccentric about. */
+	public static double extraterrestrialNormal() {
+		return SOLAR_CONSTANT;
 	}
 
 	/**
@@ -428,12 +472,39 @@ public final class Atmosphere {
 		return am * pressureHpa / WorldConditions.SEA_LEVEL_PRESSURE;
 	}
 
-	/** Global horizontal irradiance under a clear sky, W/m2. */
+	/**
+	 * Beam irradiance on a surface square to the sun under a clear sky, W/m2.
+	 *
+	 * Meinel & Meinel's broadband transmittance, which puts a clear zenith sun at 953 W/m2 of beam
+	 * and, with the sky's own contribution below, just over 1000 W/m2 on the flat - which is the
+	 * figure every module in the catalogue is rated at, arrived at rather than assumed.
+	 */
+	public static double beamNormalClear(double sinElevation, double pressureHpa) {
+		if (sinElevation <= 0.0) return 0.0;
+
+		return SOLAR_CONSTANT * Math.pow(CLEAR_AIR_TRANSMITTANCE, Math.pow(airMass(sinElevation, pressureHpa), AIR_MASS_EXPONENT));
+	}
+
+	/**
+	 * Sky irradiance on a horizontal surface under a clear sky, W/m2.
+	 *
+	 * Liu & Jordan: a share of what came in from space, less a share of what got through unscattered,
+	 * because the two are the same photons counted once each. Comes out at 88 W/m2 under a zenith sun,
+	 * nine percent of the global - which is what a clear-sky diffuse fraction actually is.
+	 */
+	public static double diffuseHorizontalClear(double sinElevation, double pressureHpa) {
+		if (sinElevation <= 0.0) return 0.0;
+
+		double diffuse = CLEAR_SKY_DIFFUSE_SHARE * SOLAR_CONSTANT * sinElevation
+				- CLEAR_SKY_DIFFUSE_BEAM_OFFSET * beamNormalClear(sinElevation, pressureHpa) * sinElevation;
+		return Math.max(0.0, diffuse);
+	}
+
+	/** Global horizontal irradiance under a clear sky, W/m2: the beam projected onto the flat, plus the sky. */
 	public static double clearSkyIrradiance(double sinElevation, double pressureHpa) {
 		if (sinElevation <= 0.0) return 0.0;
 
-		double beam = SOLAR_CONSTANT * Math.pow(CLEAR_AIR_TRANSMITTANCE, Math.pow(airMass(sinElevation, pressureHpa), AIR_MASS_EXPONENT));
-		return DIFFUSE_FACTOR * beam * sinElevation;
+		return beamNormalClear(sinElevation, pressureHpa) * sinElevation + diffuseHorizontalClear(sinElevation, pressureHpa);
 	}
 
 	/**
@@ -478,6 +549,158 @@ public final class Atmosphere {
 	 */
 	public static double cloudTransmittance(double cover) {
 		return 1.0 - 0.75 * Math.pow(Mth.clamp(cover, 0.0, 1.0), 3.4);
+	}
+
+	/**
+	 * What a cloudy sky passes of the *beam*, as a fraction of the clear-sky beam.
+	 *
+	 * The cover itself, and the reason it is that simple is worth stating: cover is the fraction of
+	 * the sky that has cloud in front of it, so it is also the probability that the particular patch
+	 * of sky the sun is behind has cloud in front of it. A cumulus either covers the disc or it does
+	 * not, and averaged over the sky that comes out linear.
+	 *
+	 * Linear here and a steep power for the global, which is the whole shape of a partly cloudy day:
+	 * at half cover the sky still passes 93% of the global while the beam is down to half, so the
+	 * diffuse fraction has gone from a tenth to a half without the total moving much. It is why a
+	 * broken sky costs a fixed array almost nothing and costs a tracker a great deal - the tracker's
+	 * advantage is entirely in the beam.
+	 */
+	public static double beamTransmittance(double cover) {
+		return 1.0 - Mth.clamp(cover, 0.0, 1.0);
+	}
+
+	/**
+	 * The whole sky at a place and a moment, assembled from the pieces above.
+	 *
+	 * <h2>Why the split is not done with a correlation</h2>
+	 *
+	 * The textbook way to get from a global figure to its two components is a diffuse-fraction
+	 * correlation - Erbs, from four years of American records, is the standard one - and it is the
+	 * right tool when a global measurement is all there is. It is the wrong tool here, because this
+	 * model *knows the cloud field*: it can say how much of the sky over this block is covered, so
+	 * asking a statistical fit to infer that from a total would be throwing information away and
+	 * paying for the privilege. Erbs under-predicts clear-sky beam by about a tenth, which is exactly
+	 * the number a tracker's whole value rests on.
+	 *
+	 * So the beam and the global are attenuated separately, each by what cloud does to it, and the
+	 * diffuse is whatever is left over. That keeps the identity {@code GHI = DNI sin(h) + DHI} exact
+	 * by construction, gives the physically correct clear-sky values, and reproduces the behaviour
+	 * that matters: cloud takes the beam away and hands part of it back as diffuse.
+	 */
+	public static SkyConditions sky(SunPosition sun, double pressureHpa, double cover, double albedo, double ambientTempC, double windSpeed) {
+		if (!sun.up()) return SkyConditions.night(sun, cover, albedo, ambientTempC, windSpeed);
+
+		double sinElevation = sun.sinElevation();
+		double mass = airMass(sinElevation, pressureHpa);
+
+		double directNormal = beamNormalClear(sinElevation, pressureHpa) * beamTransmittance(cover);
+		double global = clearSkyIrradiance(sinElevation, pressureHpa) * cloudTransmittance(cover);
+		// whatever the global has that the beam does not account for is, by definition, diffuse. Never
+		// negative: the two attenuations are chosen so the beam cannot outrun the global, and the floor
+		// is here so a rounding error at first light cannot make it look as though it had
+		double diffuse = Math.max(0.0, global - directNormal * sinElevation);
+
+		return new SkyConditions(sun, mass, cover, SOLAR_CONSTANT, directNormal, diffuse, global, albedo, ambientTempC, windSpeed);
+	}
+
+	// ---- from the sky onto a plane ----
+
+	/**
+	 * Fraction of the beam that gets through the module's front glass at a given angle.
+	 *
+	 * Martin & Ruiz, which is an exponential rather than the {@code 1 - b0(sec(AOI) - 1)} of the older
+	 * ASHRAE form, and better behaved for it: the ASHRAE version runs past zero near grazing incidence
+	 * and has to be clamped, while this one approaches it. Normalised so that light arriving straight
+	 * on loses nothing here - the reflection at normal incidence is already in the module's nameplate,
+	 * because that is the condition it was measured at.
+	 */
+	public static double incidenceAngleModifier(double incidenceDeg) {
+		if (incidenceDeg >= 90.0) return 0.0;
+
+		double cos = Math.cos(Math.toRadians(Math.max(0.0, incidenceDeg)));
+		double normal = 1.0 - Math.exp(-1.0 / ANGULAR_LOSS_COEFFICIENT);
+		return Mth.clamp((1.0 - Math.exp(-cos / ANGULAR_LOSS_COEFFICIENT)) / normal, 0.0, 1.0);
+	}
+
+	/**
+	 * The sky's three components projected onto a module plane, W/m2.
+	 *
+	 * <h2>The three terms</h2>
+	 *
+	 * The <b>beam</b> is the direct irradiance times the cosine of the incidence angle, times what the
+	 * glass passes at that angle. This is the term that makes tracking worth anything: a plane held
+	 * square to the sun keeps the cosine at one from morning to evening, while a flat plane's cosine is
+	 * the sine of the sun's elevation and collapses at both ends of the day.
+	 *
+	 * The <b>sky diffuse</b> is Hay & Davies with Reindl's horizon term. Three ideas in one expression,
+	 * and each is visible in it: a tilted plane sees less sky than a flat one, so the isotropic part
+	 * carries {@code (1 + cos(tilt))/2}; the sky is brightest around the sun rather than uniform, so a
+	 * share of the diffuse - the share of the beam that survived the atmosphere - is treated as
+	 * arriving from the sun's own direction and gets the beam's cosine; and the sky is brighter near the
+	 * horizon than overhead, which the {@code sin^3(tilt/2)} term adds back for a steeply tilted plane.
+	 *
+	 * The <b>ground reflected</b> term is the albedo times the global times how much ground the plane
+	 * can see, which is the complement of how much sky it can see. Negligible on a flat plane and worth
+	 * several percent on a tracker standing at sixty degrees over fresh snow.
+	 *
+	 * <h2>And the back</h2>
+	 *
+	 * A bifacial module's rear sees mostly lit ground, so its irradiance is the albedo times the global
+	 * times a view factor that belongs to the mounting rather than to the moment - how high the modules
+	 * stand and how far apart the rows are. That is why the same module gains two percent on a flat
+	 * table and eight on an elevated tracker, and why an albedometer is worth fitting to a bifacial
+	 * plant and nothing at all to a monofacial one.
+	 */
+	public static PlaneIrradiance planeOfArray(SkyConditions sky, double tiltDeg, double azimuthDeg, double rearViewFactor) {
+		if (!sky.sun().up() || sky.globalHorizontal() <= 0.0) return PlaneIrradiance.DARK;
+
+		double tilt = Math.toRadians(Mth.clamp(tiltDeg, 0.0, 90.0));
+		double cosIncidence = sky.sun().cosIncidence(tiltDeg, azimuthDeg);
+		double incidenceDeg = Math.toDegrees(Math.acos(Mth.clamp(cosIncidence, -1.0, 1.0)));
+
+		double beam = cosIncidence <= 0.0 ? 0.0 : sky.directNormal() * cosIncidence * incidenceAngleModifier(incidenceDeg);
+
+		// the anisotropy index: how much of the diffuse to treat as coming from around the sun rather
+		// than from everywhere. It is the share of the extraterrestrial beam that survived, so a clear
+		// sky is strongly circumsolar and an overcast one is not
+		double anisotropy = Mth.clamp(sky.directNormal() / sky.extraterrestrialNormal(), 0.0, 1.0);
+		double sunwardRatio = cosIncidence <= 0.0 ? 0.0 : cosIncidence / Math.max(0.01, sky.sun().sinElevation());
+		double skyViewFactor = (1.0 + Math.cos(tilt)) / 2.0;
+		double horizonBrightening = 1.0 + Math.sqrt(Mth.clamp(sky.beamHorizontal() / sky.globalHorizontal(), 0.0, 1.0))
+				* Math.pow(Math.sin(tilt / 2.0), 3.0);
+		double skyDiffuse = sky.diffuseHorizontal() * (anisotropy * sunwardRatio + (1.0 - anisotropy) * skyViewFactor * horizonBrightening);
+
+		double groundViewFactor = (1.0 - Math.cos(tilt)) / 2.0;
+		double groundReflected = sky.albedo() * sky.globalHorizontal() * groundViewFactor;
+
+		double rear = rearViewFactor <= 0.0 ? 0.0 : sky.albedo() * sky.globalHorizontal() * rearViewFactor;
+
+		return new PlaneIrradiance(incidenceDeg, beam, skyDiffuse, groundReflected, rear);
+	}
+
+	/**
+	 * Spectral correction: how much a module's own colour sensitivity gains or loses against the
+	 * spectrum it was rated under.
+	 *
+	 * Two effects, pulling opposite ways, and both are real. A long atmospheric path scatters the blue
+	 * out and reddens what arrives, which costs any cell that collects blue - so output falls as the air
+	 * mass grows past the AM1.5 the nameplate was measured at. And diffuse light is blue, because
+	 * scattering is what made it diffuse - so an overcast sky, which costs a great deal of intensity,
+	 * hands back a little quality.
+	 *
+	 * The size of both depends on how narrow the cell's response is. Crystalline silicon collects from
+	 * 350 to 1150 nanometres and barely notices: a couple of percent either way, which is why nobody
+	 * building a silicon plant thinks about it. Cadmium telluride stops at 850 and notices a great deal,
+	 * swinging three times as far - losing more on a hazy afternoon and gaining more under an overcast
+	 * sky. It is a real part of why thin film holds up in climates that disappoint silicon.
+	 */
+	public static double spectralFactor(double airMass, double diffuseFraction, double spectralSensitivity) {
+		if (Double.isInfinite(airMass)) return 1.0;
+
+		double scale = spectralSensitivity / REFERENCE_SPECTRAL_SENSITIVITY;
+		double reddening = -SPECTRAL_AIR_MASS_SLOPE * (Mth.clamp(airMass, 1.0, 10.0) - REFERENCE_AIR_MASS);
+		double blueing = SPECTRAL_DIFFUSE_SLOPE * (Mth.clamp(diffuseFraction, 0.0, 1.0) - REFERENCE_DIFFUSE_FRACTION);
+		return 1.0 + Mth.clamp(scale * (reddening + blueing), -SPECTRAL_LIMIT, SPECTRAL_LIMIT);
 	}
 
 	public static float wrapDegrees(float degrees) {

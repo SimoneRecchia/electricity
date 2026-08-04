@@ -1,6 +1,6 @@
 # Getting started
 
-← [Back to the README](../README.md)
+← [Back to the README](../README.md) · [Photovoltaics](photovoltaics.md) · [Telemetry](telemetry.md) · [Integrations](integrations.md)
 
 ## The items
 
@@ -19,7 +19,9 @@ workbench's own UI.
 | **Utility Pole** | Workbench | Carries power across distance |
 | **Power Box** | Workbench | Distributes in a radius, bridges to Forge Energy |
 | **Electric Lamp** | Workbench | Example consumer |
-| **Solar Panel** | Workbench | 20 kW of photovoltaic. **Alpha** |
+| **Photovoltaic Array** | Workbench | 18 kW of flat modules. Five more products are creative-only for now |
+| **Inverter** | — | Turns an array's direct current into grid power. An array without one makes nothing |
+| **Meteorological Mast** | — | Nine instruments measuring the sky. Measures; does not generate |
 | **Weather Tablet** | Workbench | Weather map — not functional yet |
 | Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core | Workbench | Components for the above |
 

@@ -1,0 +1,25 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "OOO",
+    "ele",
+    "SSS"
+  ],
+  "key": {
+    "O": {
+      "item": "electricity:copper_coil"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "e": {
+      "item": "electricity:magnetic_core"
+    },
+    "l": {
+      "item": "minecraft:iron_block"
+    }
+  },
+  "result": {
+    "item": "electricity:generator_set"
+  }
+}

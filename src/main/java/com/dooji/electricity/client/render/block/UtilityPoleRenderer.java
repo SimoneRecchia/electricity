@@ -18,7 +18,6 @@ import java.util.HashSet;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -46,7 +45,7 @@ public class UtilityPoleRenderer extends ObjRendererBase {
 		for (UtilityPoleBlockEntity blockEntity : TrackedBlockEntities.ofType(UtilityPoleBlockEntity.class)) {
 			seen.add(blockEntity.getBlockPos());
 			ObjRenderUtil.withAlignedPose(blockEntity, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(UtilityPoleBlock.FACING),
-					UtilityPoleRenderer::rotationForPole,
+					UtilityPoleBlock::rotation,
 					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), blockEntity.getBlockPos()));
 		}
 
@@ -75,15 +74,6 @@ public class UtilityPoleRenderer extends ObjRendererBase {
 		}
 
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), insulatorBoxes);
-	}
-
-	private static float rotationForPole(Direction facing) {
-		return switch (facing) {
-			case EAST -> 180.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 0.0f;
-			default -> 90.0f;
-		};
 	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {

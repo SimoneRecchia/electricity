@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "electricity:block/metal_particle"
+    },
+    "facing=south": {
+      "model": "electricity:block/metal_particle"
+    },
+    "facing=west": {
+      "model": "electricity:block/metal_particle"
+    },
+    "facing=east": {
+      "model": "electricity:block/metal_particle"
+    }
+  }
+}

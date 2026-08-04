@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " A ",
+    "CWC"
+  ],
+  "key": {
+    "A": {
+      "item": "electricity:tempered_glass"
+    },
+    "C": {
+      "item": "electricity:circuit_board"
+    },
+    "W": {
+      "item": "electricity:wire"
+    }
+  },
+  "result": {
+    "item": "electricity:sensor_head",
+    "count": 2
+  }
+}

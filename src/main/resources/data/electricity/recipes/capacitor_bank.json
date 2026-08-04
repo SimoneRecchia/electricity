@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "FrF",
+    "FrF",
+    "PPP"
+  ],
+  "key": {
+    "F": {
+      "item": "electricity:resin"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "electricity:capacitor_bank"
+  }
+}

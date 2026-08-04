@@ -1,20 +1,31 @@
 # Telemetry — ComputerCraft API
 
-← [Back to the README](../README.md) · [Integrations](integrations.md) · [Getting started](getting-started.md)
+← [Back to the README](../README.md) · [Photovoltaics](photovoltaics.md) · [Integrations](integrations.md) · [Getting started](getting-started.md)
 
-Two peripherals: `electricity_wind_turbine` and `electricity_solar_panel`.
+Four peripherals: `electricity_wind_turbine`, `electricity_pv_inverter`,
+`electricity_pv_array` and `electricity_met_station`.
 
 ```lua
-local t = peripheral.find("electricity_wind_turbine")
-local p = peripheral.find("electricity_solar_panel")
+local turbine  = peripheral.find("electricity_wind_turbine")
+local inverter = peripheral.find("electricity_pv_inverter")
+local array    = peripheral.find("electricity_pv_array")
+local mast     = peripheral.find("electricity_met_station")
 ```
+
+An array also answers to **`electricity_solar_panel`**, which is the name the old placeholder
+had, so programs written against that still find it and all nine of its methods still work.
 
 **Where to attach.** A turbine's machine block sits at the *top* of its tower, but the
 tower answers on behalf of the machine it carries — so a computer or a Wired Modem
 against **any block of the tower**, the foot included, reaches the same turbine. That is
 deliberate: a real turbine gathers its cables at the tower base, which is where you will
-build. Two modems on one structure resolve to one peripheral. A solar panel answers on
-its own block.
+build. Two modems on one structure resolve to one peripheral. The photovoltaic blocks each
+answer on their own block.
+
+**Which one to talk to.** The **inverter**, for almost everything. It is where a real plant's
+SCADA lives and it is the only part of a plant a program can usefully change — an array has no
+controls beyond its tracker, while the inverter holds the curtailment setpoint, the power
+factor and the stop. Read the arrays when you want to know *why*.
 
 **Threading.** Reads come off the computer thread and never block: every value is served
 from an immutable snapshot the machine publishes once per tick, so a call can never mix
@@ -356,61 +367,127 @@ day, while `powerLimitationActive` quietly says so.
 
 ---
 
-## 5. Solar panel — alpha
+## 5. The photovoltaic plant
 
-**This one is not finished.** The irradiance model behind it is real and the numbers it
-reports are honest, but the block itself is early: it has no control panel of its own, it
-does not join the mod's own wire network — energy leaves only on the Forge and Mekanism
-capabilities — and nothing here is settled. Build with it if you like, expect it to move.
+Three nodes, and the split is the one a real plant has: the inverter is what the grid sees,
+each array publishes the optics and the mechanism of its own patch of glass, and the mast
+publishes the sky once for the whole site. Ninety-six tags across the three.
 
-Type `electricity_solar_panel`. One block is 20 kW of modules over a hundred square
-metres — the whole block, because Minecraft's sun passes through the zenith, so there is
-nothing to tilt and no row spacing to leave.
+The physics behind all of it — the catalogue, the transposition, the shading rules, the
+tracker modes, what a site is worth — is [its own document](photovoltaics.md). This section
+is the API.
+
+### 5.1 `electricity_pv_inverter`
+
+Mekanism's generator names first, so a program written against one of those reads this
+unchanged: `getProductionRate()`, `getMaxOutput()`, `getEnergy()`, `getMaxEnergy()`,
+`getEnergyNeeded()`, `getEnergyFilledPercentage()`, `isBlacklistedDimension()`. Energy is in
+Joules and one kW is 125 J/tick, the same scale the whole mod uses.
 
 | Function | Returns | Notes |
 |---|---|---|
-| `getProductionRate()` | number | Joules in the last tick — Mekanism's name and unit |
-| `canSeeSun()` | boolean | Mekanism's name |
-| `getActivePower()` | number | kW at the inverter's terminals |
-| `getRatedPower()` | number | 20 kW at standard test conditions |
-| `getIrradiance()` | number | W/m² global horizontal; a clear zenith sun is just over 1000 |
-| `getCellTemperature()` | number | °C — some thirty above the air in full sun |
+| `getRatedPower()` | number | AC nameplate in kW |
+| `stop()` / `start()` | — | disconnects from the grid; the arrays go open-circuit and stop |
+| `isStopped()` | boolean | true only if *this program* stopped it |
+| `isRunning()` | boolean | nothing at all is holding it off the grid |
+| `isClipping()` | boolean | the array is offering more than the nameplate can pass |
+| `isDerating()` | boolean | too hot to run at nameplate |
+| `isStoppedByRedstone()` | boolean | |
+| `getRedstoneMode()` / `setRedstoneMode(mode)` | string / — | `DISABLED`, `HIGH`, `LOW` |
+| `getActivePowerLimit()` / `setActivePowerLimit(kW)` | number / — | clamped to the nameplate |
+| `getPowerFactor()` / `setPowerFactor(pf)` | number / — | clamped to what the machine can hold |
+| `getArrays()` | table | `{x, y, z}` of every array wired in, nearest first |
+| `getTelemetry()` | table | every tag at once, one tick-consistent snapshot |
+| `getTelemetryKinds()` | table | tag → `MEASURED`, `DERIVED` or `SIMULATED` |
+
+Plus a generated getter per tag. **Measured:** `activePower`, `pvActivePower`,
+`availableDcPower`, `activeEnergy`, `activeEnergyToday`, `ambientTemp`, `cabinetTemp`,
+`moduleTemp`, `irradiation`, `activePowerLimit`, `powerLimitationActive`, `running`,
+`clipping`, `derating`, `stoppedByComputer`, `stoppedByPlayer`, `stoppedByRedstone`,
+`arraysConnected`, `stringsConnected`, `stringCapacity`. **Derived:** `apparentPower`,
+`reactivePower`, `pf`, `f`, `gridVoltage`, `gridCurrent`, `v1`–`v3`, `v12`/`v23`/`v31`,
+`i1`–`i3`, `dcVoltage`, `dcCurrent`, `efficiency`, `performanceRatio`, `dcAcRatio`.
+**Simulated:** `heatSinkTemp`, `internalAirTemp`, `insulationResistance`, `dcBusVoltage`,
+`fanSpeed`.
+
+Three things worth knowing before you build a control loop on this.
+
+**`activePower` goes negative overnight.** A watt on the residential machine and a hundred on
+the central one, because the controller and the communications stay alive. A stopped inverter
+still draws it. If you are summing a fleet, that is real and a real meter reads it.
+
+**`availableDcPower` above `pvActivePower` means clipping.** The first is what the modules
+could give at their maximum power point, the second is what the inverter actually pulled them
+down to. `powerLimitationActive` is true for any of clipping, derating or a setpoint; the
+three are published separately because they have completely different answers.
+
+**`insulationResistance` falls in the rain.** That is the commonest reason a real plant fails
+to come online in the morning — condensation in a connector — and it is `SIMULATED`, so treat
+it as realistic and not as ground truth.
+
+### 5.2 `electricity_pv_array`
+
+| Function | Returns | Notes |
+|---|---|---|
+| `getProductionRate()` | number | Joules delivered last tick |
+| `canSeeSun()` | boolean | over half the beam is getting through |
+| `getActivePower()` | number | kW delivered — **zero with no inverter in range** |
+| `getRatedPower()` | number | this product's DC nameplate, kW |
+| `getIrradiance()` | number | W/m² in the plane of the modules |
+| `getCellTemperature()` | number | °C |
 | `getAmbientTemperature()` | number | °C |
-| `getCloudCover()` | number | 0–1 |
-| `getPerformanceRatio()` | number | output over nameplate, 0–1 |
+| `getCloudCover()` | number | the diffuse share of the light on the plane, 0–1 |
+| `getPerformanceRatio()` | number | output over what the nameplate would make in this light |
+| `getTrackerMode()` / `setTrackerMode(mode)` | string / — | `AUTO`, `MANUAL`, `STOW`; throws on a fixed mounting |
+| `getTrackerAngle()` | number | degrees from horizontal, positive facing west |
+| `setTrackerAngle(deg)` | — | clamped to the drive's travel, and switches to `MANUAL` |
+| `stow()` | — | flat, and held there |
+| `getModule()` | table | designation, technology, watts, efficiency, bifaciality, count |
+| `getInverter()` | table or nil | `{x, y, z}`, or nil if there is none in range |
+| `getTelemetry()` / `getTelemetryKinds()` | table | |
 
-`getPerformanceRatio()` is the one to log if you log only one: it folds the light, the
-cell temperature, this panel's own modules and the inverter into the figure a plant is
-actually judged on.
+Plus a generated getter per tag. **Measured:** `poaIrradiance`, `poaBeam`, `poaDiffuse`,
+`poaGround`, `poaRear`, `effectiveIrradiance`, `moduleTemp`, `ambientTemp`, `windSpeed`,
+`soiling`, `snowDepth`, `rowShading`, `obstruction`, `skyView`, `availableDcPower`,
+`deliveredDcPower`, `trackerAngle`, `trackerTarget`, `trackerMode`, `trackerStow`,
+`trackerSlewing`, `backtracking`, `inverterConnected`. **Derived:** `incidenceAngle`,
+`tiltAngle`, `planeAzimuth`, `stringVoltage`, `stringCurrent`, `arrayCurrent`,
+`performanceRatio`, `spectralFactor`, `moduleCount`, `dcNameplate`, `groundCoverRatio`.
+**Simulated:** `trackerMotorPower`, `trackerDriveTemp`.
 
-**Two panels side by side will not agree**, and all three reasons are the real ones. A
-cloud reaches one before the other — the cumulus field is sampled at each panel's own
-coordinates and drifts downwind, so a shadow crossing an array arrives a few seconds apart
-along it. The modules are not identical: every real one is flash tested into a bin a few
-percent wide, and that difference is fixed for the life of the panel. And dust settles
-unevenly. Median disagreement across daylight is about 4% between neighbours, 7% at twenty
-blocks, 9% across a farm — insignificant in the total, plain in a trend.
+`setTrackerAngle` switches the mode for you on purpose. Holding an angle and tracking the sun
+are the same drive and it cannot do both, so setting an angle and leaving the controller
+tracking would have the next tick quietly undo the command.
 
-**Biome matters the way it really does.** Cloud is lifting times moisture, not lifting
-plus moisture: a deep low over a desert brings wind and no cloud, because there is nothing
-there to condense. Fraction of the clear-sky light that reaches the ground:
+`trackerStow` is the one to log if you are diagnosing a flat row: `NONE`, `NIGHT`, `WIND`,
+`SNOW`, `DIFFUSE` or `COMMANDED` all look identical from a distance and want different
+responses — nothing, nothing, nothing, a shovel, patience, and a look at whoever left it in
+hand mode.
 
-| Desert | Temperate | Taiga | Rainforest |
-|---|---|---|---|
-| 0.92 | 0.74 | 0.66 | 0.64 |
+### 5.3 `electricity_met_station`
 
-A desert out-produces a rainforest by about 27%, which is what the real pair do at one
-latitude. Altitude helps too — 12% more at 2000 m, part thinner atmosphere and part cooler
-cells. Yields here are equatorial, 17 to 21% of nameplate over a year, because every
-Minecraft day is an equinox at the equator.
+| Function | Returns | Notes |
+|---|---|---|
+| `getInstruments()` | table | every instrument: designation, class, response time, uncertainty, unit |
+| `getTelemetry()` / `getTelemetryKinds()` | table | |
 
-**Wind and sun fail together.** The same pressure map decides both, so calm weather and
-clear skies arrive at once and a gale is overcast. A grid built on the two has to survive
-both going quiet together, exactly as a real one does.
+Plus a generated getter per tag. **Measured:** `globalIrradiation`, `diffusedIrradiation`,
+`irradiation` (plane of array), `referenceCell`, `albedo`, `ambientTemp`, `moduleTemp`,
+`windSpeed`, `windDir`, `snowDistance`, `snowHeight`. **Derived:** `diffuseFraction`,
+`clearnessIndex`, `sunElevation`, `sunAzimuth`.
+
+Every one of these has been through its instrument's own time constant, which is the whole
+point of reading a mast instead of asking the weather. Log `globalIrradiation` beside an
+inverter's `activePower` and the power will move first on a cloud edge: the modules answer in
+microseconds and a thermopile takes five seconds.
+
+`snowDistance` and `snowHeight` are the same quantity twice — what the gauge measures and what
+was worked out from it. On a real plant the two parting company is how you learn the
+transducer has iced over.
 
 ---
 
-## 6. Two programs
+## 6. Four programs
 
 Poll a farm:
 
@@ -438,3 +515,34 @@ end
 
 Pass `0` and every machine disconnects and idles — feathered, turning slowly, ready to
 come back the moment you raise it again.
+
+Find out why a solar plant is not making more:
+
+```lua
+local inv = peripheral.find("electricity_pv_inverter")
+local t = inv.getTelemetry()
+
+print(("AC %.1f kW of %.0f   DC %.1f of %.1f available")
+  :format(t.activePower, inv.getRatedPower(), t.pvActivePower, t.availableDcPower))
+
+if not t.running          then print("stopped")
+elseif t.derating         then print(("derating: %.0f C of air"):format(t.ambientTemp))
+elseif t.clipping         then print(("clipping: DC/AC is %.2f"):format(t.dcAcRatio))
+elseif t.stringsConnected >= t.stringCapacity then
+  print("every string terminal is used - the next array needs another inverter")
+else                           print(("PR %.2f at %.0f W/m2"):format(t.performanceRatio, t.irradiation))
+end
+```
+
+Or walk the arrays directly and find the one that is letting the side down:
+
+```lua
+for _, a in ipairs({ peripheral.find("electricity_pv_array") }) do
+  local t = a.getTelemetry()
+  if t.performanceRatio < 0.7 then
+    print(("%s  PR %.2f  soiling %.1f%%  snow %.0f cm  shade %.0f%%  rows %.0f%%  %s")
+      :format(a.getTrackerMode(), t.performanceRatio, t.soiling * 100, t.snowDepth * 100,
+              (1 - t.obstruction) * 100, t.rowShading * 100, t.trackerStow))
+  end
+end
+```

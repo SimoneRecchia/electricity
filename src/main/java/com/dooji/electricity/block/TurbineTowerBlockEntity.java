@@ -1,6 +1,5 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.main.Electricity;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -8,10 +7,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.fml.DistExecutor;
 
 /**
  * A tower block's presence, and nothing else.
@@ -80,16 +77,12 @@ public class TurbineTowerBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.track(this));
-		}
+		ClientTracking.track(this);
 	}
 
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> TrackedBlockEntities.untrack(this));
-		}
+		ClientTracking.untrack(this);
 	}
 }

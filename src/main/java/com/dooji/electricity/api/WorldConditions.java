@@ -31,6 +31,29 @@ public final class WorldConditions {
 	/** Standard mean sea level pressure, hPa. */
 	public static final double SEA_LEVEL_PRESSURE = 1013.25;
 
+	/**
+	 * Seconds of real sky one tick of Minecraft's day clock stands for: 86400 over a 24000 tick day.
+	 *
+	 * Time is the one scale the mod does not choose - Minecraft already runs a day in twenty
+	 * minutes, so this is a conversion rather than a decision. It is here because two subsystems
+	 * need it and would otherwise each write their own: the weather quotes every timescale in
+	 * real terms and converts through this, and a tracker drive quoted in degrees a minute has to
+	 * come through it as well or a row would chase the sun seventy times faster than the machine
+	 * it is drawn from.
+	 */
+	public static final double SECONDS_PER_DAY_TICK = 3.6;
+	/**
+	 * How far past a sustained wind limit a gust has to reach to trip a machine on its own.
+	 *
+	 * A fifth, and it is here because every machine that supervises wind needs it and they must agree.
+	 * Datasheets quote wind limits against a ten-minute mean - 25 m/s to take a turbine off load, 20 to
+	 * put a tracker flat - and pair each with a gust figure about a fifth higher. Supervising the gust
+	 * against the mean's own number instead is the mistake: a three-second gust runs about 1.4 times the
+	 * mean, so a row would go flat whenever the mean passed fourteen, which in this world is often enough
+	 * to leave a tracker lying down for minutes at a time with nothing visibly wrong.
+	 */
+	public static final double GUST_TRIP_RATIO = 1.2;
+
 	private WorldConditions() {
 	}
 }

@@ -1,7 +1,10 @@
 package com.dooji.electricity.wire;
 
+import com.dooji.electricity.main.registry.ObjBlockDefinition;
+import javax.annotation.Nullable;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import java.util.Locale;
@@ -15,6 +18,8 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_ELECTRIC_CABIN = "electric_cabin";
 	public static final String TYPE_UTILITY_POLE = "utility_pole";
 	public static final String TYPE_POWER_BOX = "power_box";
+	/** The photovoltaic plant's one connection to the grid. */
+	public static final String TYPE_PV_INVERTER = "pv_inverter";
 
 	private static final String[] UTILITY_POLE_PARTS = {"insulator_1_Material.023", "insulator_2_Material.009", "insulator_3_Material.016", "insulator_4_Material.001", "insulator_5_Material.051",
 			"insulator_6_Material.037", "insulator_7_Material.030", "insulator_8_Material.058"};
@@ -25,7 +30,24 @@ public final class InsulatorPartHelper {
 
 	private static final String[] WIND_TURBINE_PARTS = {"insulator_Plastic"};
 
+	private static final String[] PV_INVERTER_PARTS = {"insulator_instrument"};
+
 	private InsulatorPartHelper() {
+	}
+
+	/**
+	 * Which group of a model an insulator is drawn as, by index.
+	 *
+	 * The model's own list, in the order it declares them, which is why nothing here restates a part
+	 * name: a device with four insulators has four entries and the fourth is index three. Null for an
+	 * index the model does not have, which happens while a device is being built and its arrays have
+	 * been sized before its definition has loaded.
+	 */
+	@Nullable
+	public static String insulatorName(@Nullable ObjBlockDefinition definition, int index) {
+		if (definition == null || index < 0 || index >= definition.insulators().size()) return null;
+
+		return definition.insulators().get(index);
 	}
 
 	public static Optional<Insulator> resolve(BlockEntity entity, String partName) {
@@ -37,6 +59,8 @@ public final class InsulatorPartHelper {
 			return mapFromArray(TYPE_POWER_BOX, partName, POWER_BOX_PARTS, powerBox.getInsulatorIds(), powerBox::getWirePosition);
 		} else if (entity instanceof WindTurbineBlockEntity turbine) {
 			return mapFromArray(TYPE_WIND_TURBINE, partName, WIND_TURBINE_PARTS, turbine.getInsulatorIds(), turbine::getWirePosition);
+		} else if (entity instanceof PvInverterBlockEntity inverter) {
+			return mapFromArray(TYPE_PV_INVERTER, partName, PV_INVERTER_PARTS, inverter.getInsulatorIds(), inverter::getWirePosition);
 		}
 
 		return Optional.empty();
@@ -51,6 +75,8 @@ public final class InsulatorPartHelper {
 			return mapFromId(TYPE_POWER_BOX, insulatorId, POWER_BOX_PARTS, powerBox.getInsulatorIds(), powerBox::getWirePosition);
 		} else if (entity instanceof WindTurbineBlockEntity turbine) {
 			return mapFromId(TYPE_WIND_TURBINE, insulatorId, WIND_TURBINE_PARTS, turbine.getInsulatorIds(), turbine::getWirePosition);
+		} else if (entity instanceof PvInverterBlockEntity inverter) {
+			return mapFromId(TYPE_PV_INVERTER, insulatorId, PV_INVERTER_PARTS, inverter.getInsulatorIds(), inverter::getWirePosition);
 		}
 
 		return Optional.empty();
@@ -87,7 +113,8 @@ public final class InsulatorPartHelper {
 	}
 
 	public static String determinePowerType(BlockEntity entity, String partName) {
-		if (entity instanceof WindTurbineBlockEntity) return "output";
+		// a generator's one fitting is an output, whichever kind of generator it is
+		if (entity instanceof WindTurbineBlockEntity || entity instanceof PvInverterBlockEntity) return "output";
 		if (entity instanceof ElectricCabinBlockEntity) {
 			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("output")) return "output";
 			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("input")) return "input";
@@ -105,6 +132,8 @@ public final class InsulatorPartHelper {
 			return TYPE_UTILITY_POLE;
 		} else if (entity instanceof PowerBoxBlockEntity) {
 			return TYPE_POWER_BOX;
+		} else if (entity instanceof PvInverterBlockEntity) {
+			return TYPE_PV_INVERTER;
 		}
 
 		return "unknown";

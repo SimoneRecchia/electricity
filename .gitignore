@@ -27,3 +27,6 @@ config/
 
 # log4j writes here when a verification harness runs with the Minecraft classpath
 logs/
+
+# python bytecode from the asset generators in tools/
+__pycache__

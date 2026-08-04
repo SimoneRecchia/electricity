@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    " d ",
+    "dMd",
+    " j "
+  ],
+  "key": {
+    "M": {
+      "item": "electricity:metal_casing"
+    },
+    "d": {
+      "item": "electricity:bypass_diode"
+    },
+    "j": {
+      "item": "electricity:mc4_connector"
+    }
+  },
+  "result": {
+    "item": "electricity:junction_box"
+  }
+}

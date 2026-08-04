@@ -1,0 +1,25 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "LLL",
+    "STS",
+    "jLj"
+  ],
+  "key": {
+    "L": {
+      "item": "electricity:pv_laminate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "T": {
+      "item": "electricity:mounting_rack"
+    },
+    "j": {
+      "item": "electricity:mc4_connector"
+    }
+  },
+  "result": {
+    "item": "electricity:pv_tilt_580"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "type": "electricity:workbench",
+  "pattern": [
+    "HHH",
+    "YPY",
+    "PPP"
+  ],
+  "key": {
+    "H": {
+      "item": "electricity:gear_set"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "Y": {
+      "item": "electricity:bearing"
+    }
+  },
+  "result": {
+    "item": "electricity:gearbox"
+  }
+}

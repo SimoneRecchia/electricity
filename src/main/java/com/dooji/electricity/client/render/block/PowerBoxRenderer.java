@@ -18,7 +18,6 @@ import java.util.HashSet;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -49,7 +48,7 @@ public class PowerBoxRenderer extends ObjRendererBase {
 		for (PowerBoxBlockEntity powerBox : TrackedBlockEntities.ofType(PowerBoxBlockEntity.class)) {
 			seen.add(powerBox.getBlockPos());
 			ObjRenderUtil.withAlignedPose(powerBox, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(PowerBoxBlock.FACING),
-					PowerBoxRenderer::rotationForPowerBox,
+					turnedFrom(PowerBoxBlock.AUTHORED),
 					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), powerBox.getBlockPos()));
 		}
 
@@ -85,14 +84,6 @@ public class PowerBoxRenderer extends ObjRendererBase {
 		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), insulatorBoxes);
 	}
 
-	private static float rotationForPowerBox(Direction facing) {
-		return switch (facing) {
-			case EAST -> 0.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 180.0f;
-			default -> 90.0f;
-		};
-	}
 
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {
 		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);

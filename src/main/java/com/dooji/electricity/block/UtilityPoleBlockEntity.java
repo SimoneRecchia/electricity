@@ -1,6 +1,5 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
@@ -345,11 +344,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	private void generateInsulatorIds() {
 		ensureArraySizes();
-		for (int i = 0; i < insulatorIds.length; i++) {
-			if (insulatorIds[i] == 0) {
-				insulatorIds[i] = InsulatorIdRegistry.claimId();
-			}
-		}
+		InsulatorIdRegistry.claimMissing(insulatorIds);
 	}
 
 	public int getInsulatorId(int index) {
@@ -369,9 +364,9 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 	@Override
 	public void onLoad() {
 		super.onLoad();
+		ClientTracking.track(this);
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.track(this);
 				InsulatorLookup.register(this);
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
@@ -381,10 +376,10 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 	@Override
 	public void setRemoved() {
 		super.setRemoved();
+		ClientTracking.untrack(this);
 		InsulatorIdRegistry.releaseIds(this.getInsulatorIds());
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				TrackedBlockEntities.untrack(this);
 				InsulatorLookup.unregister(this.getInsulatorIds());
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});

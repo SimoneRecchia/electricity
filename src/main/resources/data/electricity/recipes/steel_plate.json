@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "iii",
+    "ooo"
+  ],
+  "key": {
+    "i": {
+      "item": "minecraft:iron_ingot"
+    },
+    "o": {
+      "item": "minecraft:coal"
+    }
+  },
+  "result": {
+    "item": "electricity:steel_plate",
+    "count": 3
+  }
+}
