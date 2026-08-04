@@ -33,7 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, ROUND, Mesh, angle, bolt, box, channel, clad_box, cylinder,
-                      hemisphere, ibeam, pivot, rotate, sheds, strut, write_mtl)
+                      hemisphere, ibeam, pin_insulator, pivot, rotate, strut, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -61,6 +61,7 @@ MATERIALS = {
     'dc_section': 'pv_dc_section.png',
     'switch': 'pv_switch.png',
     'concrete': 'box_plinth.png',
+    'porcelain': 'porcelain_brown.png',
     'warning': 'warning.png',
 }
 
@@ -655,12 +656,15 @@ def inverter():
         clad_box(mesh, 'grille', (x, 0.30, -0.24), (x + 0.0025, 0.86, 0.22),
                  {side: 'vent', '*': 'cabinet'})
 
-    insulator = mesh.faces('insulator', 'instrument')
-    # the alternating-current bushing on the roof: this is where the plant joins the grid
-    cylinder(mesh, insulator, (0.30, body_y + 0.035, 0.10), 'y', 0.030, 0.012, sides=FITTING,
-             uv_scale=0.3, caps=insulator)
-    sheds(mesh, insulator, (0.30, body_y + 0.047, 0.10), 0.046, 0.085, count=3, sides=FITTING,
-          uv_scale=0.4)
+    # The insulator on the roof: this is where the plant joins the grid.  The mod's own
+    # ``pin_insulator``, in brown glazed porcelain like every other one - it was wearing the
+    # *instrument* material, which is a white painted enclosure, so the one fitting a player looks at
+    # from a metre away was the one that did not match any of the others.
+    steel = mesh.faces('hardware', 'steel')
+    # two thousandths above the roof rather than exactly on it: two faces on one plane flicker
+    box(mesh, steel, (0.256, body_y + 0.002, 0.056), (0.344, body_y + 0.018, 0.144), uv_scale=0.2)
+    pin_insulator(mesh, mesh.faces('insulator', 'porcelain'), steel,
+                  (0.30, body_y + 0.050, 0.10), 0.108)
 
     # The direct-current section, drawn only when a combiner box has been fitted into the cabinet.
     #
@@ -942,7 +946,7 @@ MODELS = [
     ('pv_track', single_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, STRUCTURE + ('cabinet', 'cabinet_door', 'cabinet_leaf', 'cabinet_top', 'vent',
-                                           'display', 'instrument', 'dc_cable', 'dc_jacket',
+                                           'display', 'instrument', 'porcelain', 'dc_cable', 'dc_jacket',
                                            'dc_section', 'concrete')),
     ('pv_combiner', combiner, STRUCTURE + ('cabinet', 'cabinet_top', 'combiner_door', 'switch',
                                            'dc_cable', 'dc_jacket')),

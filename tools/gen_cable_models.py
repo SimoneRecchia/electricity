@@ -1,137 +1,485 @@
 #!/usr/bin/env python3
-"""Generates the blockstates and block models for the direct-current cables.
+"""Generates the string cable's geometry, its blockstate, and the tables its block declares.
 
     python3 tools/gen_cable_models.py            # writes the assets
     python3 tools/gen_cable_models.py --java     # and prints the tables DcCableBlock declares
 
-Writes into src/main/resources/assets/electricity/{blockstates,models/block,models/item}/.
+Writes OBJ pieces into src/main/resources/assets/electricity/models/dc_string_cable/, one block model
+per piece next to the vanilla ones, and the multipart blockstate.
 
-Vanilla JSON models rather than the OBJ pipeline the machines use, and deliberately: a cable is
-laid by the hundred, it wants ambient occlusion and chunk batching, and its shape is decided by a
-block state rather than by anything animated.  Which is also what redstone dust is, so this
-generates the same kind of multipart definition dust has.
+Why this is OBJ geometry inside a vanilla block model
+-----------------------------------------------------
+A cable is a cylinder, and this mod's standard says a round body gets the turbine's own subdivisions.
+The vanilla JSON format cannot express a cylinder at all - an element with a rotation is a *union*, so
+three boxes at 22.5 degrees make a twelve-pointed star rather than a twelve-sided prism.  Two attempts
+out of axis-aligned boxes proved it: a flat painted bar read as a ribbon, and a stack of three stepped
+boxes read as a square duct with a highlight down it.
 
-The string cable, and why it is built the way it is
----------------------------------------------------
-A photovoltaic string is wired with two *single-core* cables, one per pole: H1Z2Z2-K to EN 50618, a
-flexible tinned-copper conductor under two layers of cross-linked polyolefin, 1500 V d.c., 6.9 mm
-across at 6 mm2.  They are clipped in pairs along the racking about once a metre, bent on a radius of
-four diameters at worst, and terminated in MC4 connectors.  So that is what is drawn: two round cores
-side by side, a stainless cleat where they are held, a bend that turns instead of crossing, and a
-plug on any end that goes nowhere.
+So the pieces are real swept tubes at thirty-two sides, loaded through **Forge's own OBJ block-model
+loader**.  That is the part that makes it affordable: a model with ``"loader": "forge:obj"`` is baked
+into the chunk mesh like any other block model, so two hundred cables cost what two hundred blocks
+cost - not what two hundred block entities cost, which is what the machines' pipeline would have made
+them.
 
-**A piece per connection pattern.**  The version this replaces was a hub plus an arm per side, and
-the arms were one model turned by quarters - which is how dust is built and it is wrong for a pair.
-Turn a north arm to make an east arm and the core that was on the west is now on the north, so at a
-corner the two cores of the pair meet the *wrong* ones and the run visibly crosses itself.  Nor can
-it be fixed by choosing the colours more carefully: joining the cores through every straight and
-every bend identifies all four of them, so no two-colour assignment exists at all.  (Which is also
-why both cores here are black, as the real cable is - see gen_block_textures.py.)
+A purpose-made piece for every case
+-----------------------------------
+Nothing here is one shape stretched to cover several jobs.  The middle of the block is chosen by the
+*set* of sides that connect, all sixteen of them, and each one is drawn for what it actually is:
 
-So the middle of the block is chosen by the *set* of sides that connect, all sixteen of them, and
-each one is an exact ``when``: a side is either ``none`` or ``side|up``, so the sixteen conditions
-partition the states and exactly one middle piece is ever drawn.  No two pieces of this model ever
-share any volume, which is checked below rather than asserted.
+  * two opposite sides - the pair runs straight through, under a stainless cleat
+  * two adjacent - the pair **turns on a radius**, swept round a quarter circle rather than broken at a
+    corner, and the two arcs are *concentric*: the inside core takes the tighter line and the outside
+    one the wider, exactly a metre apart the whole way round, which is what a cleated pair does
+  * one side - the pair ends in two MC4 plugs, red collar on the positive pole
+  * none - a length of pair lying where it was dropped, with its plugs on
+  * three sides - a junction box with three walls glanded
+  * four - the same box with the fourth wall glanded too
 
-And the sixteen are what the real thing would be, which is the part worth having:
+A third leg cannot be a bare crossing: two runs can pass each other and two can turn, but something has
+to *join* a third, and what joins direct-current strings is a small IP68 box with glands in it.
 
-  * two opposite sides - the pair runs through, with a cleat over it
-  * two adjacent - the pair *turns*, the inside core staying inside, cleated on the way in
-  * one side - the pair ends in two MC4 connectors, red collar for the positive pole
-  * none - a length of pair lying there with its plugs on
-  * three or four - a junction box, because a third leg cannot be a bare crossing: something has to
-    join it, and what joins direct-current strings is a box with glands in it
+Each ``when`` names all four side properties - ``none`` for the ones it has not got and ``side|up`` for
+the ones it has - so the sixteen conditions partition the states and exactly one middle is ever drawn.
 
-**Roundness.**  This format has no rotation, so a cable is a stack of square-edged boxes, and the
-game shades a face by which way it points - so every upward face is the same brightness and a stepped
-box is flat from above however many steps it has.  The roundness is therefore in the texture and runs
-*across* the cable, and every face's uv here maps its own across-the-cable extent onto the full width
-of that tile: a face taking the crown gets the bright part, a flank gets the edge.  ``dc_core`` has
-the gradient across it for the runs along z and ``dc_core_turn`` down it for the runs along x, since a
-face's u is its own first axis and that axis changes with the run.
+Why the pattern and not the side
+--------------------------------
+Because a pair has a handedness.  The arms are one model turned by quarters, so the core on the west of
+a north arm is the core on the north of an east arm; joining the cores through every straight and every
+bend identifies all four of them, so no assignment of two colours survives a corner.  The real cable
+settles it: H1Z2Z2-K to EN 50618 is black - carbon-black loaded, because that is what survives
+twenty-five years of ultraviolet - and a plant marks the poles at the connectors.  Both cores are
+black; the collars on the plugs carry the polarity.
 
-The trench
-----------
-A buried run replaces a block of ground, so it has to be a *complete* solid: the game culls the faces
-of the soil around it, and any part of the block boundary the model does not cover would be a hole you
-could see through the world with.  So the buried model is a bedding cube up to ``GROUND`` with a rim
-above it round all four edges, which covers the boundary from nothing to sixteen with no two faces
-ever landing on the same plane.
+Nothing coincides, which is the other half of it
+------------------------------------------------
+The version this replaces had every joint made of two boxes meeting on a plane and *both* drew a face
+there - two surfaces at the same depth, which is the flicker a player saw at every corner.  A swept tube
+has no internal joint: a bend is one continuous tube per core, and a climb is one tube from the middle
+of the block, round the elbow, and up the wall.  Where two pieces really do meet - an arm against the
+middle - both stop on the same plane and neither draws a cap, because a cap there is always inside the
+neighbouring cable.
 
 The trunk cable
 ---------------
-Still the old painted bar, on purpose: it is a different product with a different job - one armoured
-home run from a combiner to the cabinet rather than the hundreds of string pairs a plant is stitched
-together with - and it is next in line rather than done here.
+Still the old painted bar, on purpose: a different product doing a different job - one armoured home run
+from a combiner to the cabinet, rather than the hundreds of string pairs a plant is stitched together
+with - and it is next in line rather than done here.
 """
 
 import itertools
 import json
+import math
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from modellib import FITTING, Mesh, arc, box, cylinder, tube, write_mtl      # noqa: E402
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
 BLOCK_MODELS = os.path.join(ASSETS, 'models', 'block')
 ITEM_MODELS = os.path.join(ASSETS, 'models', 'item')
+OBJ_DIR = os.path.join(ASSETS, 'models', 'dc_string_cable')
 
-# Face textures are *names* looked up in the model's own textures map, not paths - a raw resource
-# location in a face comes out as the missing-texture chequerboard, which is exactly what an early
-# version of this did to every cable in the world.  So the paths are declared once at the top of each
-# model under these names and the faces reference them.
-CORE = '#core'                 # the gradient across the tile: cores running north and south
-CORE_TURN = '#core_turn'       # the same gradient down the tile: cores running east and west
-CLEAT = '#cleat'
-PLUS = '#plus'
-MINUS = '#minus'
-BOX = '#box'
-TRENCH = '#trench'
+NAME = 'dc_string_cable'
+SIDES = ('north', 'east', 'south', 'west')
 
-PATHS = {
-    CORE: 'electricity:block/dc_core',
-    CORE_TURN: 'electricity:block/dc_core_turn',
-    CLEAT: 'electricity:block/dc_cleat',
-    PLUS: 'electricity:block/dc_connector_plus',
-    MINUS: 'electricity:block/dc_connector_minus',
-    BOX: 'electricity:block/dc_jbox',
-    TRENCH: 'electricity:block/dc_trench',
+# The materials, and the textures they resolve to.  A ``#name`` in the MTL is looked up in the block
+# model's own textures map, the way a vanilla model declares one - so the paths live in one place.
+MATERIALS = {
+    'core': '#core',
+    'cleat': '#cleat',
+    'plug_plus': '#plug_plus',
+    'plug_minus': '#plug_minus',
+    'jbox': '#jbox',
+    'trench': '#trench',
+}
+TEXTURES = {
+    'core': 'electricity:block/dc_core',
+    'cleat': 'electricity:block/dc_cleat',
+    'plug_plus': 'electricity:block/dc_connector_plus',
+    'plug_minus': 'electricity:block/dc_connector_minus',
+    'jbox': 'electricity:block/dc_jbox',
+    'trench': 'electricity:block/dc_trench',
 }
 
-SIDES = ('north', 'east', 'south', 'west')
-OPPOSITE = {'north': 'south', 'south': 'north', 'east': 'west', 'west': 'east'}
-
 # ---------------------------------------------------------------- the pair, in sixteenths
-
-# One core's cross-section, from the ground up: (low, high, half-width).  Three steps rather than one
-# box, because the shoulder either side of a narrower crown is what the eye reads as round even before
-# the texture's gradient is on it.
-PROFILE = ((0.00, 0.62, 0.62), (0.62, 1.44, 1.00), (1.44, 2.00, 0.62))
-CORE_HALF = max(step[2] for step in PROFILE)
-CORE_TOP = PROFILE[-1][1]
-# Each core's centre, either side of the block's centreline: two cores 2 px across, a fifth of a pixel
-# apart - a pair cleated together, which is how a string's two cables are run.
-CORE_OFFSET = 1.1
-CORES = (8.0 - CORE_OFFSET, 8.0 + CORE_OFFSET)
-# Where the arms stop and the middle piece begins, and how far a climb stands off its wall.
-HUB_LO = 8.0 - CORE_OFFSET - CORE_HALF - 0.4
-HUB_HI = 16.0 - HUB_LO
-WALL = 2.0
-
-# The MC4 connector: a gland nut onto the sheath, a barrel, and a nose, as (length, half-width).
 #
-# A real plug is 18 mm across against the cable's 6.9, and two of them cannot sit at the pair's own
-# spacing - which is why an installer's two plugs splay apart.  Here they keep the pair's spacing and
-# are told from the cable by standing *taller* instead: half again the cable's height, with the knurl
-# and the latch window on their sides.  Splaying them would want a jog piece per core and four more
-# boxes on a piece that is only ever seen at the end of a run.
-CONNECTOR = ((1.30, 1.05), (2.90, 1.05), (0.80, 0.80))
-CONNECTOR_TOP = 3.10
+# Authored in sixteenths, like every other figure in this mod's models, and divided down on the way
+# out: an OBJ here runs -0.5 to 0.5 in x and z and from 0 upwards in y.
 
-# Height of the ground surface inside a buried block, and the rim that holds the boundary shut.  Low
-# enough that the pair fits between it and the top of the block.
-GROUND = 16.0 - CORE_TOP
+# A 6 mm2 H1Z2Z2-K is 6.9 mm across.  Thin: a core is 1.3 px, so the pair is a pair of cables rather
+# than a pair of ducts - which is what the first two attempts at this looked like.
+CORE_RADIUS = 0.65
+CORE_OFFSET = 1.05
+CORES = (8.0 - CORE_OFFSET, 8.0 + CORE_OFFSET)
+# The cable rests on the ground, so its axis is its own radius above it.
+CORE_Y = CORE_RADIUS
+
+# Where an arm stops and the middle begins.  This one figure decides the bend: a quarter circle tangent
+# to both legs has its tangent points at ``8 - CORE_OFFSET - radius``, so setting the hub edge here
+# makes both arcs of a bend run *exactly* from one edge of the middle to the other with no straight
+# section inside it, and makes the two radii come out concentric.  See ``piece_bend``.
+HUB_LO = 5.4
+HUB_HI = 16.0 - HUB_LO
+
+# The MC4 plug, from the sheath outwards, as (length, radius).
+#
+# The real one is 18 mm on a 6.9 mm cable - 2.6 diameters - and two of those cannot sit at the pair's
+# own spacing, which is why an installer's two plugs splay apart.  Drawn at 1.5 diameters instead: it
+# still reads as a plug, it stays in proportion to the thin cable, and the two clear each other.
+PLUG = ((1.10, 0.85), (2.60, 0.95), (0.70, 0.62))
+PLUG_START = 8.4
+
+# How many segments a quarter turn is swept in.  Eight is smooth at the tighter of the two radii and
+# costs eight rings of thirty-two.
+BEND_STEPS = 8
+# The elbow where a run turns up a wall, and how far the riser stands off it.
+CLIMB_RADIUS = 2.4
+WALL_STANDOFF = CORE_RADIUS + 0.5
+
+# Height of the ground surface inside a buried block, and the rim that holds the block boundary shut.
+GROUND = 14.0
 RIM = 1.0
 
+
+def out(value):
+    """A figure in sixteenths, as the OBJ's own units."""
+    return value / 16.0
+
+
+def at(x, y, z):
+    """A point in sixteenths, in the OBJ's frame: x and z about the centre, y off the floor."""
+    return (out(x) - 0.5, out(y), out(z) - 0.5)
+
+
+# ---------------------------------------------------------------- the parts
+#
+# Every part is drawn *and* measured: ``boxes`` is what the block's outline claims, so the geometry and
+# the collision tables cannot drift apart.
+
+class Run:
+    """A length of cable swept along a path given in sixteenths."""
+
+    def __init__(self, path, radius=CORE_RADIUS, material='core'):
+        self.path = _dedupe([tuple(float(c) for c in p) for p in path])
+        self.radius, self.material = radius, material
+
+    def draw(self, mesh):
+        faces = mesh.faces('cable', self.material)
+        tube(mesh, faces, [at(*p) for p in self.path], out(self.radius), sides=FITTING,
+             uv_scale=1.0, uv_along=self.length() / 3.0)
+
+    def length(self):
+        return sum(math.dist(self.path[i], self.path[i + 1]) for i in range(len(self.path) - 1))
+
+    def boxes(self):
+        """One box a segment, so a curve's outline follows the curve instead of boxing the whole arc.
+
+        The padding is *perpendicular* to each segment and not around it: a tube running along one axis
+        ends flat where its path ends, so padding that axis too would claim half a diameter of air past
+        the end - which is what made an arm read as standing inside the junction box it feeds.  A segment
+        that runs diagonally, which is every chord of an arc, is padded on all three, since its cap is
+        not square to any of them.
+        """
+        result = []
+        for i in range(len(self.path) - 1):
+            a, b = self.path[i], self.path[i + 1]
+            moving = [j for j in range(3) if abs(b[j] - a[j]) > 1e-6]
+            lo, hi = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+            for j in range(3):
+                pad = 0.0 if moving == [j] else self.radius
+                lo[j] = min(a[j], b[j]) - pad
+                hi[j] = max(a[j], b[j]) + pad
+            result.append((tuple(lo), tuple(hi)))
+        return result
+
+    def turned(self, quarter):
+        return Run([_spin(p, quarter) for p in self.path], self.radius, self.material)
+
+
+class Barrel:
+    """A round fitting: a plug's gland nut or barrel, or a gland through a junction box's wall."""
+
+    def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False):
+        self.group, self.material, self.centre, self.axis = group, material, centre, axis
+        self.radius, self.low, self.high, self.cap = radius, low, high, cap
+        # A sleeve is a fitting a cable runs *through* - a gland in a junction box's wall - so it is the
+        # one thing in this model allowed to contain cable.  The check below proves it contains it rather
+        # than clipping it.
+        self.sleeve = sleeve
+
+    def draw(self, mesh):
+        faces = mesh.faces(self.group, self.material)
+        base = list(self.centre)
+        base['xyz'.index(self.axis)] = self.low
+        cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out(self.high - self.low),
+                 sides=FITTING, uv_scale=0.5, caps=faces if self.cap else None,
+                 cap_ends=(1,) if self.cap else ())
+
+    def boxes(self):
+        index = 'xyz'.index(self.axis)
+        lo, hi = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+        for i in range(3):
+            if i == index:
+                lo[i], hi[i] = self.low, self.high
+            else:
+                lo[i], hi[i] = self.centre[i] - self.radius, self.centre[i] + self.radius
+        return [(tuple(lo), tuple(hi))]
+
+    def turned(self, quarter):
+        return _Boxes([_spin_box(b, quarter) for b in self.boxes()], sleeve=self.sleeve)
+
+
+class Slab:
+    """A box of something that is not cable: a cleat's strap and feet, a junction box's shell."""
+
+    def __init__(self, group, material, lo, hi, uv_scale=1.0):
+        self.group, self.material = group, material
+        self.lo, self.hi, self.uv_scale = tuple(lo), tuple(hi), uv_scale
+
+    def draw(self, mesh):
+        box(mesh, mesh.faces(self.group, self.material), at(*self.lo), at(*self.hi),
+            uv_scale=self.uv_scale)
+
+    def boxes(self):
+        return [(self.lo, self.hi)]
+
+    def turned(self, quarter):
+        return _Boxes([_spin_box(b, quarter) for b in self.boxes()])
+
+
+class _Boxes:
+    """A part reduced to its boxes, once it has been turned: only the checks ever see one."""
+
+    def __init__(self, boxes, sleeve=False):
+        self._boxes = boxes
+        self.sleeve = sleeve
+
+    def boxes(self):
+        return self._boxes
+
+
+def _spin(point, quarter):
+    """A point turned about the block's centre, the way a blockstate's y turns it."""
+    a, b = point[0] - 8.0, point[2] - 8.0
+    for _ in range(quarter // 90):
+        a, b = -b, a
+    return (a + 8.0, point[1], b + 8.0)
+
+
+def _spin_box(bounds, quarter):
+    lo, hi = bounds
+    corners = [_spin((x, lo[1], z), quarter) for x in (lo[0], hi[0]) for z in (lo[2], hi[2])]
+    xs = [c[0] for c in corners]
+    zs = [c[2] for c in corners]
+    return ((min(xs), lo[1], min(zs)), (max(xs), hi[1], max(zs)))
+
+
+def _dedupe(path):
+    kept = [path[0]]
+    for p in path[1:]:
+        if math.dist(p, kept[-1]) > 1e-6:
+            kept.append(p)
+    return kept
+
+
+# ---------------------------------------------------------------- the fittings
+
+def plug(centre, base, positive):
+    """An MC4 plug on the end of a core: the gland nut, the barrel, the nose.
+
+    Two pieces that latch, in glass-filled polyamide, sealed onto the sheath by a knurled nut.  The
+    collar says which pole it is - red for positive, black for negative - because the cable itself is
+    black for its whole length and this is where a plant marks it.
+    """
+    material = 'plug_plus' if positive else 'plug_minus'
+    parts, cursor = [], PLUG_START
+    for index, (length, radius) in enumerate(PLUG):
+        parts.append(Barrel('plug', material, (centre, base + CORE_Y, 0.0), 'z', radius,
+                            cursor, cursor + length, cap=index == len(PLUG) - 1))
+        cursor += length
+    return parts
+
+
+def cleat(base, low, high):
+    """A stainless clip: a strap over the pair into a foot each side, one screw through it.
+
+    A run is cleated about once a metre, and the clip is the only thing on a hundred metres of pair that
+    is not pair - so it is what gives a straight run a rhythm.  The feet fill the gap between the pair
+    and the edge of the middle exactly: any wider and they stand inside the next arm along, which is a
+    fault ``check_disjoint`` catches.
+    """
+    inner = CORE_OFFSET + CORE_RADIUS
+    top = base + CORE_Y + CORE_RADIUS
+    return [
+        # the two feet, filling the gap between the pair and the edge of the middle exactly: any wider
+        # and they stand inside the next arm along, any narrower and they cut into the cable
+        Slab('cleat', 'cleat', (HUB_LO, base, low), (8.0 - inner, top, high), uv_scale=0.4),
+        Slab('cleat', 'cleat', (8.0 + inner, base, low), (HUB_HI, top, high), uv_scale=0.4),
+        # the strap, resting *on* the crown rather than sunk into it - it used to start a third of a
+        # pixel lower, which is a band cutting through the cable it is meant to hold
+        Slab('cleat', 'cleat', (HUB_LO, top, low), (HUB_HI, top + 0.42, high), uv_scale=0.6),
+        # and the screw through it, which is what a cleat is closed with
+        Barrel('cleat', 'cleat', (8.0, 0.0, (low + high) / 2.0), 'y', 0.34, top + 0.42, top + 0.72),
+    ]
+
+
+def junction_box(base, glanded):
+    """A small IP68 polycarbonate box, glanded on the walls that have a cable in them.
+
+    A purpose-made piece per pattern rather than one box with four glands and some of them unused: a
+    wall with no cable behind it has no gland in the real thing either.
+    """
+    top = base + CORE_Y + CORE_RADIUS + 1.6
+    parts = [Slab('jbox', 'jbox', (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
+    for side in glanded:
+        axis = 'z' if side in ('north', 'south') else 'x'
+        near = side in ('north', 'west')
+        low, high = (HUB_LO - 0.8, HUB_LO) if near else (HUB_HI, HUB_HI + 0.8)
+        for centre in CORES:
+            middle = [8.0, base + CORE_Y, 8.0]
+            middle[0 if axis == 'z' else 2] = centre
+            parts.append(Barrel('gland', 'plug_minus', tuple(middle), axis, 0.90, low, high,
+                                cap=False, sleeve=True))
+    return parts
+
+
+# ---------------------------------------------------------------- the sixteen middles
+
+def piece_line(base):
+    """Two opposite sides: the pair runs straight through, held down by a cleat."""
+    y = base + CORE_Y
+    return [Run([(c, y, HUB_LO), (c, y, HUB_HI)]) for c in CORES] + cleat(base, 7.1, 8.9)
+
+
+def piece_bend(base):
+    """Two adjacent sides: the pair turns on a radius, swept rather than broken at a corner.
+
+    The turn is north to east.  A quarter circle tangent to both legs of one core has its centre one
+    radius outside each of them, so the inside core's arc has radius ``8 + CORE_OFFSET - HUB_LO`` and
+    the outside core's ``8 - CORE_OFFSET - ... ``- and those two work out to the **same centre**, which
+    means the pair goes round the bend concentric, a fixed distance apart the whole way, exactly as a
+    cleated pair does.  Both arcs also begin and end precisely on the middle's own boundary, so there is
+    no straight section inside it and nothing to line up by hand.
+
+    The radius is symbolic and says so: a real cable bends no tighter than four diameters, which at a
+    block to ten metres is four hundredths of a pixel and invisible.  What matters is that it reads as
+    bent and not as broken.
+
+    No cleat: both axes of the middle are full of turning cable and there is nowhere for a foot to
+    stand - which is true of the real thing too, where a bend is supported before it and after it.
+    """
+    y = base + CORE_Y
+    # A core comes in on one lane and leaves on the other, and its arc is tangent to both - so its
+    # radius is set by the lane it *leaves* on: tangent to z = other means the centre sits one radius
+    # north of it, and the inbound tangent point lands on the middle's edge when radius = other - HUB_LO.
+    # Which puts both centres at the same place, (HUB_HI, HUB_LO), so the pair is concentric.
+    centre = (HUB_HI, y, HUB_LO)
+    parts = []
+    for lane, other in ((CORES[1], CORES[0]), (CORES[0], CORES[1])):
+        radius = other - HUB_LO
+        turn = arc(centre, radius, (0, 2), 180.0, 90.0, BEND_STEPS)
+        parts.append(Run([(lane, y, HUB_LO)] + [(p[0], y, p[2]) for p in turn]
+                         + [(HUB_HI, y, other)]))
+    return parts
+
+
+def piece_end(base):
+    """One side connected: the pair comes in and ends in two MC4 plugs."""
+    y = base + CORE_Y
+    parts = []
+    for index, c in enumerate(CORES):
+        parts.append(Run([(c, y, HUB_LO), (c, y, PLUG_START)]))
+        parts += plug(c, base, index == 0)
+    return parts
+
+
+def piece_loose(base):
+    """Nothing connected: a length of pair lying where it was dropped, with its plugs on."""
+    y = base + CORE_Y
+    parts = []
+    for index, c in enumerate(CORES):
+        parts.append(Run([(c, y, 3.2), (c, y, PLUG_START)]))
+        parts += plug(c, base, index == 0)
+    return parts
+
+
+def piece_tee(base):
+    """Three sides: a junction box, glanded north, east and south."""
+    return junction_box(base, ('north', 'east', 'south'))
+
+
+def piece_cross(base):
+    """Four sides: the same box with the fourth wall glanded too."""
+    return junction_box(base, SIDES)
+
+
+def piece_arm(base, near):
+    """The pair from a block edge in to the middle piece.
+
+    It stops exactly on the boundary rather than overrunning it: two tubes that overlap would put two
+    cylinder surfaces at the same depth, and two that stop on the same plane with no caps carry the run
+    across the seam with nothing drawn there at all.
+    """
+    y = base + CORE_Y
+    return [Run([(c, y, near), (c, y, HUB_LO)]) for c in CORES]
+
+
+def piece_climb(base):
+    """The pair going up the wall alongside, to reach a run on top of it.
+
+    One swept tube a core, from the middle of the block, round the elbow, and up the wall - the elbow
+    included in the same sweep, which is what removes the last place two pieces of this model used to
+    meet on a plane.  It replaces the arm rather than adding to it, so nothing is drawn twice.
+    """
+    y = base + CORE_Y
+    turn = arc((0.0, y + CLIMB_RADIUS, WALL_STANDOFF + CLIMB_RADIUS), CLIMB_RADIUS, (1, 2),
+               180.0, 270.0, BEND_STEPS)
+    parts = []
+    for c in CORES:
+        path = ([(c, y, HUB_LO)] + [(c, p[1], p[2]) for p in turn] + [(c, 16.0, WALL_STANDOFF)])
+        parts.append(Run(path))
+    return parts
+
+
+def bedding():
+    """The sand a buried cable is laid in, and the rim that keeps the block boundary solid.
+
+    A buried run has taken a block of ground out of the world, so the model has to be a *complete*
+    solid: the game culls the soil's faces around it, and any part of the boundary this did not cover
+    would be a hole to see through the world with.  Four rim boxes rather than a ring, because two boxes
+    overlapping at a corner would put two faces on one plane.
+    """
+    parts = [Slab('bedding', 'trench', (0.0, 0.0, 0.0), (16.0, GROUND, 16.0))]
+    for x0, z0, x1, z1 in ((0.0, 0.0, 16.0, RIM), (0.0, 16.0 - RIM, 16.0, 16.0),
+                           (0.0, RIM, RIM, 16.0 - RIM), (16.0 - RIM, RIM, 16.0, 16.0 - RIM)):
+        parts.append(Slab('bedding', 'trench', (x0, GROUND, z0), (x1, 16.0, z1), uv_scale=0.5))
+    return parts
+
+
+# Which middle a set of connected sides gets, and how far round it is turned.  Authored with the one
+# side at north, the pair running north and south, the bend from north to east, and the tee glanded
+# north, east and south.
+HUBS = {
+    (): ('loose', 0),
+    ('north',): ('end', 0), ('east',): ('end', 90),
+    ('south',): ('end', 180), ('west',): ('end', 270),
+    ('north', 'south'): ('line', 0), ('east', 'west'): ('line', 90),
+    ('north', 'east'): ('bend', 0), ('east', 'south'): ('bend', 90),
+    ('south', 'west'): ('bend', 180), ('north', 'west'): ('bend', 270),
+    ('north', 'east', 'south'): ('tee', 0), ('east', 'south', 'west'): ('tee', 90),
+    ('north', 'south', 'west'): ('tee', 180), ('north', 'east', 'west'): ('tee', 270),
+    ('north', 'east', 'south', 'west'): ('cross', 0),
+}
+
+MIDDLES = {'loose': piece_loose, 'end': piece_end, 'line': piece_line, 'bend': piece_bend,
+           'tee': piece_tee, 'cross': piece_cross}
+QUARTERS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
+
+
+# ---------------------------------------------------------------- writing
 
 def write(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -140,494 +488,318 @@ def write(path, data):
         f.write('\n')
 
 
-# ---------------------------------------------------------------- the parts of a run
-#
-# A part knows how to become both the boxes the model draws and the one box the block's outline claims,
-# so the two cannot drift: DcCableBlock's tables are printed from this same list.
-
-class Part:
-    """One box of something that is not cable: a cleat's strap, a connector's barrel, a junction box."""
-
-    def __init__(self, lo, hi, texture, faces=None, cull=None):
-        self.lo, self.hi, self.texture = tuple(lo), tuple(hi), texture
-        self.faces = faces          # which faces to draw, or None for all but the underside
-        self.cull = cull
-
-    def bounds(self):
-        return self.lo, self.hi
-
-    def elements(self):
-        return [element(self.lo, self.hi, plain_faces(self.lo, self.hi, self.texture,
-                                                     self.faces, self.cull))]
-
-
-class Core:
-    """A length of one core, running along an axis with its round profile standing on the ground.
-
-    ``across`` is the horizontal axis the core is offset on - 'x' for a run north and south, 'z' for
-    one east and west - and ``centre`` is where on that axis it sits.  ``cut`` names an end whose cap
-    should be drawn, which is only ever an end that stops in the open air: the caps at a block boundary
-    are always inside the neighbour's own cable and drawing them is a quad nobody can see.
-    """
-
-    def __init__(self, across, centre, low, high, base=0.0, cut=()):
-        self.across, self.centre, self.low, self.high, self.base = across, centre, low, high, base
-        self.cut = cut
-
-    def bounds(self):
-        lo = [0.0, self.base, 0.0]
-        hi = [0.0, self.base + CORE_TOP, 0.0]
-        a = 0 if self.across == 'x' else 2
-        b = 2 - a
-        lo[a], hi[a] = self.centre - CORE_HALF, self.centre + CORE_HALF
-        lo[b], hi[b] = self.low, self.high
-        return tuple(lo), tuple(hi)
-
-    def elements(self):
-        out = []
-        a = 0 if self.across == 'x' else 2
-        b = 2 - a
-        for low, high, half in PROFILE:
-            lo, hi = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
-            lo[1], hi[1] = self.base + low, self.base + high
-            lo[a], hi[a] = self.centre - half, self.centre + half
-            lo[b], hi[b] = self.low, self.high
-            top = high == PROFILE[-1][1]
-            out.append(element(lo, hi, core_faces(tuple(lo), tuple(hi), self.across, self.centre,
-                                                 top=top, cut=self.cut)))
-        return out
-
-
-class Riser:
-    """A length of one core going up a wall, so its round profile stands out from the wall instead.
-
-    The same three steps, measured away from the face it is clipped to rather than off the ground -
-    which is what makes a climb read as a cable against a wall and not a strip painted on it.
-    """
-
-    def __init__(self, centre, low, high):
-        self.centre, self.low, self.high = centre, low, high
-
-    def bounds(self):
-        return ((self.centre - CORE_HALF, self.low, 0.0),
-                (self.centre + CORE_HALF, self.high, CORE_TOP))
-
-    def elements(self):
-        out = []
-        for low, high, half in PROFILE:
-            lo = (self.centre - half, self.low, low)
-            hi = (self.centre + half, self.high, high)
-            out.append(element(lo, hi, riser_faces(lo, hi, self.centre,
-                                                  outward=high == PROFILE[-1][1])))
-        return out
-
-
-def element(lo, hi, faces):
-    return {'from': [round(v, 3) for v in lo], 'to': [round(v, 3) for v in hi], 'faces': faces}
-
-
-def face(texture, uv, cull=None):
-    entry = {'uv': [round(v, 3) for v in uv], 'texture': texture}
-    if cull is not None:
-        entry['cullface'] = cull
-    return entry
-
-
-def gradient(value, centre):
-    """Where a point across a core falls on its tile: the full width of the texture, edge to edge."""
-    return (value - (centre - CORE_HALF)) / (2.0 * CORE_HALF) * 16.0
-
-
-def core_faces(lo, hi, across, centre, top, cut):
-    """The faces of one step of a core, each mapped so the round shading lands the right way round.
-
-    Three cases, and which one a face is depends on the run's direction, because the format fixes
-    which world axis a face's u is:
-
-      * the crown - the upward face - wants the gradient across the cable, so it takes ``dc_core``
-        when u is the across axis and ``dc_core_turn`` when v is
-      * a flank wants one value, the edge of the gradient, so it pins that axis to a sliver
-      * a cut end wants the whole gradient, which is a cable seen down its length
-    """
-    a, b = ('x', 'z') if across == 'x' else ('z', 'x')
-    ai, bi = (0, 2) if across == 'x' else (2, 0)
-    g0, g1 = gradient(lo[ai], centre), gradient(hi[ai], centre)
-    faces = {}
-
-    # the crown, and the shoulders either side of it: the same mapping, each taking the part of the
-    # gradient its own position across the cable earns
-    if across == 'x':
-        faces['up'] = face(CORE, (g0, lo[2], g1, hi[2]))
-    else:
-        faces['up'] = face(CORE_TURN, (lo[0], g0, hi[0], g1))
-
-    # the two flanks, pinned to the gradient's edges
-    flanks = ('west', 'east') if across == 'x' else ('north', 'south')
-    for side, value in zip(flanks, (g0, g1)):
-        edge = min(max(value, 0.0), 15.2)
-        faces[side] = face(CORE, (edge, lo[1], edge + 0.8, hi[1]))
-
-    # and the ends, drawn only where the cable really stops
-    ends = ('north', 'south') if across == 'x' else ('west', 'east')
-    for side, value in zip(ends, (lo[bi], hi[bi])):
-        if side not in cut:
-            continue
-        faces[side] = face(CORE, (g0, 16.0 - hi[1], g1, 16.0 - lo[1]))
-
-    return faces
-
-
-def riser_faces(lo, hi, centre, outward):
-    """The faces of one step of a climb: the run is up, so the gradient goes across it in x."""
-    g0, g1 = gradient(lo[0], centre), gradient(hi[0], centre)
-    faces = {}
-    if outward:
-        faces['south'] = face(CORE, (g0, 16.0 - hi[1], g1, 16.0 - lo[1]))
-    else:
-        faces['south'] = face(CORE, (g0, 16.0 - hi[1], g1, 16.0 - lo[1]))
-    for side, value in (('west', g0), ('east', g1)):
-        edge = min(max(value, 0.0), 15.2)
-        faces[side] = face(CORE, (edge, 16.0 - hi[1], edge + 0.8, 16.0 - lo[1]))
-    return faces
-
-
-def plain_faces(lo, hi, texture, wanted=None, cull=None):
-    """A box mapped straight off its own coordinates, so nothing on it is stretched.
-
-    Mapping by position rather than stretching the tile onto every face is what keeps a knurl the same
-    pitch on a connector's barrel as on its nut, and what keeps the screw in a cleat round.
-    """
-    uv = {
-        'down': (lo[0], 16.0 - hi[2], hi[0], 16.0 - lo[2]),
-        'up': (lo[0], lo[2], hi[0], hi[2]),
-        'north': (16.0 - hi[0], 16.0 - hi[1], 16.0 - lo[0], 16.0 - lo[1]),
-        'south': (lo[0], 16.0 - hi[1], hi[0], 16.0 - lo[1]),
-        'west': (lo[2], 16.0 - hi[1], hi[2], 16.0 - lo[1]),
-        'east': (16.0 - hi[2], 16.0 - hi[1], 16.0 - lo[2], 16.0 - lo[1]),
-    }
-    sides = wanted if wanted is not None else [s for s in uv if s != 'down']
-    return {s: face(texture, uv[s], cull if cull == s else None) for s in sides}
-
-
-# ---------------------------------------------------------------- the middle, one per pattern
-
-def hub_loose(base):
-    """Nothing connected: a length of pair lying where it was dropped, with its plugs on."""
-    parts = []
-    for i, centre in enumerate(CORES):
-        parts.append(Core('x', centre, 2.5, 8.0, base, cut=('north',)))
-        parts += connector('x', centre, 8.0, +1, base, PLUS if i == 0 else MINUS)
-    return parts
-
-
-def hub_end(base):
-    """One side connected: the pair comes in and ends in two MC4 connectors.
-
-    Which is what the end of a string cable is - there is no bare end on a plant, and the red collar
-    on one of the two is how a cable that is black for its whole length says which pole it is.
-    """
-    parts = []
-    for i, centre in enumerate(CORES):
-        parts.append(Core('x', centre, HUB_LO, 8.0, base))
-        parts += connector('x', centre, 8.0, +1, base, PLUS if i == 0 else MINUS)
-    return parts
-
-
-def hub_line(base):
-    """Two opposite sides: the pair runs through, held down by a cleat."""
-    parts = [Core('x', centre, HUB_LO, HUB_HI, base) for centre in CORES]
-    return parts + cleat(base, 7.2, 8.8)
-
-
-def hub_bend(base):
-    """Two adjacent sides: the pair turns, and the core on the inside of the turn stays inside.
-
-    Which is the whole reason the middle of this block is chosen by pattern.  The inside core reaches
-    the corner and leaves; the outside one runs past it and crosses behind - and the two nest without
-    ever sharing a pixel, so a bend needs nothing hiding it.
-    """
-    inner, outer = CORES[1], CORES[0]        # the turn is north to east, so the inside is the east core
-    parts = [
-        # the inside of the turn: down the north leg as far as the corner, then out to the east on the
-        # near line - the shorter way round, which is what being on the inside means
-        Core('x', inner, HUB_LO, outer + CORE_HALF, base),
-        Core('z', outer, inner + CORE_HALF, HUB_HI, base),
-        # and the outside, which runs past the corner and turns behind it
-        Core('x', outer, HUB_LO, inner + CORE_HALF, base),
-        Core('z', inner, outer + CORE_HALF, HUB_HI, base),
-    ]
-    # And no cleat, which is not an omission.  Both axes of the middle are full of turning cable, so
-    # there is nowhere for a foot to stand - the check below refused every position tried.  Which is
-    # also true of the real thing: a bend is supported before it and after it, never at it, because
-    # there is no room at it either.
-    return parts
-
-
-def hub_box(base):
-    """Three sides or four: a junction box, because a third leg has to be joined to something.
-
-    Two runs can pass each other and two can turn, but a third cannot be a bare crossing - and what
-    joins direct-current strings is a small IP68 box with glands in it.  It fills the middle exactly,
-    so the arms' cores run into its walls the way cables run into the real one.
-    """
-    return [Part((HUB_LO, base, HUB_LO), (HUB_HI, base + 3.6, HUB_HI), BOX,
-                 faces=['up', 'north', 'south', 'east', 'west'])]
-
-
-def connector(across, centre, start, direction, base, texture):
-    """An MC4 plug on the end of a core: the gland nut, the barrel and the nose."""
-    parts, at = [], start
-    for length, half in CONNECTOR:
-        a, b = at, at + length * direction
-        lo = [0.0, base, 0.0]
-        hi = [0.0, base + CONNECTOR_TOP, 0.0]
-        ai, bi = (0, 2) if across == 'x' else (2, 0)
-        lo[ai], hi[ai] = centre - half, centre + half
-        lo[bi], hi[bi] = min(a, b), max(a, b)
-        parts.append(Part(lo, hi, texture))
-        at = b
-    return parts
-
-
-def cleat(base, low, high):
-    """A stainless clip: a strap over the pair into a foot each side, with one screw through it.
-
-    The feet fill the gap between the pair and the edge of the middle exactly.  Half a pixel wider and
-    they stand inside the next arm along, which ``check_disjoint`` catches and which would have been two
-    surfaces flickering at every corner of every run.
-    """
-    inner = CORES[1] + CORE_HALF
-    return [
-        Part((HUB_LO, base, low), (16.0 - inner, base + CORE_TOP, high), CLEAT),
-        Part((inner, base, low), (HUB_HI, base + CORE_TOP, high), CLEAT),
-        Part((HUB_LO, base + CORE_TOP, low), (HUB_HI, base + CORE_TOP + 0.7, high), CLEAT),
-    ]
-
-
-# Which middle piece a set of connected sides gets, and how far round it is turned.  Authored with the
-# one side at north, the pair running north and south, the bend from north to east and the box's
-# through legs north and south - then turned by quarters, which is what the blockstate's y does.
-HUBS = {
-    (): ('loose', 0),
-    ('north',): ('end', 0), ('east',): ('end', 90),
-    ('south',): ('end', 180), ('west',): ('end', 270),
-    ('north', 'south'): ('line', 0), ('east', 'west'): ('line', 90),
-    ('north', 'east'): ('bend', 0), ('east', 'south'): ('bend', 90),
-    ('south', 'west'): ('bend', 180), ('north', 'west'): ('bend', 270),
-    # three legs and four get the same box: it is square and symmetric, and one box with cables into
-    # three of its walls is exactly what one with cables into four of them is
-    ('north', 'east', 'south'): ('box', 0), ('east', 'south', 'west'): ('box', 0),
-    ('north', 'south', 'west'): ('box', 0), ('north', 'east', 'west'): ('box', 0),
-    ('north', 'east', 'south', 'west'): ('box', 0),
-}
-
-BUILDERS = {
-    'loose': hub_loose,
-    'end': hub_end,
-    'line': hub_line,
-    'bend': hub_bend,
-    'box': hub_box,
-}
-
-
-def arm(base, near):
-    """The pair from a block edge in to the middle piece."""
-    return [Core('x', centre, near, HUB_LO, base) for centre in CORES]
-
-
-def climb(base):
-    """The pair going up the wall alongside, to reach a run on top of it.
-
-    The elbow at the bottom is one full-section box a side rather than a mitred profile: a cable really
-    is at its fattest where it is bent hardest, and there is no way to mitre anything in this format.
-    """
-    parts = [Part((centre - CORE_HALF, base, 0.0), (centre + CORE_HALF, base + CORE_TOP, WALL),
-                  CORE, faces=['south', 'west', 'east'])
-             for centre in CORES]
-    return parts + [Riser(centre, base + CORE_TOP, 16.0) for centre in CORES]
-
-
-# ---------------------------------------------------------------- the trench
-
-def bedding():
-    """The sand a buried cable is laid in, and the rim that keeps the block boundary solid.
-
-    Four rim boxes rather than a ring, because two boxes that overlap at a corner would put two
-    faces on the same plane and they would flicker against each other along every trench in the
-    world.  They are cut so no two of them share any volume.
-    """
-    box = element((0.0, 0.0, 0.0), (16.0, GROUND, 16.0), {
-        'down': face(TRENCH, (0, 0, 16, 16), cull='down'),
-        'up': face(TRENCH, (0, 0, 16, 16)),
-        'north': face(TRENCH, (0, 16 - GROUND, 16, 16), cull='north'),
-        'south': face(TRENCH, (0, 16 - GROUND, 16, 16), cull='south'),
-        'west': face(TRENCH, (0, 16 - GROUND, 16, 16), cull='west'),
-        'east': face(TRENCH, (0, 16 - GROUND, 16, 16), cull='east'),
-    })
-
-    rims = []
-    spans = (
-        ((0.0, 0.0), (16.0, RIM), 'north'),
-        ((0.0, 16.0 - RIM), (16.0, 16.0), 'south'),
-        ((0.0, RIM), (RIM, 16.0 - RIM), 'west'),
-        ((16.0 - RIM, RIM), (16.0, 16.0 - RIM), 'east'),
-    )
-    for (x0, z0), (x1, z1), outward in spans:
-        faces = {
-            'up': face(TRENCH, (x0, z0, x1, z1)),
-            'down': face(TRENCH, (x0, z0, x1, z1)),
-            'north': face(TRENCH, (x0, 0, x1, RIM), cull='north' if outward == 'north' else None),
-            'south': face(TRENCH, (x0, 0, x1, RIM), cull='south' if outward == 'south' else None),
-            'west': face(TRENCH, (z0, 0, z1, RIM), cull='west' if outward == 'west' else None),
-            'east': face(TRENCH, (z0, 0, z1, RIM), cull='east' if outward == 'east' else None),
-        }
-        rims.append(element((x0, GROUND, z0), (x1, 16.0, z1), faces))
-
-    return [box] + rims
-
-
-# ---------------------------------------------------------------- the models and the blockstate
-
-def model_of(parts, extra=(), ao=False):
-    used = set()
-    elements = list(extra)
+def write_piece(name, parts):
+    """One piece as an OBJ, its material library, and the block model that loads it."""
+    mesh = Mesh()
     for part in parts:
-        elements += part.elements()
-    for e in elements:
-        for entry in e['faces'].values():
-            used.add(entry['texture'])
+        part.draw(mesh)
 
-    model = {'parent': 'block/block',
-             'textures': dict({'particle': CORE}, **{k[1:]: PATHS[k] for k in sorted(used | {CORE})}),
-             'elements': elements}
-    if not ao:
-        model['ambientocclusion'] = False
-    return model
+    seen = []
+    for _, material, faces in mesh.objects:
+        if faces and material not in seen:
+            seen.append(material)
 
+    mesh.write(os.path.join(OBJ_DIR, name + '.obj'), name + '.mtl', 'gen_cable_models.py')
+    write_mtl(os.path.join(OBJ_DIR, name + '.mtl'), seen, MATERIALS, 'gen_cable_models.py')
 
-def string_models(name):
-    """Every model the string cable needs: a middle per pattern, an arm, a climb, and the buried set."""
-    out = {}
-    for buried, base, prefix in ((False, 0.0, ''), (True, GROUND, '_trench')):
-        extra = bedding() if buried else ()
-        for kind, builder in BUILDERS.items():
-            out['%s%s_%s' % (name, prefix, kind)] = model_of(builder(base), extra, ao=buried)
-
-        near = RIM if buried else 0.0
-        out['%s%s_arm' % (name, prefix)] = model_of(arm(base, near))
-        if not buried:
-            out['%s_arm_up' % name] = model_of(arm(base, WALL))
-            out['%s_climb' % name] = model_of(climb(base))
-
-    return out
+    write(os.path.join(BLOCK_MODELS, name + '.json'), {
+        'loader': 'forge:obj',
+        'model': 'electricity:models/%s/%s.obj' % (NAME, name),
+        # An OBJ's v axis runs the other way from a block model's, so it is flipped here rather than
+        # every uv in the generator being written upside down.
+        'flip_v': True,
+        # Culling off: the loader would drop the quads that lie on a block boundary, and on a cable
+        # those are the ones that carry a run across a seam.  A few extra quads on a piece this small
+        # costs nothing.
+        'automatic_culling': False,
+        'textures': dict(TEXTURES, particle=TEXTURES['core']),
+    })
+    return mesh.stats()[1]
 
 
-def string_blockstate(name):
-    """Multipart, and the sixteen middles are an exact partition of the states.
-
-    Each middle's ``when`` names all four sides - ``none`` for the ones it does not have and
-    ``side|up`` for the ones it does - so for any state exactly one of the sixteen matches. That is
-    what makes it safe to draw a bend as a bend: nothing else is drawn in the same place.
-    """
-    model = 'electricity:block/' + name
+def blockstate():
+    """Multipart, and the sixteen middles are an exact partition of the states."""
     parts = []
-    turns = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
-
-    for buried, prefix in ((False, ''), (True, '_trench')):
+    for buried, prefix in ((False, ''), (True, 'trench_')):
         if buried:
             parts.append({'when': {'buried': 'true'},
-                          'apply': {'model': model + '_trench_bed'}})
+                          'apply': {'model': 'electricity:block/%s_trench_bed' % NAME}})
 
         for connected, (kind, turn) in sorted(HUBS.items()):
             when = {'buried': 'true' if buried else 'false'}
             for side in SIDES:
                 when[side] = 'side|up' if side in connected else 'none'
-            apply = {'model': '%s%s_%s' % (model, prefix, kind)}
+            apply = {'model': 'electricity:block/%s_%s%s' % (NAME, prefix, kind)}
             if turn:
                 apply['y'] = turn
             parts.append({'when': when, 'apply': apply})
 
-        for side, turn in turns.items():
-            values = 'side|up' if buried else 'side'
-            apply = {'model': '%s%s_arm' % (model, prefix)}
-            if turn:
-                apply['y'] = turn
-            parts.append({'when': {'buried': 'true' if buried else 'false', side: values},
-                          'apply': dict(apply)})
-            # a trench has nothing to climb: the pair is already at the surface, so it meets a run on
-            # top of the next block along without going anywhere
-            if buried:
-                continue
-            for suffix in ('_arm_up', '_climb'):
-                apply = {'model': model + suffix}
+        # A trench has nothing to climb: the pair is already at the surface, so it meets a run on top of
+        # the next block along without going anywhere.
+        wanted = (('arm', 'side|up'),) if buried else (('arm', 'side'), ('climb', 'up'))
+        for side, turn in QUARTERS.items():
+            for suffix, values in wanted:
+                apply = {'model': 'electricity:block/%s_%s%s' % (NAME, prefix, suffix)}
                 if turn:
                     apply['y'] = turn
-                parts.append({'when': {'buried': 'false', side: 'up'}, 'apply': apply})
+                parts.append({'when': {'buried': 'true' if buried else 'false', side: values},
+                              'apply': apply})
 
     return {'multipart': parts}
 
 
+# ---------------------------------------------------------------- checks
+
+def parts_of(state):
+    """Every part the given connection state draws, turned into the block's own frame and labelled."""
+    connected = tuple(s for s in SIDES if state[s] != 'none')
+    kind, turn = HUBS[connected]
+    labelled = [(p.turned(turn), '%s[%d]' % (kind, i))
+                for i, p in enumerate(MIDDLES[kind](0.0))]
+    for side in SIDES:
+        if state[side] == 'none':
+            continue
+
+        pieces = piece_climb(0.0) if state[side] == 'up' else piece_arm(0.0, 0.0)
+        labelled += [(p.turned(QUARTERS[side]), '%s:%s[%d]' % (side, state[side], i))
+                     for i, p in enumerate(pieces)]
+    return labelled
+
+
+def check_disjoint():
+    """Proves nothing a run draws touches anything else it draws, in any of the 162 states.
+
+    Two cables are compared **along their paths** rather than by their bounding boxes, and that is not a
+    convenience: the two cores of a bend are concentric arcs, so their boxes overlap almost completely
+    while the tubes stay a fixed distance apart the whole way round.  Boxing them reported nineteen
+    clashes that do not exist.  Everything that is not a cable is a box and is compared as one.
+    """
+    problems = []
+    for connected in HUBS:
+        for values in itertools.product(*[('side', 'up') if s in connected else ('none',)
+                                          for s in SIDES]):
+            state = dict(zip(SIDES, values))
+            labelled = parts_of(state)
+            for (a, la), (b, lb) in itertools.combinations(labelled, 2):
+                if la == lb:
+                    continue
+
+                if isinstance(a, Run) and isinstance(b, Run):
+                    # Two cables that share an end are a *joint* - an arm meeting the middle it feeds -
+                    # and they are meant to touch there.  Everything else has to clear.
+                    if _jointed(a.path, b.path):
+                        continue
+
+                    gap = _path_gap(a.path, b.path)
+                    if gap < a.radius + b.radius - 1e-6:
+                        problems.append('%s and %s come within %.2f px, and they are %.2f wide'
+                                        % (la, lb, gap, a.radius + b.radius))
+                    continue
+
+                sleeve, through = _sleeved(a, b)
+                for one, other in itertools.product(a.boxes(), b.boxes()):
+                    share = [min(one[1][i], other[1][i]) - max(one[0][i], other[0][i])
+                             for i in range(3)]
+                    if not all(v > 1e-6 for v in share):
+                        continue
+
+                    if sleeve is not None:
+                        bore = sleeve.boxes()[0]
+                        # every axis but the one it overlaps along has to be inside the bore, which is
+                        # what 'the cable goes through the gland' means as an inequality
+                        axial = max(range(3), key=lambda i: share[i])
+                        if all(bore[0][i] - 1e-6 <= other[0][i] and other[1][i] <= bore[1][i] + 1e-6
+                               for i in range(3) if i != axial) or \
+                           all(bore[0][i] - 1e-6 <= one[0][i] and one[1][i] <= bore[1][i] + 1e-6
+                               for i in range(3) if i != axial):
+                            continue
+
+                        problems.append('%s clips the gland %s rather than passing through it'
+                                        % (lb if through is b else la, la if through is b else lb))
+                        continue
+
+                    problems.append('%s and %s share %.2f x %.2f x %.2f px'
+                                    % (la, lb, share[0], share[1], share[2]))
+    return sorted(set(problems))
+
+
+def clearances():
+    """How much room the two cores of a bend and of a climb keep, for the log to say so."""
+    out = {}
+    for name, builder in (('bend', piece_bend), ('climb', piece_climb)):
+        runs = [p for p in builder(0.0) if isinstance(p, Run)]
+        out[name] = min(_path_gap(a.path, b.path) for a, b in itertools.combinations(runs, 2))
+    return out
+
+
+def _sleeved(a, b):
+    """Whether one of a pair is a gland and the other the cable running through it."""
+    for one, other in ((a, b), (b, a)):
+        if getattr(one, 'sleeve', False) and isinstance(other, Run):
+            return one, other
+    return None, None
+
+
+def _jointed(first, second):
+    return any(math.dist(a, b) < 1e-6 for a in (first[0], first[-1]) for b in (second[0], second[-1]))
+
+
+def _path_gap(first, second):
+    """Closest approach between two polylines, sampled finely enough for a 1 px cable."""
+    def samples(path):
+        for i in range(len(path) - 1):
+            a, b = path[i], path[i + 1]
+            steps = max(2, int(math.dist(a, b) * 6))
+            for k in range(steps + 1):
+                t = k / steps
+                yield tuple(a[j] + (b[j] - a[j]) * t for j in range(3))
+
+    return min(math.dist(p, q) for p in samples(first) for q in samples(second))
+
+
+# ---------------------------------------------------------------- the Java tables
+
+def merged(boxes):
+    """Boxes cut to the block and merged where one contains another, so a curve is not fifty boxes."""
+    inside = []
+    for lo, hi in boxes:
+        lo = tuple(min(max(v, 0.0), 16.0) for v in lo)
+        hi = tuple(min(max(v, 0.0), 16.0) for v in hi)
+        if all(hi[i] - lo[i] > 1e-6 for i in range(3)):
+            inside.append((lo, hi))
+
+    kept = []
+    for candidate in sorted(inside, key=lambda b: -sum(b[1][i] - b[0][i] for i in range(3))):
+        contained = any(all(k[0][i] <= candidate[0][i] + 1e-6 and k[1][i] >= candidate[1][i] - 1e-6
+                            for i in range(3)) for k in kept)
+        if not contained:
+            kept.append(candidate)
+    return kept
+
+
+def shape(boxes):
+    lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2],
+                                                             hi[0], hi[1], hi[2]))
+             for lo, hi in merged(boxes)]
+    if len(lines) == 1:
+        return lines[0]
+    return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
+
+
+def java():
+    print('\n\t// ---- printed by tools/gen_cable_models.py --java ----\n')
+    print('\tprivate static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(')
+    rows = []
+    for connected, (kind, turn) in sorted(HUBS.items(), key=lambda kv: mask(kv[0])):
+        boxes = [b for p in MIDDLES[kind](0.0) for b in p.turned(turn).boxes()]
+        rows.append('\t\t\tMap.entry(0b%s, %s)' % (format(mask(connected), '04b'), shape(boxes)))
+    print(',\n'.join(rows) + ');')
+
+    for label, builder in (('STRING_ARMS', lambda: piece_arm(0.0, 0.0)),
+                           ('STRING_CLIMBS', lambda: piece_climb(0.0))):
+        print('\n\tprivate static final Map<Direction, VoxelShape> %s = Map.of(' % label)
+        rows = []
+        for side, turn in (('NORTH', 0), ('EAST', 90), ('SOUTH', 180), ('WEST', 270)):
+            boxes = [b for p in builder() for b in p.turned(turn).boxes()]
+            rows.append('\t\t\tDirection.%s, %s' % (side, shape(boxes)))
+        print(',\n'.join(rows) + ');')
+
+
+def mask(connected):
+    return sum(1 << SIDES.index(s) for s in connected)
+
+
 # ---------------------------------------------------------------- the trunk, unchanged for now
 
-TRUNK = dict(half=1.0, thick=1.0, texture='dc_trunk_line')
+TRUNK = 'dc_trunk_cable'
 TRUNK_CABLE = '#cable'
+TRUNK_TRENCH = '#trench'
 TRUNK_GROUND = 15.0
 
 
-def trunk_faces(texture, lo, hi, cull=None):
+def trunk_face(texture, uv, cull=None):
+    entry = {'uv': [round(v, 2) for v in uv], 'texture': texture}
+    if cull is not None:
+        entry['cullface'] = cull
+    return entry
+
+
+def trunk_faces(lo, hi, cull=None):
     x0, y0, z0 = lo
     x1, y1, z1 = hi
-    faces = {'up': face(texture, (x0, z0, x1, z1))}
+    faces = {'up': trunk_face(TRUNK_CABLE, (x0, z0, x1, z1))}
     for name, uv in (('north', (x0, 16 - y1, x1, 16 - y0)), ('south', (x0, 16 - y1, x1, 16 - y0)),
                      ('west', (z0, 16 - y1, z1, 16 - y0)), ('east', (z0, 16 - y1, z1, 16 - y0))):
-        faces[name] = face(texture, uv, cull=name if name == cull else None)
+        faces[name] = trunk_face(TRUNK_CABLE, uv, cull=name if name == cull else None)
     return faces
 
 
-def trunk_models(name):
-    half, thick = TRUNK['half'], TRUNK['thick']
-    path = 'electricity:block/' + TRUNK['texture']
+def trunk_element(lo, hi, faces):
+    return {'from': list(lo), 'to': list(hi), 'faces': faces}
+
+
+def trunk_models():
+    half = thick = 1.0
+    path = 'electricity:block/dc_trunk_line'
     flat = {'parent': 'block/block', 'ambientocclusion': False,
             'textures': {'particle': TRUNK_CABLE, 'cable': path}}
     trench = {'parent': 'block/block',
-              'textures': {'particle': TRENCH, 'cable': path, 'trench': PATHS[TRENCH]}}
+              'textures': {'particle': TRUNK_TRENCH, 'cable': path,
+                           'trench': 'electricity:block/dc_trench'}}
 
     def dot(y0, y1):
         lo, hi = (8 - half, y0, 8 - half), (8 + half, y1, 8 + half)
-        return element(lo, hi, trunk_faces(TRUNK_CABLE, lo, hi))
+        return trunk_element(lo, hi, trunk_faces(lo, hi))
 
     def bar(y0, y1, near):
         lo, hi = (8 - half, y0, near), (8 + half, y1, 8 - half)
-        return element(lo, hi, trunk_faces(TRUNK_CABLE, lo, hi, cull='north' if near == 0.0 else None))
+        return trunk_element(lo, hi, trunk_faces(lo, hi, cull='north' if near == 0.0 else None))
 
     def wall():
         lo, hi = (8 - half, 0.0, 0.0), (8 + half, 16.0, thick)
-        return element(lo, hi, {
-            'north': face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16), cull='north'),
-            'south': face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16)),
-            'west': face(TRUNK_CABLE, (0, 0, thick, 16)),
-            'east': face(TRUNK_CABLE, (0, 0, thick, 16)),
+        return trunk_element(lo, hi, {
+            'north': trunk_face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16), cull='north'),
+            'south': trunk_face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16)),
+            'west': trunk_face(TRUNK_CABLE, (0, 0, thick, 16)),
+            'east': trunk_face(TRUNK_CABLE, (0, 0, thick, 16)),
         })
 
-    old_ground = TRUNK_GROUND
-    global GROUND
-    kept, GROUND = GROUND, old_ground
-    try:
-        bed = bedding()
-    finally:
-        GROUND = kept
+    bed = [trunk_element((0.0, 0.0, 0.0), (16.0, TRUNK_GROUND, 16.0), {
+        'down': trunk_face(TRUNK_TRENCH, (0, 0, 16, 16), cull='down'),
+        'up': trunk_face(TRUNK_TRENCH, (0, 0, 16, 16)),
+        'north': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='north'),
+        'south': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='south'),
+        'west': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='west'),
+        'east': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='east'),
+    })]
+    for x0, z0, x1, z1, outward in ((0.0, 0.0, 16.0, RIM, 'north'),
+                                    (0.0, 16.0 - RIM, 16.0, 16.0, 'south'),
+                                    (0.0, RIM, RIM, 16.0 - RIM, 'west'),
+                                    (16.0 - RIM, RIM, 16.0, 16.0 - RIM, 'east')):
+        bed.append(trunk_element((x0, TRUNK_GROUND, z0), (x1, 16.0, z1), {
+            'up': trunk_face(TRUNK_TRENCH, (x0, z0, x1, z1)),
+            'down': trunk_face(TRUNK_TRENCH, (x0, z0, x1, z1)),
+            'north': trunk_face(TRUNK_TRENCH, (x0, 0, x1, RIM),
+                                cull='north' if outward == 'north' else None),
+            'south': trunk_face(TRUNK_TRENCH, (x0, 0, x1, RIM),
+                                cull='south' if outward == 'south' else None),
+            'west': trunk_face(TRUNK_TRENCH, (z0, 0, z1, RIM),
+                               cull='west' if outward == 'west' else None),
+            'east': trunk_face(TRUNK_TRENCH, (z0, 0, z1, RIM),
+                               cull='east' if outward == 'east' else None),
+        }))
 
     return {
-        name: dict(flat, elements=[dot(0.0, thick)]),
-        name + '_arm': dict(flat, elements=[bar(0.0, thick, 0.0)]),
-        name + '_climb': dict(flat, elements=[wall()]),
-        name + '_trench': dict(trench, elements=bed + [dot(old_ground, 16.0)]),
-        name + '_trench_arm': dict(trench, elements=[bar(old_ground, 16.0, RIM)]),
+        TRUNK: dict(flat, elements=[dot(0.0, thick)]),
+        TRUNK + '_arm': dict(flat, elements=[bar(0.0, thick, 0.0)]),
+        TRUNK + '_climb': dict(flat, elements=[wall()]),
+        TRUNK + '_trench': dict(trench, elements=bed + [dot(TRUNK_GROUND, 16.0)]),
+        TRUNK + '_trench_arm': dict(trench, elements=[bar(TRUNK_GROUND, 16.0, RIM)]),
     }
 
 
-def trunk_blockstate(name):
-    model = 'electricity:block/' + name
+def trunk_blockstate():
+    model = 'electricity:block/' + TRUNK
     parts = [{'when': {'buried': 'false'}, 'apply': {'model': model}}]
     rotations = (('north', 0), ('east', 90), ('south', 180), ('west', 270))
     for side, turn in rotations:
@@ -647,151 +819,50 @@ def trunk_blockstate(name):
     return {'multipart': parts}
 
 
-# ---------------------------------------------------------------- checks
-
-def check_textures(name, model):
-    """Fails if any face names a texture the model does not declare.
-
-    Worth a function of its own because of how this fails in the game: a block model's face carries the
-    *name* of a texture, which is looked up in the model's own textures map and then up through its
-    parents.  A raw resource location put there is looked up as a name, is not found, and silently
-    resolves to the missing-texture chequerboard - no warning in the log, nothing on the console, just
-    every cable in the world turned magenta.  Which is exactly what shipped once.
-    """
-    declared = set(model.get('textures', {}))
-    for element in model.get('elements', ()):
-        for side, entry in element['faces'].items():
-            texture = entry['texture']
-            if not texture.startswith('#'):
-                raise SystemExit('%s: %s face names "%s", which is a path where a #name belongs'
-                                 % (name, side, texture))
-            if texture[1:] not in declared:
-                raise SystemExit('%s: %s face wants #%s, which the model does not declare'
-                                 % (name, side, texture[1:]))
-
-
-def check_disjoint():
-    """Proves no two boxes of the string cable ever share a pixel, in any of the 162 states.
-
-    Every part of every piece that state draws, compared with every other - which matters because two
-    of the faults this caught were *inside* one piece, where a check that skipped same-piece pairs saw
-    nothing: a bend whose inside core turned one line too late and ran through the other one, and two
-    plugs drawn at a real connector's width, which is too wide for the pair's spacing.
-
-    The old model would have failed it too: its arm and its climb overlapped by two pixels wherever a
-    run went up a wall.  Worth being mechanical about, because the symptom is two surfaces flickering
-    against each other in one state out of a hundred and sixty-two.
-    """
-    problems = []
-    for connected, (kind, turn) in HUBS.items():
-        for values in itertools.product(*[('side', 'up') if s in connected else ('none',)
-                                          for s in SIDES]):
-            state = dict(zip(SIDES, values))
-            boxes = [(turned(p, turn), '%s[%d]' % (kind, i))
-                     for i, p in enumerate(BUILDERS[kind](0.0))]
-            for side in SIDES:
-                if state[side] == 'none':
-                    continue
-
-                quarter = {'north': 0, 'east': 90, 'south': 180, 'west': 270}[side]
-                pieces = list(arm(0.0, WALL if state[side] == 'up' else 0.0))
-                if state[side] == 'up':
-                    pieces += climb(0.0)
-                boxes += [(turned(p, quarter), '%s:%s[%d]' % (side, state[side], i))
-                          for i, p in enumerate(pieces)]
-
-            for (a, la), (b, lb) in itertools.combinations(boxes, 2):
-                share = [min(a[1][i], b[1][i]) - max(a[0][i], b[0][i]) for i in range(3)]
-                if all(v > 1e-6 for v in share):
-                    problems.append('%s and %s share %.2f x %.2f x %.2f px'
-                                    % (la, lb, share[0], share[1], share[2]))
-
-    return sorted(set(problems))
-
-
-def turned(part, quarter):
-    """A part's bounding box turned about the block's centre, the way a blockstate's y turns it."""
-    lo, hi = part.bounds()
-    corners = [(x - 8.0, z - 8.0) for x in (lo[0], hi[0]) for z in (lo[2], hi[2])]
-    for _ in range(quarter // 90):
-        corners = [(-b, a) for a, b in corners]
-    xs = [c[0] + 8.0 for c in corners]
-    zs = [c[1] + 8.0 for c in corners]
-    return (min(xs), lo[1], min(zs)), (max(xs), hi[1], max(zs))
-
-
-def java():
-    """The tables DcCableBlock declares, printed from the parts the model is built from.
-
-    A box per part rather than per drawn step: a core's three steps are one cable as far as pointing at
-    it goes, and the outline a player sees should be the cable and not its profile.
-    """
-    print('\n\t// ---- printed by tools/gen_cable_models.py --java ----\n')
-    print('\tprivate static final Map<Integer, VoxelShape> HUBS = Map.ofEntries(')
-    rows = []
-    for connected, (kind, turn) in sorted(HUBS.items(), key=lambda kv: mask(kv[0])):
-        boxes = [turned(p, turn) for p in BUILDERS[kind](0.0)]
-        rows.append('\t\t\tMap.entry(0b%s, %s)' % (format(mask(connected), '04b'), shape(boxes)))
-    print(',\n'.join(rows) + ');')
-
-    for label, pieces in (('ARMS', lambda: arm(0.0, 0.0)),
-                          ('ARMS_UP', lambda: arm(0.0, WALL)),
-                          ('CLIMBS', climb0)):
-        print('\n\tprivate static final Map<Direction, VoxelShape> %s = Map.of(' % label)
-        rows = []
-        for side, turn in (('NORTH', 0), ('EAST', 90), ('SOUTH', 180), ('WEST', 270)):
-            boxes = [turned(p, turn) for p in pieces()]
-            rows.append('\t\t\tDirection.%s, %s' % (side, shape(boxes)))
-        print(',\n'.join(rows) + ');')
-
-
-def climb0():
-    return climb(0.0)
-
-
-def mask(connected):
-    return sum(1 << SIDES.index(s) for s in connected)
-
-
-def shape(boxes):
-    merged = []
-    for lo, hi in boxes:
-        merged.append('Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2],
-                                                                      hi[0], hi[1], hi[2])))
-    if len(merged) == 1:
-        return merged[0]
-    return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(merged))
-
-
 def main():
-    name = 'dc_string_cable'
-    models = string_models(name)
-    models[name + '_trench_bed'] = {'parent': 'block/block',
-                                    'textures': {'particle': TRENCH, 'trench': PATHS[TRENCH]},
-                                    'elements': bedding()}
-    for file_name, model in sorted(models.items()):
-        check_textures(file_name, model)
-        write(os.path.join(BLOCK_MODELS, file_name + '.json'), model)
-    print('%s: %d models, %d elements in all'
-          % (name, len(models), sum(len(m['elements']) for m in models.values())))
-    state = string_blockstate(name)
-    write(os.path.join(BLOCKSTATES, name + '.json'), state)
-    print('%s: %d blockstate parts' % (name, len(state['multipart'])))
+    if os.path.isdir(OBJ_DIR):
+        for stale in os.listdir(OBJ_DIR):
+            os.remove(os.path.join(OBJ_DIR, stale))
+
+    faces, pieces = 0, 0
+    for buried, prefix, base in ((False, '', 0.0), (True, 'trench_', GROUND)):
+        for kind, builder in MIDDLES.items():
+            parts = list(builder(base)) + (list(bedding()) if buried else [])
+            faces += write_piece('%s_%s%s' % (NAME, prefix, kind), parts)
+            pieces += 1
+
+        parts = piece_arm(base, RIM if buried else 0.0) + (list(bedding()) if buried else [])
+        faces += write_piece('%s_%sarm' % (NAME, prefix), parts)
+        pieces += 1
+        if not buried:
+            faces += write_piece('%s_climb' % NAME, piece_climb(base))
+            pieces += 1
+
+    faces += write_piece('%s_trench_bed' % NAME, bedding())
+    pieces += 1
+    print('%s: %d OBJ pieces, %d faces in all' % (NAME, pieces, faces))
+
+    state = blockstate()
+    write(os.path.join(BLOCKSTATES, NAME + '.json'), state)
+    print('%s: %d blockstate parts' % (NAME, len(state['multipart'])))
 
     problems = check_disjoint()
     for line in problems:
         print('    OVERLAP %s' % line)
-    print('no two pieces of a run share a pixel, in any of the 162 states' if not problems
-          else '%d overlap(s)' % len(problems))
+    if problems:
+        print('%d clash(es)' % len(problems))
+    else:
+        print('nothing a run draws touches anything else it draws, in any of the 162 states')
+    for name, gap in sorted(clearances().items()):
+        print("    the two cores of a %-5s stay %.2f px apart, on a %.2f px cable"
+              % (name, gap, CORE_RADIUS * 2.0))
 
-    trunk = 'dc_trunk_cable'
-    for file_name, model in trunk_models(trunk).items():
-        check_textures(file_name, model)
+    for file_name, model in trunk_models().items():
         write(os.path.join(BLOCK_MODELS, file_name + '.json'), model)
-    write(os.path.join(BLOCKSTATES, trunk + '.json'), trunk_blockstate(trunk))
-    print('%s: unchanged, 5 models' % trunk)
+    write(os.path.join(BLOCKSTATES, TRUNK + '.json'), trunk_blockstate())
+    print('%s: unchanged, 5 models' % TRUNK)
 
-    for cable in (name, trunk):
+    for cable in (NAME, TRUNK):
         write(os.path.join(ITEM_MODELS, cable + '.json'),
               {'parent': 'minecraft:item/generated',
                'textures': {'layer0': 'electricity:item/' + cable}})

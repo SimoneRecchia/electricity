@@ -135,6 +135,17 @@ SWEPT = {
 }
 
 
+# Models whose tables are printed somewhere else, so this file would only disagree with itself.
+#
+# The string cable is sixteen pieces chosen by which sides connect, and its outline is a different
+# shape in each - so its tables are keyed by that pattern and printed by the generator that draws the
+# pieces, off the very parts it draws them from. Reading them back here would compare one derivation
+# against another rather than the model against the game.
+ELSEWHERE = {
+    'dc_string_cable': 'printed by tools/gen_cable_models.py --java, per connection pattern',
+}
+
+
 def obj_groups(path):
     """Every object in an OBJ with the polygons it is made of."""
     verts = []
@@ -532,6 +543,9 @@ def main():
     hand_written = []
     for path in sorted(glob.glob(os.path.join(MODELS, '*', '*.obj'))):
         directory = os.path.basename(os.path.dirname(path))
+        if directory in ELSEWHERE:
+            continue
+
         name = MODEL_BLOCK.get(directory, directory)
         block = BLOCK_CLASS.get(name)
         if block is None:

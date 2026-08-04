@@ -35,7 +35,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, ROUND, Mesh, angle, bolt, box, channel, clad_box, cylinder,
-                      hemisphere, ibeam, sheds, strut, write_mtl)
+                      hemisphere, ibeam, pin_insulator, strut, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -54,6 +54,12 @@ MATERIALS = {
     'frame': 'pv_frame.png',
     'plinth': 'box_plinth.png',
 }
+
+
+# The one insulator, at one size.  A distribution insulator is a catalogue part: whoever built the
+# line bought the same ANSI 55-4 for every structure on it, so the pole's eight and the kiosk's one are
+# the same object at the same diameter rather than two drawings that happen to look similar.
+INSULATOR_DIAMETER = 0.166
 
 
 # ------------------------------------------------------------------ the utility pole
@@ -110,28 +116,18 @@ def crossarm(mesh, y, half, name):
               (side * half * 0.52, y + 0.008, 0.0), 0.022, 0.016, uv_scale=0.3)
 
 
-def pin_insulator(mesh, index, x, y):
-    """A pin insulator on a crossarm: the pin, the cap, and the shed stack.
+def crossarm_insulator(mesh, index, x, y):
+    """One of the pole's eight insulators: the mod's own ``pin_insulator``, on its spindle.
 
     Its own object per insulator, and one material inside it, because ``ObjDefinitions`` names one
-    group per insulator and the wire hangs from that group's centre.  The pin is in the arm's own
-    group for the same reason - a steel spindle inside the insulator's bounding box would drag the
-    anchor down towards the arm.
+    group per insulator and the wire hangs from that group's centre.  The spindle goes in a group of
+    its own for the same reason - steel inside the insulator's bounding box would drag the anchor down
+    towards the arm - and per insulator rather than into one 'hardware' group, because a group holding
+    both the spindles out on the arms and the climbing steps up the shaft has a bounding box four
+    blocks wide and five tall straight through the middle of the pole.
     """
-    porcelain = mesh.faces('insulator_%d' % index, 'porcelain')
-    # the shed stack: three skirts, 32 sides, which is what the turbine's own insulator carries
-    sheds(mesh, porcelain, (x, y + 0.055, 0.0), 0.083, 0.195, count=3, sides=FITTING, uv_scale=0.5)
-    # the tie wire groove at the top, where the conductor actually sits
-    cylinder(mesh, porcelain, (x, y + 0.250, 0.0), 'y', 0.052, 0.014, sides=FITTING, uv_scale=0.3,
-             caps=porcelain)
-
-    # the spindle, in an object of its own per insulator.  Not in one 'hardware' group with every other
-    # small steel part on the pole: a group's bounding box is what the collision is cut from, and one
-    # holding both the spindles out on the arms and the climbing steps up the shaft is a slab four
-    # blocks wide and five tall through the middle of the pole
-    pin = mesh.faces('pin_%d' % index, 'steel')
-    cylinder(mesh, pin, (x, y + 0.028, 0.0), 'y', 0.026, 0.028, sides=FITTING, uv_scale=0.2,
-             caps=pin, cap_ends=(1,))
+    pin_insulator(mesh, mesh.faces('insulator_%d' % index, 'porcelain'),
+                  mesh.faces('pin_%d' % index, 'steel'), (x, y + 0.050, 0.0), INSULATOR_DIAMETER)
 
 
 def utility_pole():
@@ -157,9 +153,9 @@ def utility_pole():
     crossarm(mesh, UPPER_ARM_Y, UPPER_ARM_HALF, 'arm_upper')
 
     for i, x in enumerate(LOWER_PINS):
-        pin_insulator(mesh, i + 1, x, LOWER_ARM_Y + ARM_DEPTH)
+        crossarm_insulator(mesh, i + 1, x, LOWER_ARM_Y + ARM_DEPTH)
     for i, x in enumerate(UPPER_PINS):
-        pin_insulator(mesh, i + 5, x, UPPER_ARM_Y + ARM_DEPTH)
+        crossarm_insulator(mesh, i + 5, x, UPPER_ARM_Y + ARM_DEPTH)
 
     # the climbing steps: a peg through the shaft every two thirds of a block, alternating sides, which
     # is how a concrete pole is climbed.  One object each, for the reason the spindles are
@@ -250,16 +246,13 @@ def power_box():
         clad_box(mesh, 'vent', (x, 0.20, -0.115), (x + 0.003, 0.58, 0.115),
                  {side: 'vent', '*': 'cabinet'})
 
-    # the bushing on the roof: this is where the line arrives, so it is where the wire hangs from
-    porcelain = mesh.faces('insulator', 'porcelain')
+    # The insulator on the roof: this is where the line arrives, so it is where the wire hangs from -
+    # and it is the same insulator the pole carries, at the same diameter, because it is the same part.
     steel = mesh.faces('hardware', 'steel')
-    cylinder(mesh, steel, (0.0, body_y + 0.038, 0.0), 'y', 0.060, 0.014, sides=FITTING,
-             uv_scale=0.3, caps=steel)
-    sheds(mesh, porcelain, (0.0, body_y + 0.052, 0.0), 0.072, 0.150, count=3, sides=FITTING,
-          uv_scale=0.5)
-    # the terminal on top of it, which is the thing a conductor is actually bolted to
-    cylinder(mesh, steel, (0.0, body_y + 0.205, 0.0), 'y', 0.026, 0.016, sides=FITTING,
-             uv_scale=0.2, caps=steel)
+    # two thousandths above the roof rather than exactly on it: two faces on one plane flicker
+    box(mesh, steel, (-0.075, body_y + 0.002, -0.075), (0.075, body_y + 0.022, 0.075), uv_scale=0.3)
+    pin_insulator(mesh, mesh.faces('insulator', 'porcelain'), steel,
+                  (0.0, body_y + 0.062, 0.0), INSULATOR_DIAMETER)
 
     # the cable entry: a gland through the plinth and the conduit that reaches it
     conduit = mesh.faces('conduit', 'steel')

@@ -1,0 +1,15 @@
+{
+  "loader": "forge:obj",
+  "model": "electricity:models/dc_string_cable/dc_string_cable_cross.obj",
+  "flip_v": true,
+  "automatic_culling": false,
+  "textures": {
+    "core": "electricity:block/dc_core",
+    "cleat": "electricity:block/dc_cleat",
+    "plug_plus": "electricity:block/dc_connector_plus",
+    "plug_minus": "electricity:block/dc_connector_minus",
+    "jbox": "electricity:block/dc_jbox",
+    "trench": "electricity:block/dc_trench",
+    "particle": "electricity:block/dc_core"
+  }
+}

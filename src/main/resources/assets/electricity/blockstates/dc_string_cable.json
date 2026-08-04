@@ -47,7 +47,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_box"
+        "model": "electricity:block/dc_string_cable_tee",
+        "y": 90
       }
     },
     {
@@ -96,7 +97,7 @@
         "west": "none"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_box"
+        "model": "electricity:block/dc_string_cable_tee"
       }
     },
     {
@@ -108,7 +109,7 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_box"
+        "model": "electricity:block/dc_string_cable_cross"
       }
     },
     {
@@ -120,7 +121,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_box"
+        "model": "electricity:block/dc_string_cable_tee",
+        "y": 270
       }
     },
     {
@@ -144,7 +146,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_box"
+        "model": "electricity:block/dc_string_cable_tee",
+        "y": 180
       }
     },
     {
@@ -214,15 +217,6 @@
         "north": "up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_arm_up"
-      }
-    },
-    {
-      "when": {
-        "buried": "false",
-        "north": "up"
-      },
-      "apply": {
         "model": "electricity:block/dc_string_cable_climb"
       }
     },
@@ -233,16 +227,6 @@
       },
       "apply": {
         "model": "electricity:block/dc_string_cable_arm",
-        "y": 90
-      }
-    },
-    {
-      "when": {
-        "buried": "false",
-        "east": "up"
-      },
-      "apply": {
-        "model": "electricity:block/dc_string_cable_arm_up",
         "y": 90
       }
     },
@@ -272,16 +256,6 @@
         "south": "up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_arm_up",
-        "y": 180
-      }
-    },
-    {
-      "when": {
-        "buried": "false",
-        "south": "up"
-      },
-      "apply": {
         "model": "electricity:block/dc_string_cable_climb",
         "y": 180
       }
@@ -293,16 +267,6 @@
       },
       "apply": {
         "model": "electricity:block/dc_string_cable_arm",
-        "y": 270
-      }
-    },
-    {
-      "when": {
-        "buried": "false",
-        "west": "up"
-      },
-      "apply": {
-        "model": "electricity:block/dc_string_cable_arm_up",
         "y": 270
       }
     },
@@ -371,7 +335,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_trench_box"
+        "model": "electricity:block/dc_string_cable_trench_tee",
+        "y": 90
       }
     },
     {
@@ -420,7 +385,7 @@
         "west": "none"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_trench_box"
+        "model": "electricity:block/dc_string_cable_trench_tee"
       }
     },
     {
@@ -432,7 +397,7 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_trench_box"
+        "model": "electricity:block/dc_string_cable_trench_cross"
       }
     },
     {
@@ -444,7 +409,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_trench_box"
+        "model": "electricity:block/dc_string_cable_trench_tee",
+        "y": 270
       }
     },
     {
@@ -468,7 +434,8 @@
         "west": "side|up"
       },
       "apply": {
-        "model": "electricity:block/dc_string_cable_trench_box"
+        "model": "electricity:block/dc_string_cable_trench_tee",
+        "y": 180
       }
     },
     {

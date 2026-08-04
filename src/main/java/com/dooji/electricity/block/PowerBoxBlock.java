@@ -51,8 +51,8 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 					Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20),
 					Block.box(2.91, 0.88, 4.90, 13.09, 11.20, 10.85),
 					Block.box(3.44, 1.36, 4.61, 12.56, 10.72, 5.28),
-					Block.box(6.85, 12.03, 6.85, 9.15, 14.51, 9.15),
-					Block.box(7.04, 11.58, 7.04, 8.96, 14.74, 8.96),
+					Block.box(6.67, 11.76, 6.67, 9.33, 14.26, 9.33),
+					Block.box(6.80, 10.95, 6.80, 9.20, 12.19, 9.20),
 					Block.box(10.08, 0.00, 10.56, 11.04, 1.92, 11.52))));
 
 	public PowerBoxBlock(Properties properties) {

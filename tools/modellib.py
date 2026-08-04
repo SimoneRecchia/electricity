@@ -487,3 +487,173 @@ def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=
                  sides=sides, uv_scale=uv_scale)
     cylinder(mesh, faces, (cx, cy + height, cz), 'y', radius * taper * 0.62, step * 0.10,
              sides=sides, uv_scale=uv_scale, caps=faces)
+
+
+def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, uv_scale=0.5,
+                  spindle=True):
+    """The mod's one insulator: an ANSI 55-4 pin insulator in brown glazed porcelain.
+
+    One shape, on every machine that a wire clips to.  It used to be four different things - brown pin
+    insulators on the pole and the kiosk, a *white* one on the inverter because it had been given the
+    instrument material by mistake, a stack of green plastic discs on the turbine and a tall bushing on
+    the cabin, the last two inherited with those models.  A fitting that appears on five objects should
+    be the same fitting on all five, and the real thing is a catalogue part: whoever built the line
+    bought the same insulator for every structure on it.
+
+    The proportions are the real ones.  ANSI 55-4 - the 11 kV distribution workhorse - is 142 mm across
+    its widest shed and 111 mm tall, so it is *wider than it is tall*, which is the single thing the old
+    ones all got wrong: every one of them was a tall stack, and a pin insulator is a squat one.  Every
+    figure below is a fraction of ``diameter``, with the height at 0.78 of it.
+
+    And it has a head, which the old ones did not.  A pin insulator's top is not a plain cap: there is a
+    groove round it that the conductor lies in and is bound to with tie wire, a crown above the groove
+    holding it in, and a second groove on the flank for a conductor run to the side.  Those three
+    features are what makes the silhouette recognisable at ten metres - without them a shed stack reads
+    as a stack of plates.
+
+    ``centre`` is where the porcelain sits down on its spindle, and the spindle is drawn below it in its
+    own group.  Which group matters: the wire hangs from the *centre of the insulator group's bounding
+    box*, read off the model at runtime, so a steel spindle inside that group would drag the anchor down
+    towards the crossarm.
+    """
+    cx, cy, cz = centre
+    d, h = diameter, diameter * 0.78
+
+    # The spindle: hot-dip galvanised steel, with the lead thimble the porcelain is cemented onto.
+    if spindle:
+        cylinder(mesh, steel, (cx, cy - 0.30 * h, cz), 'y', 0.085 * d, 0.30 * h, sides=sides,
+                 uv_scale=uv_scale * 0.4, caps=steel, cap_ends=(-1,))
+        cylinder(mesh, steel, (cx, cy - 0.06 * h, cz), 'y', 0.115 * d, 0.06 * h, sides=sides,
+                 uv_scale=uv_scale * 0.4)
+
+    # Two sheds, each a shallow cone widest at its lower rim with a petticoat under it.  Two rather
+    # than three because 55-4 has two: the count is what the leakage distance needs and no more.
+    for base, top, wide, narrow in ((0.00, 0.30, 0.500, 0.62), (0.34, 0.58, 0.400, 0.64)):
+        # the rim: a thin band, so the skirt has an edge rather than a knife edge
+        cylinder(mesh, porcelain, (cx, cy + base * h, cz), 'y', wide * d, 0.045 * h, sides=sides,
+                 uv_scale=uv_scale, caps=porcelain, cap_ends=(-1,))
+        cylinder(mesh, porcelain, (cx, cy + (base + 0.045) * h, cz), 'y', wide * d,
+                 (top - base - 0.045) * h, sides=sides, uv_scale=uv_scale, taper=narrow)
+
+    # the core between the sheds, and the one above the upper shed
+    cylinder(mesh, porcelain, (cx, cy + 0.28 * h, cz), 'y', 0.255 * d, 0.08 * h, sides=sides,
+             uv_scale=uv_scale)
+    cylinder(mesh, porcelain, (cx, cy + 0.56 * h, cz), 'y', 0.235 * d, 0.10 * h, sides=sides,
+             uv_scale=uv_scale)
+
+    # The head, with the side groove cut into it: a conductor running past rather than terminating
+    # sits in this one, which is why a pin insulator has both.
+    cylinder(mesh, porcelain, (cx, cy + 0.66 * h, cz), 'y', 0.290 * d, 0.055 * h, sides=sides,
+             uv_scale=uv_scale)
+    cylinder(mesh, porcelain, (cx, cy + 0.715 * h, cz), 'y', 0.240 * d, 0.055 * h, sides=sides,
+             uv_scale=uv_scale)
+    cylinder(mesh, porcelain, (cx, cy + 0.770 * h, cz), 'y', 0.290 * d, 0.045 * h, sides=sides,
+             uv_scale=uv_scale)
+
+    # the top tie groove, and the crown over it that keeps the tie wire on
+    cylinder(mesh, porcelain, (cx, cy + 0.815 * h, cz), 'y', 0.190 * d, 0.085 * h, sides=sides,
+             uv_scale=uv_scale)
+    cylinder(mesh, porcelain, (cx, cy + 0.900 * h, cz), 'y', 0.265 * d, 0.100 * h, sides=sides,
+             uv_scale=uv_scale, taper=0.86, caps=porcelain, cap_ends=(1,))
+
+
+def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=None, caps=None):
+    """A round tube swept along a polyline: the only way to draw a cable that turns.
+
+    ``cylinder`` is axis-aligned, which is enough for a mast or a bushing and no use at all for a bend.
+    This carries a ring of ``sides`` vertices along the path, orienting each ring to the average of the
+    directions either side of its point - so a corner comes out mitred rather than kinked, and a run of
+    short segments round a quarter circle comes out as a curve.
+
+    The frame is built by carrying a reference vector along the path rather than by choosing one per
+    ring, because choosing per ring twists the tube: two consecutive rings whose 'up' happened to be
+    picked differently put a quarter turn into the mesh between them, and on a black cable that reads
+    as a crease.
+
+    ``uv_scale`` is how much of the texture goes round the circumference and ``uv_along`` how much runs
+    along the length, defaulting to the path's own length so the grain does not stretch on a long run.
+    """
+    path = [tuple(float(c) for c in point) for point in points]
+    if len(path) < 2:
+        return
+
+    def norm(v):
+        length = math.sqrt(sum(c * c for c in v)) or 1.0
+        return (v[0] / length, v[1] / length, v[2] / length)
+
+    def cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+    def sub(a, b):
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+    # the direction at each point: the segment's own at the ends, the average of the two at a corner
+    segments = [norm(sub(path[i + 1], path[i])) for i in range(len(path) - 1)]
+    tangents = [segments[0]]
+    for i in range(1, len(path) - 1):
+        tangents.append(norm((segments[i - 1][0] + segments[i][0], segments[i - 1][1] + segments[i][1],
+                              segments[i - 1][2] + segments[i][2])))
+    tangents.append(segments[-1])
+
+    # one reference vector, carried along: the first is whichever axis the path starts least aligned
+    # with, and every ring after it takes the previous ring's own, re-squared against the new tangent
+    start = tangents[0]
+    seed = (0.0, 1.0, 0.0) if abs(start[1]) < 0.9 else (1.0, 0.0, 0.0)
+    up = norm(cross(cross(start, seed), start))
+
+    rings, lengths, travelled = [], [0.0], 0.0
+    for index, (point, tangent) in enumerate(zip(path, tangents)):
+        if index:
+            up = norm(cross(cross(tangent, up), tangent))
+            travelled += math.dist(path[index], path[index - 1])
+            lengths.append(travelled)
+        side = norm(cross(tangent, up))
+        ring = []
+        for i in range(sides):
+            a = 2.0 * math.pi * i / sides
+            c, s = math.cos(a), math.sin(a)
+            offset = (up[0] * c + side[0] * s, up[1] * c + side[1] * s, up[2] * c + side[2] * s)
+            ring.append(((point[0] + offset[0] * radius, point[1] + offset[1] * radius,
+                          point[2] + offset[2] * radius), offset))
+        rings.append(ring)
+
+    span = uv_along if uv_along is not None else max(travelled, 1e-6) * 4.0
+    for index in range(len(rings) - 1):
+        v0 = lengths[index] / max(travelled, 1e-6) * span
+        v1 = lengths[index + 1] / max(travelled, 1e-6) * span
+        for i in range(sides):
+            j = (i + 1) % sides
+            a, b = rings[index][i], rings[index][j]
+            c, d = rings[index + 1][j], rings[index + 1][i]
+            u0 = i / sides * uv_scale
+            u1 = (i + 1) / sides * uv_scale
+            normal = ((a[1][0] + b[1][0]) * 0.5, (a[1][1] + b[1][1]) * 0.5, (a[1][2] + b[1][2]) * 0.5)
+            mesh.quad(faces, (a[0], b[0], c[0], d[0]), normal,
+                      ((u0, v0), (u1, v0), (u1, v1), (u0, v1)))
+
+    if caps is not None:
+        for ring, tangent, sign in ((rings[0], tangents[0], -1), (rings[-1], tangents[-1], 1)):
+            normal = (tangent[0] * sign, tangent[1] * sign, tangent[2] * sign)
+            corners = [point for point, _ in (ring if sign > 0 else list(reversed(ring)))]
+            uvs = [(0.5 + 0.5 * math.cos(2.0 * math.pi * i / sides),
+                    0.5 + 0.5 * math.sin(2.0 * math.pi * i / sides)) for i in range(sides)]
+            mesh.quad(caps, corners, normal, uvs if sign > 0 else list(reversed(uvs)))
+
+
+def arc(centre, radius, plane, start, end, steps):
+    """Points round a quarter circle, for sweeping a bend along.
+
+    ``plane`` names the two axes the turn happens in, as a pair of indices, and ``start`` and ``end``
+    are angles in degrees measured in that plane.  The fixed axis keeps the centre's value.
+    """
+    a, b = plane
+    fixed = 3 - a - b
+    out = []
+    for i in range(steps + 1):
+        angle = math.radians(start + (end - start) * i / steps)
+        point = [0.0, 0.0, 0.0]
+        point[a] = centre[a] + math.cos(angle) * radius
+        point[b] = centre[b] + math.sin(angle) * radius
+        point[fixed] = centre[fixed]
+        out.append(tuple(point))
+    return out
