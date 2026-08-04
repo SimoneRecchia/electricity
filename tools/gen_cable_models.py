@@ -74,7 +74,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import FITTING, Mesh, arc, box, cylinder, tube, write_mtl      # noqa: E402
+from modellib import (FITTING, Mesh, arc, box, clad_box, cylinder, tube,        # noqa: E402
+                      write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -87,20 +88,15 @@ SIDES = ('north', 'east', 'south', 'west')
 
 # The materials, and the textures they resolve to.  A ``#name`` in the MTL is looked up in the block
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
-MATERIALS = {
-    'core': '#core',
-    'cleat': '#cleat',
-    'plug_plus': '#plug_plus',
-    'plug_minus': '#plug_minus',
-    'jbox': '#jbox',
-    'trench': '#trench',
-}
+MATERIALS = {name: '#' + name for name in
+             ('core', 'cleat', 'plug_plus', 'plug_minus', 'jbox', 'jbox_side', 'trench')}
 TEXTURES = {
     'core': 'electricity:block/dc_core',
     'cleat': 'electricity:block/dc_cleat',
     'plug_plus': 'electricity:block/dc_connector_plus',
     'plug_minus': 'electricity:block/dc_connector_minus',
     'jbox': 'electricity:block/dc_jbox',
+    'jbox_side': 'electricity:block/dc_jbox_side',
     'trench': 'electricity:block/dc_trench',
 }
 
@@ -129,7 +125,13 @@ HUB_HI = 16.0 - HUB_LO
 # The real one is 18 mm on a 6.9 mm cable - 2.6 diameters - and two of those cannot sit at the pair's
 # own spacing, which is why an installer's two plugs splay apart.  Drawn at 1.5 diameters instead: it
 # still reads as a plug, it stays in proportion to the thin cable, and the two clear each other.
-PLUG = ((1.10, 0.85), (2.60, 0.95), (0.70, 0.62))
+#
+# Each segment names the band of ``dc_connector_*`` it takes, because that tile is a strip along the
+# plug's own length: a nut cannot show the latch window and a barrel cannot show the knurl.
+PLUG = ((0.45, 0.80, 0.00, 0.12),      # the collar, which carries the polarity
+        (1.05, 0.85, 0.12, 0.44),      # the knurled gland nut
+        (2.60, 0.95, 0.44, 0.90),      # the barrel, with the latch window
+        (0.70, 0.62, 0.90, 1.00))      # the nose
 PLUG_START = 8.4
 
 # How many segments a quarter turn is swept in.  Eight is smooth at the tighter of the two radii and
@@ -168,8 +170,12 @@ class Run:
 
     def draw(self, mesh):
         faces = mesh.faces('cable', self.material)
+        # The texture wraps exactly once round the tube and exactly once along it.  Not a choice: a
+        # block model's texture is a sprite in the block atlas, so a uv past one samples the sprite next
+        # door rather than repeating - which is what put white bands across every cable.  Nothing on the
+        # core's tile has a shape along its length, so stretching it there costs nothing.
         tube(mesh, faces, [at(*p) for p in self.path], out(self.radius), sides=FITTING,
-             uv_scale=1.0, uv_along=self.length() / 3.0)
+             uv_scale=1.0, uv_along=1.0)
 
     def length(self):
         return sum(math.dist(self.path[i], self.path[i + 1]) for i in range(len(self.path) - 1))
@@ -202,9 +208,13 @@ class Run:
 class Barrel:
     """A round fitting: a plug's gland nut or barrel, or a gland through a junction box's wall."""
 
-    def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False):
+    def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False,
+                 band=None):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
         self.radius, self.low, self.high, self.cap = radius, low, high, cap
+        # Which window of its texture this segment takes, for a fitting whose tile is a strip along its
+        # own length rather than something that tiles.
+        self.band = band
         # A sleeve is a fitting a cable runs *through* - a gland in a junction box's wall - so it is the
         # one thing in this model allowed to contain cable.  The check below proves it contains it rather
         # than clipping it.
@@ -215,8 +225,8 @@ class Barrel:
         base = list(self.centre)
         base['xyz'.index(self.axis)] = self.low
         cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out(self.high - self.low),
-                 sides=FITTING, uv_scale=0.5, caps=faces if self.cap else None,
-                 cap_ends=(1,) if self.cap else ())
+                 sides=FITTING, uv_scale=1.0, uv=self.band,
+                 caps=faces if self.cap else None, cap_ends=(1,) if self.cap else ())
 
     def boxes(self):
         index = 'xyz'.index(self.axis)
@@ -233,13 +243,22 @@ class Barrel:
 
 
 class Slab:
-    """A box of something that is not cable: a cleat's strap and feet, a junction box's shell."""
+    """A box of something that is not cable: a cleat's strap and feet, a junction box's shell.
+
+    ``material`` may be a mapping from face name to material, with '*' for the rest - which is how the
+    junction box gets its lid's four screws on the lid and not on its four walls as well.
+    """
 
     def __init__(self, group, material, lo, hi, uv_scale=1.0):
         self.group, self.material = group, material
         self.lo, self.hi, self.uv_scale = tuple(lo), tuple(hi), uv_scale
 
     def draw(self, mesh):
+        if isinstance(self.material, dict):
+            clad_box(mesh, self.group, at(*self.lo), at(*self.hi), self.material,
+                     uv_scale=self.uv_scale)
+            return
+
         box(mesh, mesh.faces(self.group, self.material), at(*self.lo), at(*self.hi),
             uv_scale=self.uv_scale)
 
@@ -296,9 +315,10 @@ def plug(centre, base, positive):
     """
     material = 'plug_plus' if positive else 'plug_minus'
     parts, cursor = [], PLUG_START
-    for index, (length, radius) in enumerate(PLUG):
+    for index, (length, radius, v0, v1) in enumerate(PLUG):
         parts.append(Barrel('plug', material, (centre, base + CORE_Y, 0.0), 'z', radius,
-                            cursor, cursor + length, cap=index == len(PLUG) - 1))
+                            cursor, cursor + length, cap=index == len(PLUG) - 1,
+                            band=(0.0, v0, 1.0, v1)))
         cursor += length
     return parts
 
@@ -333,7 +353,8 @@ def junction_box(base, glanded):
     wall with no cable behind it has no gland in the real thing either.
     """
     top = base + CORE_Y + CORE_RADIUS + 1.6
-    parts = [Slab('jbox', 'jbox', (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
+    parts = [Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
+                  (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
     for side in glanded:
         axis = 'z' if side in ('north', 'south') else 'x'
         near = side in ('north', 'west')
@@ -499,15 +520,19 @@ def write_piece(name, parts):
         if faces and material not in seen:
             seen.append(material)
 
+    check_inside_sprite(name, mesh)
     mesh.write(os.path.join(OBJ_DIR, name + '.obj'), name + '.mtl', 'gen_cable_models.py')
     write_mtl(os.path.join(OBJ_DIR, name + '.mtl'), seen, MATERIALS, 'gen_cable_models.py')
 
     write(os.path.join(BLOCK_MODELS, name + '.json'), {
         'loader': 'forge:obj',
         'model': 'electricity:models/%s/%s.obj' % (NAME, name),
-        # An OBJ's v axis runs the other way from a block model's, so it is flipped here rather than
-        # every uv in the generator being written upside down.
-        'flip_v': True,
+        # Not flipped, and the reason is exact rather than a preference.  Forge's loader computes the
+        # sprite coordinate as ``getV((flipV ? 1 - v : v) * 16)``, and a sprite's v runs from its *top*,
+        # which is also where row zero of a PNG is and where texlib's Canvas puts y = 0.  So v = 0 has to
+        # mean the top of the drawing, which is flipV off.  With it on, every band of the plug's strip
+        # landed one segment out: the red collar came out on the nose and the knurl on the barrel.
+        'flip_v': False,
         # Culling off: the loader would drop the quads that lie on a block boundary, and on a cable
         # those are the ones that carry a run across a seam.  A few extra quads on a piece this small
         # costs nothing.
@@ -515,6 +540,21 @@ def write_piece(name, parts):
         'textures': dict(TEXTURES, particle=TEXTURES['core']),
     })
     return mesh.stats()[1]
+
+
+def check_inside_sprite(name, mesh):
+    """Fails if any uv leaves the tile, which in a block model means leaving the *sprite*.
+
+    Worth failing loudly over, because of how it looks: a block model's texture lives in the block
+    atlas, so a uv past one does not tile - it samples whatever sprite the atlas happened to put next
+    door.  The first version of this cable ran its v to 1.9 along every tube and came out with white
+    bands across the cable and a white collar on the plug, and none of it showed in a previewer, which
+    binds one texture at a time and wraps.
+    """
+    for u, v in mesh.vt:
+        if not (-1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6):
+            raise SystemExit('%s: uv (%.3f, %.3f) is outside its sprite, so it would sample the '
+                             'texture next to it in the atlas' % (name, u, v))
 
 
 def blockstate():

@@ -32,8 +32,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, ROUND, Mesh, angle, bolt, box, channel, clad_box, cylinder,
-                      hemisphere, ibeam, pin_insulator, pivot, rotate, strut, write_mtl)
+from modellib import (FITTING, ROUND, Mesh, angle, arc, bolt, box, channel, clad_box, cylinder,
+                      hemisphere, ibeam, pin_insulator, pivot, rotate, strut, tube, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -633,23 +633,51 @@ def inverter():
     clad_box(mesh, 'display', (-0.28, 0.66, face - 0.048), (0.02, 0.80, face - 0.036),
              {'north': 'display', '*': 'cabinet'})
 
-    # the roof fans: two guarded impellers, which is how a station inverter exhausts
+    # The roof fans: two guarded impellers, which is how a station inverter exhausts.
+    #
+    # Rebuilt, because what was here was a flat disc with six bars laid across it and five flat plates
+    # for an impeller - which is not what a fan looks like from any angle.  A real one has a spun rim, a
+    # wire finger guard of concentric rings on radial spokes, a hub, and blades that are *pitched*: a
+    # flat plate turning about its own axis moves no air, and a fan drawn with flat blades reads as a
+    # paper windmill.
     for x in (-0.22, 0.22):
-        pivot(mesh, 'fan_%s' % ('west' if x < 0 else 'east'), (x, body_y + 0.036, -0.01))
+        pivot(mesh, 'fan_%s' % ('west' if x < 0 else 'east'), (x, body_y + 0.040, -0.01))
         guard = mesh.faces('fan_guard', 'steel')
-        cylinder(mesh, guard, (x, body_y + 0.030, -0.01), 'y', 0.105, 0.006, sides=ROUND,
+        centre = (x, body_y + 0.030, -0.01)
+        # the rim the whole assembly is bolted into: a spun ring, and the collar it stands in
+        cylinder(mesh, guard, centre, 'y', 0.112, 0.007, sides=ROUND, uv_scale=0.4)
+        cylinder(mesh, guard, (x, body_y + 0.037, -0.01), 'y', 0.104, 0.006, sides=ROUND,
                  uv_scale=0.4)
-        for turn in range(0, 180, 30):
-            box(mesh, guard, (x - 0.105, body_y + 0.042, -0.014), (x + 0.105, body_y + 0.048, -0.006),
-                uv_scale=0.1, rot=((x, 0.0, -0.01), 'y', float(turn)))
+        # the finger guard: three concentric rings on eight spokes, in wire rather than in bar
+        for radius in (0.036, 0.064, 0.092):
+            ring = arc((x, body_y + 0.050, -0.01), radius, (0, 2), 0.0, 360.0, FITTING)
+            tube(mesh, guard, ring + [ring[0]], 0.0035, sides=8, uv_scale=1.0)
+        for i in range(8):
+            angle = math.radians(i * 45.0)
+            tube(mesh, guard, [(x + math.cos(angle) * 0.016, body_y + 0.050,
+                                -0.01 + math.sin(angle) * 0.016),
+                               (x + math.cos(angle) * 0.100, body_y + 0.050,
+                                -0.01 + math.sin(angle) * 0.100)], 0.0035, sides=8, uv_scale=1.0)
+        # the four bolts that hold the rim down
+        for i in range(4):
+            angle = math.radians(45.0 + i * 90.0)
+            bolt(mesh, guard, (x + math.cos(angle) * 0.106, body_y + 0.037,
+                               -0.01 + math.sin(angle) * 0.106), 'y', 0.006, 0.010, uv_scale=0.08)
 
     for x, name in ((-0.22, 'rotate_fan_west'), (0.22, 'rotate_fan_east')):
         fan = mesh.faces(name, 'steel')
-        cylinder(mesh, fan, (x, body_y + 0.034, -0.01), 'y', 0.022, 0.008, sides=FITTING,
+        hub = (x, body_y + 0.032, -0.01)
+        # the hub: the motor's own can, closed at the top where the spinner is
+        cylinder(mesh, fan, (x, body_y + 0.030, -0.01), 'y', 0.026, 0.010, sides=FITTING,
                  uv_scale=0.2, caps=fan)
-        for i in range(5):
-            box(mesh, fan, (x + 0.018, body_y + 0.030, -0.024), (x + 0.098, body_y + 0.038, 0.004),
-                uv_scale=0.2, rot=((x, body_y + 0.034, -0.01), 'y', i * 72.0))
+        cylinder(mesh, fan, (x, body_y + 0.041, -0.01), 'y', 0.020, 0.004, sides=FITTING,
+                 uv_scale=0.2, taper=0.7, caps=fan, cap_ends=(1,))
+        # seven blades, each pitched thirty degrees about its own radius and then carried round the hub
+        for i in range(7):
+            box(mesh, fan, (x + 0.022, body_y + 0.028, -0.038), (x + 0.098, body_y + 0.034, 0.018),
+                uv_scale=0.2,
+                rot=(((x + 0.060, body_y + 0.031, -0.01), 'x', 30.0),
+                     (hub, 'y', i * 360.0 / 7.0)))
 
     # the side louvre banks, on the outside of the cabinet's own face rather than inside it
     for x, side in ((0.44, 'east'), (-0.4425, 'west')):
@@ -662,9 +690,13 @@ def inverter():
     # from a metre away was the one that did not match any of the others.
     steel = mesh.faces('hardware', 'steel')
     # two thousandths above the roof rather than exactly on it: two faces on one plane flicker
-    box(mesh, steel, (0.256, body_y + 0.002, 0.056), (0.344, body_y + 0.018, 0.144), uv_scale=0.2)
+    #
+    # At the right-hand end of the roof, which is where a station machine's terminal box is - and, more
+    # to the point, clear of everything else up there. It used to stand at (0.30, 0.10), which is inside
+    # the east fan's guard: the fitting a player clicks a wire onto was sitting on a spinning impeller.
+    box(mesh, steel, (0.356, body_y + 0.002, 0.096), (0.444, body_y + 0.018, 0.184), uv_scale=0.2)
     pin_insulator(mesh, mesh.faces('insulator', 'porcelain'), steel,
-                  (0.30, body_y + 0.050, 0.10), 0.108)
+                  (0.40, body_y + 0.050, 0.14), 0.108)
 
     # The direct-current section, drawn only when a combiner box has been fitted into the cabinet.
     #

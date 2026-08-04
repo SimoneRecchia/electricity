@@ -67,10 +67,10 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 			new Cell(0, 2, 0, Block.box(0.00, 0.00, 0.00, 16.00, 10.03, 16.00)),
 			new Cell(0, 2, -1, Shapes.or(Block.box(0.00, 0.00, 6.34, 16.00, 5.73, 16.00),
 					Block.box(0.00, 5.77, 5.48, 16.00, 10.03, 16.00),
-					Block.box(5.88, 8.09, 11.54, 9.31, 12.38, 14.97))),
+					Block.box(5.88, 8.79, 11.54, 9.31, 12.38, 14.97))),
 			new Cell(0, 2, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 5.73, 9.66),
 					Block.box(0.00, 5.77, 0.00, 16.00, 10.03, 10.52),
-					Block.box(3.80, 8.09, 3.21, 7.23, 12.38, 6.64))));
+					Block.box(3.80, 8.79, 3.21, 7.23, 12.38, 6.64))));
 
 	public ElectricCabinBlock(Properties properties) {
 		super(properties);

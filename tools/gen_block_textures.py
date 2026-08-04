@@ -229,31 +229,52 @@ def pv_module_back():
             y0 = inner0 + row * span_y + span_y * 0.06
             c.aa_rect(x0, y0, x0 + span_x * 0.92, y0 + span_y * 0.88, (216, 217, 220, 255), alpha=0.75)
 
-    # the junction box: a black polymer box with a lid, off centre where a real one is
-    bx, by = size * 0.40, size * 0.30
-    bw, bh = size * 0.20, size * 0.13
-    c.aa_rect(bx, by, bx + bw, by + bh, (34, 35, 38, 255))
-    bevel(c, bx, by, bx + bw, by + bh, size * 0.010, lift=34, drop=40)
-    c.aa_rect(bx + bw * 0.1, by + bh * 0.16, bx + bw * 0.9, by + bh * 0.84, (26, 27, 30, 255))
-    for i in range(4):
-        screw(c, bx + bw * (0.12 + 0.25 * i), by + bh * 0.5, size * 0.006, (86, 88, 92, 255))
-    # the two leads out of it, and the connectors on their ends
-    for side, y in ((-1, by + bh * 0.35), (1, by + bh * 0.68)):
-        c.aa_line(bx + bw, y, bx + bw + size * 0.13, y + side * size * 0.05, (28, 28, 32, 255),
-                  width=size * 0.018)
-        c.aa_line(bx + bw + size * 0.13, y + side * size * 0.05, bx + bw + size * 0.13,
-                  y + side * size * 0.16, (28, 28, 32, 255), width=size * 0.018)
-        cap = (188, 42, 38, 255) if side < 0 else (30, 30, 34, 255)
-        c.aa_rect(bx + bw + size * 0.118, y + side * size * 0.155, bx + bw + size * 0.142,
-                  y + side * size * 0.20, cap)
+    # Everything below is laid out in *fractions of the real module*, x across its 1134 mm and y along
+    # its 2278 mm, because that is what this tile is: it goes on a face 0.42 by 0.94 of a block, so the
+    # two axes are at 2.24 to one and anything drawn square on the tile comes out two and a quarter times
+    # taller than it is wide.  The version this replaces drew a junction box at a fifth of the width by
+    # an eighth of the height - 227 by 296 mm, half a metre of polymer - and it arrived on the face
+    # stretched on top of that.
+    def across(mm):
+        return size * mm / 1134.0
 
-    # the label: a barcode and a block of type, which is what the back of every module carries
-    lx, ly = size * 0.12, size * 0.60
-    plate_label(c, lx, ly, lx + size * 0.34, ly + size * 0.14, (244, 245, 246, 255), lines=4)
+    def along(mm):
+        return size * mm / 2278.0
+
+    # the junction box: 120 by 90 mm, a third of the way down, where a real one sits
+    bx, by = across(430.0), along(560.0)
+    bw, bh = across(120.0), along(90.0)
+    c.aa_rect(bx, by, bx + bw, by + bh, (34, 35, 38, 255))
+    bevel(c, bx, by, bx + bw, by + bh, size * 0.006, lift=34, drop=40)
+    c.aa_rect(bx + bw * 0.10, by + bh * 0.20, bx + bw * 0.90, by + bh * 0.80, (26, 27, 30, 255))
+    for i in range(2):
+        screw(c, bx + bw * (0.22 + 0.56 * i), by + bh * 0.5, across(9.0), (86, 88, 92, 255))
+
+    # the two leads out of it - 4 mm cable, so a hairline - and an MC4 on the end of each
+    for side, y in ((-1, by + bh * 0.30), (1, by + bh * 0.70)):
+        c.aa_line(bx + bw, y, bx + bw + across(90.0), y + side * along(120.0), (28, 28, 32, 255),
+                  width=across(7.0))
+        c.aa_line(bx + bw + across(90.0), y + side * along(120.0), bx + bw + across(90.0),
+                  y + side * along(420.0), (28, 28, 32, 255), width=across(7.0))
+        cap = (168, 44, 40, 255) if side < 0 else (30, 30, 34, 255)
+        c.aa_rect(bx + bw + across(78.0), y + side * along(400.0), bx + bw + across(102.0),
+                  y + side * along(530.0), cap)
+
+    # the label: a barcode and a block of type, 200 by 120 mm, which is what the back of every module
+    # carries and where it carries it
+    lx, ly = across(160.0), along(1180.0)
+    lw, lh = across(200.0), along(120.0)
+    plate_label(c, lx, ly, lx + lw, ly + lh, (244, 245, 246, 255), lines=3)
     for i in range(26):
-        w = size * (0.002 + hash01(i, 3, 53) * 0.004)
-        x = lx + size * 0.02 + i * size * 0.0115
-        c.aa_rect(x, ly + size * 0.105, x + w, ly + size * 0.132, INK)
+        w = across(2.0 + hash01(i, 3, 53) * 5.0)
+        x = lx + lw * (0.06 + 0.86 * i / 26.0)
+        c.aa_rect(x, ly + lh * 0.62, x + w, ly + lh * 0.92, (28, 28, 30, 255))
+
+    # the earth mark and the two mounting-hole reinforcements, which are the only other things on it
+    for y in (along(520.0), along(1760.0)):
+        for x in (across(120.0), across(1014.0)):
+            c.aa_rect(x - across(26.0), y - along(26.0), x + across(26.0), y + along(26.0),
+                      (206, 207, 210, 255), alpha=0.7)
 
     _frame_border(c, frame_w)
     grime(c, salt=59, amount=0.10, colour=(150, 146, 138, 255))
@@ -400,18 +421,42 @@ def pv_cabinet():
 
 
 def pv_cabinet_top():
-    """A cabinet's rain hood, seen from above: a crowned lid, a drip edge, standing water.
+    """A cabinet's rain hood, seen from above: a sheet with a fall on it, a drip edge, rain marks.
 
-    The one face of a cabinet a player looks straight down on, and the only one where dirt
-    collects rather than running off - so it is the dirtiest surface in the mod.
+    The one face of a cabinet a player looks straight down on, and the only one where dirt collects
+    rather than running off - so it is the dirtiest surface in the mod.
+
+    What is *not* on it any more is five rings of dried standing water.  Two things were wrong with
+    them.  A hard ring reads as a bubble drawn on the lid rather than as a stain, which the version this
+    replaces said in a comment and then drew anyway.  And a circle on this tile cannot stay a circle: it
+    goes on the top of six different cabinets, none of them square - a combiner's is 2.26 to 1 - so
+    every one of those rings came out an oval, which is what a player noticed first about the whole
+    cabinet.
+
+    So the marks here run in *straight lines* instead, which is both what rain does on a sloped sheet
+    and the one kind of feature an uneven mapping cannot spoil: a fall across the lid, the fold that
+    stiffens it, streaks down the fall, and the dirt that gathers along the low edge and in the corners.
     """
     size = 512
     c = Canvas(size, size)
     powder(c, shade(SHEET, 6), salt=157)
-    # the crown: a lid is domed so water leaves it, which reads as a bright ridge down the middle
+
+    # The fall: a cabinet lid is not flat, it is pitched a couple of degrees so water leaves it. Bright
+    # along the high edge, shading to the low one, which is what a sloped sheet under the sky looks like.
     for y in range(size):
-        t = abs(y / size - 0.5) * 2.0
-        c.aa_rect(0, y, size, y + 1, (255, 255, 255, 255), alpha=(1.0 - t) * 0.10)
+        t = y / float(size)
+        c.aa_rect(0, y, size, y + 1, (255, 255, 255, 255), alpha=(1.0 - t) * 0.13)
+        c.aa_rect(0, y, size, y + 1, (0, 0, 0, 255), alpha=t * 0.07)
+
+    # the fold that stiffens it, a third of the way down: one bright line and one dark
+    fold = size * 0.34
+    c.aa_rect(0, fold, size, fold + size * 0.006, shade(SHEET, 34))
+    c.aa_rect(0, fold + size * 0.006, size, fold + size * 0.016, shade(SHEET, -34))
+
+    # rain streaks down the fall, thin and long: the grain of a surface water runs off
+    streaks = stretched(size, along=size * 3.0, across=size / 40.0, octaves=2, salt=167)
+    c.over(lambda x, y, base: shade(base, streaks.signed(y, x) * 13))
+
     # the drip edge all round, turned down over the sides
     for i in range(int(size * 0.035)):
         t = i / (size * 0.035)
@@ -421,15 +466,13 @@ def pv_cabinet_top():
             c.aa_rect(x0, y0, x1, y1, (0, 0, 0, 255), alpha=abs(tone) / 255.0 * 0.8)
     for x, y in ((0.09, 0.09), (0.91, 0.09), (0.09, 0.91), (0.91, 0.91)):
         hex_head(c, size * x, size * y, size * 0.024, shade(SHEET, -26), salt=163)
-    # where water has stood and dried, which is a stain rather than a ring: a hard ring reads as
-    # a bubble drawn on the lid
-    for i in range(5):
-        cx, cy = size * hash01(i, 6, 167), size * hash01(i, 7, 173)
-        r = size * (0.08 + hash01(i, 8, 179) * 0.12)
-        for k in range(6):
-            c.aa_disc(cx, cy, r * (1.0 - k * 0.14), (104, 100, 92, 255), alpha=0.035)
-        c.aa_disc(cx, cy, r, (92, 88, 80, 255), alpha=0.10, inner=r * 0.90)
-    grime(c, salt=181, amount=0.30, colour=(92, 88, 78, 255))
+
+    # the tide line along the low edge, where water stands before it goes over: a band, not a ring
+    for i in range(int(size * 0.06)):
+        t = i / (size * 0.06)
+        c.aa_rect(0, size * 0.94 - i, size, size * 0.94 - i + 1, (96, 92, 84, 255),
+                  alpha=(1.0 - t) * 0.16)
+    grime(c, salt=181, amount=0.34, colour=(92, 88, 78, 255))
     return c
 
 
@@ -729,60 +772,39 @@ CONNECTOR_RED = (150, 42, 36, 255)     # the collar that marks the positive pole
 ENCLOSURE = (188, 192, 196, 255)       # a small polycarbonate junction box
 
 
-def _round_core(transpose=False):
-    """One core seen across its width: the shading that makes an axis-aligned box read as round.
+def dc_core():
+    """One core, as a tube's texture: the shading that makes a cylinder read as lit from one side.
 
-    This is the whole trick of the cable, and it is needed because of what the format can do.  A
-    vanilla block model has no rotation, so a cable is a stack of square-edged boxes, and the game
-    shades a face by which way it points - every upward face at one brightness, whatever is under it.
-    So a stepped box lit that way is flat from above however many steps it has.
+    The u axis of a swept tube runs *around* it, so this drawing wraps - and that is the whole
+    constraint.  Anything on it has to be periodic in x or there is a hard seam down the length of every
+    cable in the world, which is exactly what the first version had: a cosine of the half-turn, bright
+    at a third across and dark at both edges, so the two edges met at different values.
 
-    The roundness therefore has to be in the texture, and it has to run *across* the cable: bright
-    along the crown, falling to nearly black at the two edges, with the highlight pushed off centre
-    towards the light every other surface in this mod is lit from.  ``gen_cable_models.py`` maps the
-    across-the-cable coordinate of every face onto the full width of this tile, so a face taking the
-    crown gets the bright part and a flank gets the edge.
+    So the brightness here is the real thing instead: a diffuse cylinder returns the cosine of the angle
+    between its surface and the light, clamped at nothing, and that is periodic by construction.  The
+    specular line sits just off the bright side, where a glossy sheath's is, and wraps with it.
 
-    ``transpose`` writes the same drawing with the gradient down the tile instead of across it, for
-    the cores running east and west: a face's u is its own first axis, which is x for a face on top,
-    so a tile drawn one way serves runs along z and the transpose serves runs along x.
+    The v axis runs along the cable and carries only the extruder's die marks - nothing with a shape, so
+    a face may stretch it as far as it likes.
     """
     size = 128
     c = Canvas(size, size)
     rubber(c, JACKET, salt=277, sheen=16)
 
-    # the crown, and the two edges falling away from it: a cylinder lit from one side, so the peak
-    # sits at about a third across rather than in the middle
-    peak = 0.38
+    lit_at = 0.34                          # where round the tube the light lands
     for i in range(size):
-        t = i / (size - 1.0)
-        # the cosine of the angle round the cylinder, which is what a diffuse round surface returns
-        lit = math.cos((t - peak) * math.pi * 1.05)
-        tone = -22 + max(0.0, lit) * 96
-        # The narrow specular line a glossy sheath carries just off the crown, and it earns its
-        # strength: the cable is nearly black, so the highlight is the only thing that says it is round
-        # rather than a bar - a black cable in sunlight is mostly reflection.
-        gloss = math.exp(-((t - peak + 0.06) ** 2) / 0.0016) * 0.46
+        t = i / float(size)                # a whole turn, so t and t + 1 are the same place
+        angle = 2.0 * math.pi * (t - lit_at)
+        tone = -30 + max(0.0, math.cos(angle)) * 104
+        gloss = max(0.0, math.cos(angle)) ** 26 * 0.42
         for j in range(size):
-            x, y = (j, i) if transpose else (i, j)
-            base = shade(c.get(x, y), tone)
-            c.set(x, y, mix(base, (188, 196, 206, 255), gloss))
+            base = shade(c.get(i, j), tone)
+            c.set(i, j, mix(base, (196, 204, 214, 255), gloss))
 
-    # the extruder's die marks, along the cable: fine, and the one thing that says which way it runs
+    # the die marks, along the cable: fine, and the one thing that says which way it runs
     marks = stretched(size, along=size * 2.0, across=size / 30.0, octaves=2, salt=281)
-    # stretched() lays its long axis along x, so a core running down the tile takes it swapped
-    c.over(lambda x, y, base: shade(base, marks.signed(*((x, y) if transpose else (y, x))) * 7))
+    c.over(lambda x, y, base: shade(base, marks.signed(y, x) * 7))
     return c
-
-
-def dc_core():
-    """A core running north and south, so the shading runs across the tile."""
-    return _round_core()
-
-
-def dc_core_turn():
-    """The same core running east and west, so the shading runs down the tile."""
-    return _round_core(transpose=True)
 
 
 def dc_cleat():
@@ -801,43 +823,69 @@ def dc_cleat():
     c.aa_rect(0, size * 0.90, size, size, shade(CLEAT_STEEL, -30))
     # the black nylon liner showing at the strap's lip, which is what keeps it off the sheath
     c.aa_rect(0, size * 0.80, size, size * 0.90, (34, 34, 38, 255), alpha=0.8)
-    # the screw through the foot
-    screw(c, size * 0.5, size * 0.5, size * 0.15, shade(CLEAT_STEEL, -6))
+    # No screw drawn: the model has a real one now, turned out of geometry, and a painted one under it
+    # was a second screw head wherever the strap's tile landed twice.
     grime(c, salt=289, amount=0.14, colour=(74, 72, 68, 255))
     return c
 
 
 def _connector(positive):
-    """An MC4 connector: the plug every string cable in the world ends in.
+    """An MC4 plug, drawn as a strip along its own length: the plug every string cable ends in.
 
     Glass-filled polyamide, about eighteen millimetres across and sixty-five long, in two pieces that
-    latch - and what is drawn is the outside of one: the knurled gland nut that seals onto the sheath,
-    the barrel, the latch window, and the collar.  The collar is where the polarity is: red for the
-    positive pole and black for the negative, which is how a plant marks a cable that is black for its
-    whole length.
+    latch.  The tile's **v axis is the plug from the cable end to the nose** and each part of the model
+    takes its own band of it, which is the only way three segments of one fitting can carry three
+    different things: a nut cannot show the latch window and a barrel cannot show the knurl.
+
+      * v 0.00 to 0.12 - the collar, red for the positive pole and black for the negative, which is how
+        a plant marks a cable that is black for its whole length
+      * v 0.12 to 0.44 - the knurled gland nut that seals onto the sheath, ribbed because it is meant to
+        be turned by hand
+      * v 0.44 to 0.90 - the barrel, with the latch window and the tongue of the locking clip in it
+      * v 0.90 to 1.00 - the nose
+
+    The u axis wraps round the plug, so the knurl's ribs are drawn to tile in x.  The latch window is
+    not, and should not be: there is one of them, on one side.
     """
     size = 128
     c = Canvas(size, size)
     rubber(c, CONNECTOR_BODY, salt=293, sheen=22)
 
-    # the knurled gland nut: axial ribs, which is what a nut meant to be turned by hand carries
+    def band(v0, v1):
+        return size * v0, size * v1
+
+    # the collar
+    y0, y1 = band(0.0, 0.12)
+    collar = CONNECTOR_RED if positive else shade(CONNECTOR_BODY, -16)
+    c.aa_rect(0, y0, size, y1, collar)
+    c.aa_rect(0, y0, size, y0 + (y1 - y0) * 0.30, shade(collar, 26), alpha=0.8)
+    c.aa_rect(0, y1 - (y1 - y0) * 0.18, size, y1, shade(collar, -30))
+
+    # the knurled nut: axial ribs, sixteen of them, tiling in x so the seam does not show
+    y0, y1 = band(0.12, 0.44)
+    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 6))
     for i in range(16):
-        x = size * (0.02 + i * 0.0615)
-        c.aa_rect(x, size * 0.62, x + size * 0.030, size, shade(CONNECTOR_BODY, 26))
-        c.aa_rect(x + size * 0.030, size * 0.62, x + size * 0.042, size, shade(CONNECTOR_BODY, -22))
-    # the shoulder between the nut and the barrel
-    c.aa_rect(0, size * 0.58, size, size * 0.62, shade(CONNECTOR_BODY, -34))
-    c.aa_rect(0, size * 0.555, size, size * 0.58, shade(CONNECTOR_BODY, 20))
+        x = size * i / 16.0
+        c.aa_rect(x, y0, x + size / 16.0 * 0.55, y1, shade(CONNECTOR_BODY, 30))
+        c.aa_rect(x + size / 16.0 * 0.55, y0, x + size / 16.0, y1, shade(CONNECTOR_BODY, -26))
+    # the shoulder off the nut
+    c.aa_rect(0, y1 - size * 0.018, size, y1, shade(CONNECTOR_BODY, -38))
 
-    # the latch window, and the tongue of the locking clip in it
-    c.aa_rect(size * 0.30, size * 0.24, size * 0.70, size * 0.44, (18, 18, 20, 255))
-    c.aa_rect(size * 0.34, size * 0.27, size * 0.66, size * 0.36, shade(CONNECTOR_BODY, 30))
+    # the barrel, and the latch window in it
+    y0, y1 = band(0.44, 0.90)
+    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 2))
+    c.aa_rect(0, y0, size, y0 + size * 0.016, shade(CONNECTOR_BODY, 22))
+    c.aa_rect(size * 0.30, y0 + (y1 - y0) * 0.22, size * 0.70, y0 + (y1 - y0) * 0.62,
+              (16, 16, 18, 255))
+    c.aa_rect(size * 0.34, y0 + (y1 - y0) * 0.27, size * 0.66, y0 + (y1 - y0) * 0.44,
+              shade(CONNECTOR_BODY, 32))
 
-    # the collar that says which pole this is
-    collar = CONNECTOR_RED if positive else shade(CONNECTOR_BODY, -12)
-    c.aa_rect(0, size * 0.06, size, size * 0.18, collar)
-    c.aa_rect(0, size * 0.06, size, size * 0.09, shade(collar, 24), alpha=0.8)
-    grime(c, salt=307, amount=0.12, colour=(70, 66, 60, 255))
+    # the nose
+    y0, y1 = band(0.90, 1.0)
+    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, -14))
+    c.aa_rect(0, y0, size, y0 + size * 0.014, shade(CONNECTOR_BODY, 18))
+
+    grime(c, salt=307, amount=0.10, colour=(70, 66, 60, 255))
     return c
 
 
@@ -866,6 +914,22 @@ def dc_jbox():
     for x, y in ((0.06, 0.06), (0.94, 0.06), (0.06, 0.94), (0.94, 0.94)):
         screw(c, size * x, size * y, size * 0.045, shade(ENCLOSURE, -8))
     grime(c, salt=313, amount=0.18, colour=(96, 94, 88, 255))
+    return c
+
+
+def dc_jbox_side():
+    """The junction box's walls: the same moulding, without the lid's screws on it.
+
+    A box has four screws and they are all in the lid, so a wall wearing the lid's tile is a wall with
+    four screws that are not there.
+    """
+    size = 128
+    c = Canvas(size, size)
+    powder(c, shade(ENCLOSURE, -10), salt=317, peel=5)
+    # the draft line every moulded wall carries, and the shadow under the lid's overhang
+    c.aa_rect(0, 0, size, size * 0.09, shade(ENCLOSURE, -34), alpha=0.7)
+    c.aa_rect(0, size * 0.09, size, size * 0.13, shade(ENCLOSURE, 16), alpha=0.5)
+    grime(c, salt=319, amount=0.22, colour=(92, 90, 84, 255))
     return c
 
 
@@ -1048,28 +1112,49 @@ def pole_plate():
 
 
 def porcelain_brown():
-    """A pin insulator's glaze: the brown porcelain of medium-voltage distribution.
+    """A pin insulator's glaze, drawn for a surface of revolution: brown, glassy, lit from one side.
 
-    Brown rather than the cabin's green, because that is what a line insulator is: the green
-    glaze belongs to the bushings on a transformer housing and the two are different objects.
+    Brown rather than the cabin's green, because that is what a line insulator is: the green glaze
+    belongs to the bushings on a transformer housing and the two are different objects.
 
-    Nothing directional is drawn on it, and that is the point.  The sheds are geometry - a stack
-    of skirts turned at eighty sides - and the render type is ``entityCutoutNoCull``, whose shader
-    lights a face by its own normal.  So a highlight painted down the tile would land on top of
-    the one the geometry already gets, and a shed drawn across it would be a second set of
-    skirts at right angles to the real ones.  What is left is what a glaze actually is: a deep,
-    slightly uneven colour with a fine crazing in it.
+    The u axis of a lathe runs *around* the turning and the v axis along its profile, and that decides
+    everything on this tile.  The insulator used to wear a flat, even glaze with a little crazing on it
+    and it read as a brown blob - the sheds were there in the geometry and nothing in the shading said
+    so.  Two reasons: the tile was sampled over half its width, so the wrap did not close, and a matt
+    even colour gives a round object no edge at all.
+
+    So what is drawn now is a **lit cylinder**, periodic in u by construction: the cosine of the angle
+    round the turning, clamped at nothing, with the narrow specular a glaze really has just off the
+    bright side and a soft bounce on the dark side, which is what stops porcelain going black where it
+    turns away.  Every shed then has a highlight running round it and reads as a separate skirt.
+
+    Along v there is only the fired colour's own unevenness and the hairline crazing a glaze cools into -
+    nothing with a shape, so a profile may stretch it as far as it likes.
     """
     size = 256
     c = Canvas(size, size)
-    porcelain(c, (118, 76, 46, 255), salt=389)
+    porcelain(c, (116, 74, 44, 255), salt=389)
+
+    lit_at = 0.30
+    for i in range(size):
+        t = i / float(size)
+        angle = 2.0 * math.pi * (t - lit_at)
+        face = math.cos(angle)
+        tone = -34 + max(0.0, face) * 66
+        # the bounce off the ground and the sky on the dark side: a glaze is never black round the back
+        tone += max(0.0, -face) * 10
+        gloss = max(0.0, face) ** 30 * 0.40
+        for j in range(size):
+            base = shade(c.get(i, j), tone)
+            c.set(i, j, mix(base, (226, 206, 182, 255), gloss))
+
     # the crazing: the hairline network a fired glaze cools into, very faint
-    for i in range(40):
-        x0, y0 = size * hash01(i, 17, 391), size * hash01(i, 18, 393)
-        angle = hash01(i, 19, 395) * math.tau
-        length = size * (0.04 + hash01(i, 20, 397) * 0.10)
-        c.aa_line(x0, y0, x0 + math.cos(angle) * length, y0 + math.sin(angle) * length,
-                  (72, 46, 28, 255), width=size * 0.004, alpha=0.30)
+    for k in range(40):
+        x0, y0 = size * hash01(k, 17, 391), size * hash01(k, 18, 393)
+        theta = hash01(k, 19, 395) * math.tau
+        length = size * (0.04 + hash01(k, 20, 397) * 0.10)
+        c.aa_line(x0, y0, x0 + math.cos(theta) * length, y0 + math.sin(theta) * length,
+                  (70, 44, 26, 255), width=size * 0.004, alpha=0.26)
     grime(c, salt=397, amount=0.10, colour=(70, 60, 50, 255))
     return c
 
@@ -1182,11 +1267,11 @@ TEXTURES = {
     'pv_dome': pv_dome,
     'pv_switch': pv_switch,
     'dc_core': dc_core,
-    'dc_core_turn': dc_core_turn,
     'dc_cleat': dc_cleat,
     'dc_connector_plus': dc_connector_plus,
     'dc_connector_minus': dc_connector_minus,
     'dc_jbox': dc_jbox,
+    'dc_jbox_side': dc_jbox_side,
     'dc_harness': dc_harness,
     'dc_jacket': dc_jacket,
     'dc_trunk_line': dc_trunk_line,

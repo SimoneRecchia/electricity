@@ -1,7 +1,7 @@
 {
   "loader": "forge:obj",
   "model": "electricity:models/dc_string_cable/dc_string_cable_tee.obj",
-  "flip_v": true,
+  "flip_v": false,
   "automatic_culling": false,
   "textures": {
     "core": "electricity:block/dc_core",
@@ -9,6 +9,7 @@
     "plug_plus": "electricity:block/dc_connector_plus",
     "plug_minus": "electricity:block/dc_connector_minus",
     "jbox": "electricity:block/dc_jbox",
+    "jbox_side": "electricity:block/dc_jbox_side",
     "trench": "electricity:block/dc_trench",
     "particle": "electricity:block/dc_core"
   }

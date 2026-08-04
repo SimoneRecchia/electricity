@@ -155,6 +155,8 @@ FACES = ('down', 'up', 'north', 'south', 'west', 'east')
 def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=0):
     """Six quads, outward normals, each face mapped across the whole texture.
 
+    ``rot`` is one ``(pivot, axis, degrees)`` or a sequence of them applied in order.
+
     ``uv_scale`` under one insets the mapping, which is how a long rail gets a strip of its texture
     rather than the whole thing stretched along it.  ``uv`` gives an explicit sub-rectangle instead,
     which is what keeps a cell the same size on every mounting: a module drawn on a shorter box
@@ -204,9 +206,12 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=
             uvs = uvs[shift:] + uvs[:shift]
         normal = normals[face]
         if rot is not None:
-            pivot_point, axis, degrees = rot
-            pts = [rotate(p, pivot_point, axis, degrees) for p in pts]
-            normal = rotate(normal, (0, 0, 0), axis, degrees)
+            # One rotation or a list of them, applied in order.  Two are needed by anything that is both
+            # pitched and spun - a fan blade has an angle of attack *and* a position round the hub, and
+            # with a single rotation it can only have one of the two.
+            for pivot_point, axis, degrees in ([rot] if isinstance(rot[1], str) else rot):
+                pts = [rotate(p, pivot_point, axis, degrees) for p in pts]
+                normal = rotate(normal, (0, 0, 0), axis, degrees)
         mesh.quad(faces, pts, normal, uvs)
 
 
@@ -231,7 +236,7 @@ def ring_points(radius, sides, phase=0.0):
 
 
 def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_scale=1.0,
-             caps=None, taper=1.0, phase=0.0, uv_along=1.0, cap_ends=(-1, 1)):
+             caps=None, taper=1.0, phase=0.0, uv_along=1.0, cap_ends=(-1, 1), uv=None):
     """A prism standing in for a tube.
 
     ``taper`` is the radius at the far end as a fraction of the near one, which is how a spun
@@ -269,10 +274,19 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
         else:
             nx = 0.0
         length = math.sqrt(nx * nx + ny * ny + nz * nz) or 1.0
-        u = i / sides * uv_scale
-        u2 = (i + 1) / sides * uv_scale
+        if uv is None:
+            u = i / sides * uv_scale
+            u2 = (i + 1) / sides * uv_scale
+            v0, v1 = 0.0, uv_along * uv_scale
+        else:
+            # An explicit window, for a fitting whose texture is a strip along its own length rather
+            # than a tile: a plug's knurled nut, its barrel and its nose are three bands of one
+            # drawing, and each segment has to take its own.
+            u = uv[0] + (uv[2] - uv[0]) * i / sides
+            u2 = uv[0] + (uv[2] - uv[0]) * (i + 1) / sides
+            v0, v1 = uv[1], uv[3]
         mesh.quad(faces, [a, b, c, d], (nx / length, ny / length, nz / length),
-                  [(u, 0.0), (u2, 0.0), (u2, uv_along * uv_scale), (u, uv_along * uv_scale)])
+                  [(u, v0), (u2, v0), (u2, v1), (u, v1)])
 
     if caps is None:
         return
@@ -489,75 +503,77 @@ def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=
              sides=sides, uv_scale=uv_scale, caps=faces)
 
 
-def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, uv_scale=0.5,
-                  spindle=True):
+def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, spindle=True):
     """The mod's one insulator: an ANSI 55-4 pin insulator in brown glazed porcelain.
 
-    One shape, on every machine that a wire clips to.  It used to be four different things - brown pin
-    insulators on the pole and the kiosk, a *white* one on the inverter because it had been given the
-    instrument material by mistake, a stack of green plastic discs on the turbine and a tall bushing on
-    the cabin, the last two inherited with those models.  A fitting that appears on five objects should
-    be the same fitting on all five, and the real thing is a catalogue part: whoever built the line
-    bought the same insulator for every structure on it.
+    One shape, on every machine a wire clips to.  There used to be four - brown pin insulators on the
+    pole and the kiosk, a *white* one on the inverter because it had been given the instrument material
+    by mistake, a stack of green plastic discs on the turbine and a tall bushing on the cabin.  A fitting
+    that appears on five objects should be the same fitting on all five: a distribution insulator is a
+    catalogue part, and whoever built the line bought the same one for every structure on it.
 
-    The proportions are the real ones.  ANSI 55-4 - the 11 kV distribution workhorse - is 142 mm across
-    its widest shed and 111 mm tall, so it is *wider than it is tall*, which is the single thing the old
-    ones all got wrong: every one of them was a tall stack, and a pin insulator is a squat one.  Every
-    figure below is a fraction of ``diameter``, with the height at 0.78 of it.
+    The proportions are the real ones.  ANSI 55-4 - the 11 kV workhorse - is 142 mm across its widest
+    shed and 111 mm tall, so it is *wider than it is tall*, which is the one thing every old version got
+    wrong: all of them were tall stacks and a pin insulator is a squat one.
 
-    And it has a head, which the old ones did not.  A pin insulator's top is not a plain cap: there is a
-    groove round it that the conductor lies in and is bound to with tie wire, a crown above the groove
-    holding it in, and a second groove on the flank for a conductor run to the side.  Those three
-    features are what makes the silhouette recognisable at ten metres - without them a shed stack reads
+    One profile, revolved
+    ---------------------
+    Drawn as a single surface of revolution rather than as a stack of cones, and that is a correctness
+    fix rather than a tidy-up.  Stacked, each shed was a cone whose top was wider than the core above
+    it, so between the two sat an annulus with no surface in it - and since these models are drawn
+    without back-face culling, those annuli were holes you could see through the porcelain.  A profile
+    closes by construction: a radius that steps in draws the step.
+
+    Reading the contour from the bottom up, it is the real object part by part: the underside of the
+    lower petticoat, its rim, the cone up to the neck, the neck, the upper shed and its rim, the head,
+    the groove round the head's flank for a conductor running past, the groove round the top that a
+    conductor terminating here is tied into, and the crown over it that keeps the tie wire on.  Those
+    last three are what makes the silhouette recognisable at ten metres; without them a shed stack reads
     as a stack of plates.
-
-    ``centre`` is where the porcelain sits down on its spindle, and the spindle is drawn below it in its
-    own group.  Which group matters: the wire hangs from the *centre of the insulator group's bounding
-    box*, read off the model at runtime, so a steel spindle inside that group would drag the anchor down
-    towards the crossarm.
     """
     cx, cy, cz = centre
     d, h = diameter, diameter * 0.78
 
-    # The spindle: hot-dip galvanised steel, with the lead thimble the porcelain is cemented onto.
+    # (radius, height) as fractions of the diameter and the height, bottom centre to top centre.
+    contour = [
+        (0.000, 0.000),
+        (0.500, 0.000),   # the lower petticoat's rim, seen from underneath
+        (0.300, 0.290),   # the cone up to the neck
+        (0.255, 0.290),   # in to the neck
+        (0.255, 0.340),
+        (0.400, 0.340),   # out to the upper shed's rim
+        (0.245, 0.565),   # its cone
+        (0.235, 0.565),   # in to the upper neck
+        (0.235, 0.660),
+        (0.290, 0.660),   # out to the head
+        (0.290, 0.712),
+        (0.238, 0.712),   # the side groove, for a conductor running past
+        (0.238, 0.768),
+        (0.290, 0.768),
+        (0.290, 0.812),
+        (0.188, 0.812),   # the top groove, for one that terminates here
+        (0.188, 0.898),
+        (0.266, 0.898),   # out to the crown that holds the tie wire in
+        (0.224, 1.000),
+        (0.000, 1.000),
+    ]
+    lathe(mesh, porcelain, centre, [(r * d, y * h) for r, y in contour], sides=sides,
+          uv_scale=1.0, uv_along=1.0)
+
+    # The spindle: hot-dip galvanised steel, with the lead thimble the porcelain is cemented onto.  Its
+    # own group, because the wire hangs from the centre of the insulator group's bounding box and steel
+    # inside that group would drag the anchor down towards the crossarm.
     if spindle:
-        cylinder(mesh, steel, (cx, cy - 0.30 * h, cz), 'y', 0.085 * d, 0.30 * h, sides=sides,
-                 uv_scale=uv_scale * 0.4, caps=steel, cap_ends=(-1,))
-        cylinder(mesh, steel, (cx, cy - 0.06 * h, cz), 'y', 0.115 * d, 0.06 * h, sides=sides,
-                 uv_scale=uv_scale * 0.4)
-
-    # Two sheds, each a shallow cone widest at its lower rim with a petticoat under it.  Two rather
-    # than three because 55-4 has two: the count is what the leakage distance needs and no more.
-    for base, top, wide, narrow in ((0.00, 0.30, 0.500, 0.62), (0.34, 0.58, 0.400, 0.64)):
-        # the rim: a thin band, so the skirt has an edge rather than a knife edge
-        cylinder(mesh, porcelain, (cx, cy + base * h, cz), 'y', wide * d, 0.045 * h, sides=sides,
-                 uv_scale=uv_scale, caps=porcelain, cap_ends=(-1,))
-        cylinder(mesh, porcelain, (cx, cy + (base + 0.045) * h, cz), 'y', wide * d,
-                 (top - base - 0.045) * h, sides=sides, uv_scale=uv_scale, taper=narrow)
-
-    # the core between the sheds, and the one above the upper shed
-    cylinder(mesh, porcelain, (cx, cy + 0.28 * h, cz), 'y', 0.255 * d, 0.08 * h, sides=sides,
-             uv_scale=uv_scale)
-    cylinder(mesh, porcelain, (cx, cy + 0.56 * h, cz), 'y', 0.235 * d, 0.10 * h, sides=sides,
-             uv_scale=uv_scale)
-
-    # The head, with the side groove cut into it: a conductor running past rather than terminating
-    # sits in this one, which is why a pin insulator has both.
-    cylinder(mesh, porcelain, (cx, cy + 0.66 * h, cz), 'y', 0.290 * d, 0.055 * h, sides=sides,
-             uv_scale=uv_scale)
-    cylinder(mesh, porcelain, (cx, cy + 0.715 * h, cz), 'y', 0.240 * d, 0.055 * h, sides=sides,
-             uv_scale=uv_scale)
-    cylinder(mesh, porcelain, (cx, cy + 0.770 * h, cz), 'y', 0.290 * d, 0.045 * h, sides=sides,
-             uv_scale=uv_scale)
-
-    # the top tie groove, and the crown over it that keeps the tie wire on
-    cylinder(mesh, porcelain, (cx, cy + 0.815 * h, cz), 'y', 0.190 * d, 0.085 * h, sides=sides,
-             uv_scale=uv_scale)
-    cylinder(mesh, porcelain, (cx, cy + 0.900 * h, cz), 'y', 0.265 * d, 0.100 * h, sides=sides,
-             uv_scale=uv_scale, taper=0.86, caps=porcelain, cap_ends=(1,))
+        # half the sides: it is a spindle 8 mm across, mostly inside the porcelain, and eight of these
+        # on one pole is the heaviest geometry in the mod
+        lathe(mesh, steel, (cx, cy, cz), [
+            (0.000, -0.34 * h), (0.085 * d, -0.34 * h),
+            (0.085 * d, -0.10 * h), (0.118 * d, -0.08 * h),
+            (0.118 * d, -0.005 * h), (0.000, -0.005 * h),
+        ], sides=max(8, sides // 2), uv_scale=1.0, uv_along=1.0)
 
 
-def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=None, caps=None):
+def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=None):
     """A round tube swept along a polyline: the only way to draw a cable that turns.
 
     ``cylinder`` is axis-aligned, which is enough for a mast or a bushing and no use at all for a bend.
@@ -571,7 +587,10 @@ def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=None
     as a crease.
 
     ``uv_scale`` is how much of the texture goes round the circumference and ``uv_along`` how much runs
-    along the length, defaulting to the path's own length so the grain does not stretch on a long run.
+    along the length.  Both default to exactly one, and that is not a style choice: a block model's
+    texture lives in the block atlas, so a uv past one does not tile - it samples whatever sprite the
+    atlas happens to have put next door.  Which is precisely what broke the first version of the cable,
+    and it is invisible in a previewer that binds one texture at a time.
     """
     path = [tuple(float(c) for c in point) for point in points]
     if len(path) < 2:
@@ -617,7 +636,7 @@ def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=None
                           point[2] + offset[2] * radius), offset))
         rings.append(ring)
 
-    span = uv_along if uv_along is not None else max(travelled, 1e-6) * 4.0
+    span = uv_along
     for index in range(len(rings) - 1):
         v0 = lengths[index] / max(travelled, 1e-6) * span
         v1 = lengths[index + 1] / max(travelled, 1e-6) * span
@@ -657,3 +676,55 @@ def arc(centre, radius, plane, start, end, steps):
         point[fixed] = centre[fixed]
         out.append(tuple(point))
     return out
+
+
+def lathe(mesh, faces, centre, profile, sides=FITTING, uv_scale=1.0, uv_along=1.0):
+    """A surface of revolution through a profile: the honest way to draw anything turned.
+
+    ``profile`` is a list of ``(radius, height)`` in order from one end to the other, in the same units
+    as ``centre``, and the surface is closed by construction - consecutive points are joined whatever
+    their radii, so there is no way to leave a gap.
+
+    Which is why the insulator is drawn this way now.  Built from stacked ``cylinder`` calls it had
+    holes in it: a shed is a cone whose top is wider than the core above it, so between the two there was
+    an annulus with nothing in it, and since the machines' render type does not cull back faces you
+    could see straight through the porcelain.  A profile cannot have that fault - a radius that steps in
+    draws the step.
+
+    The uv runs once round the circumference and once along the profile by arc length, so a texture with
+    a lit-cylinder gradient across it lands the same way on every part of the turning.
+    """
+    cx, cy, cz = centre
+    if len(profile) < 2:
+        return
+
+    lengths, travelled = [0.0], 0.0
+    for i in range(1, len(profile)):
+        travelled += math.dist(profile[i], profile[i - 1])
+        lengths.append(travelled)
+
+    def point(index, i):
+        radius, height = profile[index]
+        a = 2.0 * math.pi * i / sides
+        return (cx + math.cos(a) * radius, cy + height, cz + math.sin(a) * radius)
+
+    for index in range(len(profile) - 1):
+        r0, h0 = profile[index]
+        r1, h1 = profile[index + 1]
+        if r0 <= 1e-9 and r1 <= 1e-9:
+            continue
+
+        v0 = lengths[index] / max(travelled, 1e-9) * uv_along
+        v1 = lengths[index + 1] / max(travelled, 1e-9) * uv_along
+        # the outward normal of the band, which is the profile segment turned a quarter turn
+        dr, dh = r1 - r0, h1 - h0
+        span = math.hypot(dr, dh) or 1.0
+        for i in range(sides):
+            j = (i + 1) % sides
+            a, b = point(index, i), point(index, j)
+            c, d = point(index + 1, j), point(index + 1, i)
+            mid = 2.0 * math.pi * (i + 0.5) / sides
+            normal = (math.cos(mid) * dh / span, -dr / span, math.sin(mid) * dh / span)
+            u0, u1 = i / sides * uv_scale, (i + 1) / sides * uv_scale
+            # a band that closes onto the axis is a triangle, and the quad degenerates cleanly
+            mesh.quad(faces, (a, b, c, d), normal, ((u0, v0), (u1, v0), (u1, v1), (u0, v1)))

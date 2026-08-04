@@ -26,6 +26,7 @@ is the other half of "that looks blocky" - the half no rule can decide for you.
 """
 
 import collections
+import functools
 import glob
 import math
 import os
@@ -60,6 +61,15 @@ FRAME_EXEMPT = {'pv_dome.png'}
 # Pixels of texture per block of surface, under which a face is stretched enough to look soft. A block is
 # ten metres in this mod, so this is not a vanilla figure: 16 would be one texel per 60 centimetres.
 DENSITY = 48.0
+# How far u and v may disagree on one face before a circle on that texture reads as an oval. A tenth is
+# below what the eye picks up on a disc; a third is unmistakable.
+ANISOTROPY = 1.12
+# Faces meant to sample one texture at two scales. A cable core's tile is a cross-section gradient with
+# nothing along its length, so stretching it along the run is exactly what it is drawn for.
+STRETCH_EXEMPT = {'dc_core.png',
+                  # a dome's side faces want the glass the circle is drawn on, which is the
+                  # same reason it is in FRAME_EXEMPT: sampling it unevenly is the intent
+                  'pv_dome.png'}
 
 
 def png_size(path):
@@ -118,6 +128,83 @@ def png_pixels(path):
         previous = line
 
     return rows, width, step
+
+
+@functools.lru_cache(maxsize=None)
+def round_features(path):
+    """Whether a texture carries something round enough that stretching it would show.
+
+    Declared nowhere and detected instead, because the point is to catch the *next* texture with a
+    circle in it as well as the ones already drawn.  A status lamp, a lock barrel, a screw head, a
+    bolted boss, the ring round a warning triangle: all of them come out as ovals the moment the face
+    they are on is not square, and that is the single most common fault in this mod's models.
+
+    Found by level sets: the tile is reduced to a small grid, thresholded at a few brightnesses, and its
+    connected regions measured.  A region counts as round when its bounding box is nearly square and it
+    fills about pi over four of it, which is what a disc does and what a rectangle, a stripe and a blob
+    of noise do not.
+    """
+    rows, width, step = png_pixels(path)
+    if rows is None or width < 16:
+        return False
+
+    grid = 48
+    height = len(rows)
+    field = []
+    for gy in range(grid):
+        row = []
+        for gx in range(grid):
+            x, y = gx * width // grid, gy * height // grid
+            pixel = rows[y][x * step:x * step + 3]
+            row.append(sum(pixel) / 3.0)
+        field.append(row)
+
+    values = sorted(v for row in field for v in row)
+    for fraction in (0.12, 0.25, 0.5, 0.75, 0.88):
+        level = values[int(fraction * (len(values) - 1))]
+        for want in (True, False):
+            seen = [[False] * grid for _ in range(grid)]
+            for sy in range(grid):
+                for sx in range(grid):
+                    if seen[sy][sx] or (field[sy][sx] > level) != want:
+                        continue
+
+                    stack, cells = [(sx, sy)], []
+                    seen[sy][sx] = True
+                    while stack:
+                        cx, cy = stack.pop()
+                        cells.append((cx, cy))
+                        for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                            if 0 <= nx < grid and 0 <= ny < grid and not seen[ny][nx] \
+                                    and (field[ny][nx] > level) == want:
+                                seen[ny][nx] = True
+                                stack.append((nx, ny))
+
+                    if len(cells) < 24:
+                        continue
+
+                    xs = [c[0] for c in cells]
+                    ys = [c[1] for c in cells]
+                    w = max(xs) - min(xs) + 1
+                    h = max(ys) - min(ys) + 1
+                    # a region touching the tile's edge is a background, not a feature on it
+                    if min(xs) == 0 or min(ys) == 0 or max(xs) == grid - 1 or max(ys) == grid - 1:
+                        continue
+                    # Below a fifteenth of the tile a round feature cannot show an aspect error - a
+                    # bolt head stretched by half is still a bolt head - and every lid in the mod has
+                    # four of them, so without this the check reports nothing but screws.
+                    #
+                    # And above half the tile it is the *ground* rather than a feature on it: a
+                    # backsheet with a few dark things on it has a square bounding box and fills just
+                    # under all of it, which passes the roundness test by accident.
+                    if w < grid * 0.13 or h < grid * 0.13 or max(w, h) / min(w, h) > 1.12:
+                        continue
+                    if w > grid * 0.55 or h > grid * 0.55:
+                        continue
+                    if 0.86 <= len(cells) / (math.pi / 4.0 * w * h) <= 1.14:
+                        return True
+
+    return False
 
 
 def bordered(path):
@@ -322,6 +409,7 @@ def report(name):
 
     stretched = []
     sliced = set()
+    skew = []
     for obj, material, corners, uvs, normal in model_faces:
         texture = texture_of.get(material)
         if texture is None or not uvs:
@@ -376,6 +464,15 @@ def report(name):
             if densities and min(densities) < DENSITY:
                 stretched.append((min(densities), obj, material, texture, max(along_u, along_v)))
 
+            # Anisotropy: the same texture at two different scales on one face, which is what turns a
+            # circle into an oval.  Only reported where it can be seen - a face wearing plain noise may
+            # be stretched as far as it likes, and a cable core's gradient is constant along the run on
+            # purpose, so what decides it is whether the tile has anything round on it.
+            if len(densities) == 2 and min(densities) > 1e-9:
+                ratio = max(densities) / min(densities)
+                if ratio > ANISOTROPY and texture not in STRETCH_EXEMPT and round_features(file_path):
+                    skew.append((ratio, obj, material, texture))
+
     by_material = {}
     for density, obj, material, texture, size in stretched:
         if material not in by_material or density < by_material[material][0]:
@@ -383,6 +480,15 @@ def report(name):
     for material, (density, obj, texture, size) in sorted(by_material.items(), key=lambda item: item[1][0]):
         print('    stretched %-14s %-22s %5.0f texels per block over %.2f blocks (%s)'
               % (material, obj, density, size, texture))
+
+    worst = {}
+    for ratio, obj, material, texture in skew:
+        if (obj, texture) not in worst or ratio > worst[(obj, texture)][0]:
+            worst[(obj, texture)] = (ratio, material)
+    for (obj, texture), (ratio, material) in sorted(worst.items(), key=lambda item: -item[1][0]):
+        problems += 1
+        print('    OVAL     %s wears %s at %.2f to 1, and it has something round on it'
+              % (obj, texture, ratio))
 
     sides = collections.defaultdict(set)
     for obj, material, corners, _, normal in model_faces:
