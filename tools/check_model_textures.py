@@ -27,6 +27,7 @@ is the other half of "that looks blocky" - the half no rule can decide for you.
 
 import collections
 import glob
+import math
 import os
 import struct
 import sys
@@ -38,7 +39,10 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'te
 # Models the mod draws itself. The inherited ones - the turbine, the cabin, the pole, the power box - are
 # a modelling package's output with a 1024 pixel atlas, and none of the four faults below can be fixed
 # from here without redrawing them from scratch.
-OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast')
+# Every model the mod generates for itself, which is now every model it has: the pole, the kiosk and
+# the lamp were inherited art and are generated too.
+OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
+        'utility_pole', 'power_box', 'electric_lamp')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting. A shared edge is
 # not a fault; a shared area is.
@@ -47,12 +51,27 @@ OVERLAP = 1e-4
 # Pairs of parts that are never drawn at the same time, so sharing a plane costs nothing. A tracked row's
 # run and its end plugs are the case: the run is drawn when the row is cabled and the plug when it is not,
 # and the renderer's drawn() is where that is decided.
-EXCLUSIVE = (('harness', 'harness_plug'),)
+EXCLUSIVE = (('harness', 'harness_plug'),
+             # the lamp carries its glass bowl six times over, one per glow state, in the same place -
+             # the renderer draws exactly one of them, which is how a texture is swapped in a pipeline
+             # that binds one texture per material
+             ('lens_off', 'lens_dim'), ('lens_off', 'lens_warm'), ('lens_off', 'lens_bright'),
+             ('lens_off', 'lens_overdrive'), ('lens_off', 'lens_burnt'),
+             ('lens_dim', 'lens_warm'), ('lens_dim', 'lens_bright'), ('lens_dim', 'lens_overdrive'),
+             ('lens_dim', 'lens_burnt'), ('lens_warm', 'lens_bright'),
+             ('lens_warm', 'lens_overdrive'), ('lens_warm', 'lens_burnt'),
+             ('lens_bright', 'lens_overdrive'), ('lens_bright', 'lens_burnt'),
+             ('lens_overdrive', 'lens_burnt'))
 # Below this fraction of a texture's own size, a face is sub-sampling it.
 SUBSAMPLE = 0.98
 # Textures a face is *meant* to take the middle out of. A glass dome is a circle drawn on a light ground,
 # and the side of the dome wants the glass rather than the circle - so sampling the middle is the point.
-FRAME_EXEMPT = {'pv_dome.png'}
+# The lamp's lens is the same case: the bowl's underside takes the whole picture - the diode array in its
+# frame - and its four sides take a *strip* out of the middle of it on purpose, which is a lit band round
+# the edge of the glass and not a frame with its corners cut off.
+FRAME_EXEMPT = {'pv_dome.png', 'electric_lamp_off.png', 'electric_lamp_dim.png',
+                'electric_lamp_warm.png', 'electric_lamp_bright.png',
+                'electric_lamp_overdrive.png', 'electric_lamp_burnt.png'}
 # Pixels of texture per block of surface, under which a face is stretched enough to look soft. A block is
 # ten metres in this mod, so this is not a vanilla figure: 16 would be one texel per 60 centimetres.
 DENSITY = 48.0
@@ -344,12 +363,33 @@ def report(name):
                 print('    SLICED   %s uses %.2f of %s, which is a bordered picture - the frame is cut off'
                       % (obj, max(span_u, span_v), texture))
 
-        # the two world axes this face spans, for texels per block
-        extents = sorted((max(c[i] for c in corners) - min(c[i] for c in corners)) for i in range(3))[1:]
-        if min(extents) > 1e-6:
-            density = min(span_u * width / max(extents[1], 1e-6), span_v * height / max(extents[0], 1e-6))
-            if density < DENSITY:
-                stretched.append((density, obj, material, texture, extents[1]))
+        # Texels per block, measured along the face's own u and v rather than along the world axes.
+        #
+        # The axis pairing matters and used to be wrong: it took the face's two largest world extents and
+        # paired u with the larger of them, which is right for a box and backwards for the side of a
+        # cylinder - there u runs *round* the tube, over a chord a few thousandths of a block wide, and v
+        # runs along its length. Every eighty-sided prism in the mod therefore read as stretched by a
+        # factor of two hundred, and the one real case would have been lost in them. The corners and the
+        # uvs are both to hand, so the honest measure is the world distance along each of them.
+        # A cap is fanned into quads whose first corner is the centre of the ring, so its uv step from
+        # corner to corner is not along u or v at all - it is a wedge, and measuring it gives a density
+        # of nothing over a distance of nothing. The same distinction the SLICED check already makes.
+        wedge = False
+        if len(uvs) >= 4:
+            wedge = (abs(uvs[1][1] - uvs[0][1]) > abs(uvs[1][0] - uvs[0][0])
+                     or abs(uvs[-1][0] - uvs[0][0]) > abs(uvs[-1][1] - uvs[0][1]))
+        if len(corners) >= 4 and len(uvs) >= 4 and not wedge:
+            along_u = math.dist(corners[0], corners[1])
+            along_v = math.dist(corners[0], corners[-1])
+            step_u = abs(uvs[1][0] - uvs[0][0])
+            step_v = abs(uvs[-1][1] - uvs[0][1])
+            densities = []
+            if along_u > 1e-6 and step_u > 1e-9:
+                densities.append(step_u * width / along_u)
+            if along_v > 1e-6 and step_v > 1e-9:
+                densities.append(step_v * height / along_v)
+            if densities and min(densities) < DENSITY:
+                stretched.append((min(densities), obj, material, texture, max(along_u, along_v)))
 
     by_material = {}
     for density, obj, material, texture, size in stretched:
@@ -366,6 +406,11 @@ def report(name):
             sides[(obj, material)].add((plane[0], plane[2]))
     for (obj, material), used in sorted(sides.items()):
         texture = texture_of.get(material)
+        # a texture in FRAME_EXEMPT is one whose middle is meant to be sampled, which is the same reason
+        # it is allowed on every side: the lamp's bowl takes the whole diode array underneath and a strip
+        # of the middle of it round the edge, and both are the drawing's intent
+        if texture in FRAME_EXEMPT:
+            continue
         if texture and len(used) >= 5 and bordered(os.path.join(TEXTURES, texture)):
             problems += 1
             print('    ALLSIDES %s wears %s on %d faces, and it is a picture rather than a pattern'

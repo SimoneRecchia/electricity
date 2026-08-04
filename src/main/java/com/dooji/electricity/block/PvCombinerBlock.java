@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,6 +26,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -43,7 +45,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * That is what isolating a combiner does on a real plant, and it is the only maintenance action in this
  * mod that a player can perform with their hands.
  */
-public class PvCombinerBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+public class PvCombinerBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing pv_combiner.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
 	 *
@@ -55,8 +57,21 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 	/** The output load-break switch, open. */
 	public static final BooleanProperty ISOLATED = BooleanProperty.create("isolated");
 
-	/** An enclosure on a post: narrow, shallow, and standing about waist high on the mod's scale. */
-	private static final VoxelShape SHAPE = Block.box(4.0, 0.0, 6.0, 12.0, 13.0, 10.0);
+	/**
+	 * The box as collision, cut from pv_combiner.obj and turned with the block.
+	 *
+	 * One box, four by thirteen by eight, was both too big and the wrong shape: it filled the air beside
+	 * the post from the ground to the lid, and it did not turn, so on two facings it stood across the
+	 * enclosure rather than on it. This is the post, the brackets, the enclosure and its hood, each where
+	 * the model puts it. Written by {@code tools/check_hitboxes.py --java}.
+	 */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(4.24, 6.08, 6.00, 11.76, 12.80, 9.60),
+					Block.box(4.88, 4.86, 6.88, 6.88, 6.08, 9.12),
+					Block.box(6.48, 0.00, 6.80, 9.52, 11.36, 9.68),
+					Block.box(8.88, 4.86, 6.88, 10.88, 6.08, 9.12),
+					Block.box(10.88, 5.68, 6.88, 12.14, 7.76, 9.12))));
+
 
 	private final CombinerSpec spec;
 
@@ -83,7 +98,22 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
+	}
+
+	@Override
+	public List<Cell> shellCells() {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	/**

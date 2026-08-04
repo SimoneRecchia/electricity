@@ -16,7 +16,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import java.util.List;
 
 /**
  * A meteorological mast: seven instruments on one bus.
@@ -31,7 +33,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * plant is wired - a tilted pyranometer and a resistance thermometer out on the racking, cabled back
  * to the same data logger the mast instruments are on.
  */
-public class MetStationBlock extends HorizontalDirectionalBlock implements EntityBlock {
+public class MetStationBlock extends HorizontalDirectionalBlock implements EntityBlock, MachineShell {
 	/**
 	 * The facing met_mast.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
 	 *
@@ -40,8 +42,26 @@ public class MetStationBlock extends HorizontalDirectionalBlock implements Entit
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/** A mast with a boom: thin, and tall enough that the anemometer is clear of the array. */
-	private static final VoxelShape SHAPE = Block.box(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
+	/**
+	 * The mast as collision, cut from met_mast.obj and turned with the block.
+	 *
+	 * It used to be one box four pixels across for the whole machine, which had two faults at once: a
+	 * player walked through both instrument booms as though they were not there, and the shape did not
+	 * turn, so on two of the four facings it stood across the mast rather than on it. Declared as a cell
+	 * table for the same reason the cabin's is - {@link MachineShell} turns both the offset and the shape,
+	 * and {@code tools/check_hitboxes.py} reads the table back and fails if it has drifted from the model.
+	 *
+	 * One cell: everything the mast has is inside its own block.
+	 */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(6.16, 0.00, 6.16, 9.84, 16.00, 9.84),
+					Block.box(7.07, 2.75, 11.87, 8.93, 4.74, 13.73),
+					Block.box(7.08, 5.41, 11.60, 8.92, 7.65, 13.84),
+					Block.box(7.08, 5.76, 9.56, 8.92, 6.81, 11.40),
+					Block.box(7.19, 5.43, 13.99, 8.81, 6.73, 15.61),
+					Block.box(7.23, 2.78, 7.23, 8.77, 6.08, 14.72),
+					Block.box(7.36, 3.20, 2.56, 8.64, 4.08, 8.16))));
+
 
 	public MetStationBlock(Properties properties) {
 		super(properties.sound(SoundType.METAL));
@@ -61,7 +81,22 @@ public class MetStationBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
+	}
+
+	@Override
+	public List<Cell> shellCells() {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Nullable

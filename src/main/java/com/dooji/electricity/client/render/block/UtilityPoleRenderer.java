@@ -45,7 +45,7 @@ public class UtilityPoleRenderer extends ObjRendererBase {
 		for (UtilityPoleBlockEntity blockEntity : TrackedBlockEntities.ofType(UtilityPoleBlockEntity.class)) {
 			seen.add(blockEntity.getBlockPos());
 			ObjRenderUtil.withAlignedPose(blockEntity, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(UtilityPoleBlock.FACING),
-					UtilityPoleBlock::rotation,
+					turnedFrom(UtilityPoleBlock.AUTHORED),
 					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), blockEntity.getBlockPos()));
 		}
 

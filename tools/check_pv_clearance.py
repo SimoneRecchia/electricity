@@ -44,8 +44,10 @@ EPS = 1.0e-4
 # own groups.  Restated here rather than measured so that a model whose pivot moved would
 # fail this check rather than quietly pass a different one.
 PIVOTS = {'pv_track': 0.62, 'pv_dual': 0.7475}
-# Radius of the dual axis's pedestal, which is a body of revolution about the vertical.
-PEDESTAL_RADIUS = 0.085
+# Radius of the widest part of the dual axis's pedestal, which is a body of revolution about the
+# vertical: the slew ring under the collar, not the column, since the ring is the wider of the two.
+# Restated here rather than measured so that a pedestal that grew would fail this check.
+PEDESTAL_RADIUS = 0.062
 
 
 def read_faces(path):

@@ -4,6 +4,8 @@ import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.main.Electricity;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,7 +24,9 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -41,7 +45,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * with a transformer next to it. The door faces the way it was placed, because a technician has to be
  * able to open it.
  */
-public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing pv_inverter.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
 	 *
@@ -63,12 +67,48 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	 */
 	public static final BooleanProperty COMBINER = BooleanProperty.create("combiner");
 
-	/** A wall-mounted residential machine: shallow, and not much taller than it is wide. */
-	private static final VoxelShape SMALL_SHAPE = Block.box(2.0, 0.0, 4.0, 14.0, 12.0, 12.0);
-	/** A commercial cabinet standing on the ground. */
-	private static final VoxelShape MEDIUM_SHAPE = Block.box(1.0, 0.0, 3.0, 15.0, 16.0, 13.0);
-	/** A central inverter, which is a container rather than a cabinet. */
-	private static final VoxelShape LARGE_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 16.0);
+	/**
+	 * The machine as collision, cut from pv_inverter.obj at the size it is drawn.
+	 *
+	 * The plinth, the cabinet, the hood, the doors and the direct-current compartment, each where the model
+	 * puts it - and it turns with the block, which three hand-written boxes did not. Written by
+	 * {@code tools/check_hitboxes.py --java}, and it is the 1:1 table: the machine is drawn at the size of
+	 * the commercial cabinet and scaled per product, so the other two sizes come from this one.
+	 */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 15.39, 2.72, 15.52, 16.00, 12.96),
+					Block.box(0.56, 0.00, 2.80, 15.44, 0.88, 12.88),
+					Block.box(0.80, 0.88, 2.62, 15.20, 15.68, 12.64),
+					Block.box(1.52, 1.52, 2.21, 14.48, 15.04, 3.20),
+					Block.box(3.20, 0.85, 2.00, 12.80, 6.72, 2.64))));
+
+	/**
+	 * The same table at the other two sizes the renderer draws.
+	 *
+	 * Scaled rather than written out, because the renderer scales the model rather than swapping it, and a
+	 * second table would be a second thing to keep in step. The scale is about the middle of the block's
+	 * footprint and its floor, which is where {@code PvInverterRenderer} applies it - so a small machine
+	 * sits on the ground in the middle of its block rather than hovering in a corner of it.
+	 */
+	private static final List<Cell> CABINET_CELLS = scaledCells(0.92);
+	private static final List<Cell> WALL_CELLS = scaledCells(0.62);
+
+	private static List<Cell> scaledCells(double factor) {
+		List<Cell> out = new ArrayList<>();
+		for (Cell cell : CELLS) {
+			VoxelShape scaled = Shapes.empty();
+			for (AABB box : cell.shape(0).toAabbs()) {
+				scaled = Shapes.or(scaled, Shapes.box(
+						0.5 + (box.minX - 0.5) * factor, box.minY * factor, 0.5 + (box.minZ - 0.5) * factor,
+						0.5 + (box.maxX - 0.5) * factor, box.maxY * factor, 0.5 + (box.maxZ - 0.5) * factor));
+			}
+
+			// every cell of this machine is its own, so the offset is the one it was declared with
+			out.add(new Cell(0, 0, 0, scaled));
+		}
+
+		return List.copyOf(out);
+	}
 
 	/** Nameplate above which a machine is drawn as a container rather than a cabinet, in kW. */
 	private static final double CONTAINER_KW = 1000.0;
@@ -134,10 +174,25 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		if (spec.acPowerKw() >= CONTAINER_KW) return LARGE_SHAPE;
-		if (spec.acPowerKw() <= WALL_KW) return SMALL_SHAPE;
+		return shellShape(state);
+	}
 
-		return MEDIUM_SHAPE;
+	@Override
+	public List<Cell> shellCells() {
+		if (spec.acPowerKw() >= CONTAINER_KW) return CELLS;
+		if (spec.acPowerKw() <= WALL_KW) return WALL_CELLS;
+
+		return CABINET_CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Nullable

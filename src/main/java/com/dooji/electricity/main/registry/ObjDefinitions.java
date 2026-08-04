@@ -17,20 +17,30 @@ public final class ObjDefinitions {
 	public static void bootstrap() {
 		if (!ALL.isEmpty()) return;
 
+		// The eight pin insulators, in the order tools/gen_grid_models.py writes them: the lower arm's
+		// four and then the upper arm's, inner pair before outer, negative side first. The order is the
+		// index a wire is stored against, so it is the one thing about the pole that cannot be
+		// rearranged without moving every wire in every world that has one.
 		ALL.add(new ObjBlockDefinition(Electricity.UTILITY_POLE_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/utility_pole/utility_pole.obj"), List.of(
-				"insulator_1_Material.023",
-				"insulator_2_Material.009",
-				"insulator_3_Material.016",
-				"insulator_4_Material.001",
-				"insulator_5_Material.051",
-				"insulator_6_Material.037",
-				"insulator_7_Material.030",
-				"insulator_8_Material.058"
+				"insulator_1_porcelain",
+				"insulator_2_porcelain",
+				"insulator_3_porcelain",
+				"insulator_4_porcelain",
+				"insulator_5_porcelain",
+				"insulator_6_porcelain",
+				"insulator_7_porcelain",
+				"insulator_8_porcelain"
 		)));
 
 		ALL.add(new ObjBlockDefinition(Electricity.POWER_BOX_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/power_box/power_box.obj"), List.of(
-				"insulator_Material"
+				"insulator_porcelain"
 		)));
+
+		// The lamp draws itself from OBJ like the machines rather than from a JSON cube, because its
+		// column is round and the vanilla format cannot express a cylinder at all. No wire fitting: a
+		// lamp is fed by the power field in a radius, not by a line.
+		ALL.add(new ObjBlockDefinition(Electricity.ELECTRIC_LAMP_BLOCK.get(),
+				new ResourceLocation(Electricity.MOD_ID, "models/electric_lamp/electric_lamp.obj"), List.of()));
 
 		ALL.add(new ObjBlockDefinition(Electricity.ELECTRIC_CABIN_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/electric_cab/cab.obj"), List.of(
 				"insulator_input_Material.065",

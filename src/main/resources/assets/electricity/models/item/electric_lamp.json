@@ -1,3 +1,6 @@
 {
-  "parent": "electricity:block/electric_lamp_bright"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "electricity:item/electric_lamp"
+  }
 }

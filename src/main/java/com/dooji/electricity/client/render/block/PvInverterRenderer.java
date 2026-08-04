@@ -95,7 +95,6 @@ public class PvInverterRenderer extends ObjRendererBase {
 		float scale = (float) renderScale(spec);
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
 
-		Vec3 hub = pivot(model, "fan", new Vec3(0.46, 0.68, 0.0));
 		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
 		Set<String> entries = inverter.getLevel() == null ? Set.of()
 				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), PvInverterBlock.AUTHORED, facing, "entry");
@@ -115,9 +114,17 @@ public class PvInverterRenderer extends ObjRendererBase {
 			// edge of the block whatever size the cabinet is, because that is where the cable is
 			if (!groupName.startsWith("entry")) poseStack.scale(scale, scale, scale);
 
+			// Each roof fan turns about its own hub, and about the vertical.
+			//
+			// Two things there. The machine has two extract fans on the roof now rather than one on its
+			// flank, so a single hub read off every group whose name starts with pivot_fan would be the
+			// point midway between them - and the west fan would orbit the east one's axis rather than
+			// spin. And a roof fan's axis is vertical: on the flank it was XP.
 			if (groupName.startsWith("rotate_fan")) {
+				Vec3 hub = pivot(model, "fan_" + groupName.substring("rotate_fan_".length()).split("_")[0],
+						new Vec3(0.0, 1.0, 0.0));
 				poseStack.translate(hub.x, hub.y, hub.z);
-				poseStack.mulPose(Axis.XP.rotationDegrees(fanAngle));
+				poseStack.mulPose(Axis.YP.rotationDegrees(fanAngle));
 				poseStack.translate(-hub.x, -hub.y, -hub.z);
 			}
 

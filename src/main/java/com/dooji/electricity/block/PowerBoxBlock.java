@@ -20,34 +20,40 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
 	/**
-	 * The facing power_box.obj was modelled at, which is not north.
+	 * The facing power_box.obj is modelled at.
 	 *
-	 * Another inherited model facing east, and the reason this block's shape is a table of one rather than
-	 * four boxes written out. The four were each a quarter turn from where the cabinet is drawn, because
-	 * they were worked out as though the model faced north: a player collided with the side of the block
-	 * next to the box.
+	 * North now, like every model the mod generates for itself: the doors are on the north face and the
+	 * kiosk is centred in its block. The inherited model faced east and hugged the west edge, hanging a
+	 * sixteenth of a block outside it - so a kiosk placed against a wall was half inside the wall, and its
+	 * collision was four hand-written boxes each a quarter turn from where the cabinet was drawn.
 	 */
-	public static final Direction AUTHORED = Direction.EAST;
+	public static final Direction AUTHORED = Direction.NORTH;
 
 	/**
-	 * The cabinet, where it actually is.
+	 * The kiosk, where it actually is: cut from power_box.obj, part by part.
 	 *
-	 * This was a whole cube, and the box is not: cut from power_box.obj it is 3.99 pixels across, 10.23
-	 * tall and 8.16 deep, and it hangs against one side of its block rather than sitting in the middle. So
-	 * three quarters of the cube a player could not walk through was empty air.
+	 * The plinth, the body, the doors, the hood over them and the bushing on the roof, each as the box it
+	 * is drawn as - so a player walking round it collides with the cabinet and not with the air over the
+	 * plinth, and can stand on the hood's ledge because there is one.
 	 *
-	 * One box, in the model's own frame, turned onto the facing by the same arithmetic the renderer uses.
-	 * The door leaf and the bushing under the box are left out: a quarter of a pixel and a pixel and a
-	 * half, neither of which a player can touch.
+	 * In the model's own frame, turned onto the facing by the same arithmetic the renderer poses by.
+	 * Written by {@code tools/check_hitboxes.py --java}, which reads both and fails if they have drifted.
 	 */
 	private static final List<Cell> CELLS = List.of(
-			new Cell(0, 0, 0, Block.box(0.00, 0.00, 3.92, 3.99, 10.23, 12.08)));
+			new Cell(0, 0, 0, Shapes.or(Block.box(2.53, 10.94, 4.77, 13.47, 11.81, 11.23),
+					Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20),
+					Block.box(2.91, 0.88, 4.90, 13.09, 11.20, 10.85),
+					Block.box(3.44, 1.36, 4.61, 12.56, 10.72, 5.28),
+					Block.box(6.85, 12.03, 6.85, 9.15, 14.51, 9.15),
+					Block.box(7.04, 11.58, 7.04, 8.96, 14.74, 8.96),
+					Block.box(10.08, 0.00, 10.56, 11.04, 1.92, 11.52))));
 
 	public PowerBoxBlock(Properties properties) {
 		super(properties);

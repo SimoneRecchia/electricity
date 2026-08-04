@@ -2,8 +2,11 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
+import com.dooji.electricity.api.power.PvMounting;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.CableCatalog;
+import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
@@ -51,7 +55,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * follow a sun that travels east to west, so a tracker snaps to that whatever direction the player
  * was looking.
  */
-public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing the four mounting models was modelled at: the mod's own, so they face north - and the physics reads a plane's bearing off the same facing.
 	 *
@@ -73,14 +77,84 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	 */
 	public static final BooleanProperty HARNESSED = BooleanProperty.create("harnessed");
 
-	/** Ankle high: a flat table is walked over rather than round. */
-	private static final VoxelShape FLAT_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 3.0, 16.0);
-	/** A tilted rack, low edge on the ground and high edge about half a block up. */
-	private static final VoxelShape TILT_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 8.0, 16.0);
-	/** A torque tube on piers, with the rotation envelope above it. */
-	private static final VoxelShape TRACKER_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 12.0, 16.0);
-	/** A pedestal frame, which is the tallest thing in the catalogue that is not a turbine. */
-	private static final VoxelShape PEDESTAL_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 14.0, 16.0);
+	/**
+	 * The four mountings as collision, each cut from its own model.
+	 *
+	 * A box the full width of the block and a hand-picked height was wrong in both directions at once: a
+	 * ballasted table three pixels tall claimed three, when it is two and its ballast is under the frame
+	 * rather than beside it; and a rack claimed eight pixels over its whole footprint, so a player walked
+	 * into a wall of air in front of its low edge and stood on air above it.
+	 *
+	 * The two fixed mountings are cut to the model to a hundredth of a pixel, the rack's tilted plane as a
+	 * staircase of two-pixel treads that follows the slope. The two tracked ones cannot be: their plane
+	 * turns through the day, so their collision is the fixed body cut from the model plus the volume the
+	 * plane sweeps - see {@link #SWEPT_ROW} and {@link #SWEPT_FRAME}. Written by
+	 * {@code tools/check_hitboxes.py --java}.
+	 */
+	private static final List<Cell> FLAT_CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.72, 0.48, 15.52, 1.68, 15.52),
+					Block.box(0.72, 1.62, 0.48, 15.28, 2.45, 15.52),
+					Block.box(0.96, 0.00, 0.96, 15.04, 0.72, 15.04))));
+
+	private static final List<Cell> TILT_CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.89, 1.55, 15.52, 1.96, 2.73),
+					Block.box(0.48, 6.50, 13.58, 15.52, 7.57, 14.76),
+					Block.box(0.61, 1.71, 0.83, 15.39, 3.07, 2.83),
+					Block.box(0.61, 2.47, 2.83, 15.39, 4.01, 4.83),
+					Block.box(0.61, 4.41, 6.83, 15.39, 5.87, 8.83),
+					Block.box(0.61, 6.27, 10.83, 15.39, 7.81, 12.83),
+					Block.box(0.61, 7.14, 12.83, 15.39, 8.50, 14.67),
+					Block.box(0.72, 1.39, 1.04, 15.28, 2.64, 3.04),
+					Block.box(0.72, 2.25, 3.04, 15.28, 3.57, 5.04),
+					Block.box(0.72, 3.18, 5.04, 15.28, 4.50, 7.04),
+					Block.box(0.72, 4.12, 7.04, 15.28, 5.44, 9.04),
+					Block.box(0.72, 5.05, 9.04, 15.28, 6.37, 11.04),
+					Block.box(0.72, 5.98, 11.04, 15.28, 7.30, 13.04),
+					Block.box(0.72, 6.91, 13.04, 15.28, 8.06, 14.82),
+					Block.box(0.96, 3.48, 4.83, 15.04, 4.94, 6.83),
+					Block.box(0.96, 5.34, 8.83, 15.04, 6.80, 10.83),
+					Block.box(1.82, 0.00, 1.48, 14.18, 1.28, 3.48),
+					Block.box(1.82, 0.00, 13.48, 14.18, 6.77, 15.10),
+					Block.box(2.35, 0.92, 3.48, 13.65, 2.22, 5.48),
+					Block.box(2.35, 1.86, 5.48, 13.65, 3.16, 7.48),
+					Block.box(2.35, 2.80, 7.48, 13.65, 4.10, 9.48),
+					Block.box(2.35, 3.75, 9.48, 13.65, 5.04, 11.48),
+					Block.box(2.35, 4.69, 11.48, 13.65, 5.98, 13.48))));
+
+	/**
+	 * What a tracked row's plane can be anywhere in, over a day.
+	 *
+	 * A plane 0.94 of a block wide turning about a tube 0.62 up sweeps a disc of that radius, so the box
+	 * is the disc's extent in x and y and the modules' own extent along the tube. It reaches the top of
+	 * the block because the plane does, at 55 degrees and beyond.
+	 */
+	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 2.26, 0.32, 15.66, 16.00, 15.68);
+
+	/**
+	 * The same for a pedestal frame, which turns about two axes.
+	 *
+	 * The elevation axis is 0.75 up and the frame also spins in azimuth, so the swept volume is a sphere
+	 * rather than a disc - and a sphere of that radius is wider than the block, which is why this one is
+	 * the whole of the block above the frame's lowest reach.
+	 */
+	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.42, 0.00, 16.00, 16.00, 16.00);
+
+	private static final List<Cell> TRACK_CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(
+					Block.box(5.92, 0.00, 7.12, 10.08, 8.24, 8.88),
+					Block.box(6.32, 8.24, 7.15, 11.31, 11.60, 8.85),
+					SWEPT_ROW)));
+
+	private static final List<Cell> DUAL_CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(
+					Block.box(4.96, 0.00, 4.96, 11.04, 8.80, 11.04),
+					SWEPT_FRAME)));
+
+	private static final Map<PvMounting, List<Cell>> CELLS = Map.of(
+			PvMounting.FLAT, FLAT_CELLS,
+			PvMounting.FIXED_TILT, TILT_CELLS,
+			PvMounting.SINGLE_AXIS, TRACK_CELLS,
+			PvMounting.DUAL_AXIS, DUAL_CELLS);
 
 	private final PvArraySpec spec;
 
@@ -222,12 +296,29 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return switch (spec.mounting()) {
-			case FLAT -> FLAT_SHAPE;
-			case FIXED_TILT -> TILT_SHAPE;
-			case SINGLE_AXIS -> TRACKER_SHAPE;
-			case DUAL_AXIS -> PEDESTAL_SHAPE;
-		};
+		return shellShape(state);
+	}
+
+	@Override
+	public List<Cell> shellCells() {
+		return CELLS.get(spec.mounting());
+	}
+
+	/**
+	 * Which way the collision is turned.
+	 *
+	 * The same answer the renderer gives, and it has to be: a tracked row is drawn facing north whatever
+	 * its state says, because its tube has to run north-south to follow the sun, so a shape turned by the
+	 * state would stand across a row that is drawn along it.
+	 */
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return spec.tracked() ? AUTHORED : state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	/**

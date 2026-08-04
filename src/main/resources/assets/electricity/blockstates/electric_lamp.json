@@ -1,51 +1,8 @@
 {
   "multipart": [
     {
-      "when": {
-        "glow_state": "off"
-      },
       "apply": {
-        "model": "electricity:block/electric_lamp"
-      }
-    },
-    {
-      "when": {
-        "glow_state": "dim"
-      },
-      "apply": {
-        "model": "electricity:block/electric_lamp_dim"
-      }
-    },
-    {
-      "when": {
-        "glow_state": "warm"
-      },
-      "apply": {
-        "model": "electricity:block/electric_lamp_warm"
-      }
-    },
-    {
-      "when": {
-        "glow_state": "bright"
-      },
-      "apply": {
-        "model": "electricity:block/electric_lamp_bright"
-      }
-    },
-    {
-      "when": {
-        "glow_state": "overdrive"
-      },
-      "apply": {
-        "model": "electricity:block/electric_lamp_overdrive"
-      }
-    },
-    {
-      "when": {
-        "glow_state": "burnt"
-      },
-      "apply": {
-        "model": "electricity:block/electric_lamp_burnt"
+        "model": "electricity:block/glass_particle"
       }
     }
   ]

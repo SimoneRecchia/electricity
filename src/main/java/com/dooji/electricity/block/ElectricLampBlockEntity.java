@@ -280,6 +280,21 @@ public class ElectricLampBlockEntity extends BlockEntity implements IElectricPow
 		}
 
 		updateLampState();
+		// the lamp is drawn from OBJ by a global renderer rather than from a JSON cube, so it has to be
+		// in the list that renderer walks - the same as every other machine in the mod
+		ClientTracking.track(this);
+	}
+
+	@Override
+	public void setRemoved() {
+		super.setRemoved();
+		ClientTracking.untrack(this);
+	}
+
+	@Override
+	public void onChunkUnloaded() {
+		super.onChunkUnloaded();
+		ClientTracking.untrack(this);
 	}
 
 	@Nonnull @Override

@@ -39,6 +39,7 @@ taking a cubic metre of the world away for either would cost more than the ledge
 
 import collections
 import glob
+import math
 import os
 import re
 import sys
@@ -47,13 +48,24 @@ MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'mode
 BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block')
 RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
 
-# Groups that are a marker or a moving part rather than a body.
-MOVING = ('pivot_', 'rotate_')
+# Groups that are a marker, a moving part, or something that is only sometimes there.
+#
+# ``harness`` and ``entry`` are the cable a machine grows when a reel is worked into it or a run is
+# laid up against it.  They are left out for the same reason a laid run itself has no collision:
+# DcCableBlock gives a surface run none, so a stub of the same cable standing proud of a machine
+# should not be the one piece of copper in the mod a player can bump into - and it would be collision
+# where, most of the time, nothing is drawn at all.
+MOVING = ('pivot_', 'rotate_', 'harness', 'entry')
 
 # Everything below is in pixels, the sixteenths the game itself is authored in.
 # How thick a box has to be in every axis to be collision at all, in the machine's own cell and in one
 # it would have to claim.
-MIN_OWN = 1.0
+#
+# A quarter of a pixel in the machine's own cell, which is thinner than it sounds and is deliberate: a
+# ballasted table is two pixels tall in total, so a threshold of a whole pixel threw away its ballast,
+# its frame and its glass and left the machine with no collision whatever.  The same threshold had a
+# kiosk's plinth and its rain hood - both plainly visible, both under a pixel - collide with nothing.
+MIN_OWN = 0.25
 MIN_CLAIM = 2.0
 # A gap this small is a seam in the model rather than a step, and the two boxes are merged. The cabin's
 # roof sits two thousandths of a block above its body, which is a thirtieth of a pixel.
@@ -67,10 +79,34 @@ BLOCK_CLASS = {
     'power_box': 'PowerBoxBlock',
     'electric_cabin': 'ElectricCabinBlock',
     'met_station': 'MetStationBlock',
+    'electric_lamp': 'ElectricLampBlock',
     'wind_turbine': 'WindTurbineBlock',
     'pv_array': 'PvArrayBlock',
     'pv_inverter': 'PvInverterBlock',
     'pv_combiner': 'PvCombinerBlock',
+}
+
+# One block class, several models: which constant in its file holds the table cut from this one.
+#
+# Four mountings share PvArrayBlock, and a table per mounting in one file cannot be told apart by
+# looking for ``new Cell(`` - the first pass at this compared the flat table's model against all four
+# tables at once and reported everything as wrong.
+MODEL_TABLE = {
+    # the inverter declares one table and derives its two smaller sizes by scaling it, so the derived
+    # ones are built with a Cell of their own that carries no literal box - and read unscoped, that empty
+    # cell overwrites the real table and every box in it reads as missing
+    'pv_inverter': 'CELLS',
+    'pv_flat': 'FLAT_CELLS',
+    'pv_tilt': 'TILT_CELLS',
+    'pv_track': 'TRACK_CELLS',
+    'pv_dual': 'DUAL_CELLS',
+}
+
+# Machines with no facing at all, and why. Nothing about them can be turned wrongly.
+NO_FACING = {
+    'electric_lamp':
+        'a post-top luminaire is symmetric about its own column, so the block has no facing property '
+        'and nothing to declare a modelled one against',
 }
 
 # One model, several products: the directory name is not the block's name.
@@ -83,13 +119,19 @@ MODEL_BLOCK = {
     'pv_dual': 'pv_array',
 }
 
-# Machines whose collision is a volume rather than a shape, and why. Their tables are printed for
-# reference and not compared: a shape cut from where the geometry happens to be authored would be wrong
-# a second later.
+# Models whose collision is a volume rather than a shape, and why. Their tables are printed for
+# reference and not compared: a shape cut from where the geometry happens to be authored would be
+# wrong a second later.
+#
+# Keyed by model rather than by block, because two of the four mountings that share PvArrayBlock do
+# not move at all and are compared to the pixel.
 SWEPT = {
-    'pv_array':
-        'the panel tracks the sun, so its collision has to be the volume it sweeps rather than the '
-        'place it was drawn',
+    'pv_track':
+        'the panel tracks the sun about its torque tube, so its collision has to cover the volume it '
+        'sweeps rather than the place it was authored - a shape cut from the flat position would let '
+        'a player fall through the row every afternoon',
+    'pv_dual':
+        'the frame turns about two axes, so the same holds and in one more direction',
     'wind_turbine':
         'the model carries its own tower, which in the world is a stack of turbine_tower blocks with '
         'their own collision, and a hundred metres of turning rotor above it that nothing should be '
@@ -98,7 +140,7 @@ SWEPT = {
 
 
 def obj_groups(path):
-    """Every object in an OBJ with its own bounding box."""
+    """Every object in an OBJ with the polygons it is made of."""
     verts = []
     groups = collections.OrderedDict()
     current = 'none'
@@ -108,25 +150,125 @@ def obj_groups(path):
         elif line.startswith('o '):
             current = line.split(None, 1)[1].strip()
         elif line.startswith('f '):
-            box = groups.setdefault(current, [[9.0] * 3, [-9.0] * 3])
-            for index in (int(f.split('/')[0]) for f in line.split()[1:]):
-                point = verts[index - 1]
-                for axis in range(3):
-                    box[0][axis] = min(box[0][axis], point[axis])
-                    box[1][axis] = max(box[1][axis], point[axis])
+            face = [verts[int(f.split('/')[0]) - 1] for f in line.split()[1:]]
+            groups.setdefault(current, []).append(face)
 
     return groups
 
 
+def bounds(faces):
+    """The bounding box of a list of polygons."""
+    lo = [9.0] * 3
+    hi = [-9.0] * 3
+    for face in faces:
+        for point in face:
+            for axis in range(3):
+                lo[axis] = min(lo[axis], point[axis])
+                hi[axis] = max(hi[axis], point[axis])
+
+    return lo, hi
+
+
+def clipped(face, axis, low, high):
+    """One polygon cut to a slab, as the part of it between two planes.
+
+    Sutherland-Hodgman against two parallel planes.  What it is for: a tilted plane's bounding box is
+    not the plane - a rack at 25 degrees has a box seven pixels tall over its whole footprint, and
+    collision cut from that is a wall of air in front of the low edge.  Cut into slabs and clipped, the
+    same plane comes out as a staircase that follows it, which is how the game itself draws a slope.
+    """
+    for sign, limit in ((1, low), (-1, high)):
+        out = []
+        for index, point in enumerate(face):
+            nxt = face[(index + 1) % len(face)]
+            inside = sign * (point[axis] - limit) >= 0
+            inside_next = sign * (nxt[axis] - limit) >= 0
+            if inside:
+                out.append(point)
+            if inside != inside_next:
+                span = nxt[axis] - point[axis]
+                if abs(span) > 1e-9:
+                    t = (limit - point[axis]) / span
+                    out.append(tuple(point[k] + (nxt[k] - point[k]) * t for k in range(3)))
+
+        face = out
+        if not face:
+            return []
+
+    return face
+
+
+# How thick a slice is, in blocks, and how much of a step in a group's own height it takes before the
+# group is worth slicing at all.
+#
+# Two pixels.  One pixel is the grain the game's own models are authored on and would be exact, but a
+# tilted rack came out as forty-four boxes at that width and a field of them is a great many boxes for
+# the collision code to walk - and the difference between a one-pixel staircase and a two-pixel one is
+# twelve centimetres of a step nobody can feel.  A step under a fiftieth of a block is a seam rather
+# than a slope, and is not sliced at all.
+SLICE = 2.0 / 16.0
+SLOPE = 0.02
+
+
+def sliced(faces):
+    """A group as boxes: one if it fills its own bounding box, a staircase of them if it slopes.
+
+    Sliced along whichever horizontal axis it slopes in, and only if it slopes: everything in these
+    models that is axis-aligned - which is nearly all of it - comes out as the single box it always
+    was, so the tables stay short.
+    """
+    lo, hi = bounds(faces)
+    for axis in (0, 2):
+        span = hi[axis] - lo[axis]
+        if span < 3 * SLICE:
+            continue
+
+        steps = int(math.ceil(span / SLICE))
+        slabs = []
+        for step in range(steps):
+            low = lo[axis] + step * SLICE
+            high = min(hi[axis], low + SLICE)
+            pieces = [clipped(face, axis, low, high) for face in faces]
+            pieces = [piece for piece in pieces if piece]
+            if not pieces:
+                continue
+
+            slab_lo, slab_hi = bounds(pieces)
+            slab_lo[axis], slab_hi[axis] = low, high
+            slabs.append((slab_lo, slab_hi))
+
+        if len(slabs) < 3:
+            continue
+
+        # A slope is a group whose top climbs, or falls, all the way across it.  Monotone is the whole
+        # of the test, and it is what tells the two cases apart:
+        #
+        #   * a rack's plane, a brace, a pier cut to a tilt - the top moves the same way throughout,
+        #     and a single box round it is a wall of air in front of the low end
+        #   * a round shaft with a dome on it, a cylinder, a cabinet - the top goes up and comes back
+        #     down, or does not move at all, and one box is within half a pixel of the truth
+        #
+        # Without it every eighty-sided cone in the mod came out as eight boxes of staircase across its
+        # own diameter, which is a hundred and twenty boxes on a pole and no more accurate for any of it.
+        tops = [slab[1][1] for slab in slabs]
+        climbs = all(b >= a - SLOPE for a, b in zip(tops, tops[1:]))
+        falls = all(b <= a + SLOPE for a, b in zip(tops, tops[1:]))
+        if (climbs or falls) and max(tops) - min(tops) > 4 * SLOPE:
+            return slabs
+
+    return [(lo, hi)]
+
+
 def body(groups):
-    """The groups that stand still, in pixels from the block's own corner."""
+    """The groups that stand still, in pixels from the block's own corner, sloping parts sliced."""
     kept = []
-    for name, (lo, hi) in groups.items():
+    for name, faces in groups.items():
         if name.startswith(MOVING):
             continue
 
-        kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
-                     tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
+        for lo, hi in sliced(faces):
+            kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
+                         tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
 
     return kept
 
@@ -241,6 +383,23 @@ def java(cells):
     return '\n'.join(lines)
 
 
+def scoped(text, constant):
+    """Just the initialiser of one named constant, so a file with four tables can be read one at a time."""
+    if constant is None:
+        return text
+
+    match = re.search(r'%s\s*=\s*List\.of\(' % re.escape(constant), text)
+    if match is None:
+        return ''
+
+    depth, index = 1, match.end()
+    while depth and index < len(text):
+        depth += {'(': 1, ')': -1}.get(text[index], 0)
+        index += 1
+
+    return text[match.end():index - 1]
+
+
 def declared(text):
     """The cells a block's own table declares, read back out of the Java."""
     out = {}
@@ -290,15 +449,6 @@ def show(box):
 # in the mod is worked out from.
 FACING_ORDER = {'SOUTH': 0, 'WEST': 1, 'NORTH': 2, 'EAST': 3}
 
-# Machines whose parts are not a quarter turn of an authored facing, and why. Their mappings are checked
-# modulo half a turn, which is all a model symmetric about both horizontal axes can express.
-MIRRORED = {
-    'utility_pole':
-        'the pole model is mirrored rather than turned, so its renderer and its wire anchors come out '
-        'half a turn from east for east and west - which neither the geometry nor the cells can show',
-}
-
-
 def turn(authored, facing):
     """The angle the geometry is turned by to face this way, the way every renderer here works it out."""
     return ((FACING_ORDER[authored] - FACING_ORDER[facing]) % 4) * 90
@@ -338,6 +488,9 @@ def facing_faults(name, block, java):
     anchors, and the cells - so the block declares it and the others have to be reading the same thing.
     """
     faults = []
+    if name in NO_FACING:
+        return []
+
     said = authored(java)
     if said is None:
         return ['no AUTHORED on the block, so nothing reading its model knows which way it faces']
@@ -346,7 +499,7 @@ def facing_faults(name, block, java):
     renderer = os.path.join(RENDERERS, block.replace('Block', 'Renderer') + '.java')
     if os.path.exists(renderer):
         text = open(renderer).read()
-        if ('%s.AUTHORED' % block) not in text and name not in MIRRORED:
+        if ('%s.AUTHORED' % block) not in text:
             faults.append('the renderer works the authored facing out for itself rather than reading '
                           '%s.AUTHORED, so the two can drift apart' % block)
 
@@ -355,14 +508,9 @@ def facing_faults(name, block, java):
         mapping = anchor_turns(open(entity).read())
         if mapping is not None:
             implies = implied(mapping)
-            allowed = [authored_name] if name not in MIRRORED else [authored_name, None]
-            if implies not in allowed:
+            if implies != authored_name:
                 faults.append('the wire anchors are turned as though the model faced %s, and the block '
                               'says %s' % (implies or 'no facing at all', authored_name))
-            elif implies is None and any(turn(authored_name, facing) % 180 != angle % 180
-                                        for facing, angle in mapping.items()):
-                faults.append('the wire anchors are turned more than half a turn from %s, which the '
-                              'model cannot hide' % authored_name)
 
     return faults
 
@@ -395,22 +543,22 @@ def main():
             continue
 
         cells = claimed(pieces(body(obj_groups(path))))
-        java = open(os.path.join(BLOCKS, block + '.java')).read()
+        source = open(os.path.join(BLOCKS, block + '.java')).read()
         print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
             os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),
-            authored(java) or 'nowhere in particular'))
+            authored(source) or 'nowhere in particular'))
         if printing:
             print(java(cells))
 
-        if name in SWEPT:
-            print('    not compared: %s' % SWEPT[name])
+        if directory in SWEPT:
+            print('    not compared: %s' % SWEPT[directory])
             continue
 
-        for fault in facing_faults(name, block, java):
+        for fault in facing_faults(name, block, source):
             faults += 1
             print('    %s' % fault)
 
-        have = declared(java)
+        have = declared(scoped(source, MODEL_TABLE.get(directory)))
         if not have:
             outside = [cell for cell in cells if cell != (0, 0, 0)]
             if outside:

@@ -1,5 +1,6 @@
 package com.dooji.electricity.block;
 
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,12 +20,29 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class ElectricLampBlock extends Block implements EntityBlock {
+public class ElectricLampBlock extends Block implements EntityBlock, MachineShell {
 	public static final BooleanProperty LIT = BlockStateProperties.LIT;
 	public static final EnumProperty<LampState> GLOW_STATE = EnumProperty.create("glow_state", LampState.class);
-	private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 16, 16);
+	/**
+	 * The luminaire as collision, cut from electric_lamp.obj.
+	 *
+	 * It used to be the whole block, because the lamp used to *be* the whole block - a cube with a picture
+	 * of a light on all six faces. It is a post-top area light now: a base plate, a column, a glass bowl
+	 * and the head over it, and the collision is those four things where they are drawn. Written by
+	 * {@code tools/check_hitboxes.py --java}.
+	 *
+	 * A cell table rather than a plain shape only so that the checker can read it back the same way it
+	 * reads every other machine's. Nothing here turns: a post-top luminaire is symmetric about its own
+	 * column, which is why the block has no facing at all.
+	 */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(3.76, 10.98, 3.76, 12.24, 13.06, 12.24),
+					Block.box(4.08, 10.14, 4.08, 11.92, 11.07, 11.92),
+					Block.box(5.84, 0.00, 5.84, 10.16, 1.22, 10.16),
+					Block.box(6.85, 1.20, 6.85, 9.15, 10.62, 9.15))));
 
 	public ElectricLampBlock(Properties properties) {
 		super(properties.lightLevel(state -> state.getValue(GLOW_STATE).getLightLevel()).sound(SoundType.GLASS));
@@ -36,14 +54,36 @@ public class ElectricLampBlock extends Block implements EntityBlock {
 		builder.add(LIT, GLOW_STATE);
 	}
 
+	/**
+	 * Nothing is drawn from the block model.
+	 *
+	 * The lamp is an OBJ machine now, drawn by {@code ElectricLampRenderer} like the rest of them, and
+	 * its blockstate points at a model with no elements in it - which is what every other machine here
+	 * does. The model is still loaded, because that is where the break particle's texture comes from.
+	 */
 	@Override
 	public RenderShape getRenderShape(BlockState state) {
-		return RenderShape.MODEL;
+		return RenderShape.INVISIBLE;
 	}
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
+	}
+
+	@Override
+	public List<Cell> shellCells() {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return Direction.NORTH;
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return Direction.NORTH;
 	}
 
 	@Nullable @Override

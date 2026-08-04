@@ -15,11 +15,16 @@ that talk to Mekanism and answer to ComputerCraft.
 
 > [!NOTE]
 > This is a **fork** of [dooji2/electricity](https://github.com/dooji2/electricity).
-> The grid simulation, the weather model, the blocks and the art are all dooji's work.
-> What this fork adds is everything under [Integrations](#integrations): the turbine
-> now feeds other mods' energy networks, reports itself as a ComputerCraft peripheral
-> with 63 plant signals, and can be stopped and curtailed — and the placeholder solar
-> panel has become a photovoltaic plant with arrays, inverters, trackers and a met mast.
+> The grid simulation, the weather model and the blocks are dooji's work, as are the
+> turbine and the electric cabin — the two models everything else here was measured
+> against. What this fork adds is everything under [Integrations](#integrations): the
+> turbine now feeds other mods' energy networks, reports itself as a ComputerCraft
+> peripheral with 63 plant signals, and can be stopped and curtailed; the placeholder
+> solar panel has become a photovoltaic plant with arrays, inverters, trackers and a met
+> mast; and every other placeable has been redrawn to the turbine's own level of detail,
+> with its collision cut from its own geometry.
+>
+> → [The models, the textures and the hitboxes](docs/model-audit.md)
 
 ---
 

@@ -119,12 +119,10 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 		Vector3f result = new Vector3f(point);
 		var facing = getBlockState().getValue(UtilityPoleBlock.FACING);
 
-		float facingRotation = switch (facing) {
-			case EAST -> 180.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 0.0f;
-			default -> 90.0f;
-		};
+		// the same quarter turn the renderer poses the model by and the cells are turned by, from the one
+		// place that arithmetic lives - this was a copy of a table the pole kept for its mirrored model,
+		// and a copy is how the anchors came to disagree with the geometry in the first place
+		float facingRotation = ModelFacing.degrees(UtilityPoleBlock.AUTHORED, facing);
 
 		if (facingRotation != 0) {
 			float cosYaw = (float) Math.cos(Math.toRadians(facingRotation));

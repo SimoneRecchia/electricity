@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.DcCableSpec;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -62,8 +63,38 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	private static final Map<Direction, EnumProperty<RedstoneSide>> SIDES = sides();
 
-	/** A cable lying on the ground: low enough to be stepped over without noticing. */
-	private static final VoxelShape SURFACE_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 2.0, 16.0);
+	/**
+	 * A surface run's outline, cut to the pair rather than to the block.
+	 *
+	 * It was a slab the whole width of the block and two pixels tall, and the model is a pair two pixels
+	 * across and one tall: so pointing anywhere in the block picked out the cable, and the highlight box a
+	 * player saw was eight times the width of the thing they were pointing at. This is the hub, an arm for
+	 * each side that is connected, and the climb where a run goes up a wall - the same figures
+	 * {@code tools/gen_cable_models.py} writes the model from.
+	 *
+	 * A few pixels of outline is the right answer for a cable and not a compromise: the collision is still
+	 * nothing at all, so a player does not catch a boot on every metre of their own plant.
+	 */
+	private static final VoxelShape HUB = Block.box(7.0, 0.0, 7.0, 9.0, 1.0, 9.0);
+	private static final Map<Direction, VoxelShape> ARMS = Map.of(
+			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 1.0, 7.0),
+			Direction.SOUTH, Block.box(7.0, 0.0, 9.0, 9.0, 1.0, 16.0),
+			Direction.WEST, Block.box(0.0, 0.0, 7.0, 7.0, 1.0, 9.0),
+			Direction.EAST, Block.box(9.0, 0.0, 7.0, 16.0, 1.0, 9.0));
+	private static final Map<Direction, VoxelShape> CLIMBS = Map.of(
+			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 16.0, 1.0),
+			Direction.SOUTH, Block.box(7.0, 0.0, 15.0, 9.0, 16.0, 16.0),
+			Direction.WEST, Block.box(0.0, 0.0, 7.0, 1.0, 16.0, 9.0),
+			Direction.EAST, Block.box(15.0, 0.0, 7.0, 16.0, 16.0, 9.0));
+
+	/**
+	 * One shape per state, worked out once when the block is made.
+	 *
+	 * A hundred and sixty-two states, which is four sides at three values each and buried or not - few
+	 * enough to hold and far cheaper than unioning five boxes on every collision test a player makes
+	 * against a run. This is what {@code RedStoneWireBlock} does with dust, for the same reason.
+	 */
+	private final Map<BlockState, VoxelShape> shapes = new HashMap<>();
 
 	private final DcCableSpec spec;
 
@@ -76,6 +107,33 @@ public class DcCableBlock extends Block implements DcTerminal {
 				.setValue(SOUTH, RedstoneSide.NONE)
 				.setValue(WEST, RedstoneSide.NONE)
 				.setValue(BURIED, false));
+
+		for (BlockState state : stateDefinition.getPossibleStates()) {
+			shapes.put(state, shapeOf(state));
+		}
+	}
+
+	/**
+	 * The run as it is drawn in this state: the hub, the arms it has, and any climb.
+	 *
+	 * A buried run is the whole block because it has taken a block of ground out of the world and the
+	 * trench model really does fill the cell.
+	 */
+	private static VoxelShape shapeOf(BlockState state) {
+		if (state.getValue(BURIED)) return Shapes.block();
+
+		VoxelShape shape = HUB;
+		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
+			RedstoneSide connection = state.getValue(side.getValue());
+			if (connection == RedstoneSide.NONE) continue;
+
+			shape = Shapes.or(shape, ARMS.get(side.getKey()));
+			if (connection == RedstoneSide.UP) {
+				shape = Shapes.or(shape, CLIMBS.get(side.getKey()));
+			}
+		}
+
+		return shape;
 	}
 
 	private static Map<Direction, EnumProperty<RedstoneSide>> sides() {
@@ -100,7 +158,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return state.getValue(BURIED) ? Shapes.block() : SURFACE_SHAPE;
+		return shapes.getOrDefault(state, HUB);
 	}
 
 	/**

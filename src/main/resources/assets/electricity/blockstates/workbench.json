@@ -1,5 +1,19 @@
 {
   "variants": {
-    "": { "model": "electricity:block/workbench" }
+    "facing=north": {
+      "model": "electricity:block/workbench"
+    },
+    "facing=east": {
+      "model": "electricity:block/workbench",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "electricity:block/workbench",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "electricity:block/workbench",
+      "y": 270
+    }
   }
 }
