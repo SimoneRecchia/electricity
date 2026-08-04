@@ -139,8 +139,14 @@ those two already meet corner to corner.
 The one asymmetry left is the plug on a tracked row, and it is placement that forces it. A tracker's tube
 is turned north-south whichever way the player was facing, so half the rows in a field are chained the
 other way round: a plug only ever at one end would be at the wrong end of half of them. So both ends have
-one, an uncabled row next to a cabled one shows the plug at that end, and a cabled row — whose run already
+one, an uncabled row fed at one end shows the plug at that end, and a cabled row — whose run already
 reaches both boundaries — shows neither.
+
+The plug brings the **tail** in to the middle of the block with it, which is where the row's own terminals
+are. Without it the plug was a connector lying in the sand half a block from the machine it belongs to,
+and it read as one. It is part of the plug's own group rather than a group of its own, so it appears and
+goes with it and needs no rule; and its far end finishes inside the pier or the pedestal, so what you see
+is a cable going into the machine rather than a cable stopping.
 
 An **empty hand** on the box throws its load-break switch. That takes the group off the cabinet and
 sends the arrays behind it to standby, which is what isolating a combiner does — and note the panel's

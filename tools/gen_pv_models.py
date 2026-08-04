@@ -656,8 +656,13 @@ def row_harness(mesh):
     a loop of slack is a knot of cable sitting where the row's one uncluttered span is.  The run alone.
 
     A plug at each end, and only one of them is ever drawn: whether the row is cabled decides which.  A
-    cabled row runs from boundary to boundary and needs no plug; an uncabled row next to a cabled one shows
-    the plug at that end and nothing more, which is the piece that makes the pair read as joined.
+    cabled row runs from boundary to boundary and needs no plug; an uncabled row fed at one end shows the
+    plug at that end, which is the piece that makes the pair read as joined.
+
+    The plug carries the tail in to the middle of the block with it, and that is not decoration: on its own
+    the plug is a connector lying in the sand half a block from the machine it belongs to, and it read as
+    exactly that.  The tail is where the arriving pair goes - in to the row's own terminals - and it is part
+    of the plug's group rather than its own so that it appears and goes with it, no rule of its own.
 
     The one place the row's own pair is drawn at a *laid* run's full two pixels rather than the one a
     panel's leads get, and being collinear is the reason: a laid run continues straight into this one, so
@@ -667,7 +672,10 @@ def row_harness(mesh):
     """
     lead(mesh, 'harness', (-LAID / 2, 0.0, -0.50), (LAID / 2, LEAD, 0.50))
     for end, side in ((-1, 'north'), (1, 'south')):
-        row_socket(mesh, -LAID / 2, 0.0, name='harness_plug_%s' % side, end=end, width=LAID)
+        name = 'harness_plug_%s' % side
+        row_socket(mesh, -LAID / 2, 0.0, name=name, end=end, width=LAID)
+        tail = (-0.44, 0.0) if end < 0 else (0.0, 0.44)
+        lead(mesh, name, (-LAID / 2, 0.0, tail[0]), (LAID / 2, LEAD, tail[1]))
 
 
 # ------------------------------------------------------ dual-axis pedestal
