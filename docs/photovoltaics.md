@@ -87,21 +87,25 @@ string. A **rack** and a **tracked row** have ground underneath to cross, so the
 rack's along its side, the tracked row's down the middle, since its flanks are under modules that turn
 through sixty degrees.
 
-On a table the leads are **let into the glass**, not laid on it: the modules stop a pixel short of the
-block's edge and the pair lies in that channel with its own top face level with the cells — which is where
-a table's leads are in the first place, clipped into the frame under the module lip. A **rack**'s go on the
-same line, out at the edge, because a third of the way in is where its legs are.
+Every one of them lies **on the ground**, at the block's edge. That is not a detail: a lead has to meet the
+next row's socket and the run laid between them, and all three are on the ground, so a lead anywhere else
+ends in mid-air. A table's sat up at the glass line for a while and read as exactly that — a cable stopping
+half a metre above the sand, pointing at the panel next door.
 
 A **tracked row** carries the run and nothing else. Real trackers have more than that — a drag loop for the
 sixty degrees of roll, a service coil round an azimuth column — and at a block to ten metres both read as a
 knot of cable sitting in the one span the row keeps clear. Its run goes boundary to boundary instead, and
 because that is the block's own axis, a laid run meets it head on with nothing to turn.
 
-Everything else has to turn, and the row draws the turn: a run of cable arrives down the **middle** of the
-block and a fixed row's leads are out at its **edge**, so where copper has been laid up to a table or a
-rack it runs along the boundary to the corner the leads are on, and steps up onto the glass if that is
-where they are. Only where copper has actually been laid — a row fed by the row next door has nothing to
-turn, since the two already meet edge to edge.
+Everything else has to turn, and the row draws the turn: what arrives comes down the **middle** of the
+block and a fixed row's leads are out at its **edge**, so the table or the rack runs a length of cable along
+the boundary from the middle to the corner its leads are on.
+
+Two things arrive down the middle. Laid copper, and **a tracked row**, whose own run goes down the middle of
+its block and whose plug sits there too — so a table or a rack next to a tracker needs the same turn as one
+next to a cable, and without it showed a lead pointing at half a block of nothing. Only on the two faces a
+tube actually runs to, since a tracker's is forced north-south. A fixed row next door needs no turn at all:
+those two already meet corner to corner.
 
 The one asymmetry left is the plug on a tracked row, and it is placement that forces it. A tracker's tube
 is turned north-south whichever way the player was facing, so half the rows in a field are chained the

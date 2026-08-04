@@ -132,15 +132,15 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * What is at each end of the row's own axis.
 	 *
 	 * {@code fed} is anything at all - the row alongside with its leads in, or copper laid up to that
-	 * edge. {@code cable} is only the copper, because the two want different things drawn: a row next
-	 * door meets this one edge to edge and needs a plug, while a run of cable arrives down the middle of
-	 * the block and needs the turn out to the edge the leads are on.
+	 * edge. {@code mid} is narrower: whatever is there brings its cable to the *middle* of the edge
+	 * rather than to the corner, and so this row has to grow the turn out to the corner its own leads
+	 * are on. The two want different things drawn, which is why they are counted apart.
 	 *
 	 * North and south are the model's own ends, not the world's. The model is authored with its input at
 	 * the north end and the base rotation maps that onto the block's facing, so north here means the
 	 * facing and south means the way the leads leave.
 	 */
-	private record Ends(boolean fedNorth, boolean fedSouth, boolean cableNorth, boolean cableSouth) {
+	private record Ends(boolean fedNorth, boolean fedSouth, boolean midNorth, boolean midSouth) {
 	}
 
 	private static Ends ends(PvArrayBlockEntity array) {
@@ -149,8 +149,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		Direction north = drawnFacing(array.getBlockState());
 		Direction south = north.getOpposite();
 		return new Ends(fedFrom(array, north), fedFrom(array, south),
-				cableArrives(array.getLevel(), array.getBlockPos(), north),
-				cableArrives(array.getLevel(), array.getBlockPos(), south));
+				midRun(array, north), midRun(array, south));
 	}
 
 	private static boolean fedFrom(PvArrayBlockEntity array, Direction direction) {
@@ -158,6 +157,32 @@ public class PvArrayRenderer extends ObjRendererBase {
 		if (PvArrayBlock.harnessed(array.getLevel().getBlockState(beside))) return true;
 
 		return cableArrives(array.getLevel(), array.getBlockPos(), direction);
+	}
+
+	/**
+	 * Whether whatever is at this edge meets it in the middle rather than at the corner.
+	 *
+	 * Laid copper does, because a run lies down the middle of its block. So does a tracked row, and for
+	 * the same reason: a tracker's own harness goes the whole length of its block down the middle, and its
+	 * plug sits there too, so it reaches this boundary half a block from the corner a fixed row's leads
+	 * are on. Left as only the copper, a table or a rack next to a tracker showed a cable pointing at half
+	 * a block of nothing - the same fault a laid run had before it grew the turn, and the same turn fixes
+	 * it.
+	 *
+	 * Only on the two faces a tracker's tube actually runs to. Its tube is forced north-south, so its
+	 * cable never reaches its east or west side, and a turn out to a face with nothing behind it would be
+	 * this fault over again pointing the other way.
+	 */
+	private static boolean midRun(PvArrayBlockEntity array, Direction direction) {
+		if (cableArrives(array.getLevel(), array.getBlockPos(), direction)) return true;
+
+		BlockState beside = array.getLevel().getBlockState(array.getBlockPos().relative(direction));
+		return tracked(beside) && drawnFacing(beside).getAxis() == direction.getAxis();
+	}
+
+	/** Whether a block is an array whose harness runs down the middle of it rather than along an edge. */
+	private static boolean tracked(BlockState state) {
+		return state.getBlock() instanceof PvArrayBlock array && array.spec().tracked();
 	}
 
 	/**
@@ -178,16 +203,17 @@ public class PvArrayRenderer extends ObjRendererBase {
 	 * in a field are chained the other way round, and a plug only ever at the north end is at the wrong end
 	 * of half of them.
 	 *
-	 * The entries are drawn for laid copper only. A row that is fed by the row next door has nothing to
-	 * turn: the two meet edge to edge already.
+	 * The entries are drawn for whatever meets this row in the middle of an edge - laid copper, or a
+	 * tracked row, whose harness runs down the middle of its own block. A fixed row next door needs no
+	 * turn: the two meet corner to corner already.
 	 */
 	private static boolean drawn(String groupName, boolean harnessed, Ends ends) {
 		if (!isHarness(groupName)) return true;
 		if (groupName.startsWith("harness_plug_north")) return !harnessed && ends.fedNorth();
 		if (groupName.startsWith("harness_plug_south")) return !harnessed && ends.fedSouth();
 		if (groupName.startsWith("harness_input")) return ends.fedNorth();
-		if (groupName.startsWith("harness_entry_north")) return harnessed && ends.cableNorth();
-		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.cableSouth();
+		if (groupName.startsWith("harness_entry_north")) return harnessed && ends.midNorth();
+		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.midSouth();
 
 		return harnessed;
 	}
@@ -281,13 +307,6 @@ public class PvArrayRenderer extends ObjRendererBase {
 	}
 
 	/**
-	 * How far to turn the model for a given facing.
-	 *
-	 * The models are authored tipping towards north, because that is the default facing and because
-	 * {@link PvArrayBlock#planeAzimuthDeg} reads the plane's bearing off the same facing - so north
-	 * needs no rotation and the rest follow round.
-	 */
-	/**
 	 * Which way the model is turned before the tracker's own rotation is applied.
 	 *
 	 * North for anything tracked, whatever the block state says, because a tracker's tube runs
@@ -303,6 +322,13 @@ public class PvArrayRenderer extends ObjRendererBase {
 		return state.getValue(PvArrayBlock.FACING);
 	}
 
+	/**
+	 * How far to turn the model for a given facing.
+	 *
+	 * The models are authored tipping towards north, because that is the default facing and because
+	 * {@link PvArrayBlock#planeAzimuthDeg} reads the plane's bearing off the same facing - so north
+	 * needs no rotation and the rest follow round.
+	 */
 	private static float rotationForFacing(Direction facing) {
 		return rotationFrom(Direction.NORTH, facing);
 	}
