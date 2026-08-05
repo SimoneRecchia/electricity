@@ -108,6 +108,17 @@ Every model, texture, recipe and blockstate in this mod is written by a script i
 the output is a change that the next regeneration silently discards. The generators are also where the
 reasoning lives — read the module docstring before changing figures.
 
+**One file, one generator.** Two tools writing the same path is the worst kind of bug here: the one that
+runs last wins, and the output looks like a deliberate choice. `gen_pv_textures.py` held old
+low-resolution copies of twenty block textures and ran second, so every regeneration silently put them
+back — a 1024-pixel laminate became a 256-pixel one and nothing could tell you which tool had done it.
+`check_generated_assets.py` now fails the build on it.
+
+**A figure belongs to one file too.** `check_pv_clearance.py` kept its own copy of the torque tube's
+height; the tube moved and the checker went on measuring the old axis, so it reported a clash that was
+not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
+the renderer does.
+
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
 python3 tools/gen_pv_textures.py        # item sprites and panel layouts
@@ -127,7 +138,8 @@ python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--jav
 ```bash
 python3 tools/check_hitboxes.py         # "the models and the tables agree, to a hundredth of a pixel"
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
-python3 tools/check_pv_clearance.py     # "no clash possible at any angle"
+python3 tools/check_generated_assets.py # "one generator a file, every file read, nothing under resolution"
+python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches
 python3 tools/check_gui_fits.py         # "0 problems"
 python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
 python3 tools/gen_conductor_models.py   # the same, per conductor, and the shapes match the block

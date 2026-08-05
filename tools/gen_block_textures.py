@@ -18,9 +18,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from texlib import (Canvas, Field, LIGHT, bevel, brushed, concrete, cross_hatch, dome, galvanised,
-                    grime, groove, hash01, hex_head, louvre, mesh_screen, mix, mul, plate_label,
+                    grime, groove, hash01, hex_head, louvre, mesh_screen, mix, plate_label,
                     polygon, porcelain, powder, rubber, rust, screw, shade, streak, stretched,
-                    warning_triangle, wood)
+                    warning_triangle)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures', 'block')
 
@@ -607,19 +607,13 @@ def dc_core():
     size = 128
     c = Canvas(size, size)
 
-    # The bright side is u = 0, which is the tube's own 'up': modellib carries one reference vector
-    lit_at = 0.0
     # one profile round the tube, then written down every row: the die marks are picked from a noise
     # field sampled along u only, so they are lines along the cable rather than rings round it
     marks = stretched(size, along=size * 3.0, across=size / 26.0, octaves=2, salt=281)
     profile = []
     for i in range(size):
-        t = i / float(size)                # a whole turn, so t and t + 1 are the same place
-        angle = 2.0 * math.pi * (t - lit_at)
-        # the unlit side stays above nothing, so the tube keeps its form in shadow rather than becoming
-        lit = max(0.0, math.cos(angle))
-        tone = -8 + lit * lit * 44
-        gloss = lit ** 20 * 0.50
+        # _turned is where the gradient lives, shared with the fittings moulded onto this cable
+        tone, gloss = _turned((i + 0.5) / size, matt=False)
         # the sheath's own grain, sampled across the turn so it comes out as fine longitudinal lines
         grain = marks.signed(0.0, i) * 9 + hash01(i, 0, 277) * 4 - 2
         profile.append(mix(shade(JACKET, tone + grain), (196, 204, 214, 255), gloss))
@@ -646,49 +640,109 @@ def dc_cleat():
     return c
 
 
+# A knurl is not a stripe: a flute tilts the surface, so it takes the light the tilt earns it and a flute
+# on the shaded side stays shaded.  The figure is the tilt in radians, added to the cylinder's own angle.
+def _flute(u, count, tilt):
+    return math.sin(2.0 * math.pi * ((u * count) % 1.0)) * tilt
+
+
+def _turned(u, count=0, tilt=0.0, matt=True):
+    """A point round a turned part: the tone and the sheen its own angle to the light earns.
+
+    Same construction as dc_core, and that is the point - shade_quads is off on every cable model, so a
+    tile like this is the only lighting a fitting gets, and a plug lit on a different side from the cable
+    it is moulded onto reads as two objects rather than one.  u zero is the top, which is where
+    modellib.mc4 phases each segment and where tube carries its reference vector.
+    """
+    lit = max(0.0, math.cos(2.0 * math.pi * u + _flute(u, count, tilt)))
+    if matt:
+        # Polyamide against the jacket's polyolefin: a weaker gradient and a broad sheen instead of a
+        return -6 + lit * lit * 38, lit ** 5 * 0.13
+    return -8 + lit * lit * 44, lit ** 20 * 0.50
+
+
 def _connector(positive):
-    """An MC4 plug, drawn as a strip along its own length: the plug every string cable ends in."""
-    size = 128
+    """An MC4 plug as a strip along its own length: gland nut, body, coupling ring, nose.
+
+    The v bands are modellib.MC4's own - move one and move both.  Nothing here is a picture of a feature:
+    the knurl and the grip are tilts fed through _turned, so they are lit rather than painted.
+    """
+    # 256 rather than the 128 CLAUDE.md gives a connector: sixteen flutes round an eleven-pixel nut need
+    # the samples, and at 128 each one got eight columns and came out as a stripe.
+    size = 256
     c = Canvas(size, size)
-    rubber(c, CONNECTOR_BODY, salt=293, sheen=22)
 
-    def band(v0, v1):
-        return size * v0, size * v1
+    # (v0, v1, base, flutes, tilt) - the bands in MC4's order, and how deep their grip is cut
+    bands = (
+        (0.000, 0.118, None, 0, 0.00),                                  # the strain relief
+        (0.118, 0.299, shade(CONNECTOR_BODY, 5), 16, 0.72),             # the cable gland nut
+        (0.299, 0.625, CONNECTOR_BODY, 0, 0.00),                        # the body
+        (0.625, 0.889, shade(CONNECTOR_BODY, 8), 8, 0.80),              # the coupling ring
+        (0.889, 1.000, shade(CONNECTOR_BODY, -12), 0, 0.00),            # the nose
+    )
+    # the moulding's own grain, along the part rather than round it - the same reason as dc_core's
+    grain = stretched(size, along=size * 3.0, across=size / 22.0, octaves=2, salt=293)
 
-    # the collar
-    y0, y1 = band(0.0, 0.12)
-    collar = CONNECTOR_RED if positive else shade(CONNECTOR_BODY, -16)
-    c.aa_rect(0, y0, size, y1, collar)
-    c.aa_rect(0, y0, size, y0 + (y1 - y0) * 0.30, shade(collar, 26), alpha=0.8)
-    c.aa_rect(0, y1 - (y1 - y0) * 0.18, size, y1, shade(collar, -30))
+    for j in range(size):
+        v = (j + 0.5) / size
+        v0, v1, base, count, tilt = next(b for b in bands if b[0] <= v <= b[1])
+        across = (v - v0) / max(v1 - v0, 1e-6)
+        for i in range(size):
+            u = (i + 0.5) / size
+            tone, sheen = _turned(u, count, tilt)
+            if base is None:
+                # the jacket becoming the shell: the moulding grips the sheath, it is not butted to it
+                colour = mix(JACKET, CONNECTOR_BODY, min(1.0, across * 1.6))
+                # The polarity, as a ring at the gland: 2.5 mm of it, which is what a coding ring
+                # measures, and the only thing that tells a player which pole a black plug is.  Over the
+                # whole band it read as a red flange rather than a marking.
+                if positive and across < 0.55:
+                    colour = CONNECTOR_RED
+            else:
+                colour = base
+            tone += grain.signed(0.0, i) * 7
+            colour = mix(shade(colour, tone), (208, 214, 222, 255), sheen)
+            c.set(i, j, colour)
 
-    # the knurled nut: axial ribs, sixteen of them, tiling in x so the seam does not show
-    y0, y1 = band(0.12, 0.44)
-    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 6))
-    for i in range(16):
-        x = size * i / 16.0
-        c.aa_rect(x, y0, x + size / 16.0 * 0.55, y1, shade(CONNECTOR_BODY, 30))
-        c.aa_rect(x + size / 16.0 * 0.55, y0, x + size / 16.0, y1, shade(CONNECTOR_BODY, -26))
-    # the shoulder off the nut
-    c.aa_rect(0, y1 - size * 0.018, size, y1, shade(CONNECTOR_BODY, -38))
-
-    # the barrel
-    y0, y1 = band(0.44, 0.90)
-    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 2))
-    c.aa_rect(0, y0, size, y0 + size * 0.016, shade(CONNECTOR_BODY, 22))
-    # the latch window: a fifth of the way round rather than four tenths, which read as a hole punched
-    # through the plug rather than as the window the locking clip shows through
-    c.aa_rect(size * 0.40, y0 + (y1 - y0) * 0.24, size * 0.60, y0 + (y1 - y0) * 0.58,
-              shade(CONNECTOR_BODY, -30))
-    c.aa_rect(size * 0.43, y0 + (y1 - y0) * 0.29, size * 0.57, y0 + (y1 - y0) * 0.44,
-              shade(CONNECTOR_BODY, 34))
-
-    # the nose
-    y0, y1 = band(0.90, 1.0)
-    c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, -14))
-    c.aa_rect(0, y0, size, y0 + size * 0.014, shade(CONNECTOR_BODY, 18))
+    # the shoulder at every step in the profile: what tells a player the plug has steps at all, since
+    # shade_quads cannot draw the silhouette's own shadow
+    for v0, _, _, _, _ in bands[1:]:
+        c.aa_rect(0, size * v0 - size * 0.010, size, size * v0 + size * 0.006,
+                  (0, 0, 0, 255), alpha=0.42)
+    # and the mould's parting line, down the two sides where the tool splits
+    for u in (0.25, 0.75):
+        c.aa_rect(size * u - size * 0.006, size * 0.118, size * u + size * 0.006, size,
+                  (0, 0, 0, 255), alpha=0.30)
 
     grime(c, salt=307, amount=0.10, colour=(70, 66, 60, 255))
+    return c
+
+
+def dc_gland():
+    """An M16 cable gland, as a strip from the box wall out: the hex body, then the compression nut.
+
+    A quarter of the strip is the hex and the rest the nut, which is gen_cable_models.gland's own split.
+    """
+    size = 256
+    c = Canvas(size, size)
+    split = 0.25
+
+    for j in range(size):
+        v = (j + 0.5) / size
+        nut = v > split
+        for i in range(size):
+            u = (i + 0.5) / size
+            # the hex takes six facets, so its light is stepped rather than swept, and a flat sits on top
+            tone, sheen = _turned(u if nut else (math.floor(u * 6.0) + 0.5) / 6.0,
+                                  20 if nut else 0, 0.62)
+            colour = shade(CONNECTOR_BODY, tone + (4 if nut else -6))
+            c.set(i, j, mix(colour, (204, 210, 218, 255), sheen))
+
+    # the shoulder off the hex, and the sealing cone the cable is squeezed by at the tip
+    c.aa_rect(0, size * split - size * 0.014, size, size * split + size * 0.008, (0, 0, 0, 255),
+              alpha=0.45)
+    c.aa_rect(0, size * 0.86, size, size, (0, 0, 0, 255), alpha=0.22)
+    grime(c, salt=311, amount=0.16, colour=(66, 62, 56, 255))
     return c
 
 
@@ -750,22 +804,6 @@ def _pair(c, y0, y1, armoured=False, salt=271):
             x = size * (0.06 + i * 0.16)
             c.aa_rect(x, y0, x + size * 0.055, y1, (142, 146, 152, 255), alpha=0.85)
             c.aa_rect(x, y0, x + size * 0.018, y1, (188, 192, 198, 255), alpha=0.7)
-
-
-def dc_harness():
-    """The pair as an OBJ face wears it: filling the tile, since a face maps a whole texture."""
-    size = 256
-    c = Canvas(size, size)
-    _pair(c, 0, size)
-    return c
-
-
-def dc_jacket():
-    """The flanks and underside of a run: sheathing"""
-    size = 256
-    c = Canvas(size, size)
-    rubber(c, (28, 29, 33, 255), salt=277, sheen=14)
-    return c
 
 
 def _line_tile(armoured=False):
@@ -996,15 +1034,6 @@ def box_plinth():
         c.aa_rect(0, y, size, y + size * 0.012, (0, 0, 0, 255), alpha=0.20)
         c.aa_rect(0, y + size * 0.012, size, y + size * 0.024, (255, 255, 255, 255), alpha=0.12)
     grime(c, salt=431, amount=0.34, colour=(70, 66, 58, 255))
-    return c
-
-
-def warning():
-    """The high-voltage sign as its own decal, on transparent ground."""
-    size = 512
-    c = Canvas(size, size)
-    warning_triangle(c, size * 0.5, size * 0.46, size * 0.86)
-    grime(c, salt=433, amount=0.14, colour=(96, 90, 70, 255))
     return c
 
 
@@ -1316,10 +1345,9 @@ TEXTURES = {
     'dc_cleat': dc_cleat,
     'dc_connector_plus': dc_connector_plus,
     'dc_connector_minus': dc_connector_minus,
+    'dc_gland': dc_gland,
     'dc_jbox': dc_jbox,
     'dc_jbox_side': dc_jbox_side,
-    'dc_harness': dc_harness,
-    'dc_jacket': dc_jacket,
     'dc_trunk_line': dc_trunk_line,
     'dc_trench': dc_trench,
     'pole_concrete': pole_concrete,
@@ -1329,7 +1357,6 @@ TEXTURES = {
     'box_leaf': lambda: box_door(plain=True),
     'box_sheet': box_sheet,
     'box_plinth': box_plinth,
-    'warning': warning,
     'tower_steel': tower_steel,
     'tower_plate': tower_plate,
     'tx_tank': tx_tank,

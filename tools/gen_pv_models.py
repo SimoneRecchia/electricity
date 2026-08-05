@@ -18,9 +18,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, ROUND, Mesh, angle, arc, bolt, box, channel, clad_box, cylinder,
-                      eyebolt, hemisphere, ibeam, pin_insulator, pivot, rotate, strut, tube,
-                      write_mtl)
+from modellib import (FITTING, MC4_RADIUS, MC4_SPREAD, ROUND, Mesh, angle, arc, bolt, box, channel,
+                      clad_box, cylinder, eyebolt, hemisphere, ibeam, mc4, pin_insulator, pivot,
+                      rotate, strut, tube, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -87,12 +87,13 @@ EDGE = 0.50 - LEAD
 CORE_RADIUS = 0.65 / 16.0
 CORE_OFFSET = 1.05 / 16.0
 CORE_Y = CORE_RADIUS
-# The four segments of an MC4, as (length, radius, v0, v1) - the same table, and the same texture bands.
-MC4 = ((0.80 / 16.0, 0.80 / 16.0, 0.00, 0.12),
-       (1.05 / 16.0, 0.85 / 16.0, 0.12, 0.44),
-       (2.25 / 16.0, 0.95 / 16.0, 0.44, 0.90),
-       (0.70 / 16.0, 0.62 / 16.0, 0.90, 1.00))
-MC4_Y = max(radius for _, radius, _, _ in MC4)
+# The plug's own profile is modellib.MC4, shared with gen_cable_models: a plug lies on its fattest part,
+# and a pair of them splays to MC4_SPREAD because two coupling rings will not sit at the cable's spacing.
+MC4_Y = MC4_RADIUS / 16.0
+MC4_LANE = MC4_SPREAD / 16.0
+# How far back from the edge the pair leaves its own lane to climb onto the plugs.  A row's lead has to
+# reach this far or the rise starts on nothing - see flat_table.
+SOCKET_RISE = 0.34
 # How far short of the middle a machine's stub stops
 UNDER = 0.20
 
@@ -112,25 +113,29 @@ def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADI
         tube(mesh, faces, path, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
 
 
-def tail_rise(z_from, z_to):
-    """A pair's last stretch before a plug, lifting from the cable's axis onto the plug's."""
-    step = 0.9 / 16.0 * (1.0 if z_to > z_from else -1.0)
-    return [(0.0, CORE_Y, z_from), (0.0, MC4_Y, z_from + step), (0.0, MC4_Y, z_to)]
+def tail_rise(z_from, z_to, base=0.0):
+    """A core's last stretch before its plug: out onto the plug's lane and up onto its axis.
+
+    One path a lane, so it returns a pair.  It runs 0.35 px into the plug, where its own end cap is
+    buried - level with the plug's first face the two discs are coplanar and flicker.
+    """
+    step = 1.6 / 16.0 * (1.0 if z_to > z_from else -1.0)
+    bury = 0.35 / 16.0 * (1.0 if z_to > z_from else -1.0)
+    return [[(lane * CORE_OFFSET, base + CORE_Y, z_from),
+             (lane * CORE_OFFSET, base + CORE_Y, z_to - step),
+             (lane * MC4_LANE, base + MC4_Y, z_to - step * 0.28),
+             (lane * MC4_LANE, base + MC4_Y, z_to + bury)] for lane in (-1.0, 1.0)]
 
 
-def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, lanes=CORE_OFFSET, at_x=0.0):
-    """Two MC4 plugs on the end of a pair, red collar on the positive pole."""
+def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, at_x=0.0):
+    """Two MC4 plugs on the end of a pair, the positive one carrying the red ring and the pin."""
     y = MC4_Y if y is None else y
     axis = 'z' if turn % 180 == 0 else 'x'
-    for index, lane in enumerate((at_x - lanes, at_x + lanes)):
+    for index, lane in enumerate((at_x - MC4_LANE, at_x + MC4_LANE)):
         faces = mesh.faces(name, 'plug_plus' if index == 0 else 'plug_minus')
-        cursor = at_z
-        for step, (length, radius, v0, v1) in enumerate(MC4):
-            low, high = sorted((cursor, cursor + into * length))
-            cylinder(mesh, faces, spin_y((lane, y, (low + high) / 2.0), turn), axis, radius,
-                     (high - low) / 2.0, sides=FITTING, uv_scale=1.0, uv=(0.0, v0, 1.0, v1),
-                     caps=faces, cap_ends=(1,) if step == len(MC4) - 1 else ())
-            cursor += into * length
+        # flip_v because the mod's own renderer does 1 - v, so the bands arrive tail first without it
+        mc4(mesh, faces, spin_y((lane, y, at_z), turn), axis, unit=1.0 / 16.0,
+            into=1 if into > 0 else -1, flip_v=True, pin=index == 0)
 
 
 def stubs(mesh, name='stub'):
@@ -155,10 +160,16 @@ def row_lead(mesh, x0, height, start=-0.44):
 
 def row_socket(mesh, x0, height, name='harness_input', end=-1):
     """Where the row behind plugs in: a pair of MC4s on the edge a row is wired on."""
-    # The plugs and nothing else: the lead is already there
-    # second tube end on the same plane as the lead's own.
-    mc4_pair(mesh, name, -0.44 if end < 0 else 0.44, y=height + CORE_Y,
-             into=-1.0 if end < 0 else 1.0, lanes=CORE_OFFSET, at_x=x0 - CORE_OFFSET)
+    # The rise onto the plug's own axis and the plugs themselves: row_lead brings the pair up to here
+    edge = -0.44 if end < 0 else 0.44
+    faces = mesh.faces(name, 'core')
+    # The rise starts *inside* the block and runs out to the edge: the other way round it climbs backwards
+    # through the plug it is meant to feed.
+    for path in tail_rise(edge + (SOCKET_RISE if end < 0 else -SOCKET_RISE), edge, base=height):
+        tube(mesh, faces, [(x0 - CORE_OFFSET + x, y, z) for x, y, z in path], CORE_RADIUS,
+             sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
+    mc4_pair(mesh, name, edge, y=height + MC4_Y, into=-1.0 if end < 0 else 1.0,
+             at_x=x0 - CORE_OFFSET)
 
 
 def row_entry(mesh, x0, height, end=-1):
@@ -181,7 +192,10 @@ def row_harness(mesh):
     for end, side in ((-1, 'north'), (1, 'south')):
         name = 'harness_plug_%s' % side
         edge = -0.44 if end < 0 else 0.44
-        cable_pair(mesh, name, tail_rise(0.0, edge))
+        faces = mesh.faces(name, 'core')
+        for path in tail_rise(0.0, edge):
+            tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0,
+                 caps=faces)
         mc4_pair(mesh, name, edge, into=-1.0 if end < 0 else 1.0)
 
 
@@ -224,8 +238,9 @@ def flat_table():
         for x in (-0.455, 0.435):
             box(mesh, clamps, (x, 0.101, z), (x + 0.02, top + 0.004, z + 0.03), uv_scale=0.12)
 
-    # The harness: a short tail out of the corner and a socket on the far edge, and that is all.
-    row_lead(mesh, EDGE, 0.0, start=0.38)
+    # The harness: the lead reaches back as far as the socket's rise, so the pair is continuous from the
+    # plugs to the block's south edge, and no further - the ballast holds the corners.
+    row_lead(mesh, EDGE, 0.0, start=-0.44 + SOCKET_RISE)
     row_socket(mesh, EDGE, 0.0)
     for end in (-1, 1):
         row_entry(mesh, EDGE, 0.0, end=end)
@@ -325,7 +340,10 @@ DRIVE_BAY = 0.055
 def single_axis():
     """A 1P horizontal tracker: one module in portrait across a torque tube, on driven piers."""
     mesh = Mesh()
-    axis_y = 0.62
+    # 1.70 m at this model's own scale, where MODULE_LONG stands for 2.35 m.  At 0.62 the module's low
+    # corner swept to 0.39 m off the ground - under the height of the harness lying beside it, which is
+    # what check_pv_clearance caught.  Real 1P rows run 1.5 to 2.0 m and keep half a metre of clearance.
+    axis_y = 0.68
     bay = DRIVE_BAY
 
     pier = mesh.faces('pier', 'steel')

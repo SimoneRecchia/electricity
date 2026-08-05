@@ -9,6 +9,7 @@
     "cleat": "electricity:block/dc_cleat",
     "plug_plus": "electricity:block/dc_connector_plus",
     "plug_minus": "electricity:block/dc_connector_minus",
+    "gland": "electricity:block/dc_gland",
     "jbox": "electricity:block/dc_jbox",
     "jbox_side": "electricity:block/dc_jbox_side",
     "trench": "electricity:block/dc_trench",

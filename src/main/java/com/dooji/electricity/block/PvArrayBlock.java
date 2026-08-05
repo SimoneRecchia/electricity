@@ -72,15 +72,15 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 					Block.box(2.35, 4.69, 11.48, 13.65, 5.98, 13.48))));
 
 	/** What a tracked row's plane can be anywhere in, over a day. */
-	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 2.26, 0.32, 15.66, 16.00, 15.68);
+	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 3.22, 0.32, 15.66, 16.00, 15.68);
 
 	/** The same for a pedestal frame, which turns about two axes. */
-	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.42, 0.00, 16.00, 16.00, 16.00);
+	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.37, 0.00, 16.00, 16.00, 16.00);
 
 	private static final List<Cell> TRACK_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(
-					Block.box(5.92, 0.00, 7.12, 10.08, 8.24, 8.88),
-					Block.box(6.32, 8.24, 7.15, 11.31, 11.60, 8.85),
+					Block.box(5.92, 0.00, 7.12, 10.08, 9.20, 8.88),
+					Block.box(6.32, 9.20, 7.15, 11.31, 12.56, 8.85),
 					SWEPT_ROW)));
 
 	private static final List<Cell> DUAL_CELLS = List.of(

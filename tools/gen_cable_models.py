@@ -21,8 +21,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, Mesh, arc, box, clad_box, cylinder, tube,        # noqa: E402
-                      write_mtl)
+from modellib import (FITTING, HEX, MC4, MC4_PIN, MC4_RADIUS, MC4_SPREAD,     # noqa: E402
+                      Mesh, arc, box, clad_box, cylinder, mc4, tube, write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -36,12 +36,13 @@ SIDES = ('north', 'east', 'south', 'west')
 # The materials, and the textures they resolve to.
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
 MATERIALS = {name: '#' + name for name in
-             ('core', 'cleat', 'plug_plus', 'plug_minus', 'jbox', 'jbox_side', 'trench')}
+             ('core', 'cleat', 'plug_plus', 'plug_minus', 'gland', 'jbox', 'jbox_side', 'trench')}
 TEXTURES = {
     'core': 'electricity:block/dc_core',
     'cleat': 'electricity:block/dc_cleat',
     'plug_plus': 'electricity:block/dc_connector_plus',
     'plug_minus': 'electricity:block/dc_connector_minus',
+    'gland': 'electricity:block/dc_gland',
     'jbox': 'electricity:block/dc_jbox',
     'jbox_side': 'electricity:block/dc_jbox_side',
     'trench': 'electricity:block/dc_trench',
@@ -61,15 +62,11 @@ CORE_Y = CORE_RADIUS
 HUB_LO = 5.4
 HUB_HI = 16.0 - HUB_LO
 
-# The MC4 plug, from the sheath outwards, as (length, radius).
-PLUG = ((0.80, 0.80, 0.00, 0.12),      # the collar, which carries the polarity
-        (1.05, 0.85, 0.12, 0.44),      # the knurled gland nut
-        (2.25, 0.95, 0.44, 0.90),      # the barrel, with the latch window
-        (0.70, 0.62, 0.90, 1.00))      # the nose
-PLUG_START = 8.4
+# Where the plug's own axis starts.  MC4 and its figures are in modellib, shared with gen_pv_models.
+PLUG_START = 7.5
 # A plug is fatter than the cable it is moulded onto, so a plug resting on the ground holds its own axis
-PLUG_Y = max(radius for _, radius, _, _ in PLUG)
-PLUG_RISE = 2.4
+PLUG_Y = MC4_RADIUS
+PLUG_RISE = 1.9
 
 # How many segments a quarter turn is swept in.
 # costs eight rings of thirty-two.
@@ -79,7 +76,9 @@ CLIMB_RADIUS = 2.4
 WALL_STANDOFF = CORE_RADIUS + 0.5
 
 # Height of the ground surface inside a buried block, and the rim that holds the block boundary shut.
-GROUND = 14.0
+# Deep enough for the fattest thing a run puts in it, which is the coupling ring on an MC4 plug: at 14
+# the plug's crown left the block and check_inside_block failed the build.
+GROUND = 16.0 - 2.0 - MC4_RADIUS * 2.0
 RIM = 1.0
 
 
@@ -98,9 +97,12 @@ def at(x, y, z):
 class Run:
     """A length of cable swept along a path given in sixteenths."""
 
-    def __init__(self, path, radius=CORE_RADIUS, material='core'):
+    def __init__(self, path, radius=CORE_RADIUS, material='core', joint=None):
         self.path = _dedupe([tuple(float(c) for c in p) for p in path])
         self.radius, self.material = radius, material
+        # Parts that name the same joint are one fitting, and check_disjoint lets them touch: a tail and
+        # the plug moulded onto it are not two objects.
+        self.joint = joint
 
     def draw(self, mesh):
         faces = mesh.faces('cable', self.material)
@@ -126,14 +128,14 @@ class Run:
         return result
 
     def turned(self, quarter):
-        return Run([_spin(p, quarter) for p in self.path], self.radius, self.material)
+        return Run([_spin(p, quarter) for p in self.path], self.radius, self.material, self.joint)
 
 
 class Barrel:
-    """A round fitting: a plug's gland nut or barrel, or a gland through a junction box's wall."""
+    """A round fitting: a cleat's screw, or a gland through a junction box's wall."""
 
     def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False,
-                 band=None):
+                 band=None, sides=FITTING, taper=1.0, outward=1):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
         self.radius, self.low, self.high, self.cap = radius, low, high, cap
         # Which window of its texture this segment takes
@@ -141,27 +143,61 @@ class Barrel:
         self.band = band
         # A sleeve is a fitting a cable runs *through* - a gland in a junction box's wall
         self.sleeve = sleeve
+        # ``outward`` is which end is the far one: cylinder() tapers its +axis end, so a fitting facing
+        self.sides, self.taper, self.outward = sides, taper, outward
 
     def draw(self, mesh):
         faces = mesh.faces(self.group, self.material)
         base = list(self.centre)
         base['xyz'.index(self.axis)] = self.low
-        cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out(self.high - self.low),
-                 sides=FITTING, uv_scale=1.0, uv=self.band,
-                 caps=faces if self.cap else None, cap_ends=(1,) if self.cap else ())
+        radius, taper = ((self.radius, self.taper) if self.outward > 0
+                         else (self.radius * self.taper, 1.0 / self.taper))
+        # A hexagon wants a flat on top, which is a vertex at sixty degrees.
+        phase = math.pi / 3 if self.sides == HEX else (math.pi / 2 if self.axis == 'z' else 0.0)
+        cylinder(mesh, faces, at(*base), self.axis, out(radius), out(self.high - self.low),
+                 sides=self.sides, uv_scale=1.0, uv=self.band, taper=taper, phase=phase,
+                 caps=faces if self.cap else None, cap_ends=(self.outward,) if self.cap else ())
 
     def boxes(self):
         index = 'xyz'.index(self.axis)
+        span = self.radius * max(1.0, self.taper)
         lo, hi = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
         for i in range(3):
             if i == index:
                 lo[i], hi[i] = self.low, self.high
             else:
-                lo[i], hi[i] = self.centre[i] - self.radius, self.centre[i] + self.radius
+                lo[i], hi[i] = self.centre[i] - span, self.centre[i] + span
         return [(tuple(lo), tuple(hi))]
 
     def turned(self, quarter):
         return _Boxes([_spin_box(b, quarter) for b in self.boxes()], sleeve=self.sleeve)
+
+
+class Plug:
+    """An MC4 on the end of a core.  modellib.mc4 draws it; its boxes are the profile's own steps."""
+
+    def __init__(self, centre, base, positive, joint=None):
+        self.centre, self.base, self.positive = centre, base, positive
+        self.material = 'plug_plus' if positive else 'plug_minus'
+        self.joint = joint
+
+    def draw(self, mesh):
+        mc4(mesh, mesh.faces('plug', self.material),
+            at(self.centre, self.base + PLUG_Y, PLUG_START), 'z', unit=1.0 / 16.0,
+            pin=self.positive)
+
+    def boxes(self):
+        y, result, cursor = self.base + PLUG_Y, [], PLUG_START
+        steps = list(MC4) + ([(MC4_PIN, 0.30, 1.0, 0.0, 0.0)] if self.positive else [])
+        for length, radius, taper, _, _ in steps:
+            span = radius * max(1.0, taper)
+            result.append(((self.centre - span, y - span, cursor),
+                           (self.centre + span, y + span, cursor + length)))
+            cursor += length
+        return result
+
+    def turned(self, quarter):
+        return _Boxes([_spin_box(b, quarter) for b in self.boxes()])
 
 
 class Slab:
@@ -224,24 +260,43 @@ def _dedupe(path):
 
 # ---------------------------------------------------------------- the fittings
 
-def plug(centre, base, positive):
-    """An MC4 plug on the end of a core: the gland nut, the barrel, the nose."""
-    material = 'plug_plus' if positive else 'plug_minus'
-    parts, cursor = [], PLUG_START
-    for index, (length, radius, v0, v1) in enumerate(PLUG):
-        parts.append(Barrel('plug', material, (centre, base + PLUG_Y, 0.0), 'z', radius,
-                            cursor, cursor + length, cap=index == len(PLUG) - 1,
-                            band=(0.0, v0, 1.0, v1)))
-        cursor += length
-    return parts
+def plug_lane(centre):
+    """Which lane a core's plug sits on: the pair splays from CORE_OFFSET out to MC4_SPREAD, because two
+    coupling rings 3.6 px across will not lie 2.1 px apart.  A real string's leads splay at an end too."""
+    return 8.0 + (centre - 8.0) / CORE_OFFSET * MC4_SPREAD
 
 
-def tail(centre, base, start):
-    """The length of core between a piece's own boundary and a plug"""
-    y = base + CORE_Y
+def tail(centre, base, start, joint=None):
+    """The core between a piece's own boundary and its plug: straight, then out and up onto the lane."""
+    y, lane = base + CORE_Y, plug_lane(centre)
+    # It runs 0.35 px *into* the plug so its own end cap is buried: level with the plug's first face the
+    # two discs are coplanar and flicker against each other.
     return Run([(centre, y, start), (centre, y, PLUG_START - PLUG_RISE),
-                (centre, base + PLUG_Y, PLUG_START - PLUG_RISE + 0.9),
-                (centre, base + PLUG_Y, PLUG_START)])
+                (lane, base + PLUG_Y, PLUG_START - 0.45), (lane, base + PLUG_Y, PLUG_START + 0.35)],
+               joint=joint)
+
+
+def gland(base, side, centre):
+    """An M16 cable gland through a box wall: the hex body against it, the compression nut in front.
+
+    Its band is dc_gland's own strip, wall to tip.  ``sleeve`` is how check_disjoint knows the cable is
+    meant to run through it rather than into it - see _sleeved.
+    """
+    axis = 'z' if side in ('north', 'south') else 'x'
+    near = side in ('north', 'west')
+    step = -1.0 if near else 1.0
+    middle = [8.0, base + CORE_Y, 8.0]
+    middle[0 if axis == 'z' else 2] = centre
+
+    parts, cursor = [], HUB_LO if near else HUB_HI
+    # (length, radius, taper, sides, band): a hex body and a nut tapering the way a compression nut does
+    for length, radius, taper, sides, band in ((0.34, 0.92, 1.0, HEX, (0.0, 0.0, 1.0, 0.25)),
+                                              (1.02, 0.86, 0.80, FITTING, (0.0, 0.25, 1.0, 1.0))):
+        low, high = sorted((cursor, cursor + step * length))
+        parts.append(Barrel('gland', 'gland', tuple(middle), axis, radius, low, high, cap=False,
+                            sleeve=True, band=band, sides=sides, taper=taper, outward=int(step)))
+        cursor += step * length
+    return parts
 
 
 def cleat(base, low, high):
@@ -267,14 +322,8 @@ def junction_box(base, glanded):
     parts = [Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
                   (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
     for side in glanded:
-        axis = 'z' if side in ('north', 'south') else 'x'
-        near = side in ('north', 'west')
-        low, high = (HUB_LO - 0.8, HUB_LO) if near else (HUB_HI, HUB_HI + 0.8)
         for centre in CORES:
-            middle = [8.0, base + CORE_Y, 8.0]
-            middle[0 if axis == 'z' else 2] = centre
-            parts.append(Barrel('gland', 'plug_minus', tuple(middle), axis, 0.90, low, high,
-                                cap=False, sleeve=True))
+            parts += gland(base, side, centre)
     return parts
 
 
@@ -305,8 +354,8 @@ def piece_end(base):
     """One side connected: the pair comes in and ends in two MC4 plugs."""
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(tail(c, base, HUB_LO))
-        parts += plug(c, base, index == 0)
+        parts.append(tail(c, base, HUB_LO, joint='lead_%d' % index))
+        parts.append(Plug(plug_lane(c), base, index == 0, joint='lead_%d' % index))
     return parts
 
 
@@ -314,8 +363,8 @@ def piece_loose(base):
     """Nothing connected: a length of pair lying where it was dropped"""
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(tail(c, base, 3.2))
-        parts += plug(c, base, index == 0)
+        parts.append(tail(c, base, 3.2, joint='lead_%d' % index))
+        parts.append(Plug(plug_lane(c), base, index == 0, joint='lead_%d' % index))
     return parts
 
 
@@ -468,7 +517,7 @@ def parts_of(state):
     """Every part the given connection state draws, turned into the block's own frame and labelled."""
     connected = tuple(s for s in SIDES if state[s] != 'none')
     kind, turn = HUBS[connected]
-    labelled = [(p.turned(turn), '%s[%d]' % (kind, i))
+    labelled = [(p.turned(turn), '%s[%s]' % (kind, getattr(p, 'joint', None) or i))
                 for i, p in enumerate(MIDDLES[kind](0.0))]
     for side in SIDES:
         if state[side] == 'none':

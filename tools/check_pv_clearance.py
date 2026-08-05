@@ -9,13 +9,17 @@ meets that annulus.  Assumes a full turn, which is stricter than the drives reac
 
 import math
 import os
+import re
 import sys
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
+ARRAY_BLOCK = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
+                           'PvArrayBlock.java')
 EPS = 1.0e-4
 
-# Where each tracker's drives pivot, matching what the renderer measures off the model's
-PIVOTS = {'pv_track': 0.62, 'pv_dual': 0.7475}
+# Which pivot marker each tracker turns its row about.  Read out of the model, not restated here: a copy
+# of the figure went stale the moment the torque tube moved and this checker then measured the wrong axis.
+PIVOTS = {'pv_track': 'pivot_tube', 'pv_dual': 'pivot_elevation'}
 # Radius of the widest part of the dual axis's pedestal
 PEDESTAL_RADIUS = 0.062
 
@@ -89,9 +93,35 @@ def reaches_vertical_axis(faces, pivot_y):
     return closest, (pivot_y - radius, pivot_y + radius)
 
 
+def pivot_height(objects, group):
+    """Where a ``pivot_*`` marker sits: the renderer measures the same hinge off the same group."""
+    faces = objects[group]
+    return sum(point[1] for face in faces for point in face) / sum(len(face) for face in faces)
+
+
+# Which shape in PvArrayBlock stands for each tracker's swept plane.  Its floor is the one figure in the
+# Java that no other check watches, and if it sits too low a player walks through the row.
+SWEPT = {'pv_track': 'SWEPT_ROW', 'pv_dual': 'SWEPT_FRAME'}
+
+
+def declared_floor(name):
+    """The y a swept shape starts at in PvArrayBlock, in blocks."""
+    source = open(ARRAY_BLOCK).read()
+    found = re.search(r'%s = Block\.box\(([^)]*)\)' % SWEPT[name], source)
+    return float(found.group(1).split(',')[1]) / 16.0 if found else None
+
+
+def swept_floor(moving, pivot_y):
+    """How low the turning parts can ever reach: the pivot less the furthest any of them is from it."""
+    radius = max(annulus(face, (0, 1), (0.0, pivot_y))[1]
+                 for group, faces in moving.items() if not group.startswith('rotate_azimuth')
+                 for face in faces)
+    return pivot_y - radius
+
+
 def check(name):
-    pivot_y = PIVOTS[name]
     objects = read_faces(os.path.join(MODELS, name, name + '.obj'))
+    pivot_y = pivot_height(objects, PIVOTS[name])
     fixed = {k: v for k, v in objects.items() if not k.startswith('rotate_')}
     moving = {k: v for k, v in objects.items() if k.startswith('rotate_')}
 
@@ -137,6 +167,12 @@ def check(name):
               % (closest, PEDESTAL_RADIUS, ', and their heights overlap' if overlaps_y else ''))
         if overlaps_y and closest < PEDESTAL_RADIUS - EPS:
             problems.append('the elevation frame sweeps into the pedestal')
+
+    floor, declared = swept_floor(moving, pivot_y), declared_floor(name)
+    print('  swept    the turning parts reach down to %.2f px, and %s declares %s'
+          % (floor * 16.0, SWEPT[name], '%.2f' % (declared * 16.0) if declared is not None else 'none'))
+    if declared is None or abs(declared - floor) > 0.01 / 16.0:
+        problems.append('%s does not start where the sweep reaches' % SWEPT[name])
 
     for problem in problems:
         print('  CLASH    %s' % problem)

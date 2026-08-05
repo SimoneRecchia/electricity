@@ -406,6 +406,63 @@ def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
     tube(mesh, faces, circle + [circle[0]], section, sides=max(6, sides // 4), uv_scale=1.0)
 
 
+# A Stäubli MC4, as (length, radius, taper, v0, v1) in sixteenths.  The diameters are the real ones at
+# the cable's own drawn scale - a 6.9 mm core reads as 1.30 px, so a millimetre of radius is 0.188 px -
+# and the length is cut to what fits inside a block, which is the exaggeration the cable's diameter
+# already carries in the other direction.  Fat, thin, fat is the signature: gland nut, body, coupling ring.
+# gen_cable_models and gen_pv_models both draw from this, and dc_connector_plus's bands are these v.
+MC4 = ((0.85, 0.72, 1.667, 0.000, 0.118),    # the strain relief out of the jacket
+       (1.30, 1.41, 1.000, 0.118, 0.299),    # the cable gland nut, knurled
+       (2.35, 1.24, 1.000, 0.299, 0.625),    # the body, carrying the legend
+       (1.90, 1.79, 1.000, 0.625, 0.889),    # the coupling ring: the widest part, the one you grip
+       (0.80, 1.79, 0.849, 0.889, 1.000))    # the nose, chamfered
+MC4_LENGTH = sum(step[0] for step in MC4)
+MC4_RADIUS = max(step[1] * max(1.0, step[2]) for step in MC4)
+MC4_PIN = 0.34
+# Two plugs will not lie side by side at the cable's own spacing - the coupling rings are 3.6 px across
+# and the pair is 2.1 px apart - so a pair of leads splays at an end, the way a real string's does.
+MC4_SPREAD = 2.10
+
+
+def mc4(mesh, faces, start, axis, unit=1.0, into=1, flip_v=False, pin=False):
+    """An MC4 plug grown along one axis from ``start``, which is a point on its own centre line.
+
+    ``unit`` is a sixteenth in the caller's units: 1.0 in a block-frame OBJ, 1/16 in a machine's.
+    ``flip_v`` for the mod's own renderer, which does 1 - v, so the bands arrive tail first without it.
+    ``pin`` is the male contact, and is the only thing that tells the two poles apart in silhouette.
+    """
+    # u zero is the top, which is where tube() puts its own reference vector: a plug lit down one side and
+    # a cable lit down another read as two objects.
+    phase = math.pi / 2 if axis == 'z' else 0.0
+    steps = list(MC4)
+    if pin:
+        nose = MC4[-1]
+        steps.append((MC4_PIN, 0.30, 1.0, nose[3], nose[4]))
+
+    # A shoulder between two steps is an annulus, and an open one is a hole straight into the plug - which
+    # is what a profile that steps in as well as out gets if only the last segment is capped.  The wider
+    # side of each shoulder carries the disc; where the two are equal neither does, because two coplanar
+    # discs flicker against each other.
+    radii = [(r, r * t) for _, r, t, _, _ in steps]
+    axis_index = 'xyz'.index(axis)
+    cursor = start[axis_index]
+    centre = list(start)
+    for index, (length, radius, taper, v0, v1) in enumerate(steps):
+        low, high = sorted((cursor, cursor + into * length * unit))
+        # cylinder() tapers its +axis end, so a plug growing the other way takes the profile reversed
+        near, ratio = (radius, taper) if into > 0 else (radius * taper, 1.0 / taper)
+        behind = radii[index - 1][1] if index else 0.0
+        ahead = radii[index + 1][0] if index + 1 < len(steps) else 0.0
+        ends = ([-into] if radii[index][0] > behind + 1e-9 else []) + \
+               ([into] if radii[index][1] > ahead + 1e-9 else [])
+        centre[axis_index] = (low + high) / 2.0
+        cylinder(mesh, faces, tuple(centre), axis, near * unit, (high - low) / 2.0, sides=FITTING,
+                 uv_scale=1.0, taper=ratio, phase=phase, caps=faces if ends else None,
+                 cap_ends=tuple(ends),
+                 uv=(0.0, 1.0 - v1, 1.0, 1.0 - v0) if flip_v else (0.0, v0, 1.0, v1))
+        cursor += into * length * unit
+
+
 def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=0.5, taper=0.72):
     """An insulator: a stack of skirts on a core, each wider at its lower rim."""
     cx, cy, cz = centre

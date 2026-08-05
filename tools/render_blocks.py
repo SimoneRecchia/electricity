@@ -413,13 +413,28 @@ def scene_cable_corner():
     return triangles, (0.4, 1.15, 2.3), (1.7, 0.06, 1.2)
 
 
+def scene_cable_junction():
+    """The tee's own fittings up close: the box, and the four cable glands through its walls."""
+    triangles = ground(-1, -1, 4, 4, SAND)
+    triangles += cable_piece('tee', (1, 0, 1), yaw=0)
+    for side in (0, 90, 270):
+        triangles += cable_piece('arm', (1, 0, 1), yaw=side)
+    triangles += cable_piece('line', (1, 0, 0), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 0), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 0), yaw=180)
+    return triangles, (0.55, 0.62, 2.35), (1.5, 0.06, 1.45)
+
+
 def scene_cable_plug():
-    """The plugs, near enough to read the collar, the knurl, the latch and the nose."""
+    """The plugs from three quarters above, which is where a player standing over one looks from.
+
+    Down the axis they read as one dark disc whatever the profile does: the steps only show off-axis.
+    """
     triangles = ground(-1, -1, 3, 3, SAND)
     triangles += cable_piece('end', (1, 0, 1), yaw=0)
     triangles += cable_piece('arm', (1, 0, 1), yaw=0)
     triangles += cable_piece('loose', (1, 0, 2))
-    return triangles, (1.2, 0.42, 2.9), (1.5, 0.05, 1.6)
+    return triangles, (0.35, 0.95, 2.85), (1.5, 0.05, 1.55)
 
 
 # Every machine is authored facing north, which is -z, so a scene that wants to see the face a player
@@ -481,6 +496,19 @@ def scene_machine_cable():
     return triangles, (0.55, 0.85, -1.0), (2.2, 0.25, 1.4)
 
 
+def scene_array_harness():
+    """Where a row's own harness ends: the plugs the row behind it mates with, on the ground at the edge.
+
+    Two rows a block apart, so the socket on one and the lead of the other are in the same picture - which
+    is what has to line up for a string to read as one product.
+    """
+    triangles = ground(-2, -2, 6, 6, SAND)
+    for z in (1, 2):
+        triangles += placed(machine_model('pv_tilt'), (2, 0, z))
+    triangles += placed(machine_model('pv_track'), (4, 0, 1))
+    return triangles, (0.9, 0.75, 0.2), (2.6, 0.16, 1.35)
+
+
 def scene_tx_machine():
     triangles = ground(-3, -3, 6, 6, SAND)
     triangles += placed(machine_model('tx_machine'), (2, 0, 2))
@@ -522,8 +550,10 @@ SCENES = {
     'tx_machine': scene_tx_machine,
     'tx_substation': scene_tx_substation,
     'machine_cable': scene_machine_cable,
+    'array_harness': scene_array_harness,
     'cable_run': scene_cable_run,
     'cable_corner': scene_cable_corner,
+    'cable_junction': scene_cable_junction,
     'cable_plug': scene_cable_plug,
     'inverter_front': scene_inverter_front,
     'inverter_roof': scene_inverter_roof,
