@@ -313,5 +313,11 @@
   "tooltip.electricity.tx_machine": "Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.",
   "block.electricity.tx_substation": "Substation Transformer",
   "tooltip.electricity.tx_substation": "Steps 33 kV up to 400 kV. The transmission line starts here.",
-  "tooltip.electricity.transformer.reading": "Ratio %s  in %s kW  loss %s kW"
+  "tooltip.electricity.transformer.reading": "Ratio %s  in %s kW  loss %s kW",
+  "block.electricity.abc_conductor_run": "Bundle Run",
+  "tooltip.electricity.abc_conductor_run": "Aerial bundled cable, laid along the ground.",
+  "block.electricity.mv_conductor_run": "Medium-Voltage Run",
+  "tooltip.electricity.mv_conductor_run": "Bare all-aluminium-alloy conductor, laid along the ground.",
+  "block.electricity.hv_conductor_run": "Transmission Run",
+  "tooltip.electricity.hv_conductor_run": "A quad ACSR bundle on spacers, laid along the ground."
 }

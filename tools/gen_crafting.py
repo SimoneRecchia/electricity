@@ -286,6 +286,11 @@ INVISIBLE_MACHINES = {
 
 # The names and tooltips for what is not a part: a block is named here rather than by hand.
 BLOCK_NAMES = {
+    # A run of conductor has a name even though nothing ever shows it: a block with no name key reads as
+    # its own registry id in an advancement, in a death message, and in the F3 screen.
+    'abc_conductor_run': ('Bundle Run', 'Aerial bundled cable, laid along the ground.'),
+    'mv_conductor_run': ('Medium-Voltage Run', 'Bare all-aluminium-alloy conductor, laid along the ground.'),
+    'hv_conductor_run': ('Transmission Run', 'A quad ACSR bundle on spacers, laid along the ground.'),
     'tx_machine': ('Machine Transformer',
                    'Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.'),
     'tx_substation': ('Substation Transformer',

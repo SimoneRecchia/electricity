@@ -944,16 +944,6 @@ GRIP = ((104, 26, 24, 255), (172, 48, 42, 255), (214, 92, 78, 255))
 INSTRUMENT = ((150, 154, 160, 255), (226, 229, 234, 255), (255, 255, 255, 255))
 
 
-def limb(c, start, end, width, palette, margin=1.4):
-    """A shaded bar: shadow underneath, body over it, highlight along the top-left edge."""
-    dark, mid, light = palette
-    x0, y0 = start
-    x1, y1 = end
-    c.stroke(x0 + margin / 3.0, y0 + margin / 3.0, x1 + margin / 3.0, y1 + margin / 3.0, dark, width + margin)
-    c.stroke(x0, y0, x1, y1, mid, width)
-    c.stroke(x0 - 0.55, y0 - 0.55, x1 - 0.55, y1 - 0.55, light, max(1.0, width - 2.0))
-
-
 # The spanner, drawn.  D dark steel, S the body, L the lit edge, K the knurl on the worm block.
 WRENCH = (
     '..........LSSD..',

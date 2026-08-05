@@ -105,6 +105,12 @@ ELSEWHERE = {
     'lattice_suspension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
     'lattice_tension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
     'lattice_terminal': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    # Ground-laid conductor, for the same reason the string cable is here: a piece per connection pattern,
+    # so the tables are keyed by pattern and printed by the generator that draws them - which also proves
+    # GroundConductorBlock still declares them.
+    'abc_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
+    'mv_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
+    'hv_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
 }
 
 

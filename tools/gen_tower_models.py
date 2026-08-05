@@ -129,7 +129,6 @@ def crossarm(mesh, steel, y, reach, depth):
     """One crossarm: a triangulated cantilever each side, which is how a real one carries its load."""
     for side in (-1, 1):
         tip = (side * reach, y, 0.0)
-        root_out = (side * WAIST_HALF, y, 0.0)
         # the two main members, one either side of the tower's own depth
         for sz in (-1, 1):
             strut(mesh, steel, (side * WAIST_HALF, y, sz * depth), (side * reach, y, sz * depth * 0.35),
