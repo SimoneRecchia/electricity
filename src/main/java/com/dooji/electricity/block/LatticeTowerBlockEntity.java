@@ -1,6 +1,8 @@
 package com.dooji.electricity.block;
 
+import com.dooji.electricity.api.power.TowerSpec.Duty;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
+import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
@@ -26,7 +28,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
-import org.joml.Vector3f;
 
 /**
  * A lattice transmission tower: six phase fittings and the earth peak above them.
@@ -71,18 +72,34 @@ public class LatticeTowerBlockEntity extends BlockEntity implements InsulatorHos
 	private void refresh() {
 		ensureArraySizes();
 		List<String> groups = insulatorGroups();
+		Duty duty = getBlockState().getBlock() instanceof LatticeTowerBlock tower ? tower.spec().duty() : Duty.SUSPENSION;
 		for (int i = 0; i < groups.size() && i < wirePositions.length; i++) {
-			Vector3f centre = ObjBoundingBoxRegistry.getCenterSafe(getBlockState().getBlock(), groups.get(i));
-			if (centre == null) continue;
+			ObjModel.BoundingBox box = ObjBoundingBoxRegistry.getBoundingBox(getBlockState().getBlock(), groups.get(i));
+			if (box == null) continue;
 
+			Vec3 hang = clamped(box, duty);
 			float degrees = ModelFacing.degrees(LatticeTowerBlock.AUTHORED, getBlockState().getValue(LatticeTowerBlock.FACING));
 			double radians = Math.toRadians(degrees);
 			double cos = Math.cos(radians);
 			double sin = Math.sin(radians);
-			double x = centre.x * cos + centre.z * sin;
-			double z = -centre.x * sin + centre.z * cos;
-			wirePositions[i] = new Vec3(x, centre.y, z).add(Vec3.atLowerCornerOf(getBlockPos())).add(0.5, 0.0, 0.5);
+			double x = hang.x * cos + hang.z * sin;
+			double z = -hang.x * sin + hang.z * cos;
+			wirePositions[i] = new Vec3(x, hang.y, z).add(Vec3.atLowerCornerOf(getBlockPos())).add(0.5, 0.0, 0.5);
 		}
+	}
+
+	/**
+	 * Where on a string the conductor is actually clamped, which is not the middle of it.
+	  *
+	 * Anchored at the box's centre every span landed halfway up the discs. A terminal tower dead-ends the
+	 * line on one side, so its clamp is at the far end of the string, out on -z. The other two carry the
+	 * phase across the tower - a suspension string hangs from the arm and a tension tower's jumper loops
+	 * under it - so for both the phase's station is under the hanger.
+	 */
+	private static Vec3 clamped(ObjModel.BoundingBox box, Duty duty) {
+		return duty == Duty.TERMINAL
+				? new Vec3(box.center.x, box.center.y, box.min.z)
+				: new Vec3(box.center.x, box.min.y, box.center.z);
 	}
 
 	@Override
@@ -107,11 +124,16 @@ public class LatticeTowerBlockEntity extends BlockEntity implements InsulatorHos
 	 *
 	 * And to a run laid on the ground, which is what a line does at its end: it comes off the tower's
 	 * dead-end into a trench or a ground bus. A run feeds a tower too, so the link is two-way.
+	 *
+	 * The transformer is in the list because a line has two ends. A substation unit already fed a tower;
+	 * without the other direction a 400 kV line could leave a substation and never arrive at one, which is
+	 * every receiving station there is.
 	 */
 	@Override
 	public boolean feeds(InsulatorHost other) {
 		return other instanceof LatticeTowerBlockEntity || other instanceof ElectricCabinBlockEntity
-				|| other instanceof UtilityPoleBlockEntity || other instanceof GroundConductorBlockEntity;
+				|| other instanceof UtilityPoleBlockEntity || other instanceof GroundConductorBlockEntity
+				|| other instanceof TransformerBlockEntity;
 	}
 
 	@Override

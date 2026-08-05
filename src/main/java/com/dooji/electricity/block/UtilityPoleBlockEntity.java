@@ -100,7 +100,9 @@ public class UtilityPoleBlockEntity extends BlockEntity implements InsulatorHost
 
 	private Vec3 calculateOrientedInsulatorCenter(String insulatorGroup) {
 		try {
-			Vector3f localCenter = ObjBoundingBoxRegistry.getCenterSafe(getBlockState().getBlock(), insulatorGroup);
+			// the top of the porcelain, which is where a pin insulator's groove is and where the tie holds
+			// the conductor - the box's centre put every span halfway down the shed stack
+			Vector3f localCenter = ObjBoundingBoxRegistry.getTopSafe(getBlockState().getBlock(), insulatorGroup);
 			if (localCenter == null) return null;
 
 			Vector3f facingRotated = applyFacingRotation(localCenter);

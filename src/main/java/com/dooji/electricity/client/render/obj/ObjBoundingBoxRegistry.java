@@ -40,4 +40,16 @@ public class ObjBoundingBoxRegistry {
 			return null;
 		}
 	}
+
+	/**
+	 * The top of a part's box, over the middle of it.
+	  *
+	 * Where a conductor lands on an upright fitting: a pin insulator holds it in the groove on its head and
+	 * a bushing on the palm at its top. Anchored on the box's centre instead, every span ran into the
+	 * middle of the porcelain.
+	 */
+	public static Vector3f getTopSafe(Block block, String groupName) {
+		ObjModel.BoundingBox box = getBoundingBox(block, groupName);
+		return box == null ? null : new Vector3f(box.center.x, box.max.y, box.center.z);
+	}
 }

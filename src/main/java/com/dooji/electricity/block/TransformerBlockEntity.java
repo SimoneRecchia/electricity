@@ -79,7 +79,8 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 		ensureArraySizes();
 		List<String> groups = insulatorGroups();
 		for (int i = 0; i < groups.size() && i < wirePositions.length; i++) {
-			Vector3f centre = ObjBoundingBoxRegistry.getCenterSafe(getBlockState().getBlock(), groups.get(i));
+			// the palm on top of the bushing, not the middle of the porcelain
+			Vector3f centre = ObjBoundingBoxRegistry.getTopSafe(getBlockState().getBlock(), groups.get(i));
 			if (centre == null) continue;
 
 			double radians = Math.toRadians(ModelFacing.degrees(TransformerBlock.AUTHORED,

@@ -17,8 +17,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, Mesh, angle, bolt, box, coarse, cylinder, lathe,   # noqa: E402
-                      strut, write_mtl)
+from modellib import (FITTING, Mesh, bolt, box, coarse, cylinder, strut, tube,   # noqa: E402
+                      write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -27,7 +27,8 @@ MATERIALS = {
     'plate': 'tower_plate.png',
     'porcelain': 'porcelain_brown.png',
     'concrete': 'pole_concrete.png',
-    'conductor': 'tower_conductor.png',
+    # bare stranded aluminium, the same tile the ground-laid conductors use
+    'conductor': 'line_alu.png',
     'sign': 'pole_plate.png',
 }
 
@@ -149,9 +150,27 @@ def crossarm(mesh, steel, y, reach, depth):
                 b = (side * (WAIST_HALF + (reach - WAIST_HALF) * t1), y,
                      other * depth * (1.0 - 0.65 * t1))
                 strut(mesh, steel, a, b, BRACE * 0.34, BRACE * 0.34, uv_scale=0.3)
-        # the gusset plate the insulator hangs from
-        box(mesh, mesh.faces('arm', 'plate'), (side * reach - 0.075, y - 0.030, -0.075),
-            (side * reach + 0.075, y + 0.010, 0.075), uv_scale=0.4)
+
+
+def arm_half_depth(x, reach, depth):
+    """How far apart the arm's two main members are at this distance out along it."""
+    span = max(reach - WAIST_HALF, 1.0e-6)
+    t = min(1.0, max(0.0, (abs(x) - WAIST_HALF) / span))
+    return depth * (1.0 - 0.65 * t)
+
+
+def hanger(mesh, x, y, reach, depth):
+    """The cross member and gusset plate one phase hangs from.
+
+    Only the arm tips used to get a plate, so the four inner phases hung off nothing: their top disc
+    floated between the arm's two main members, which at that station are 0.3 apart with air on the
+    centreline. A real arm carries a transverse member at every hanging point.
+    """
+    half_z = arm_half_depth(x, reach, depth)
+    strut(mesh, mesh.faces('arm', 'steel'), (x, y, -half_z), (x, y, half_z), BRACE * 0.40,
+          BRACE * 0.40, uv_scale=0.3)
+    box(mesh, mesh.faces('arm', 'plate'), (x - 0.075, y - 0.030, -0.075),
+        (x + 0.075, y + 0.010, 0.075), uv_scale=0.4)
 
 
 def peak(mesh, steel):
@@ -172,20 +191,21 @@ def peak(mesh, steel):
              sides=FITTING, uv_scale=0.2, caps=mesh.faces('peak', 'plate'))
 
 
-def insulator_string(mesh, index, x, y, horizontal=False):
-    """A cap-and-pin insulator string: eighteen glass discs on a steel link"""
+def insulator_string(mesh, index, x, y, axis='y', sign=-1.0):
+    """A cap-and-pin insulator string: eighteen glass discs on a steel link, and its conductor clamp.
+
+    ``axis`` is which way the string lies. A suspension tower's hangs, because the only thing it carries
+    is the weight of the span: 'y'. A tension tower's lies **along the line**, which is z here, because
+    the string is what takes the pull - drawn radially along the arm instead, it ran back through the
+    arm's own lattice. ``sign`` is which way from the hanger.
+    """
     porcelain = mesh.faces('insulator_%d' % index, 'porcelain')
     steel = mesh.faces('string_%d' % index, 'steel')
 
     length = DISCS * DISC_PITCH
     for disc in range(DISCS):
-        along = (disc + 0.5) * DISC_PITCH
-        if horizontal:
-            centre = (x + math.copysign(along, x), y, 0.0)
-            axis = 'x'
-        else:
-            centre = (x, y - along, 0.0)
-            axis = 'y'
+        along = (disc + 0.5) * DISC_PITCH * sign
+        centre = (x, y + along, 0.0) if axis == 'y' else (x, y, along)
 
         # one disc: a shallow cap over a pin
         cylinder(mesh, porcelain, centre, axis, DISC_RADIUS, DISC_PITCH * 0.34, sides=FITTING,
@@ -193,13 +213,32 @@ def insulator_string(mesh, index, x, y, horizontal=False):
         cylinder(mesh, steel, centre, axis, DISC_RADIUS * 0.30, DISC_PITCH * 0.5, sides=FITTING,
                  uv_scale=0.4)
 
-    # the clamp the conductor is held in, at the far end of the string
-    if horizontal:
-        far = (x + math.copysign(length + 0.05, x), y, 0.0)
-    else:
-        far = (x, y - length - 0.05, 0.0)
-    box(mesh, steel, (far[0] - 0.055, far[1] - 0.035, far[2] - 0.035),
+    # The clamp the conductor is held in, on the string's far end, in a group of its own: it is where the
+    # span actually lands, and LatticeTowerBlockEntity anchors a wire there rather than halfway up the
+    # discs.
+    far_along = (length + 0.05) * sign
+    far = (x, y + far_along, 0.0) if axis == 'y' else (x, y, far_along)
+    box(mesh, mesh.faces('clamp_%d' % index, 'steel'),
+        (far[0] - 0.055, far[1] - 0.035, far[2] - 0.035),
         (far[0] + 0.055, far[1] + 0.035, far[2] + 0.035), uv_scale=0.2)
+    return far
+
+
+def jumper(mesh, index, x, y):
+    """The loop of conductor between a tension tower's two dead-ends on one phase.
+
+    The line stops at each string's clamp, so the phase is carried across the tower by a jumper hanging
+    below the arm. Without it the two halves of a circuit are two spans that never meet.
+    """
+    length = DISCS * DISC_PITCH + 0.05
+    drop = 0.30
+    faces = mesh.faces('jumper_%d' % index, 'conductor')
+    points = []
+    steps = 10
+    for step in range(steps + 1):
+        t = -1.0 + 2.0 * step / steps
+        points.append((x, y - drop * (1.0 - t * t), length * t))
+    tube(mesh, faces, points, 0.030, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
 
 
 def footings(mesh):
@@ -245,9 +284,19 @@ def tower(duty):
     crossarm(mesh, mesh.faces('arm', 'steel'), UPPER_ARM, UPPER_REACH, 0.34)
     peak(mesh, steel)
 
-    horizontal = duty in ('tension', 'terminal')
     for index, (x, y) in enumerate(PHASES):
-        insulator_string(mesh, index + 1, x, y, horizontal=horizontal)
+        reach, depth = (LOWER_REACH, 0.42) if y == LOWER_ARM else (UPPER_REACH, 0.34)
+        hanger(mesh, x, y, reach, depth)
+        if duty == 'suspension':
+            insulator_string(mesh, index + 1, x, y, axis='y', sign=-1.0)
+        elif duty == 'tension':
+            # a dead-end each way and the jumper between them, which is what a section tower is
+            for sign in (-1.0, 1.0):
+                insulator_string(mesh, index + 1, x, y, axis='z', sign=sign)
+            jumper(mesh, index + 1, x, y)
+        else:
+            # the whole pull comes from -z, which is the side the back-stay does not anchor
+            insulator_string(mesh, index + 1, x, y, axis='z', sign=-1.0)
 
     if duty == 'terminal':
         # the back-stay: the whole pull of the line is on one side, so it is anchored on the other
@@ -301,14 +350,20 @@ def collision_boxes(duty):
         boxes.append(((-reach - 0.08, y - COLLISION_ARM * 0.5, -depth),
                       (reach + 0.08, y + COLLISION_ARM * 0.5, depth)))
 
-    # the peak, as one box a level, tapering to the point
+    # The peak: a box a leg a level, the same as the body. Filling the square between the four legs
+    # instead made a column 1.56 blocks across - nine cells a level, a solid block on the centreline, and
+    # a player standing on the crossarm walking into air. Near the point the four boxes overlap and
+    # coarse() merges them back into one, which is right: there the pyramid really is solid.
     for level in range(int(math.floor(top)), int(math.ceil(PEAK))):
         y0, y1 = max(top, float(level)), min(PEAK, level + 1.0)
         if y1 - y0 < 0.05:
             continue
 
-        half = WAIST_HALF * (1.0 - (y0 - top) / (PEAK - top)) + COLLISION_LEG
-        boxes.append(((-half, y0, -half), (half, y1, half)))
+        half = WAIST_HALF * (1.0 - ((y0 + y1) * 0.5 - top) / (PEAK - top))
+        for sx in (-1, 1):
+            for sz in (-1, 1):
+                boxes.append(((sx * half - COLLISION_LEG, y0, sz * half - COLLISION_LEG),
+                              (sx * half + COLLISION_LEG, y1, sz * half + COLLISION_LEG)))
 
     # No back-stay for the terminal tower. Two sloped runs across seven levels claim sixty-six cells on
     # their own, and what they would buy is collision with a guy that a player walks past rather than
@@ -318,8 +373,31 @@ def collision_boxes(duty):
             boxes.append(((sx * BASE_HALF * 1.25 - 0.16, 0.0, BASE_HALF * 1.55 - 0.16),
                           (sx * BASE_HALF * 1.25 + 0.16, 0.10, BASE_HALF * 1.55 + 0.16)))
 
+    boxes += string_boxes(duty)
+
     return [(tuple(min(a[i], b[i]) for i in range(3)), tuple(max(a[i], b[i]) for i in range(3)))
             for a, b in boxes]
+
+
+def string_boxes(duty):
+    """A box round each phase's insulator string, cut to it.
+
+    A fitting is what a player aims at - a span is hung on one by pointing at it - so every insulator in
+    this mod carries collision of its own. The jumper does not: a conductor is a wire, and no wire in this
+    mod collides with anything.
+    """
+    length = DISCS * DISC_PITCH + 0.09
+    half = 0.06
+    boxes = []
+    for x, y in PHASES:
+        if duty == 'suspension':
+            boxes.append(((x - half, y - length, -half), (x + half, y + 0.01, half)))
+        elif duty == 'tension':
+            boxes.append(((x - half, y - half, -length), (x + half, y + 0.01, length)))
+        else:
+            boxes.append(((x - half, y - half, -length), (x + half, y + 0.01, half)))
+
+    return boxes
 
 
 def collision_cells(duty):
@@ -382,7 +460,7 @@ MODELS = [
     ('lattice_terminal', 'terminal'),
 ]
 
-USED = ('steel', 'plate', 'porcelain', 'concrete', 'sign')
+USED = ('steel', 'plate', 'porcelain', 'concrete', 'conductor', 'sign')
 
 
 def main():

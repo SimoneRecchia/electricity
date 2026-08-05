@@ -44,7 +44,9 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 
 	private static final List<Cell> MACHINE_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(1.76, 0.00, 3.28, 14.24, 10.93, 12.64),
-					Block.box(4.25, 10.08, 8.89, 11.75, 14.08, 10.31))));
+					Block.box(4.25, 10.08, 8.89, 5.67, 14.08, 10.31),
+					Block.box(7.29, 10.08, 8.89, 8.71, 14.08, 10.31),
+					Block.box(10.33, 10.08, 8.89, 11.75, 14.08, 10.31))));
 
 	private static final List<Cell> SUBSTATION_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.block()),
@@ -65,11 +67,17 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 			new Cell(1, 0, 1, Shapes.or(Block.box(0.00, 3.20, 0.00, 3.49, 16.00, 2.08),
 					Block.box(0.00, 0.00, 0.00, 6.72, 3.52, 2.56))),
 			new Cell(0, 1, 0, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 8.06, 16.00),
-					Block.box(0.00, 7.01, 4.15, 16.00, 16.00, 16.00))),
+					Block.box(0.00, 7.05, 15.52, 16.00, 12.32, 16.00),
+					Block.box(0.31, 7.01, 4.15, 2.89, 16.00, 6.73),
+					Block.box(1.75, 7.01, 11.03, 3.37, 11.33, 12.65),
+					Block.box(6.71, 7.01, 4.15, 9.29, 16.00, 6.73),
+					Block.box(7.19, 7.01, 11.03, 8.81, 11.33, 12.65),
+					Block.box(12.63, 7.01, 11.03, 14.25, 11.33, 12.65),
+					Block.box(13.11, 7.01, 4.15, 15.69, 16.00, 6.73))),
 			new Cell(-1, 1, 0, Block.box(11.04, 0.00, 0.00, 16.00, 8.06, 16.00)),
 			new Cell(0, 1, -1, Block.box(0.00, 0.00, 13.92, 16.00, 8.06, 16.00)),
 			new Cell(0, 1, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 8.06, 2.08),
-					Block.box(0.00, 7.01, 0.00, 16.00, 16.00, 4.00))),
+					Block.box(0.00, 7.05, 0.00, 16.00, 12.32, 4.00))),
 			new Cell(1, 1, 0, Block.box(0.00, 0.00, 0.00, 3.49, 8.06, 16.00)),
 			new Cell(-1, 1, -1, Block.box(11.04, 0.00, 13.92, 16.00, 8.06, 16.00)),
 			new Cell(-1, 1, 1, Block.box(11.04, 0.00, 0.00, 16.00, 8.06, 2.08)),

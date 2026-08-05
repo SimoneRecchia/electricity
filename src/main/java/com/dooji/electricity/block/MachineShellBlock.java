@@ -72,7 +72,7 @@ public class MachineShellBlock extends Block {
 
 		int quarters = machine.shellTurns(hostState);
 		BlockPos offset = pos.subtract(host);
-		for (MachineShell.Cell cell : machine.shellCells()) {
+		for (MachineShell.Cell cell : machine.shellCells(hostState)) {
 			if (cell.at(quarters).equals(offset)) return cell.shape(quarters);
 		}
 

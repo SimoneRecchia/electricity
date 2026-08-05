@@ -43,7 +43,8 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	/** The kiosk, where it actually is: cut from power_box.obj, part by part. */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(2.53, 0.00, 4.61, 13.47, 11.81, 11.52),
-					Block.box(6.67, 11.23, 6.67, 9.33, 14.26, 9.33))));
+					Block.box(6.67, 12.19, 6.67, 9.33, 14.26, 9.33),
+					Block.box(6.80, 11.23, 6.80, 9.20, 12.18, 9.20))));
 
 	/**
 	 * The plinth, which a mounted box has not got.

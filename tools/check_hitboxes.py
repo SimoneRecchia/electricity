@@ -102,13 +102,18 @@ SWEPT = {
 #
 # Every group a model draws has to appear here exactly once, or this file fails: a part added to a model is
 # then a decision about its collision rather than a silent extra box.
+# A porcelain fitting is the exception to the merging: **every insulator, bushing and arrester gets a
+# rectangle of its own**, cut to it. It is the part of a machine a player aims at - a wire is hung on one
+# by pointing at it - and swept into the roof rectangle beside its neighbours it became a slab of air
+# with the fittings somewhere inside. That is also why the model splits them one group apiece.
 RECTANGLES = {
     'pv_inverter': (
         # the cabinet, its plinth and everything let into its faces are one box; the roof fittings the
         # only thing that stands clear of it
         ('cabinet', ('plinth', 'cabinet', 'hood', 'door', 'display', 'grille', 'section', 'blank',
                      'fan_guard')),
-        ('roof', ('hardware', 'insulator')),
+        ('roof', ('hardware',)),
+        ('insulator', ('insulator',)),
     ),
     # The three the object has: what it stands on, what holds it up, and the box itself.  Merging the post
     # into the enclosure would put a wall of air beside a column a player walks past.
@@ -119,7 +124,8 @@ RECTANGLES = {
     ),
     'power_box': (
         ('cabinet', ('plinth', 'body', 'hood', 'door', 'vent', 'conduit')),
-        ('top', ('hardware', 'insulator')),
+        ('top', ('hardware',)),
+        ('insulator', ('insulator',)),
     ),
     # One box each: a ballasted table is 2.5 px tall in all and a fixed rack 8.5, so there is no gap under
     # either that a player could have been in.  Two boxes bought nothing but a second box.
@@ -135,29 +141,48 @@ RECTANGLES = {
     ),
     'tx_machine': (
         ('tank', ('plinth', 'tank', 'cover', 'cablebox', 'nameplate', 'fittings', 'earth')),
-        ('bushings', ('bushing_1', 'flange_1', 'bushing_2', 'flange_2', 'bushing_3', 'flange_3')),
+        ('bushing_1', ('bushing_1', 'flange_1')),
+        ('bushing_2', ('bushing_2', 'flange_2')),
+        ('bushing_3', ('bushing_3', 'flange_3')),
     ),
     'tx_substation': (
         ('bund', ('bund', 'rails')),
         ('tank', ('tank', 'cover', 'radiator', 'tapchanger', 'nameplate')),
-        ('top', ('conservator', 'relay',
-                 'bushing_1', 'flange_1', 'bushing_2', 'flange_2', 'bushing_3', 'flange_3',
-                 'bushing_4', 'flange_4', 'bushing_5', 'flange_5', 'bushing_6', 'flange_6')),
+        ('top', ('conservator', 'relay')),
+        ('bushing_1', ('bushing_1', 'flange_1')),
+        ('bushing_2', ('bushing_2', 'flange_2')),
+        ('bushing_3', ('bushing_3', 'flange_3')),
+        ('bushing_4', ('bushing_4', 'flange_4')),
+        ('bushing_5', ('bushing_5', 'flange_5')),
+        ('bushing_6', ('bushing_6', 'flange_6')),
     ),
     'electric_cab': (
         ('plinth', ('plinth',)),
         ('body', ('body', 'door', 'vent', 'signage')),
         ('roof', ('roof', 'hardware')),
-        ('fittings', ('insulator_input', 'insulator_output', 'arrester_1', 'arrester_2', 'arrester_3')),
+        # a column apiece: the two bushings and the three arresters are five separate porcelain stacks on
+        # the roof, and one box round the lot of them is a wall across it
+        ('insulator_input', ('insulator_input',)),
+        ('insulator_output', ('insulator_output',)),
+        ('arrester_1', ('arrester_1',)),
+        ('arrester_2', ('arrester_2',)),
+        ('arrester_3', ('arrester_3',)),
     ),
     'utility_pole': (
         # the steps are what a player climbs, and they are within a pixel of the shaft either side of it
         ('shaft', ('shaft', 'earth', 'plate',
                    'step_0', 'step_1', 'step_2', 'step_3', 'step_4', 'step_5', 'step_6')),
-        ('arm_lower', ('arm_lower', 'insulator_1', 'pin_1', 'insulator_2', 'pin_2',
-                       'insulator_3', 'pin_3', 'insulator_4', 'pin_4')),
-        ('arm_upper', ('arm_upper', 'insulator_5', 'pin_5', 'insulator_6', 'pin_6',
-                       'insulator_7', 'pin_7', 'insulator_8', 'pin_8')),
+        ('arm_lower', ('arm_lower',)),
+        ('arm_upper', ('arm_upper',)),
+        # the pin goes with the insulator it carries: the spindle is what stands it off the arm
+        ('insulator_1', ('insulator_1', 'pin_1')),
+        ('insulator_2', ('insulator_2', 'pin_2')),
+        ('insulator_3', ('insulator_3', 'pin_3')),
+        ('insulator_4', ('insulator_4', 'pin_4')),
+        ('insulator_5', ('insulator_5', 'pin_5')),
+        ('insulator_6', ('insulator_6', 'pin_6')),
+        ('insulator_7', ('insulator_7', 'pin_7')),
+        ('insulator_8', ('insulator_8', 'pin_8')),
     ),
 }
 

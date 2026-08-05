@@ -81,7 +81,7 @@ public interface MachineShell {
 		if (level.isClientSide || !(state.getBlock() instanceof MachineShell machine)) return;
 
 		int quarters = machine.shellTurns(state);
-		for (Cell cell : machine.shellCells()) {
+		for (Cell cell : machine.shellCells(state)) {
 			if (cell.own()) continue;
 
 			BlockPos target = pos.offset(cell.at(quarters));
@@ -103,16 +103,27 @@ public interface MachineShell {
 		return owner == null || owner.equals(pos);
 	}
 
-	/** Takes back the cells that point at this machine, and nothing else. */
+	/**
+	 * Takes back the cells that point at this machine, and nothing else.
+	  *
+	 * Read off the cell's own back-pointer rather than through {@link #hostOf}: this runs from
+	 * {@code onRemove}, and by then the chunk already holds the new state, so the machine asking is air
+	 * and hostOf disowns every cell it has. Nothing was cleared, and only a machine whose cells touch its
+	 * own block hid it - those go through MachineShellBlock.updateShape instead. A tower's do not touch
+	 * it, so all seventy-eight of its cells stayed behind, solid and invisible.
+	 */
 	static void clear(Level level, BlockPos pos, BlockState state) {
 		if (level.isClientSide || !(state.getBlock() instanceof MachineShell machine)) return;
 
 		int quarters = machine.shellTurns(state);
-		for (Cell cell : machine.shellCells()) {
+		for (Cell cell : machine.shellCells(state)) {
 			if (cell.own()) continue;
 
 			BlockPos target = pos.offset(cell.at(quarters));
-			if (level.hasChunkAt(target) && pos.equals(hostOf(level, target))) {
+			if (!level.hasChunkAt(target)) continue;
+
+			BlockState there = level.getBlockState(target);
+			if (there.getBlock() instanceof MachineShellBlock && pos.equals(MachineShellBlock.pointsAt(target, there))) {
 				level.removeBlock(target, false);
 			}
 		}
@@ -149,7 +160,7 @@ public interface MachineShell {
 	/** Whether a machine at {@code host} says the cell at {@code pos} is one of its own. */
 	private static boolean claims(MachineShell machine, BlockState state, BlockPos host, BlockPos pos) {
 		int quarters = machine.shellTurns(state);
-		for (Cell cell : machine.shellCells()) {
+		for (Cell cell : machine.shellCells(state)) {
 			if (!cell.own() && host.offset(cell.at(quarters)).equals(pos)) return true;
 		}
 

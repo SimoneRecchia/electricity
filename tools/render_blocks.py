@@ -783,7 +783,22 @@ def scene_pole():
 def scene_tower():
     triangles = ground(-6, -6, 12, 12, SAND)
     triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))  # noqa: E501
-    return triangles, (-4.0, 6.0, 12.0), (3.5, 5.0, 3.5)
+    return triangles, (-6.0, 9.0, 18.0), (3.5, 6.5, 3.5)
+
+
+def scene_tower_head():
+    """The head of each duty side by side: the arms, the hangers and the strings they carry."""
+    triangles = ground(-8, -8, 28, 28, SAND)
+    for index, duty in enumerate(('suspension', 'tension', 'terminal')):
+        triangles += placed(machine_model('lattice_' + duty), (3 + index * 7, 0, 3))
+    return triangles, (10.5, 12.0, 20.0), (10.5, 8.9, 3.0)
+
+
+def scene_tower_arm():
+    """One tension tower's lower arm from below: the jumper loops and the dead-ends either side."""
+    triangles = ground(-8, -8, 24, 24, SAND)
+    triangles += placed(machine_model('lattice_tension'), (3, 0, 3))
+    return triangles, (3.5, 6.2, 9.5), (3.5, 8.4, 3.5)
 
 
 def scene_machine_cable():
@@ -869,6 +884,8 @@ SCENES = {
     'cab': scene_cab,
     'pole': scene_pole,
     'tower': scene_tower,
+    'tower_head': scene_tower_head,
+    'tower_arm': scene_tower_arm,
 }
 
 
