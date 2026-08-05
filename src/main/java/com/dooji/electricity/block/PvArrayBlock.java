@@ -42,12 +42,10 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	/** The four mountings as collision, each cut from its own model. */
 	private static final List<Cell> FLAT_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.72, 0.48, 15.52, 2.45, 15.52),
-					Block.box(0.96, 0.00, 0.96, 15.04, 0.72, 15.04))));
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.48, 15.52, 2.45, 15.52)));
 
 	private static final List<Cell> TILT_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.89, 0.83, 15.52, 8.50, 14.82),
-					Block.box(1.82, 0.00, 1.48, 14.18, 6.77, 15.10))));
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.83, 15.52, 8.50, 15.10)));
 
 	/** What a tracked row's plane can be anywhere in, over a day. */
 	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 3.22, 0.32, 15.66, 16.00, 15.68);
@@ -55,10 +53,11 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	/** The same for a pedestal frame, which turns about two axes. */
 	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.37, 0.00, 16.00, 16.00, 16.00);
 
+	// The pier and the drive above it are one column, so they are one box: two of them differed by a pixel
+	// of overhang nobody can walk into.
 	private static final List<Cell> TRACK_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(
-					Block.box(5.92, 0.00, 7.12, 10.08, 9.20, 8.88),
-					Block.box(6.32, 9.20, 7.15, 11.31, 12.56, 8.85),
+					Block.box(5.92, 0.00, 7.12, 11.31, 12.56, 8.88),
 					SWEPT_ROW)));
 
 	private static final List<Cell> DUAL_CELLS = List.of(

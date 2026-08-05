@@ -142,8 +142,11 @@ The rules that came out of doing it:
   which model groups make up each part of the object: an inverter is a cabinet and a cabinet is one
   rectangle. Every group a model draws has to appear there exactly once, so a new part is a decision about
   its collision rather than a silent extra box. Cut from every group and sliced wherever it sloped, a
-  fixed-tilt array came out as **23 boxes of staircase**; it is 2. The inverter is **1**, the combiner 2
-  (post, enclosure), the kiosk 2.
+  fixed-tilt array came out as **23 boxes of staircase**; it is **1**. So is a flat one, and the inverter.
+  The combiner keeps 2 and should: merging a thin post into the wider enclosure above it puts a wall of air
+  beside the post for its whole height, which is the one case where a second box earns its keep.
+* **A box is only worth adding where a player could have been in the gap.** A ballasted table is 2.5 px
+  tall in all and a fixed rack 8.5 — there is nothing under either to stand in, so one box each.
 * **A quarter of a pixel is a real part.** The threshold is `MIN_OWN = 0.25` px: a ballasted table is
   2 px tall in total, and a 1-px threshold discarded it entirely.
 * **A cable's hitbox is a few pixels, and that is right.** Not the block.

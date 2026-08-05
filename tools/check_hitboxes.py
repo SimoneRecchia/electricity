@@ -118,13 +118,13 @@ RECTANGLES = {
         ('cabinet', ('plinth', 'body', 'hood', 'door', 'vent', 'conduit')),
         ('top', ('hardware', 'insulator')),
     ),
+    # One box each: a ballasted table is 2.5 px tall in all and a fixed rack 8.5, so there is no gap under
+    # either that a player could have been in.  Two boxes bought nothing but a second box.
     'pv_flat': (
-        ('ballast', ('ballast',)),
-        ('panel', ('frame', 'modules')),
+        ('table', ('ballast', 'frame', 'modules')),
     ),
     'pv_tilt': (
-        ('piers', ('piers',)),
-        ('panel', ('purlin_0', 'purlin_1', 'rails', 'modules')),
+        ('rack', ('piers', 'purlin_0', 'purlin_1', 'rails', 'modules')),
     ),
     'met_mast': (
         ('mast', ('mast', 'logger', 'anemometer')),
