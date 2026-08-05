@@ -21,8 +21,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, HEX, MC4, MC4_PIN, MC4_RADIUS, MC4_SPREAD,     # noqa: E402
-                      Mesh, arc, box, clad_box, cylinder, mc4, tube, write_mtl)
+from modellib import (FITTING, HEX, MC4, MC4_JOINT, MC4_JOINT_LENGTH,          # noqa: E402
+                      MC4_LENGTH, MC4_PIN, MC4_RADIUS, MC4_SPREAD, MC4_STAGGER, Mesh, arc, box,
+                      clad_box, cylinder, mc4, tube, write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -36,12 +37,15 @@ SIDES = ('north', 'east', 'south', 'west')
 # The materials, and the textures they resolve to.
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
 MATERIALS = {name: '#' + name for name in
-             ('core', 'cleat', 'plug_plus', 'plug_minus', 'gland', 'jbox', 'jbox_side', 'trench')}
+             ('core', 'cleat', 'plug_plus', 'plug_minus', 'joint_plus', 'joint_minus', 'gland',
+              'jbox', 'jbox_side', 'trench')}
 TEXTURES = {
     'core': 'electricity:block/dc_core',
     'cleat': 'electricity:block/dc_cleat',
     'plug_plus': 'electricity:block/dc_connector_plus',
     'plug_minus': 'electricity:block/dc_connector_minus',
+    'joint_plus': 'electricity:block/dc_joint_plus',
+    'joint_minus': 'electricity:block/dc_joint_minus',
     'gland': 'electricity:block/dc_gland',
     'jbox': 'electricity:block/dc_jbox',
     'jbox_side': 'electricity:block/dc_jbox_side',
@@ -62,11 +66,17 @@ CORE_Y = CORE_RADIUS
 HUB_LO = 5.4
 HUB_HI = 16.0 - HUB_LO
 
-# Where the plug's own axis starts.  MC4 and its figures are in modellib, shared with gen_pv_models.
-PLUG_START = 7.5
+# Where the plug's own axis starts, for the longer of the pair.  MC4 and its figures are in modellib,
+# shared with gen_pv_models.  The tip has to stay a pixel inside the block - check_inside_block.
+PLUG_START = 15.0 - MC4_LENGTH - MC4_PIN
 # A plug is fatter than the cable it is moulded onto, so a plug resting on the ground holds its own axis
 PLUG_Y = MC4_RADIUS
-PLUG_RISE = 1.9
+PLUG_RISE = 2.2
+
+# Where the mated joint on a straight run sits: centred in the middle, so each arm's cable has room to
+# splay onto the joint's lane and climb onto its axis before it gets there.
+JOINT_LO = 8.0 - MC4_JOINT_LENGTH / 2.0
+JOINT_HI = 8.0 + MC4_JOINT_LENGTH / 2.0
 
 # How many segments a quarter turn is swept in.
 # costs eight rings of thirty-two.
@@ -174,21 +184,28 @@ class Barrel:
 
 
 class Plug:
-    """An MC4 on the end of a core.  modellib.mc4 draws it; its boxes are the profile's own steps."""
+    """An MC4 moulding on a core: a plug at a free end, or a mated joint mid-run.
 
-    def __init__(self, centre, base, positive, joint=None):
-        self.centre, self.base, self.positive = centre, base, positive
-        self.material = 'plug_plus' if positive else 'plug_minus'
+    modellib.mc4 draws it; its boxes are the profile's own steps.
+    """
+
+    def __init__(self, centre, base, index, start, profile=MC4, group='plug', joint=None):
+        self.centre, self.base, self.index, self.start = centre, base, index, start
+        self.profile, self.group = profile, group
+        self.positive = index == 0
+        # A joint is one plug pushed into another, so it has no free pin to show.
+        self.pin = self.positive and profile is MC4
+        self.material = '%s_%s' % (group, 'plus' if self.positive else 'minus')
         self.joint = joint
 
     def draw(self, mesh):
-        mc4(mesh, mesh.faces('plug', self.material),
-            at(self.centre, self.base + PLUG_Y, PLUG_START), 'z', unit=1.0 / 16.0,
-            pin=self.positive)
+        mc4(mesh, mesh.faces(self.group, self.material),
+            at(self.centre, self.base + PLUG_Y, self.start), 'z', unit=1.0 / 16.0,
+            profile=self.profile, pin=self.pin)
 
     def boxes(self):
-        y, result, cursor = self.base + PLUG_Y, [], PLUG_START
-        steps = list(MC4) + ([(MC4_PIN, 0.30, 1.0, 0.0, 0.0)] if self.positive else [])
+        y, result, cursor = self.base + PLUG_Y, [], self.start
+        steps = list(self.profile) + ([(MC4_PIN, 0.22, 1.0, 0.0, 0.0)] if self.pin else [])
         for length, radius, taper, _, _ in steps:
             span = radius * max(1.0, taper)
             result.append(((self.centre - span, y - span, cursor),
@@ -262,17 +279,23 @@ def _dedupe(path):
 
 def plug_lane(centre):
     """Which lane a core's plug sits on: the pair splays from CORE_OFFSET out to MC4_SPREAD, because two
-    coupling rings 3.6 px across will not lie 2.1 px apart.  A real string's leads splay at an end too."""
+    coupling rings 2.2 px across will not quite lie 2.1 px apart."""
     return 8.0 + (centre - 8.0) / CORE_OFFSET * MC4_SPREAD
 
 
-def tail(centre, base, start, joint=None):
+def plug_start(index):
+    """Where a core's plug begins.  The second is MC4_STAGGER short of the first, which is how a string's
+    two leads are cut and what makes the pair read as two connectors rather than one wide lump."""
+    return PLUG_START - (MC4_STAGGER if index else 0.0)
+
+
+def tail(centre, base, start, index, joint=None):
     """The core between a piece's own boundary and its plug: straight, then out and up onto the lane."""
-    y, lane = base + CORE_Y, plug_lane(centre)
-    # It runs 0.35 px *into* the plug so its own end cap is buried: level with the plug's first face the
+    y, lane, into = base + CORE_Y, plug_lane(centre), plug_start(index)
+    # It runs 0.30 px *into* the plug so its own end cap is buried: level with the plug's first face the
     # two discs are coplanar and flicker against each other.
-    return Run([(centre, y, start), (centre, y, PLUG_START - PLUG_RISE),
-                (lane, base + PLUG_Y, PLUG_START - 0.45), (lane, base + PLUG_Y, PLUG_START + 0.35)],
+    return Run([(centre, y, start), (centre, y, into - PLUG_RISE),
+                (lane, base + PLUG_Y, into - 0.45), (lane, base + PLUG_Y, into + 0.30)],
                joint=joint)
 
 
@@ -330,9 +353,22 @@ def junction_box(base, glanded):
 # ---------------------------------------------------------------- the sixteen middles
 
 def piece_line(base):
-    """Two opposite sides: the pair runs straight through, held down by a cleat."""
-    y = base + CORE_Y
-    return [Run([(c, y, HUB_LO), (c, y, HUB_HI)]) for c in CORES] + cleat(base, 7.1, 8.9)
+    """Two opposite sides: the pair runs through, and it has a mated pair of MC4s in it.
+
+    A string is a chain of finite lengths plugged together - module lead into module lead - so a metre of
+    one has a joint in it.  With plugs only on the dead end and the offcut, a player who lays cable from a
+    row to an inverter never saw a connector at all.  The cleat that used to hold this middle down is on
+    the arms now, either side of the joint, which is where a cleat goes.
+    """
+    y, parts = base + CORE_Y, []
+    for index, c in enumerate(CORES):
+        lane, name = plug_lane(c), 'joint_%d' % index
+        parts.append(Plug(lane, base, index, JOINT_LO, profile=MC4_JOINT, group='joint', joint=name))
+        # in from each arm, splaying onto the joint's lane and climbing onto its axis as it comes.  0.30 px
+        # inside the joint, so the tube's own cap is buried rather than coplanar with the joint's face.
+        parts.append(Run([(c, y, HUB_LO), (lane, base + PLUG_Y, JOINT_LO + 0.30)], joint=name))
+        parts.append(Run([(lane, base + PLUG_Y, JOINT_HI - 0.30), (c, y, HUB_HI)], joint=name))
+    return parts
 
 
 def piece_bend(base):
@@ -354,8 +390,9 @@ def piece_end(base):
     """One side connected: the pair comes in and ends in two MC4 plugs."""
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(tail(c, base, HUB_LO, joint='lead_%d' % index))
-        parts.append(Plug(plug_lane(c), base, index == 0, joint='lead_%d' % index))
+        parts.append(tail(c, base, HUB_LO, index, joint='lead_%d' % index))
+        parts.append(Plug(plug_lane(c), base, index, plug_start(index),
+                          joint='lead_%d' % index))
     return parts
 
 
@@ -363,8 +400,9 @@ def piece_loose(base):
     """Nothing connected: a length of pair lying where it was dropped"""
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(tail(c, base, 3.2, joint='lead_%d' % index))
-        parts.append(Plug(plug_lane(c), base, index == 0, joint='lead_%d' % index))
+        parts.append(tail(c, base, 3.2, index, joint='lead_%d' % index))
+        parts.append(Plug(plug_lane(c), base, index, plug_start(index),
+                          joint='lead_%d' % index))
     return parts
 
 
@@ -379,9 +417,9 @@ def piece_cross(base):
 
 
 def piece_arm(base, near):
-    """The pair from a block edge in to the middle piece."""
+    """The pair from a block edge in to the middle piece, cleated where it crosses open ground."""
     y = base + CORE_Y
-    return [Run([(c, y, near), (c, y, HUB_LO)]) for c in CORES]
+    return [Run([(c, y, near), (c, y, HUB_LO)]) for c in CORES] + cleat(base, 2.3, 3.1)
 
 
 def piece_climb(base):

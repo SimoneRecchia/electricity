@@ -406,27 +406,49 @@ def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
     tube(mesh, faces, circle + [circle[0]], section, sides=max(6, sides // 4), uv_scale=1.0)
 
 
-# A Stäubli MC4, as (length, radius, taper, v0, v1) in sixteenths.  The diameters are the real ones at
-# the cable's own drawn scale - a 6.9 mm core reads as 1.30 px, so a millimetre of radius is 0.188 px -
-# and the length is cut to what fits inside a block, which is the exaggeration the cable's diameter
-# already carries in the other direction.  Fat, thin, fat is the signature: gland nut, body, coupling ring.
-# gen_cable_models and gen_pv_models both draw from this, and dc_connector_plus's bands are these v.
-MC4 = ((0.85, 0.72, 1.667, 0.000, 0.118),    # the strain relief out of the jacket
-       (1.30, 1.41, 1.000, 0.118, 0.299),    # the cable gland nut, knurled
-       (2.35, 1.24, 1.000, 0.299, 0.625),    # the body, carrying the legend
-       (1.90, 1.79, 1.000, 0.625, 0.889),    # the coupling ring: the widest part, the one you grip
-       (0.80, 1.79, 0.849, 0.889, 1.000))    # the nose, chamfered
+# A Stäubli MC4, as (length, radius, taper, v0, v1) in sixteenths.  Fat, thin, fat is the signature:
+# gland nut, body, coupling ring.  gen_cable_models and gen_pv_models both draw from this, and
+# dc_connector_plus's bands are these v.
+#
+# The size is chosen by what reads, not by the datasheet's own ratio.  A real MC4 is 2.75 times its
+# cable across the coupling ring - but this mod's cable is itself drawn nine times oversize, because a
+# true 6.9 mm core is a fifteenth of a pixel and invisible, so taking the true ratio on top of that gave
+# a connector 3.6 px across on a 1.3 px cable: a fitting the size of a bollard, wider than the run was
+# long, hiding the cable it was moulded onto.  1.7 times the cable is the least that still shows three
+# diameters and a knurl, and that is what this is.
+MC4 = ((0.55, 0.68, 1.206, 0.0000, 0.1250),   # the strain relief out of the jacket
+       (0.80, 0.95, 1.000, 0.1250, 0.3068),   # the cable gland nut, knurled
+       (1.35, 0.80, 1.000, 0.3068, 0.6136),   # the body, carrying the legend
+       (1.15, 1.10, 1.000, 0.6136, 0.8750),   # the coupling ring: the widest part, the one you grip
+       (0.55, 1.10, 0.864, 0.8750, 1.0000))   # the nose, chamfered
 MC4_LENGTH = sum(step[0] for step in MC4)
 MC4_RADIUS = max(step[1] * max(1.0, step[2]) for step in MC4)
-MC4_PIN = 0.34
-# Two plugs will not lie side by side at the cable's own spacing - the coupling rings are 3.6 px across
-# and the pair is 2.1 px apart - so a pair of leads splays at an end, the way a real string's does.
-MC4_SPREAD = 2.10
+MC4_PIN = 0.22
+# Two coupling rings 2.2 px across will not quite lie 2.1 px apart, so the pair splays a little at an
+# end - a tenth of a pixel each way, where a bollard-sized plug needed a whole pixel.
+MC4_SPREAD = 1.25
+# And the two leads of a string are cut to different lengths, so their plugs do not sit level.  Which is
+# also what makes two of them read as two rather than as one wide lump.
+MC4_STAGGER = 2.00
+
+# A mated pair, which is what joins two module leads and therefore what a laid run actually shows: a
+# string is a chain of finite lengths plugged together, and every metre of one has a joint in it.  The
+# silhouette is the pair's own - nut, coupling collar, nut - with the two smooth bodies cut back to what
+# fits between a block's arms.  dc_joint_plus's bands are these v.
+MC4_JOINT = ((0.40, 0.68, 1.235, 0.0000, 0.1111),   # the strain relief in
+             (0.65, 0.95, 1.000, 0.1111, 0.2917),   # one gland nut
+             (0.25, 0.80, 1.000, 0.2917, 0.3611),   # its body
+             (1.00, 1.10, 1.000, 0.3611, 0.6389),   # the coupling collar, screwed home
+             (0.25, 0.80, 1.000, 0.6389, 0.7083),   # the other body
+             (0.65, 0.95, 1.000, 0.7083, 0.8889),   # the other gland nut
+             (0.40, 0.84, 0.810, 0.8889, 1.0000))   # and the strain relief out
+MC4_JOINT_LENGTH = sum(step[0] for step in MC4_JOINT)
 
 
-def mc4(mesh, faces, start, axis, unit=1.0, into=1, flip_v=False, pin=False):
-    """An MC4 plug grown along one axis from ``start``, which is a point on its own centre line.
+def mc4(mesh, faces, start, axis, unit=1.0, into=1, flip_v=False, pin=False, profile=MC4):
+    """An MC4 moulding grown along one axis from ``start``, which is a point on its own centre line.
 
+    ``profile`` is MC4 for a plug on a free end or MC4_JOINT for a mated pair mid-run.
     ``unit`` is a sixteenth in the caller's units: 1.0 in a block-frame OBJ, 1/16 in a machine's.
     ``flip_v`` for the mod's own renderer, which does 1 - v, so the bands arrive tail first without it.
     ``pin`` is the male contact, and is the only thing that tells the two poles apart in silhouette.
@@ -434,10 +456,10 @@ def mc4(mesh, faces, start, axis, unit=1.0, into=1, flip_v=False, pin=False):
     # u zero is the top, which is where tube() puts its own reference vector: a plug lit down one side and
     # a cable lit down another read as two objects.
     phase = math.pi / 2 if axis == 'z' else 0.0
-    steps = list(MC4)
+    steps = list(profile)
     if pin:
-        nose = MC4[-1]
-        steps.append((MC4_PIN, 0.30, 1.0, nose[3], nose[4]))
+        nose = profile[-1]
+        steps.append((MC4_PIN, 0.22, 1.0, nose[3], nose[4]))
 
     # A shoulder between two steps is an annulus, and an open one is a hole straight into the plug - which
     # is what a profile that steps in as well as out gets if only the last segment is capped.  The wider

@@ -661,36 +661,52 @@ def _turned(u, count=0, tilt=0.0, matt=True):
     return -8 + lit * lit * 44, lit ** 20 * 0.50
 
 
-def _connector(positive):
-    """An MC4 plug as a strip along its own length: gland nut, body, coupling ring, nose.
+# (v0, v1, tone off CONNECTOR_BODY or None for a strain relief, flutes, how deep they are cut).  The v
+# are modellib.MC4's and MC4_JOINT's own - move one there and move it here.  Eight flutes round a 6 px nut
+# and six ribs round a 7 px ring: a flute has to be about a pixel wide or it is a stripe.
+PLUG_BANDS = (
+    (0.0000, 0.1250, None, 0, 0.00),        # the strain relief
+    (0.1250, 0.3068, 5, 8, 0.72),           # the cable gland nut
+    (0.3068, 0.6136, 0, 0, 0.00),           # the body
+    (0.6136, 0.8750, 8, 6, 0.80),           # the coupling ring
+    (0.8750, 1.0000, -12, 0, 0.00),         # the nose
+)
+JOINT_BANDS = (
+    (0.0000, 0.1111, None, 0, 0.00),        # the strain relief in
+    (0.1111, 0.2917, 5, 8, 0.72),           # one gland nut
+    (0.2917, 0.3611, 0, 0, 0.00),           # its body
+    (0.3611, 0.6389, 8, 6, 0.80),           # the coupling collar, screwed home
+    (0.6389, 0.7083, 0, 0, 0.00),           # the other body
+    (0.7083, 0.8889, 5, 8, 0.72),           # the other gland nut
+    (0.8889, 1.0000, None, 0, 0.00),        # and the strain relief out
+)
 
-    The v bands are modellib.MC4's own - move one and move both.  Nothing here is a picture of a feature:
-    the knurl and the grip are tilts fed through _turned, so they are lit rather than painted.
+
+def _moulded(bands, positive):
+    """An MC4 moulding as a strip along its own length: a plug at a free end, or a mated joint mid-run.
+
+    Nothing here is a picture of a feature - the knurl and the grip are tilts fed through _turned, so they
+    are lit rather than painted, and a flute on the shaded side of the tube stays shaded.
     """
-    # 256 rather than the 128 CLAUDE.md gives a connector: sixteen flutes round an eleven-pixel nut need
-    # the samples, and at 128 each one got eight columns and came out as a stripe.
+    # 256 rather than the 128 CLAUDE.md gives a connector: this tile is a strip along a length and its
+    # flutes are turned detail, so u wants the samples.
     size = 256
     c = Canvas(size, size)
-
-    # (v0, v1, base, flutes, tilt) - the bands in MC4's order, and how deep their grip is cut
-    bands = (
-        (0.000, 0.118, None, 0, 0.00),                                  # the strain relief
-        (0.118, 0.299, shade(CONNECTOR_BODY, 5), 16, 0.72),             # the cable gland nut
-        (0.299, 0.625, CONNECTOR_BODY, 0, 0.00),                        # the body
-        (0.625, 0.889, shade(CONNECTOR_BODY, 8), 8, 0.80),              # the coupling ring
-        (0.889, 1.000, shade(CONNECTOR_BODY, -12), 0, 0.00),            # the nose
-    )
     # the moulding's own grain, along the part rather than round it - the same reason as dc_core's
     grain = stretched(size, along=size * 3.0, across=size / 22.0, octaves=2, salt=293)
 
     for j in range(size):
         v = (j + 0.5) / size
-        v0, v1, base, count, tilt = next(b for b in bands if b[0] <= v <= b[1])
+        index, band = next((k, b) for k, b in enumerate(bands) if b[0] <= v <= b[1])
+        v0, v1, step, count, tilt = band
         across = (v - v0) / max(v1 - v0, 1e-6)
+        # a joint's last band is its *far* strain relief, so its blend into the jacket runs the other way
+        if index == len(bands) - 1 and step is None:
+            across = 1.0 - across
         for i in range(size):
             u = (i + 0.5) / size
             tone, sheen = _turned(u, count, tilt)
-            if base is None:
+            if step is None:
                 # the jacket becoming the shell: the moulding grips the sheath, it is not butted to it
                 colour = mix(JACKET, CONNECTOR_BODY, min(1.0, across * 1.6))
                 # The polarity, as a ring at the gland: 2.5 mm of it, which is what a coding ring
@@ -699,20 +715,19 @@ def _connector(positive):
                 if positive and across < 0.55:
                     colour = CONNECTOR_RED
             else:
-                colour = base
+                colour = shade(CONNECTOR_BODY, step)
             tone += grain.signed(0.0, i) * 7
-            colour = mix(shade(colour, tone), (208, 214, 222, 255), sheen)
-            c.set(i, j, colour)
+            c.set(i, j, mix(shade(colour, tone), (208, 214, 222, 255), sheen))
 
-    # the shoulder at every step in the profile: what tells a player the plug has steps at all, since
+    # the shoulder at every step in the profile: what tells a player the moulding has steps at all, since
     # shade_quads cannot draw the silhouette's own shadow
     for v0, _, _, _, _ in bands[1:]:
-        c.aa_rect(0, size * v0 - size * 0.010, size, size * v0 + size * 0.006,
-                  (0, 0, 0, 255), alpha=0.42)
+        c.aa_rect(0, size * v0 - size * 0.011, size, size * v0 + size * 0.007,
+                  (0, 0, 0, 255), alpha=0.55)
     # and the mould's parting line, down the two sides where the tool splits
     for u in (0.25, 0.75):
-        c.aa_rect(size * u - size * 0.006, size * 0.118, size * u + size * 0.006, size,
-                  (0, 0, 0, 255), alpha=0.30)
+        c.aa_rect(size * u - size * 0.006, size * bands[1][0], size * u + size * 0.006,
+                  size * bands[-1][0], (0, 0, 0, 255), alpha=0.30)
 
     grime(c, salt=307, amount=0.10, colour=(70, 66, 60, 255))
     return c
@@ -747,11 +762,19 @@ def dc_gland():
 
 
 def dc_connector_plus():
-    return _connector(True)
+    return _moulded(PLUG_BANDS, True)
 
 
 def dc_connector_minus():
-    return _connector(False)
+    return _moulded(PLUG_BANDS, False)
+
+
+def dc_joint_plus():
+    return _moulded(JOINT_BANDS, True)
+
+
+def dc_joint_minus():
+    return _moulded(JOINT_BANDS, False)
 
 
 def dc_jbox():
@@ -1345,6 +1368,8 @@ TEXTURES = {
     'dc_cleat': dc_cleat,
     'dc_connector_plus': dc_connector_plus,
     'dc_connector_minus': dc_connector_minus,
+    'dc_joint_plus': dc_joint_plus,
+    'dc_joint_minus': dc_joint_minus,
     'dc_gland': dc_gland,
     'dc_jbox': dc_jbox,
     'dc_jbox_side': dc_jbox_side,

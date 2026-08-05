@@ -267,7 +267,34 @@ def ground(x0, z0, x1, z1, texture, y=0.0):
 
 # ---------------------------------------------------------------- drawing
 
-def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)):
+def outline(boxes, offset=(0.0, 0.0, 0.0), yaw=0):
+    """The twelve edges of each collision box, in world space: what F3+B draws in the game.
+
+    A hitbox is the only thing a player sees that no render showed, and a box round nothing looks exactly
+    like a box round something.  Shapes come from the generator's own tables, so this is the game's own
+    outline rather than a drawing of it.
+    """
+    quarters = (yaw // 90) % 4
+    segments = []
+    for lo, hi in boxes:
+        corners = []
+        for x in (lo[0], hi[0]):
+            for y in (lo[1], hi[1]):
+                for z in (lo[2], hi[2]):
+                    a, b = x - 0.5, z - 0.5
+                    for _ in range(quarters):
+                        a, b = -b, a
+                    corners.append((a + 0.5 + offset[0], y + offset[1], b + 0.5 + offset[2]))
+        # the pairs that differ in exactly one axis of the three-bit corner index
+        for i in range(8):
+            for bit in (1, 2, 4):
+                if i & bit:
+                    continue
+                segments.append((corners[i], corners[i | bit]))
+    return segments
+
+
+def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0), edges=()):
     """A z-buffered pass with perspective-correct texture sampling."""
     forward = _unit(_sub(target, eye))
     right = _unit(_cross(forward, up))
@@ -276,6 +303,15 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
 
     depth = [1e30] * (size * size)
     canvas = Canvas(size, size, (96, 108, 122, 255))
+
+    def project(point):
+        offset = _sub(point, eye)
+        z = _dot(offset, forward)
+        if z <= 0.05:
+            return None
+        inverse = focal / z
+        return (size * 0.5 + _dot(offset, right) * inverse,
+                size * 0.5 - _dot(offset, above) * inverse, z)
 
     for _, texture, corners, normal, shade in triangles:
         lit = 1.0 if not shade else \
@@ -295,8 +331,33 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
 
         _triangle(canvas, depth, size, screen, texture, lit)
 
+    for a, b in edges:
+        first, second = project(a), project(b)
+        if first and second:
+            _line(canvas, depth, size, first, second)
+
     canvas.write(path)
     return path
+
+
+def _line(canvas, depth, size, first, second, colour=(24, 24, 28)):
+    """A depth-tested line, biased towards the eye so an edge on a face is not swallowed by it."""
+    steps = max(2, int(max(abs(second[0] - first[0]), abs(second[1] - first[1]))) + 1)
+    for k in range(steps + 1):
+        t = k / steps
+        x = first[0] + (second[0] - first[0]) * t
+        y = first[1] + (second[1] - first[1]) * t
+        z = first[2] + (second[2] - first[2]) * t
+        px, py = int(x), int(y)
+        if not (0 <= px < size and 0 <= py < size):
+            continue
+
+        index = py * size + px
+        if z - 0.004 >= depth[index]:
+            continue
+
+        depth[index] = z - 0.004
+        canvas.px[index] = list(colour) + [255]
 
 
 def _triangle(canvas, depth, size, screen, texture, lit):
@@ -423,6 +484,28 @@ def scene_cable_junction():
     triangles += cable_piece('arm', (1, 0, 0), yaw=0)
     triangles += cable_piece('arm', (1, 0, 0), yaw=180)
     return triangles, (0.55, 0.62, 2.35), (1.5, 0.06, 1.45)
+
+
+def scene_cable_hitbox():
+    """A dead end with its collision drawn, which is the view every cable fault has been reported from.
+
+    The boxes come from gen_cable_models' own tables, so this is what F3+B shows in the game.
+    """
+    import gen_cable_models as cable
+
+    triangles = ground(-1, -1, 4, 4, SAND)
+    triangles += cable_piece('end', (1, 0, 1), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 1), yaw=0)
+    triangles += cable_piece('line', (1, 0, 0), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 0), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 0), yaw=180)
+
+    boxes = [(tuple(v / 16.0 for v in lo), tuple(v / 16.0 for v in hi))
+             for part in cable.piece_end(0.0) for lo, hi in part.boxes()]
+    boxes += [(tuple(v / 16.0 for v in lo), tuple(v / 16.0 for v in hi))
+              for part in cable.piece_arm(0.0, 0.0) for lo, hi in part.boxes()]
+    edges = outline(cable.merged(boxes), (1, 0, 1))
+    return triangles, (0.45, 0.80, 2.65), (1.55, 0.08, 1.45), edges
 
 
 def scene_cable_plug():
@@ -554,6 +637,7 @@ SCENES = {
     'cable_run': scene_cable_run,
     'cable_corner': scene_cable_corner,
     'cable_junction': scene_cable_junction,
+    'cable_hitbox': scene_cable_hitbox,
     'cable_plug': scene_cable_plug,
     'inverter_front': scene_inverter_front,
     'inverter_roof': scene_inverter_roof,
@@ -577,8 +661,11 @@ def main():
             size = int(flag.split('=')[1])
 
     for name in args or sorted(SCENES):
-        triangles, eye, target = SCENES[name]()
-        path = render(triangles, eye, target, os.path.join(OUT, name + '.png'), size=size)
+        scene = SCENES[name]()
+        triangles, eye, target = scene[:3]
+        edges = scene[3] if len(scene) > 3 else ()
+        path = render(triangles, eye, target, os.path.join(OUT, name + '.png'), size=size,
+                      edges=edges)
         print('%-16s %6d triangles  %s' % (name, len(triangles), path))
 
 

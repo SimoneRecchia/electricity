@@ -119,6 +119,13 @@ height; the tube moved and the checker went on measuring the old axis, so it rep
 not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
 the renderer does.
 
+**A fitting a player never reaches is a fitting that does not exist.** The MC4 connectors were drawn only
+on the dead end and the dropped offcut, so anybody laying cable from a row to an inverter saw a smooth
+tube and nothing else, and three rounds of work on the connector changed nothing they could see. A string
+is a chain of finite lengths plugged together, so the straight piece carries a **mated pair** — which is
+both the real object and the only place a run puts one. Before drawing a part better, check where it is
+drawn at all.
+
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
 python3 tools/gen_pv_textures.py        # item sprites and panel layouts
