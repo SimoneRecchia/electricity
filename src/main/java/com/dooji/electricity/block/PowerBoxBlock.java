@@ -18,13 +18,38 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+
+	/**
+	 * Hung on a wall rather than stood on the ground.
+	 *
+	 * Set by clicking the side of a block, which is how every wall-mounted thing in the game is placed.
+	 * A pad-mounted kiosk and a wall enclosure are the same cabinet with two ways of fixing it, and the
+	 * mounting channels on its back are drawn either way because a real one is railed at the factory -
+	 * so the only visible difference is that a mounted box loses its plinth and sits back against the
+	 * wall instead of in the middle of its block.
+	 */
+	public static final BooleanProperty MOUNTED = BooleanProperty.create("mounted");
+
+	/**
+	 * How far back a mounted box is pushed, so its own back lands on the block's.
+	 *
+	 * The model is centred and reaches z 0.220 at the rear, so this is what is left to the boundary.
+	 * The renderer translates the model by it and {@link #WALL_CELLS} moves the collision by the same
+	 * figure, in the model's own frame, before the facing turns either.
+	 */
+	public static final double BACKSET = 0.280;
 
 	/**
 	 * The facing power_box.obj is modelled at.
@@ -49,25 +74,65 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(2.53, 10.94, 4.77, 13.47, 11.81, 11.23),
 					Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20),
-					Block.box(2.91, 0.88, 4.90, 13.09, 11.20, 10.85),
+					Block.box(2.91, 0.88, 4.90, 13.09, 11.20, 11.20),
 					Block.box(3.44, 1.36, 4.61, 12.56, 10.72, 5.28),
 					Block.box(6.67, 12.19, 6.67, 9.33, 14.26, 9.33),
 					Block.box(6.80, 11.23, 6.80, 9.20, 12.18, 9.20),
 					Block.box(10.08, 0.00, 10.56, 11.04, 1.92, 11.52))));
 
+	/** The plinth, which a mounted box has not got. One of the boxes of {@link #CELLS}. */
+	private static final VoxelShape PLINTH = Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20);
+
+	/** The same cabinet with no plinth under it, moved back against the wall it hangs on. */
+	private static final List<Cell> WALL_CELLS = wallCells();
+
+	private static List<Cell> wallCells() {
+		// one cell, and it is the machine's own: a kiosk fits inside its block
+		VoxelShape shape = Shapes.join(CELLS.get(0).shape(0), PLINTH, BooleanOp.ONLY_FIRST);
+		return List.of(new Cell(0, 0, 0, shape.move(0.0, 0.0, BACKSET)));
+	}
+
 	public PowerBoxBlock(Properties properties) {
 		super(properties);
-		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(MOUNTED, false));
 	}
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(FACING);
+		builder.add(FACING, MOUNTED);
+	}
+
+	/**
+	 * Clicked on a wall it hangs on that wall; clicked on the ground it stands on the ground.
+	 *
+	 * The facing is the clicked face when mounted, so the doors look out of the wall rather than into it.
+	 */
+	@Override
+	public BlockState getStateForPlacement(BlockPlaceContext context) {
+		Direction face = context.getClickedFace();
+		if (face.getAxis().isHorizontal()) {
+			return this.defaultBlockState().setValue(FACING, face).setValue(MOUNTED, true);
+		}
+
+		return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite()).setValue(MOUNTED, false);
+	}
+
+	/** A mounted box needs the wall it is bolted to. */
+	@Override
+	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+		if (!state.getValue(MOUNTED)) return true;
+
+		BlockPos wall = pos.relative(state.getValue(FACING).getOpposite());
+		return level.getBlockState(wall).isFaceSturdy(level, wall, state.getValue(FACING));
 	}
 
 	@Override
-	public BlockState getStateForPlacement(BlockPlaceContext context) {
-		return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
+		if (state.getValue(MOUNTED) && direction == state.getValue(FACING).getOpposite() && !canSurvive(state, level, pos)) {
+			return Blocks.AIR.defaultBlockState();
+		}
+
+		return super.updateShape(state, direction, neighbour, level, pos, neighbourPos);
 	}
 
 	@Override
@@ -78,6 +143,11 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	@Override
 	public List<Cell> shellCells() {
 		return CELLS;
+	}
+
+	@Override
+	public List<Cell> shellCells(BlockState state) {
+		return state.getValue(MOUNTED) ? WALL_CELLS : CELLS;
 	}
 
 	@Override

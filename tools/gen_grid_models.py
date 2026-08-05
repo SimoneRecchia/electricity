@@ -246,6 +246,19 @@ def power_box():
         clad_box(mesh, 'vent', (x, 0.20, -0.115), (x + 0.003, 0.58, 0.115),
                  {side: 'vent', '*': 'cabinet'})
 
+    # The mounting channels on the back, which is what this hangs on a wall by.
+    #
+    # Part of the body rather than a group of its own, so it is there whichever way the box is fitted:
+    # a real enclosure is drilled and railed at the factory and stands on its plinth with the rails on
+    # it.  Which also keeps one collision shape true for both states - the wall shape is this one less
+    # the plinth, moved back, and nothing has to appear or disappear.
+    for x in (-body_x + 0.055, body_x - 0.075):
+        clad_box(mesh, 'body', (x, plinth_y + 0.055, body_z), (x + 0.020, body_y - 0.055, body_z + 0.018),
+                 {'*': 'frame'}, uv_scale=0.15)
+        for y in (plinth_y + 0.085, body_y - 0.095):
+            bolt(mesh, mesh.faces('body', 'steel'), (x + 0.010, y, body_z + 0.018), 'z', 0.007, 0.012,
+                 uv_scale=0.08)
+
     # The insulator on the roof: this is where the line arrives, so it is where the wire hangs from -
     # and it is the same insulator the pole carries, at the same diameter, because it is the same part.
     steel = mesh.faces('hardware', 'steel')

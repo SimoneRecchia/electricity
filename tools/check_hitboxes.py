@@ -95,6 +95,8 @@ MODEL_TABLE = {
     # ones are built with a Cell of their own that carries no literal box - and read unscoped, that empty
     # cell overwrites the real table and every box in it reads as missing
     'pv_inverter': 'CELLS',
+    # and the kiosk, for the same reason: its wall-mounted shape is derived from CELLS in code
+    'power_box': 'CELLS',
     'pv_flat': 'FLAT_CELLS',
     'pv_tilt': 'TILT_CELLS',
     'pv_track': 'TRACK_CELLS',

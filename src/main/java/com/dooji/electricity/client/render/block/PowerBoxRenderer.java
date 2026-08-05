@@ -16,6 +16,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -49,7 +50,8 @@ public class PowerBoxRenderer extends ObjRendererBase {
 			seen.add(powerBox.getBlockPos());
 			ObjRenderUtil.withAlignedPose(powerBox, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(PowerBoxBlock.FACING),
 					turnedFrom(PowerBoxBlock.AUTHORED),
-					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), powerBox.getBlockPos()));
+					(context, pose, buffers) -> renderBaked(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), powerBox.getBlockPos(),
+							powerBox.getBlockState()));
 		}
 
 		cleanupCache(BUFFER_CACHE, seen);
@@ -85,7 +87,31 @@ public class PowerBoxRenderer extends ObjRendererBase {
 	}
 
 
-	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos) {
-		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);
+	/**
+	 * Hung on a wall the kiosk loses its plinth and sits back against it.
+	 *
+	 * Both halves of that are here rather than in two models: the plinth is a group that is simply not
+	 * drawn, and the setback is a translation in the model's own frame, applied inside the pose so the
+	 * facing turn carries it round. PowerBoxBlock.WALL_CELLS moves the collision by the same figure.
+	 */
+	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos,
+			BlockState state) {
+		boolean mounted = state.getValue(PowerBoxBlock.MOUNTED);
+		if (!mounted) {
+			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);
+			return;
+		}
+
+		Map<String, Matrix4f> poses = new HashMap<>();
+		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("plinth") || groupName.startsWith("conduit")) continue;
+
+			poseStack.pushPose();
+			poseStack.translate(0.0, 0.0, PowerBoxBlock.BACKSET);
+			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
+			poseStack.popPose();
+		}
+
+		renderGrouped(model, poses, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);
 	}
 }
