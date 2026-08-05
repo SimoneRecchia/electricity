@@ -549,6 +549,19 @@ def scene_cable_climb():
     return triangles, (2.6, 1.9, 3.6), (1.5, 0.9, 1.4)
 
 
+def scene_cable_over():
+    """From over the run, close and steep, which is where a player stands when they look at what they laid.
+
+    A shallow eye looks along a wall and sees it; from up here the junction box shows almost nothing but
+    its lid, so anything that relies on a wall being visible has to be legible from this angle too.
+    """
+    triangles = ground(-1, -1, 5, 5, SAND)
+    triangles += joined('tee', (2, 0, 2), (0, 90, 180))
+    triangles += cable_piece('end', (3, 0, 2), yaw=90)
+    triangles += cable_piece('arm', (3, 0, 2), yaw=270)
+    return triangles, (0.9, 2.6, 0.4), (2.3, 0.06, 2.1)
+
+
 def scene_cable_hitbox():
     """A dead end with its collision drawn, which is the view every cable fault has been reported from.
 
@@ -702,6 +715,7 @@ SCENES = {
     'cable_junction': scene_cable_junction,
     'cable_hitbox': scene_cable_hitbox,
     'cable_states': scene_cable_states,
+    'cable_over': scene_cable_over,
     'cable_climb': scene_cable_climb,
     'cable_plug': scene_cable_plug,
     'inverter_front': scene_inverter_front,

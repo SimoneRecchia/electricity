@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from texlib import (Canvas, Field, LIGHT, bevel, brushed, concrete, cross_hatch, dome, galvanised,
-                    grime, groove, hash01, hex_head, louvre, mesh_screen, mix, plate_label,
+                    grime, groove, hash01, hex_head, louvre, mesh_screen, mix, mul, plate_label,
                     polygon, porcelain, powder, rubber, rust, screw, shade, streak, stretched,
                     warning_triangle)
 
@@ -594,7 +594,10 @@ def pv_switch():
 # four diameters at worst, and terminated in MC4 connectors.
 
 # Carbon-black cross-linked polyolefin.
-JACKET = (48, 50, 56, 255)
+# What a black cross-linked polyolefin sheath measures in daylight.  At (48, 50, 56) with a broad
+# gradient and a half-strength specular it came out as polished grey pipe - the whole run read as
+# plumbing, and every black fitting on it read as a brick stuck to a pipe.  See _turned.
+JACKET = (36, 37, 42, 255)
 CLEAT_STEEL = (154, 158, 164, 255)     # a stainless cable clip
 # Glass-filled polyamide, the MC4 shell.
 CONNECTOR_BODY = (54, 56, 61, 255)
@@ -657,8 +660,9 @@ def _turned(u, count=0, tilt=0.0, matt=True):
     lit = max(0.0, math.cos(2.0 * math.pi * u + _flute(u, count, tilt)))
     if matt:
         # Polyamide against the jacket's polyolefin: a weaker gradient and a broad sheen instead of a
-        return -6 + lit * lit * 38, lit ** 5 * 0.13
-    return -8 + lit * lit * 44, lit ** 20 * 0.50
+        return -6 + lit * lit * 30, lit ** 5 * 0.11
+    # A narrow, weak highlight: black cable has a sheen, not a chrome line down it.
+    return -8 + lit * lit * 26, lit ** 16 * 0.30
 
 
 # (v0, v1, tone off CONNECTOR_BODY or None for a strain relief, flutes, how deep they are cut).  The v
@@ -740,13 +744,18 @@ def dc_tie():
     """
     size = 128
     c = Canvas(size, size)
-    rubber(c, (34, 34, 38, 255), salt=331, sheen=14)
-    # the teeth, across the strap, which is the one feature a tie has
-    for i in range(22):
-        y = size * (i + 0.15) / 22.0
-        c.aa_rect(0, y, size, y + size / 22.0 * 0.42, (24, 24, 27, 255), alpha=0.75)
-        c.aa_rect(0, y + size / 22.0 * 0.42, size, y + size / 22.0 * 0.58, (58, 58, 64, 255),
-                  alpha=0.55)
+    # the top half is the crown of the strap, the bottom half its flanks, at Minecraft's own 0.8 for a
+    # vertical face - see dc_jbox_side.  gen_cable_models picks the band per piece.
+    rubber(c, (62, 62, 68, 255), salt=331, sheen=10)
+    for half, base in ((0, (62, 62, 68, 255)), (1, mul((62, 62, 68, 255), 0.76))):
+        y0, y1 = size * 0.5 * half, size * 0.5 * (half + 1)
+        c.aa_rect(0, y0, size, y1, base, alpha=0.88)
+        # the ratchet teeth, across the strap, which is the one feature a tie has
+        for i in range(11):
+            y = y0 + (y1 - y0) * (i + 0.12) / 11.0
+            step = (y1 - y0) / 11.0
+            c.aa_rect(0, y, size, y + step * 0.40, shade(base, -22), alpha=0.8)
+            c.aa_rect(0, y + step * 0.40, size, y + step * 0.56, shade(base, 26), alpha=0.6)
     grime(c, salt=337, amount=0.10, colour=(70, 68, 62, 255))
     return c
 
@@ -813,14 +822,22 @@ def dc_jbox():
 
 
 def dc_jbox_side():
-    """The junction box's walls: the same moulding"""
+    """The junction box's walls, carrying their own face shading.
+
+    shade_quads is off on every cable model, so Minecraft applies no per-face factor and a wall drawn in
+    the lid's tone is the lid's tone - which is why the box read as a flat plate lying on the sand however
+    tall it was built.  This is the lid less Minecraft's own 0.8 for a vertical face.
+    """
     size = 128
     c = Canvas(size, size)
-    powder(c, shade(ENCLOSURE, -10), salt=317, peel=5)
-    # the draft line every moulded wall carries, and the shadow under the lid's overhang
-    c.aa_rect(0, 0, size, size * 0.09, shade(ENCLOSURE, -34), alpha=0.7)
-    c.aa_rect(0, size * 0.09, size, size * 0.13, shade(ENCLOSURE, 16), alpha=0.5)
-    grime(c, salt=319, amount=0.22, colour=(92, 90, 84, 255))
+    wall = mul(shade(ENCLOSURE, -6), 0.78)
+    powder(c, wall, salt=317, peel=5)
+    # the lid's edge catching the light, and the shadow it throws on the wall under its overhang
+    c.aa_rect(0, 0, size, size * 0.055, shade(ENCLOSURE, 10), alpha=0.9)
+    c.aa_rect(0, size * 0.055, size, size * 0.16, shade(wall, -40), alpha=0.8)
+    # the draft line every moulded wall carries
+    c.aa_rect(0, size * 0.20, size, size * 0.23, shade(wall, 14), alpha=0.45)
+    grime(c, salt=319, amount=0.22, colour=(76, 74, 68, 255))
     return c
 
 

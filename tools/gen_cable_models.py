@@ -227,18 +227,20 @@ class Plug:
 class Slab:
     """A box of something that is not cable: a cleat's strap and feet, a junction box's shell."""
 
-    def __init__(self, group, material, lo, hi, uv_scale=1.0):
+    def __init__(self, group, material, lo, hi, uv_scale=1.0, uv=None):
         self.group, self.material = group, material
         self.lo, self.hi, self.uv_scale = tuple(lo), tuple(hi), uv_scale
+        # Which band of the texture, for a part whose faces carry their own shading - see dc_tie.
+        self.uv = uv
 
     def draw(self, mesh):
         if isinstance(self.material, dict):
             clad_box(mesh, self.group, at(*self.lo), at(*self.hi), self.material,
-                     uv_scale=self.uv_scale)
+                     uv_scale=self.uv_scale, uv=self.uv)
             return
 
         box(mesh, mesh.faces(self.group, self.material), at(*self.lo), at(*self.hi),
-            uv_scale=self.uv_scale)
+            uv_scale=self.uv_scale, uv=self.uv)
 
     def boxes(self):
         return [(self.lo, self.hi)]
@@ -343,15 +345,19 @@ def tie(base, low, high):
     """
     crown = base + CORE_Y + CORE_RADIUS
     # clear of the cable, not into it: the strap passes outside the pair
-    outer = CORE_OFFSET + CORE_RADIUS + 0.34
+    outer = CORE_OFFSET + CORE_RADIUS + 0.30
+    band, strap = 0.22, 0.24
+    # dc_tie's top half is the crown of the strap and its bottom half the flanks, already darkened by
+    # Minecraft's own factor for a vertical face - shade_quads cannot do it, so the texture does.
+    top, side = (0.0, 0.02, 0.55, 0.48), (0.0, 0.52, 0.55, 0.98)
     return [
         # over the crown and down both flanks: the strap of a tie is one band, not a plate on feet
-        Slab('tie', 'tie', (8.0 - outer, crown, low), (8.0 + outer, crown + 0.28, high), uv_scale=0.5),
-        Slab('tie', 'tie', (8.0 - outer, base, low), (8.0 - outer + 0.28, crown, high), uv_scale=0.3),
-        Slab('tie', 'tie', (8.0 + outer - 0.28, base, low), (8.0 + outer, crown, high), uv_scale=0.3),
+        Slab('tie', 'tie', (8.0 - outer, crown, low), (8.0 + outer, crown + band, high), uv=top),
+        Slab('tie', 'tie', (8.0 - outer, base, low), (8.0 - outer + strap, crown, high), uv=side),
+        Slab('tie', 'tie', (8.0 + outer - strap, base, low), (8.0 + outer, crown, high), uv=side),
         # the ratchet head, which is the one lump a tie has and the only way to tell which it is
-        Slab('tie', 'tie', (8.0 + outer, base + 0.2, low - 0.10),
-             (8.0 + outer + 0.42, base + 0.95, high + 0.10), uv_scale=0.4),
+        Slab('tie', 'tie', (8.0 + outer, base + 0.25, low - 0.06),
+             (8.0 + outer + 0.36, base + 0.90, high + 0.06), uv=side),
     ]
 
 
@@ -468,7 +474,7 @@ def piece_arm(base, near):
     y = base + CORE_Y
     # An arm is drawn only for a side that connects, so neither of its ends is ever free.
     return [Run([(c, y, near), (c, y, HUB_LO)], ends=(False, False)) for c in CORES] \
-        + tie(base, 2.5, 3.5)
+        + tie(base, 2.6, 3.4)
 
 
 def piece_climb(base):
