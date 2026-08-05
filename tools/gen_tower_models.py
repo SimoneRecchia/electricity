@@ -17,8 +17,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, Mesh, angle, bolt, box, cylinder, lathe, strut,   # noqa: E402
-                      write_mtl)
+from modellib import (FITTING, Mesh, angle, bolt, box, coarse, cylinder, lathe,   # noqa: E402
+                      strut, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -340,8 +340,13 @@ def collision_cells(duty):
                               round((high[2] - cz + 0.5) * 16.0, 2))
                     cells.setdefault((cx, cy, cz), set()).add(box_px)
 
-    return {cell: sorted(boxes) for cell, boxes in sorted(cells.items(),
-                                                          key=lambda kv: (kv[0][1], kv[0][0], kv[0][2]))}
+    # coarse() per cell: a lattice cell held one box per member, and a tower a player climbs does not need
+    # its collision carved per angle iron - modellib.COLLISION_SLACK decides how coarse, for the whole mod.
+    out = {}
+    for cell, boxes in sorted(cells.items(), key=lambda kv: (kv[0][1], kv[0][0], kv[0][2])):
+        pairs = coarse([((b[0], b[1], b[2]), (b[3], b[4], b[5])) for b in boxes])
+        out[cell] = sorted(tuple(round(v, 2) for v in lo + hi) for lo, hi in pairs)
+    return out
 
 
 def check_java():

@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, HEX, MC4, MC4_JOINT, MC4_JOINT_LENGTH,          # noqa: E402
                       MC4_LENGTH, MC4_PIN, MC4_RADIUS, MC4_SPREAD, MC4_STAGGER, Mesh, arc, box,
-                      clad_box, cylinder, mc4, tube, write_mtl)
+                      clad_box, coarse, cylinder, mc4, tube, write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -883,7 +883,7 @@ def merged(boxes):
 def shape(boxes):
     lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2],
                                                              hi[0], hi[1], hi[2]))
-             for lo, hi in merged(boxes)]
+             for lo, hi in coarse(merged(boxes))]
     if len(lines) == 1:
         return lines[0]
     return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))

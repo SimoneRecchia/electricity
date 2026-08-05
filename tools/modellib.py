@@ -11,11 +11,56 @@ closes by construction, which is why the insulator is drawn with it rather than 
 import math
 import os
 
-# The turbine's own subdivisions, restated here because they are now the whole mod's.
-ROUND = 80
-FITTING = 32
+# The turbine's own subdivisions, restated here because they are now the whole mod's.  Overridable so a
+# setting can be generated and *looked at* side by side - tools/compare_sides.py writes the sheet, and a
+# render is the only way to argue with a figure like this.  CLAUDE.md section 1 says what each is for.
+ROUND = int(os.environ.get('ELECTRICITY_ROUND', 80))
+FITTING = int(os.environ.get('ELECTRICITY_FITTING', 16))
 # A hexagon, for the things that are hexagons.
 HEX = 6
+
+
+# ------------------------------------------------------------------ collision
+
+# How much air a merged collision box may gain, as a fraction of the boxes it replaces.  A hitbox is what a
+# player points at and stands on, not a drawing: a box per fitting was 621 across the two cable gauges, and
+# nobody can feel the difference between a tube's eight segments and the one box that contains them.  Only
+# ever merges, so a coarse box still contains everything the model draws.  0.0 turns it off.
+COLLISION_SLACK = float(os.environ.get('ELECTRICITY_SLACK', 0.5))
+
+
+def _volume(box):
+    lo, hi = box
+    return max(0.0, hi[0] - lo[0]) * max(0.0, hi[1] - lo[1]) * max(0.0, hi[2] - lo[2])
+
+
+def coarse(boxes, slack=None):
+    """Merges boxes greedily while the merge gains little air, to a fixpoint.
+
+    A tube's segments share a cross-section, so merging along the run is exact; a swept bend's staircase is
+    not, and that is where the slack goes.  Shared by the cables, the ground conductors and the towers, so
+    one figure decides how coarse every run in the mod is.
+    """
+    slack = COLLISION_SLACK if slack is None else slack
+    if slack <= 0.0:
+        return list(boxes)
+
+    kept = [(tuple(lo), tuple(hi)) for lo, hi in boxes]
+    merged = True
+    while merged and len(kept) > 1:
+        merged = False
+        for i in range(len(kept)):
+            for j in range(i + 1, len(kept)):
+                lo = tuple(min(kept[i][0][k], kept[j][0][k]) for k in range(3))
+                hi = tuple(max(kept[i][1][k], kept[j][1][k]) for k in range(3))
+                own = _volume(kept[i]) + _volume(kept[j])
+                if _volume((lo, hi)) <= own * (1.0 + slack):
+                    kept = [b for n, b in enumerate(kept) if n not in (i, j)] + [(lo, hi)]
+                    merged = True
+                    break
+            if merged:
+                break
+    return kept
 
 
 class Mesh:

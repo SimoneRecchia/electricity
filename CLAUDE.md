@@ -15,12 +15,25 @@ Taken from the wind turbine, which is the model everything else was measured aga
 | | sides | what gets it |
 |---|---|---|
 | `ROUND` | **80** | a body a player stands next to: a pole shaft, a mast, a torque tube, a pedestal column, a tower |
-| `FITTING` | **32** | anything bolted to one: an insulator's sheds, a bushing, a gland, a boss, a vent stack |
+| `FITTING` | **16** | anything bolted to one: an insulator's sheds, a bushing, a gland, a boss, a vent stack |
 | `HEX` | **6** | a bolt head, because a bolt head really is a hexagon |
 
-In [tools/modellib.py](tools/modellib.py). Never lower one to save faces. Some parts legitimately keep
-few sides — an I-beam, a channel, a rolled angle, a cast fin — because the real part is faceted, and
-that is a different thing from a cylinder drawn coarsely.
+In [tools/modellib.py](tools/modellib.py). Some parts legitimately keep few sides — an I-beam, a channel,
+a rolled angle, a cast fin — because the real part is faceted, and that is a different thing from a
+cylinder drawn coarsely.
+
+**Lower one only against a picture, never to save faces.**
+[tools/compare_sides.py](tools/compare_sides.py) writes the sheet: one variable a sheet, the same scene at
+each setting, from the distance a player is at. What it settled, measured over the whole mod:
+
+* **`FITTING` 32 → 16 costs nothing and is worth 40 %** — 290 948 OBJ lines to 174 664. At 16 an
+  insulator's shed is still round porcelain; at 12 the skirt shows its segments, at 8 it is an octagon.
+* **`ROUND` stays 80 because lowering it buys 2 %.** There are a handful of big round bodies and thousands
+  of fittings, so the line count was never in the shafts — and at 16 the pole's shaft carries a visible
+  vertical crease in its shading, which is the one thing a player leans on and looks up.
+
+The lesson generalises: **the saving is where the count is, not where the sides are.** Both figures take an
+`ELECTRICITY_ROUND` / `ELECTRICITY_FITTING` override so a sheet can be generated without editing anything.
 
 Vanilla JSON models **cannot** express a cylinder: an element with a rotation is a *union*, so three
 boxes at 22.5° make a twelve-pointed star, not a twelve-sided prism. Anything with a round body must
@@ -113,7 +126,12 @@ Say so in a comment and exempt it explicitly.
 ```bash
 python3 tools/check_hitboxes.py          # the models and the tables must agree
 python3 tools/check_hitboxes.py --java   # prints the tables to paste
+python3 tools/splice_tables.py           # pastes the generators' own tables back into their blocks
 ```
+
+Every generated table is proved current by the generator that prints it, so a figure that moves fails the
+build until the table is refreshed. Doing that by hand across three classes and 1 400 boxes is where a
+stale table comes from — `splice_tables.py` does the paste.
 
 The rules that came out of doing it:
 
@@ -125,6 +143,12 @@ The rules that came out of doing it:
 * **A quarter of a pixel is a real part.** The threshold is `MIN_OWN = 0.25` px: a ballasted table is
   2 px tall in total, and a 1-px threshold discarded it entirely.
 * **A cable's hitbox is a few pixels, and that is right.** Not the block.
+* **But a run does not need carving per fitting.** `modellib.coarse` merges collision boxes while the
+  merge gains less than `COLLISION_SLACK = 0.5` of air, to a fixpoint — it only ever merges, so a coarse
+  box still contains everything the model draws. That took the mod from **1 670 boxes to 607**: the two
+  cable gauges 621 → 44, the ground conductors 529 → 64. A lattice tower barely moves (337 → 316) and
+  should not: its members are thin and its cells are climbed, so filling a cell would make the lattice
+  solid. One figure, in `modellib`, decides how coarse every run in the mod is.
 * **Two hitboxes cannot be the drawn shape, and the checker prints why**: a tracked array sweeps a
   volume as it follows the sun, and the turbine model carries its own tower, which in the world is a
   stack of blocks with their own collision.

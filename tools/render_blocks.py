@@ -722,7 +722,8 @@ def scene_cable_hitbox():
              for part in cable.piece_end(0.0) for lo, hi in part.boxes()]
     boxes += [(tuple(v / 16.0 for v in lo), tuple(v / 16.0 for v in hi))
               for part in cable.piece_arm(0.0, 0.0) for lo, hi in part.boxes()]
-    edges = outline(cable.merged(boxes), (1, 0, 1))
+    # coarse() as well as merged(), or this draws boxes the block does not declare - shape() does both.
+    edges = outline(cable.coarse(cable.merged(boxes)), (1, 0, 1))
     return triangles, (0.45, 0.80, 2.65), (1.55, 0.08, 1.45), edges
 
 

@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import FITTING, Mesh, arc, box, cylinder, tube, write_mtl        # noqa: E402
+from modellib import FITTING, Mesh, arc, box, coarse, cylinder, tube, write_mtl  # noqa: E402
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -151,8 +151,11 @@ class Barrel:
     def draw(self, mesh):
         faces = mesh.faces(self.group, self.material)
         base = list(self.centre)
-        base['xyz'.index(self.axis)] = self.low
-        cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out(self.high - self.low),
+        # cylinder() takes a centre and a *half* length.  Placed at self.low with the whole length as the
+        # half, a clamp came out twice as long reaching back past low, while boxes() below said low..high -
+        # the same fault gen_cable_models.Barrel had, and check_drawn is why that one was found.
+        base['xyz'.index(self.axis)] = (self.low + self.high) / 2.0
+        cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out((self.high - self.low) / 2.0),
                  sides=FITTING, uv_scale=1.0, caps=faces if self.cap else None,
                  cap_ends=(1,) if self.cap else ())
 
@@ -479,8 +482,10 @@ def merged(boxes):
 
 
 def shape(boxes):
+    # coarse() as well as merged(): a conductor's own segments are one box each, and a run that a player
+    # points at and walks over does not need to be carved per segment - modellib.COLLISION_SLACK.
     lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
-             for lo, hi in merged(boxes)]
+             for lo, hi in coarse(merged(boxes))]
     return lines[0] if len(lines) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
 
 
