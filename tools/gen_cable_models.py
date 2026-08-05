@@ -316,7 +316,9 @@ def gland(base, side, centre):
     for length, radius, taper, sides, band in ((0.34, 0.92, 1.0, HEX, (0.0, 0.0, 1.0, 0.25)),
                                               (1.02, 0.86, 0.80, FITTING, (0.0, 0.25, 1.0, 1.0))):
         low, high = sorted((cursor, cursor + step * length))
-        parts.append(Barrel('gland', 'gland', tuple(middle), axis, radius, low, high, cap=False,
+        # Each step is closed at its outer end.  Open, the game culls the far inside wall too and a gland
+        # is a hole you see the ground through - the cable running out through the disc hides its middle.
+        parts.append(Barrel('gland', 'gland', tuple(middle), axis, radius, low, high, cap=True,
                             sleeve=True, band=band, sides=sides, taper=taper, outward=int(step)))
         cursor += step * length
     return parts

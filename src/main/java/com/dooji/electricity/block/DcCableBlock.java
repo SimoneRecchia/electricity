@@ -515,10 +515,14 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return shapes.getOrDefault(state, TRUNK_HUB);
 	}
 
-	/** A trench is walked over; a surface run is not walked into at all. */
+	/**
+	 * The cable is solid: a laid run is a couple of pixels high and a joint in it is three, so a player
+	 * steps over it the way they step onto a carpet.  Returning nothing here meant walking straight
+	 * through the thing whose outline was drawn round it.  A trench is filled to the surface.
+	 */
 	@Override
 	public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return state.getValue(BURIED) ? Shapes.block() : Shapes.empty();
+		return state.getValue(BURIED) ? Shapes.block() : shapes.getOrDefault(state, TRUNK_HUB);
 	}
 
 	/** What the light and the face culling see. */

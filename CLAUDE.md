@@ -27,6 +27,25 @@ boxes at 22.5° make a twelve-pointed star, not a twelve-sided prism. Anything w
 therefore be OBJ. Anything that is all boxes may stay JSON and gets chunk batching, ambient occlusion
 and an inventory model for free.
 
+### The two OBJ pipelines cull differently, and one of them was drawing holes
+
+| | frame | v | culling |
+|---|---|---|---|
+| `forge:obj` block model, baked into the chunk | block's own, corner at the origin | `flip_v: false`, v zero is the PNG's top row | **culls by winding** (`RenderType.solid`) |
+| `ObjRendererBase`, the machines | authored centred, −0.5..0.5 | does `1 - v` | **no culling** (`entityCutoutNoCull`) |
+
+A quad wound clockwise as seen from the front is not drawn by the chunk renderer — it does not read the
+`vn` the model states. So a face wound the wrong way is a **hole**: you see through it, and through the
+far inside wall as well, because that is back-facing too. Half of every box in this mod was wound inside
+out, and because the machines are `NoCull` it only ever showed on the string cable — a junction box with
+no lid, cleats that were open channels, glands that were ribbed cups with the ground between them. It took
+four rounds of reports because `render_blocks.py` did not cull either, so every render here looked solid.
+
+`Mesh.quad` rewinds a quad to agree with its normal, `render_blocks.py` culls what the game culls (and
+only that: a machine model is read with `cull=False`), and `check_winding.py` fails the build on it.
+**An open tube end is the same fault by another route** — cap it, or the game shows you the ground through
+it.
+
 ## 2. Textures
 
 Written by [tools/gen_block_textures.py](tools/gen_block_textures.py) on top of
@@ -144,6 +163,7 @@ python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--jav
 
 ```bash
 python3 tools/check_hitboxes.py         # "the models and the tables agree, to a hundredth of a pixel"
+python3 tools/check_winding.py          # "every face is wound the way its normal points"
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_generated_assets.py # "one generator a file, every file read, nothing under resolution"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches

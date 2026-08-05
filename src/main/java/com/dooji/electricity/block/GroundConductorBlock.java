@@ -647,10 +647,10 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 		return hub == null ? shape : Shapes.or(shape, hub);
 	}
 
-	/** A conductor is not something to walk into: it is ankle-high and a player steps over it. */
+	/** Solid, like the string cable: it is ankle-high, so a player steps onto it rather than through it. */
 	@Override
 	public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return Shapes.empty();
+		return getShape(state, level, pos, context);
 	}
 
 	/** It needs the ground under it, the way a run of conductor pulled along a yard does. */

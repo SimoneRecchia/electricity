@@ -162,10 +162,12 @@ def read_mtl(path, resolve):
     return out
 
 
-def read_obj(path, resolve, flip_v=False, shade=True):
-    """Triangles as (group, Texture, three (position, uv) pairs, normal, shade).
+def read_obj(path, resolve, flip_v=False, shade=True, cull=True):
+    """Triangles as (group, Texture, three (position, uv) pairs, normal, shade, cull).
 
-    ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does
+    ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does 1 - v.
+    ``cull`` because the two pipelines differ: a block model is baked into the chunk with RenderType.solid,
+    which culls by winding, while ObjRendererBase draws a machine with entityCutoutNoCull, which does not.
     """
     directory = os.path.dirname(path)
     verts, uvs, normals, materials = [], [], [], {}
@@ -198,7 +200,7 @@ def read_obj(path, resolve, flip_v=False, shade=True):
                 normal = _face_normal([c[0] for c in corners])
             for i in range(1, len(corners) - 1):
                 out.append((group, materials.get(material), (corners[0], corners[i], corners[i + 1]),
-                            normal, shade))
+                            normal, shade, cull))
     return out
 
 
@@ -223,9 +225,10 @@ def machine_model(name, obj=None):
 
     ``obj`` where the file is not named after its directory, which electric_cab/cab.obj is.
     """
-    triangles = read_obj(os.path.join(MODELS, name, (obj or name) + '.obj'), {}, flip_v=True)
-    return [(g, t, tuple(((p[0] + 0.5, p[1], p[2] + 0.5), uv) for p, uv in c), n, s)
-            for g, t, c, n, s in triangles]
+    triangles = read_obj(os.path.join(MODELS, name, (obj or name) + '.obj'), {}, flip_v=True,
+                         cull=False)
+    return [(g, t, tuple(((p[0] + 0.5, p[1], p[2] + 0.5), uv) for p, uv in c), n, s, k)
+            for g, t, c, n, s, k in triangles]
 
 
 # ---------------------------------------------------------------- placing and turning
@@ -234,7 +237,7 @@ def placed(triangles, offset=(0.0, 0.0, 0.0), yaw=0, drop=()):
     """A model's triangles moved into the world, turned the way a blockstate's ``y`` turns them."""
     quarters = (yaw // 90) % 4
     out = []
-    for group, texture, corners, normal, shade in triangles:
+    for group, texture, corners, normal, shade, cull in triangles:
         if any(group.startswith(prefix) for prefix in drop):
             continue
 
@@ -247,7 +250,7 @@ def placed(triangles, offset=(0.0, 0.0, 0.0), yaw=0, drop=()):
         nx, nz = normal[0], normal[2]
         for _ in range(quarters):
             nx, nz = -nz, nx
-        out.append((group, texture, tuple(moved), (nx, normal[1], nz), shade))
+        out.append((group, texture, tuple(moved), (nx, normal[1], nz), shade, cull))
     return out
 
 
@@ -261,7 +264,7 @@ def ground(x0, z0, x1, z1, texture, y=0.0):
                        ((x + 1, y, z), (1.0, 0.0)), ((x, y, z), (0.0, 0.0)))
             for i in (1, 2):
                 out.append(('ground', tile, (corners[0], corners[i], corners[i + 1]),
-                            (0.0, 1.0, 0.0), True))
+                            (0.0, 1.0, 0.0), True, False))
     return out
 
 
@@ -313,7 +316,12 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
         return (size * 0.5 + _dot(offset, right) * inverse,
                 size * 0.5 - _dot(offset, above) * inverse, z)
 
-    for _, texture, corners, normal, shade in triangles:
+    for _, texture, corners, normal, shade, cull in triangles:
+        # Culled by *winding*, the way a GPU does it, not by the stated normal: a quad wound the wrong way
+        # is a hole in the world and was a solid face in here.
+        if cull and _dot(_face_normal([point for point, _ in corners]), _sub(corners[0][0], eye)) > 0.0:
+            continue
+
         lit = 1.0 if not shade else \
             AMBIENT + (1.0 - AMBIENT) * max(0.0, sum(normal[i] * LIGHT[i] for i in range(3)))
         screen = []

@@ -52,11 +52,40 @@ class Mesh:
         return self.add_object(name, material)
 
     def quad(self, faces, corners, normal, uvs):
+        """One quad.  Wound to agree with its own normal, whatever order the caller passed.
+
+        Minecraft culls by winding, not by the stated normal, so a quad wound the wrong way is a hole in
+        the world - and half of every box in this mod was wound inside out.  That is what a player saw as
+        a junction box with no lid, a cleat that was an open channel and a cable with a gap in it.
+        check_winding.py fails the build on it now; this is where it cannot happen in the first place.
+        """
+        corners, uvs = list(corners), list(uvs)
+        if len(corners) >= 3:
+            a = tuple(corners[1][i] - corners[0][i] for i in range(3))
+            b = tuple(corners[2][i] - corners[0][i] for i in range(3))
+            wound = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+            if sum(c * c for c in wound) < 1e-18:
+                return          # no area: nothing to draw, and no winding to get right either
+
+            if sum(wound[i] * normal[i] for i in range(3)) < 0.0:
+                corners.reverse()
+                uvs.reverse()
+
         indices = []
         n = self._index(self.vn, normal, 'vn')
         for corner, uv in zip(corners, uvs):
             indices.append((self._index(self.v, corner, 'v'), self._index(self.vt, uv, 'vt'), n))
         faces.append(indices)
+
+    def marker(self, faces, point):
+        """A zero-size face at one point: a ``pivot_*`` hinge, which quad() would drop for having no area.
+
+        The renderers and check_pv_clearance measure a hinge off this group - CLAUDE.md section 5.
+        """
+        v = self._index(self.v, point, 'v')
+        n = self._index(self.vn, (0.0, 1.0, 0.0), 'vn')
+        t = self._index(self.vt, (0.0, 0.0), 'vt')
+        faces.append([(v, t, n)] * 3)
 
     def write(self, path, mtl_name, source):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -112,7 +141,7 @@ def rotate(point, pivot_point, axis, degrees):
 
 def pivot(mesh, name, point, material='steel'):
     """Marks where a moving part turns"""
-    box(mesh, mesh.faces('pivot_' + name, material), point, point)
+    mesh.marker(mesh.faces('pivot_' + name, material), point)
 
 
 # ------------------------------------------------------------------ boxes
@@ -402,8 +431,10 @@ def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
              uv_scale=0.1, caps=faces, cap_ends=(1,))
 
     centre_y = cy + collar * 0.60 + ring_radius
+    # arc closes on itself at 270, so the path is already a loop: repeating the first point gave a
+    # zero-length segment, and a ring swept along nothing came out as four faces with a junk normal.
     circle = arc((cx, centre_y, cz), ring_radius, (0, 1), -90.0, 270.0, sides)
-    tube(mesh, faces, circle + [circle[0]], section, sides=max(6, sides // 4), uv_scale=1.0)
+    tube(mesh, faces, circle, section, sides=max(6, sides // 4), uv_scale=1.0)
 
 
 # A Stäubli MC4, as (length, radius, taper, v0, v1) in sixteenths.  Fat, thin, fat is the signature:
