@@ -105,12 +105,19 @@ def spin_y(point, degrees):
     return (point[0] * c + point[2] * s, point[1], -point[0] * s + point[2] * c)
 
 
-def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADIUS):
-    """The pair swept along a path, one tube a core - the string cable's own geometry."""
+def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADIUS,
+               ends=(True, True)):
+    """The pair swept along a path, one tube a core - the string cable's own geometry.
+
+    ``ends`` is which ends are capped, and only a *free* end is: an end at the block's own boundary is
+    carried on by the laid run's arm, and two caps in one plane fight each other.
+    """
     faces = mesh.faces(name, 'core')
+    cap_ends = tuple(end for end, wanted in ((-1, ends[0]), (1, ends[1])) if wanted)
     for lane in (-lanes, lanes):
         path = [spin_y((x + lane, y, z), turn) for x, y, z in points]
-        tube(mesh, faces, path, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
+        tube(mesh, faces, path, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0,
+             caps=faces if cap_ends else None, cap_ends=cap_ends)
 
 
 def tail_rise(z_from, z_to, base=0.0):
@@ -142,7 +149,8 @@ def stubs(mesh, name='stub'):
     """A run of cable from each of the four block edges in under the machine, one group apiece."""
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
         group = '%s_%s' % (name, side)
-        cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -UNDER)], turn=turn)
+        cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -UNDER)], turn=turn,
+                   ends=(False, True))
         # the cleat that holds it down where it crosses open ground: the same fitting a laid run has
         faces = mesh.faces(group, 'steel')
         strap, top = CORE_OFFSET + CORE_RADIUS, CORE_Y + CORE_RADIUS
@@ -155,7 +163,8 @@ def stubs(mesh, name='stub'):
 def row_lead(mesh, x0, height, start=-0.44):
     """The lead out of one end of a row"""
     y = height + CORE_Y
-    cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)])
+    cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)],
+               ends=(True, False))
 
 
 def row_socket(mesh, x0, height, name='harness_input', end=-1):
@@ -183,12 +192,14 @@ def row_entry(mesh, x0, height, end=-1):
         path = [(lane, CORE_Y, edge), (lane, CORE_Y, turn_z), (x0 - CORE_OFFSET + lane, CORE_Y, turn_z)]
         if height > 0.0:
             path.append((x0 - CORE_OFFSET + lane, height + CORE_Y, turn_z))
-        tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
+        # the block edge is carried on by the laid run's own arm, so that end takes no cap
+        tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces,
+             cap_ends=(1,))
 
 
 def row_harness(mesh):
     """A tracked row's harness: a run along the ground down the middle, and nothing else."""
-    cable_pair(mesh, 'harness', [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, 0.5)])
+    cable_pair(mesh, 'harness', [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, 0.5)], ends=(False, False))
     for end, side in ((-1, 'north'), (1, 'south')):
         name = 'harness_plug_%s' % side
         edge = -0.44 if end < 0 else 0.44

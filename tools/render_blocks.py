@@ -482,15 +482,29 @@ def scene_cable_corner():
     return triangles, (0.4, 1.15, 2.3), (1.7, 0.06, 1.2)
 
 
+# An arm's outer end is at the block boundary and the neighbour's own arm covers it, so it carries no cap
+# - which means a scene has to place that neighbour or the render shows an open tube the game never does.
+NEIGHBOUR = {0: (0, -1), 90: (1, 0), 180: (0, 1), 270: (-1, 0)}
+
+
+def joined(kind, at, sides, yaw=0):
+    """A piece, its arms, and a straight in every block those arms reach into."""
+    triangles = cable_piece(kind, at, yaw=yaw)
+    for side in sides:
+        triangles += cable_piece('arm', at, yaw=side)
+        dx, dz = NEIGHBOUR[side]
+        beyond = (at[0] + dx, at[1], at[2] + dz)
+        triangles += cable_piece('line', beyond, yaw=90 if dx else 0)
+        triangles += cable_piece('arm', beyond, yaw=side)
+        triangles += cable_piece('arm', beyond, yaw=(side + 180) % 360)
+    return triangles
+
+
 def scene_cable_junction():
     """The tee's own fittings up close: the box, and the four cable glands through its walls."""
     triangles = ground(-1, -1, 4, 4, SAND)
-    triangles += cable_piece('tee', (1, 0, 1), yaw=0)
-    for side in (0, 90, 270):
-        triangles += cable_piece('arm', (1, 0, 1), yaw=side)
-    triangles += cable_piece('line', (1, 0, 0), yaw=0)
-    triangles += cable_piece('arm', (1, 0, 0), yaw=0)
-    triangles += cable_piece('arm', (1, 0, 0), yaw=180)
+    # piece_tee glands north, east and south, and HUBS places it unturned for exactly that set
+    triangles += joined('tee', (1, 0, 1), (0, 90, 180))
     return triangles, (0.55, 0.62, 2.35), (1.5, 0.06, 1.45)
 
 

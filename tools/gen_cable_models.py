@@ -107,18 +107,23 @@ def at(x, y, z):
 class Run:
     """A length of cable swept along a path given in sixteenths."""
 
-    def __init__(self, path, radius=CORE_RADIUS, material='core', joint=None):
+    def __init__(self, path, radius=CORE_RADIUS, material='core', joint=None, ends=(True, True)):
         self.path = _dedupe([tuple(float(c) for c in p) for p in path])
         self.radius, self.material = radius, material
         # Parts that name the same joint are one fitting, and check_disjoint lets them touch: a tail and
         # the plug moulded onto it are not two objects.
         self.joint = joint
+        # Which ends are capped, and only a *free* end is.  A cap where another tube carries on is a disc
+        # sitting in the same plane as that tube's own end, and the disc wins: it takes its colour from the
+        # middle of dc_core, so every joint in a run came out as a pale ring across the cable.
+        self.ends = ends
 
     def draw(self, mesh):
         faces = mesh.faces('cable', self.material)
+        cap_ends = tuple(end for end, wanted in ((-1, self.ends[0]), (1, self.ends[1])) if wanted)
         # The texture wraps exactly once round the tube and exactly once along it.
         tube(mesh, faces, [at(*p) for p in self.path], out(self.radius), sides=FITTING,
-             uv_scale=1.0, uv_along=1.0, caps=faces)
+             uv_scale=1.0, uv_along=1.0, caps=faces if cap_ends else None, cap_ends=cap_ends)
 
     def length(self):
         return sum(math.dist(self.path[i], self.path[i + 1]) for i in range(len(self.path) - 1))
@@ -138,7 +143,8 @@ class Run:
         return result
 
     def turned(self, quarter):
-        return Run([_spin(p, quarter) for p in self.path], self.radius, self.material, self.joint)
+        return Run([_spin(p, quarter) for p in self.path], self.radius, self.material, self.joint,
+                   self.ends)
 
 
 class Barrel:
@@ -289,14 +295,17 @@ def plug_start(index):
     return PLUG_START - (MC4_STAGGER if index else 0.0)
 
 
-def tail(centre, base, start, index, joint=None):
-    """The core between a piece's own boundary and its plug: straight, then out and up onto the lane."""
+def tail(centre, base, start, index, joint=None, free=False):
+    """The core between a piece's own boundary and its plug: straight, then out and up onto the lane.
+
+    ``free`` when the far end of the run is nothing - an offcut lying on the ground - so it takes a cap.
+    """
     y, lane, into = base + CORE_Y, plug_lane(centre), plug_start(index)
     # It runs 0.30 px *into* the plug so its own end cap is buried: level with the plug's first face the
     # two discs are coplanar and flicker against each other.
     return Run([(centre, y, start), (centre, y, into - PLUG_RISE),
                 (lane, base + PLUG_Y, into - 0.45), (lane, base + PLUG_Y, into + 0.30)],
-               joint=joint)
+               joint=joint, ends=(free, True))
 
 
 def gland(base, side, centre):
@@ -368,8 +377,10 @@ def piece_line(base):
         parts.append(Plug(lane, base, index, JOINT_LO, profile=MC4_JOINT, group='joint', joint=name))
         # in from each arm, splaying onto the joint's lane and climbing onto its axis as it comes.  0.30 px
         # inside the joint, so the tube's own cap is buried rather than coplanar with the joint's face.
-        parts.append(Run([(c, y, HUB_LO), (lane, base + PLUG_Y, JOINT_LO + 0.30)], joint=name))
-        parts.append(Run([(lane, base + PLUG_Y, JOINT_HI - 0.30), (c, y, HUB_HI)], joint=name))
+        parts.append(Run([(c, y, HUB_LO), (lane, base + PLUG_Y, JOINT_LO + 0.30)], joint=name,
+                         ends=(False, True)))
+        parts.append(Run([(lane, base + PLUG_Y, JOINT_HI - 0.30), (c, y, HUB_HI)], joint=name,
+                         ends=(True, False)))
     return parts
 
 
@@ -383,8 +394,9 @@ def piece_bend(base):
     for lane, other in ((CORES[1], CORES[0]), (CORES[0], CORES[1])):
         radius = other - HUB_LO
         turn = arc(centre, radius, (0, 2), 180.0, 90.0, BEND_STEPS)
+        # both ends meet an arm, by definition of a bend
         parts.append(Run([(lane, y, HUB_LO)] + [(p[0], y, p[2]) for p in turn]
-                         + [(HUB_HI, y, other)]))
+                         + [(HUB_HI, y, other)], ends=(False, False)))
     return parts
 
 
@@ -402,7 +414,7 @@ def piece_loose(base):
     """Nothing connected: a length of pair lying where it was dropped"""
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(tail(c, base, 3.2, index, joint='lead_%d' % index))
+        parts.append(tail(c, base, 3.2, index, joint='lead_%d' % index, free=True))
         parts.append(Plug(plug_lane(c), base, index, plug_start(index),
                           joint='lead_%d' % index))
     return parts
@@ -421,7 +433,9 @@ def piece_cross(base):
 def piece_arm(base, near):
     """The pair from a block edge in to the middle piece, cleated where it crosses open ground."""
     y = base + CORE_Y
-    return [Run([(c, y, near), (c, y, HUB_LO)]) for c in CORES] + cleat(base, 2.3, 3.1)
+    # An arm is drawn only for a side that connects, so neither of its ends is ever free.
+    return [Run([(c, y, near), (c, y, HUB_LO)], ends=(False, False)) for c in CORES] \
+        + cleat(base, 2.3, 3.1)
 
 
 def piece_climb(base):
@@ -432,7 +446,8 @@ def piece_climb(base):
     parts = []
     for c in CORES:
         path = ([(c, y, HUB_LO)] + [(c, p[1], p[2]) for p in turn] + [(c, 16.0, WALL_STANDOFF)])
-        parts.append(Run(path))
+        # down into the middle, up into the block above: a climb has no free end either
+        parts.append(Run(path, ends=(False, False)))
     return parts
 
 
