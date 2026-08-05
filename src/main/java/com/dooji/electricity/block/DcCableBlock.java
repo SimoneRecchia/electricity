@@ -43,18 +43,247 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	private static final Map<Direction, EnumProperty<RedstoneSide>> SIDES = sides();
 
-	/** A run's outline, cut to what is drawn rather than to the block. */
-	private static final VoxelShape TRUNK_HUB = Block.box(7.0, 0.0, 7.0, 9.0, 1.0, 9.0);
+	private static final Map<Integer, VoxelShape> TRUNK_HUBS = Map.ofEntries(
+			Map.entry(0b0000, Shapes.or(Block.box(8.65, 0.00, 0.60, 11.45, 2.95, 7.95),
+					Block.box(4.55, 0.00, 0.60, 7.35, 2.95, 7.95),
+					Block.box(8.50, 0.00, 6.20, 11.60, 3.10, 9.80),
+					Block.box(4.40, 0.00, 6.20, 7.50, 3.10, 9.80),
+					Block.box(8.65, 1.24, 9.80, 11.45, 1.86, 13.20),
+					Block.box(4.55, 1.24, 9.80, 7.35, 1.86, 13.20),
+					Block.box(9.50, 0.94, 11.36, 10.60, 2.16, 12.46),
+					Block.box(5.40, 0.94, 11.36, 6.50, 2.16, 12.46))),
+			Map.entry(0b0001, Shapes.or(Block.box(8.65, 0.00, 1.40, 11.45, 2.95, 7.95),
+					Block.box(4.55, 0.00, 1.40, 7.35, 2.95, 7.95),
+					Block.box(8.50, 0.00, 6.20, 11.60, 3.10, 9.80),
+					Block.box(4.40, 0.00, 6.20, 7.50, 3.10, 9.80),
+					Block.box(8.65, 1.24, 9.80, 11.45, 1.86, 13.20),
+					Block.box(4.55, 1.24, 9.80, 7.35, 1.86, 13.20),
+					Block.box(9.50, 0.94, 11.36, 10.60, 2.16, 12.46),
+					Block.box(5.40, 0.94, 11.36, 6.50, 2.16, 12.46))),
+			Map.entry(0b0010, Shapes.or(Block.box(8.05, 0.00, 4.55, 14.60, 2.95, 7.35),
+					Block.box(8.05, 0.00, 8.65, 14.60, 2.95, 11.45),
+					Block.box(6.20, 0.00, 8.50, 9.80, 3.10, 11.60),
+					Block.box(6.20, 0.00, 4.40, 9.80, 3.10, 7.50),
+					Block.box(2.80, 1.24, 8.65, 6.20, 1.86, 11.45),
+					Block.box(2.80, 1.24, 4.55, 6.20, 1.86, 7.35),
+					Block.box(3.54, 0.94, 9.50, 4.64, 2.16, 10.60),
+					Block.box(3.54, 0.94, 5.40, 4.64, 2.16, 6.50))),
+			Map.entry(0b0011, Shapes.or(Block.box(5.77, 0.00, 5.43, 9.47, 2.80, 9.33),
+					Block.box(6.67, 0.00, 6.53, 10.57, 2.80, 10.23),
+					Block.box(7.77, 0.00, 7.43, 11.83, 2.80, 10.90),
+					Block.box(5.10, 0.00, 4.17, 8.57, 2.80, 8.23),
+					Block.box(4.69, 0.00, 2.81, 7.90, 2.80, 6.97),
+					Block.box(9.03, 0.00, 8.10, 13.19, 2.80, 11.31),
+					Block.box(10.39, 0.00, 8.51, 14.60, 2.80, 11.45),
+					Block.box(4.55, 0.00, 1.40, 7.49, 2.80, 5.61),
+					Block.box(9.18, 0.00, 3.15, 12.37, 2.80, 6.43),
+					Block.box(9.57, 0.00, 3.63, 12.85, 2.80, 6.82),
+					Block.box(10.05, 0.00, 4.02, 13.39, 2.80, 7.11),
+					Block.box(8.89, 0.00, 2.61, 11.98, 2.80, 5.95),
+					Block.box(8.71, 0.00, 2.01, 11.69, 2.80, 5.41),
+					Block.box(10.59, 0.00, 4.31, 13.99, 2.80, 7.29),
+					Block.box(8.65, 0.00, 1.40, 11.51, 2.80, 4.81),
+					Block.box(11.19, 0.00, 4.49, 14.60, 2.80, 7.35))),
+			Map.entry(0b0100, Shapes.or(Block.box(8.65, 0.00, 8.05, 11.45, 2.95, 14.60),
+					Block.box(4.55, 0.00, 8.05, 7.35, 2.95, 14.60),
+					Block.box(4.40, 0.00, 6.20, 7.50, 3.10, 9.80),
+					Block.box(8.50, 0.00, 6.20, 11.60, 3.10, 9.80),
+					Block.box(4.55, 1.24, 2.80, 7.35, 1.86, 6.20),
+					Block.box(8.65, 1.24, 2.80, 11.45, 1.86, 6.20),
+					Block.box(5.40, 0.94, 3.54, 6.50, 2.16, 4.64),
+					Block.box(9.50, 0.94, 3.54, 10.60, 2.16, 4.64))),
+			Map.entry(0b0101, Shapes.or(Block.box(8.65, 0.00, 1.40, 11.45, 3.60, 9.85),
+					Block.box(4.55, 0.00, 6.25, 7.35, 3.60, 14.60),
+					Block.box(3.75, 0.00, 4.40, 8.15, 4.40, 6.50),
+					Block.box(7.85, 0.00, 9.60, 12.25, 4.40, 11.70),
+					Block.box(4.55, 0.00, 1.40, 7.35, 3.60, 4.65),
+					Block.box(8.65, 0.00, 11.45, 11.45, 3.60, 14.60),
+					Block.box(8.05, 0.20, 8.10, 12.05, 4.20, 9.00),
+					Block.box(3.95, 0.20, 2.90, 7.95, 4.20, 3.80),
+					Block.box(3.95, 0.20, 7.10, 7.95, 4.20, 8.00),
+					Block.box(8.05, 0.20, 12.30, 12.05, 4.20, 13.20),
+					Block.box(8.00, 0.15, 9.00, 12.10, 4.25, 9.60),
+					Block.box(8.00, 0.15, 11.70, 12.10, 4.25, 12.30),
+					Block.box(3.90, 0.15, 3.80, 8.00, 4.25, 4.40),
+					Block.box(3.90, 0.15, 6.50, 8.00, 4.25, 7.10))),
+			Map.entry(0b0110, Shapes.or(Block.box(6.67, 0.00, 5.77, 10.57, 2.80, 9.47),
+					Block.box(5.77, 0.00, 6.67, 9.47, 2.80, 10.57),
+					Block.box(5.10, 0.00, 7.77, 8.57, 2.80, 11.83),
+					Block.box(7.77, 0.00, 5.10, 11.83, 2.80, 8.57),
+					Block.box(9.03, 0.00, 4.69, 13.19, 2.80, 7.90),
+					Block.box(4.69, 0.00, 9.03, 7.90, 2.80, 13.19),
+					Block.box(4.55, 0.00, 10.39, 7.49, 2.80, 14.60),
+					Block.box(10.39, 0.00, 4.55, 14.60, 2.80, 7.49),
+					Block.box(9.57, 0.00, 9.18, 12.85, 2.80, 12.37),
+					Block.box(9.18, 0.00, 9.57, 12.37, 2.80, 12.85),
+					Block.box(8.89, 0.00, 10.05, 11.98, 2.80, 13.39),
+					Block.box(10.05, 0.00, 8.89, 13.39, 2.80, 11.98),
+					Block.box(10.59, 0.00, 8.71, 13.99, 2.80, 11.69),
+					Block.box(8.71, 0.00, 10.59, 11.69, 2.80, 13.99),
+					Block.box(11.19, 0.00, 8.65, 14.60, 2.80, 11.51),
+					Block.box(8.65, 0.00, 11.19, 11.51, 2.80, 14.60))),
+			Map.entry(0b0111, Shapes.or(Block.box(2.80, 0.00, 2.80, 13.20, 5.66, 13.20),
+					Block.box(2.46, 5.66, 2.46, 13.54, 6.00, 13.54),
+					Block.box(13.65, 0.00, 4.10, 14.70, 3.25, 7.80),
+					Block.box(13.65, 0.00, 8.20, 14.70, 3.25, 11.90),
+					Block.box(4.10, 0.00, 13.65, 7.80, 3.25, 14.70),
+					Block.box(8.20, 0.00, 13.65, 11.90, 3.25, 14.70),
+					Block.box(4.10, 0.00, 1.30, 7.80, 3.25, 2.35),
+					Block.box(8.20, 0.00, 1.30, 11.90, 3.25, 2.35),
+					Block.box(4.00, 0.00, 2.35, 7.90, 3.35, 2.80),
+					Block.box(13.20, 0.00, 4.00, 13.65, 3.35, 7.90),
+					Block.box(4.00, 0.00, 13.20, 7.90, 3.35, 13.65),
+					Block.box(8.10, 0.00, 2.35, 12.00, 3.35, 2.80),
+					Block.box(13.20, 0.00, 8.10, 13.65, 3.35, 12.00),
+					Block.box(8.10, 0.00, 13.20, 12.00, 3.35, 13.65))),
+			Map.entry(0b1000, Shapes.or(Block.box(1.40, 0.00, 8.65, 7.95, 2.95, 11.45),
+					Block.box(1.40, 0.00, 4.55, 7.95, 2.95, 7.35),
+					Block.box(6.20, 0.00, 4.40, 9.80, 3.10, 7.50),
+					Block.box(6.20, 0.00, 8.50, 9.80, 3.10, 11.60),
+					Block.box(9.80, 1.24, 4.55, 13.20, 1.86, 7.35),
+					Block.box(9.80, 1.24, 8.65, 13.20, 1.86, 11.45),
+					Block.box(11.36, 0.94, 5.40, 12.46, 2.16, 6.50),
+					Block.box(11.36, 0.94, 9.50, 12.46, 2.16, 10.60))),
+			Map.entry(0b1001, Shapes.or(Block.box(5.43, 0.00, 6.53, 9.33, 2.80, 10.23),
+					Block.box(6.53, 0.00, 5.43, 10.23, 2.80, 9.33),
+					Block.box(7.43, 0.00, 4.17, 10.90, 2.80, 8.23),
+					Block.box(4.17, 0.00, 7.43, 8.23, 2.80, 10.90),
+					Block.box(2.81, 0.00, 8.10, 6.97, 2.80, 11.31),
+					Block.box(8.10, 0.00, 2.81, 11.31, 2.80, 6.97),
+					Block.box(1.40, 0.00, 8.51, 5.61, 2.80, 11.45),
+					Block.box(8.51, 0.00, 1.40, 11.45, 2.80, 5.61),
+					Block.box(3.15, 0.00, 3.63, 6.43, 2.80, 6.82),
+					Block.box(3.63, 0.00, 3.15, 6.82, 2.80, 6.43),
+					Block.box(4.02, 0.00, 2.61, 7.11, 2.80, 5.95),
+					Block.box(2.61, 0.00, 4.02, 5.95, 2.80, 7.11),
+					Block.box(2.01, 0.00, 4.31, 5.41, 2.80, 7.29),
+					Block.box(4.31, 0.00, 2.01, 7.29, 2.80, 5.41),
+					Block.box(1.40, 0.00, 4.49, 4.81, 2.80, 7.35),
+					Block.box(4.49, 0.00, 1.40, 7.35, 2.80, 4.81))),
+			Map.entry(0b1010, Shapes.or(Block.box(6.15, 0.00, 8.65, 14.60, 3.60, 11.45),
+					Block.box(1.40, 0.00, 4.55, 9.75, 3.60, 7.35),
+					Block.box(9.50, 0.00, 3.75, 11.60, 4.40, 8.15),
+					Block.box(4.30, 0.00, 7.85, 6.40, 4.40, 12.25),
+					Block.box(11.35, 0.00, 4.55, 14.60, 3.60, 7.35),
+					Block.box(1.40, 0.00, 8.65, 4.55, 3.60, 11.45),
+					Block.box(7.00, 0.20, 8.05, 7.90, 4.20, 12.05),
+					Block.box(12.20, 0.20, 3.95, 13.10, 4.20, 7.95),
+					Block.box(8.00, 0.20, 3.95, 8.90, 4.20, 7.95),
+					Block.box(2.80, 0.20, 8.05, 3.70, 4.20, 12.05),
+					Block.box(6.40, 0.15, 8.00, 7.00, 4.25, 12.10),
+					Block.box(3.70, 0.15, 8.00, 4.30, 4.25, 12.10),
+					Block.box(8.90, 0.15, 3.90, 9.50, 4.25, 8.00),
+					Block.box(11.60, 0.15, 3.90, 12.20, 4.25, 8.00))),
+			Map.entry(0b1011, Shapes.or(Block.box(2.80, 0.00, 2.80, 13.20, 5.66, 13.20),
+					Block.box(2.46, 5.66, 2.46, 13.54, 6.00, 13.54),
+					Block.box(4.10, 0.00, 1.30, 7.80, 3.25, 2.35),
+					Block.box(8.20, 0.00, 1.30, 11.90, 3.25, 2.35),
+					Block.box(13.65, 0.00, 8.20, 14.70, 3.25, 11.90),
+					Block.box(13.65, 0.00, 4.10, 14.70, 3.25, 7.80),
+					Block.box(1.30, 0.00, 8.20, 2.35, 3.25, 11.90),
+					Block.box(1.30, 0.00, 4.10, 2.35, 3.25, 7.80),
+					Block.box(2.35, 0.00, 8.10, 2.80, 3.35, 12.00),
+					Block.box(4.00, 0.00, 2.35, 7.90, 3.35, 2.80),
+					Block.box(13.20, 0.00, 8.10, 13.65, 3.35, 12.00),
+					Block.box(2.35, 0.00, 4.00, 2.80, 3.35, 7.90),
+					Block.box(8.10, 0.00, 2.35, 12.00, 3.35, 2.80),
+					Block.box(13.20, 0.00, 4.00, 13.65, 3.35, 7.90))),
+			Map.entry(0b1100, Shapes.or(Block.box(6.53, 0.00, 6.67, 10.23, 2.80, 10.57),
+					Block.box(5.43, 0.00, 5.77, 9.33, 2.80, 9.47),
+					Block.box(4.17, 0.00, 5.10, 8.23, 2.80, 8.57),
+					Block.box(7.43, 0.00, 7.77, 10.90, 2.80, 11.83),
+					Block.box(8.10, 0.00, 9.03, 11.31, 2.80, 13.19),
+					Block.box(2.81, 0.00, 4.69, 6.97, 2.80, 7.90),
+					Block.box(8.51, 0.00, 10.39, 11.45, 2.80, 14.60),
+					Block.box(1.40, 0.00, 4.55, 5.61, 2.80, 7.49),
+					Block.box(3.63, 0.00, 9.57, 6.82, 2.80, 12.85),
+					Block.box(3.15, 0.00, 9.18, 6.43, 2.80, 12.37),
+					Block.box(2.61, 0.00, 8.89, 5.95, 2.80, 11.98),
+					Block.box(4.02, 0.00, 10.05, 7.11, 2.80, 13.39),
+					Block.box(4.31, 0.00, 10.59, 7.29, 2.80, 13.99),
+					Block.box(2.01, 0.00, 8.71, 5.41, 2.80, 11.69),
+					Block.box(4.49, 0.00, 11.19, 7.35, 2.80, 14.60),
+					Block.box(1.40, 0.00, 8.65, 4.81, 2.80, 11.51))),
+			Map.entry(0b1101, Shapes.or(Block.box(2.80, 0.00, 2.80, 13.20, 5.66, 13.20),
+					Block.box(2.46, 5.66, 2.46, 13.54, 6.00, 13.54),
+					Block.box(1.30, 0.00, 8.20, 2.35, 3.25, 11.90),
+					Block.box(1.30, 0.00, 4.10, 2.35, 3.25, 7.80),
+					Block.box(8.20, 0.00, 1.30, 11.90, 3.25, 2.35),
+					Block.box(4.10, 0.00, 1.30, 7.80, 3.25, 2.35),
+					Block.box(8.20, 0.00, 13.65, 11.90, 3.25, 14.70),
+					Block.box(4.10, 0.00, 13.65, 7.80, 3.25, 14.70),
+					Block.box(8.10, 0.00, 13.20, 12.00, 3.35, 13.65),
+					Block.box(4.00, 0.00, 13.20, 7.90, 3.35, 13.65),
+					Block.box(2.35, 0.00, 8.10, 2.80, 3.35, 12.00),
+					Block.box(8.10, 0.00, 2.35, 12.00, 3.35, 2.80),
+					Block.box(2.35, 0.00, 4.00, 2.80, 3.35, 7.90),
+					Block.box(4.00, 0.00, 2.35, 7.90, 3.35, 2.80))),
+			Map.entry(0b1110, Shapes.or(Block.box(2.80, 0.00, 2.80, 13.20, 5.66, 13.20),
+					Block.box(2.46, 5.66, 2.46, 13.54, 6.00, 13.54),
+					Block.box(8.20, 0.00, 13.65, 11.90, 3.25, 14.70),
+					Block.box(4.10, 0.00, 13.65, 7.80, 3.25, 14.70),
+					Block.box(1.30, 0.00, 4.10, 2.35, 3.25, 7.80),
+					Block.box(1.30, 0.00, 8.20, 2.35, 3.25, 11.90),
+					Block.box(13.65, 0.00, 4.10, 14.70, 3.25, 7.80),
+					Block.box(13.65, 0.00, 8.20, 14.70, 3.25, 11.90),
+					Block.box(13.20, 0.00, 4.00, 13.65, 3.35, 7.90),
+					Block.box(13.20, 0.00, 8.10, 13.65, 3.35, 12.00),
+					Block.box(8.10, 0.00, 13.20, 12.00, 3.35, 13.65),
+					Block.box(2.35, 0.00, 4.00, 2.80, 3.35, 7.90),
+					Block.box(4.00, 0.00, 13.20, 7.90, 3.35, 13.65),
+					Block.box(2.35, 0.00, 8.10, 2.80, 3.35, 12.00))),
+			Map.entry(0b1111, Shapes.or(Block.box(2.80, 0.00, 2.80, 13.20, 5.66, 13.20),
+					Block.box(2.46, 5.66, 2.46, 13.54, 6.00, 13.54),
+					Block.box(13.65, 0.00, 4.10, 14.70, 3.25, 7.80),
+					Block.box(13.65, 0.00, 8.20, 14.70, 3.25, 11.90),
+					Block.box(4.10, 0.00, 13.65, 7.80, 3.25, 14.70),
+					Block.box(8.20, 0.00, 13.65, 11.90, 3.25, 14.70),
+					Block.box(4.10, 0.00, 1.30, 7.80, 3.25, 2.35),
+					Block.box(8.20, 0.00, 1.30, 11.90, 3.25, 2.35),
+					Block.box(1.30, 0.00, 4.10, 2.35, 3.25, 7.80),
+					Block.box(1.30, 0.00, 8.20, 2.35, 3.25, 11.90),
+					Block.box(4.00, 0.00, 2.35, 7.90, 3.35, 2.80),
+					Block.box(2.35, 0.00, 4.00, 2.80, 3.35, 7.90),
+					Block.box(13.20, 0.00, 4.00, 13.65, 3.35, 7.90),
+					Block.box(4.00, 0.00, 13.20, 7.90, 3.35, 13.65),
+					Block.box(8.10, 0.00, 2.35, 12.00, 3.35, 2.80),
+					Block.box(2.35, 0.00, 8.10, 2.80, 3.35, 12.00),
+					Block.box(13.20, 0.00, 8.10, 13.65, 3.35, 12.00),
+					Block.box(8.10, 0.00, 13.20, 12.00, 3.35, 13.65))));
+
 	private static final Map<Direction, VoxelShape> TRUNK_ARMS = Map.of(
-			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 1.0, 7.0),
-			Direction.SOUTH, Block.box(7.0, 0.0, 9.0, 9.0, 1.0, 16.0),
-			Direction.WEST, Block.box(0.0, 0.0, 7.0, 7.0, 1.0, 9.0),
-			Direction.EAST, Block.box(9.0, 0.0, 7.0, 16.0, 1.0, 9.0));
-	private static final Map<Direction, VoxelShape> TRUNK_CLIMBS = Map.of(
-			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 16.0, 1.0),
-			Direction.SOUTH, Block.box(7.0, 0.0, 15.0, 9.0, 16.0, 16.0),
-			Direction.WEST, Block.box(0.0, 0.0, 7.0, 1.0, 16.0, 9.0),
-			Direction.EAST, Block.box(15.0, 0.0, 7.0, 16.0, 16.0, 9.0));
+			Direction.NORTH, Shapes.or(Block.box(4.10, 2.80, 0.05, 11.90, 3.20, 1.15),
+					Block.box(8.65, 0.00, 0.00, 11.45, 2.80, 2.80),
+					Block.box(4.55, 0.00, 0.00, 7.35, 2.80, 2.80),
+					Block.box(7.60, 0.00, 0.05, 8.40, 2.80, 1.15),
+					Block.box(4.10, 0.00, 0.05, 4.50, 2.80, 1.15),
+					Block.box(11.50, 0.00, 0.05, 11.90, 2.80, 1.15),
+					Block.box(3.88, 3.20, 0.18, 4.72, 3.58, 1.02),
+					Block.box(11.28, 3.20, 0.18, 12.12, 3.58, 1.02)),
+			Direction.EAST, Shapes.or(Block.box(14.85, 2.80, 4.10, 15.95, 3.20, 11.90),
+					Block.box(13.20, 0.00, 8.65, 16.00, 2.80, 11.45),
+					Block.box(13.20, 0.00, 4.55, 16.00, 2.80, 7.35),
+					Block.box(14.85, 0.00, 7.60, 15.95, 2.80, 8.40),
+					Block.box(14.85, 0.00, 4.10, 15.95, 2.80, 4.50),
+					Block.box(14.85, 0.00, 11.50, 15.95, 2.80, 11.90),
+					Block.box(14.98, 3.20, 3.88, 15.82, 3.58, 4.72),
+					Block.box(14.98, 3.20, 11.28, 15.82, 3.58, 12.12)),
+			Direction.SOUTH, Shapes.or(Block.box(4.10, 2.80, 14.85, 11.90, 3.20, 15.95),
+					Block.box(8.65, 0.00, 13.20, 11.45, 2.80, 16.00),
+					Block.box(4.55, 0.00, 13.20, 7.35, 2.80, 16.00),
+					Block.box(7.60, 0.00, 14.85, 8.40, 2.80, 15.95),
+					Block.box(11.50, 0.00, 14.85, 11.90, 2.80, 15.95),
+					Block.box(4.10, 0.00, 14.85, 4.50, 2.80, 15.95),
+					Block.box(11.28, 3.20, 14.98, 12.12, 3.58, 15.82),
+					Block.box(3.88, 3.20, 14.98, 4.72, 3.58, 15.82)),
+			Direction.WEST, Shapes.or(Block.box(0.05, 2.80, 4.10, 1.15, 3.20, 11.90),
+					Block.box(0.00, 0.00, 8.65, 2.80, 2.80, 11.45),
+					Block.box(0.00, 0.00, 4.55, 2.80, 2.80, 7.35),
+					Block.box(0.05, 0.00, 7.60, 1.15, 2.80, 8.40),
+					Block.box(0.05, 0.00, 11.50, 1.15, 2.80, 11.90),
+					Block.box(0.05, 0.00, 4.10, 1.15, 2.80, 4.50),
+					Block.box(0.18, 3.20, 11.28, 1.02, 3.58, 12.12),
+					Block.box(0.18, 3.20, 3.88, 1.02, 3.58, 4.72)));
 
 	private static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(
 			Map.entry(0b0000, Shapes.or(Block.box(6.30, 0.00, 3.20, 7.60, 1.30, 8.18),
@@ -346,8 +575,8 @@ public class DcCableBlock extends Block implements DcTerminal {
 	private static final Map<Direction, VoxelShape> STRING_CLIMBS = Map.of(
 			Direction.NORTH, Shapes.or(Block.box(6.30, 3.05, 0.50, 7.60, 16.00, 1.80),
 					Block.box(8.40, 3.05, 0.50, 9.70, 16.00, 1.80),
-					Block.box(5.40, 9.00, 1.78, 10.60, 10.40, 2.20),
-					Block.box(6.30, 9.00, 0.00, 9.70, 10.40, 1.78),
+					Block.box(5.95, 9.00, 0.00, 10.05, 10.40, 0.50),
+					Block.box(5.95, 9.00, 1.80, 10.05, 10.40, 2.20),
 					Block.box(6.30, 0.70, 0.90, 7.60, 2.37, 2.50),
 					Block.box(8.40, 0.70, 0.90, 9.70, 2.37, 2.50),
 					Block.box(6.30, 0.40, 1.20, 7.60, 2.00, 2.87),
@@ -366,11 +595,13 @@ public class DcCableBlock extends Block implements DcTerminal {
 					Block.box(6.30, 1.93, 0.50, 7.60, 3.70, 1.85),
 					Block.box(8.40, 0.00, 2.43, 9.70, 1.35, 4.20),
 					Block.box(8.40, 1.93, 0.50, 9.70, 3.70, 1.85),
+					Block.box(5.95, 9.00, 0.50, 6.30, 10.40, 1.80),
+					Block.box(9.70, 9.00, 0.50, 10.05, 10.40, 1.80),
 					Block.box(7.66, 9.36, 2.20, 8.34, 10.04, 2.50)),
 			Direction.EAST, Shapes.or(Block.box(14.20, 3.05, 6.30, 15.50, 16.00, 7.60),
 					Block.box(14.20, 3.05, 8.40, 15.50, 16.00, 9.70),
-					Block.box(13.80, 9.00, 5.40, 14.22, 10.40, 10.60),
-					Block.box(14.22, 9.00, 6.30, 16.00, 10.40, 9.70),
+					Block.box(15.50, 9.00, 5.95, 16.00, 10.40, 10.05),
+					Block.box(13.80, 9.00, 5.95, 14.20, 10.40, 10.05),
 					Block.box(13.50, 0.70, 6.30, 15.10, 2.37, 7.60),
 					Block.box(13.50, 0.70, 8.40, 15.10, 2.37, 9.70),
 					Block.box(13.13, 0.40, 6.30, 14.80, 2.00, 7.60),
@@ -389,11 +620,13 @@ public class DcCableBlock extends Block implements DcTerminal {
 					Block.box(11.80, 0.00, 8.40, 13.57, 1.35, 9.70),
 					Block.box(14.15, 1.93, 6.30, 15.50, 3.70, 7.60),
 					Block.box(14.15, 1.93, 8.40, 15.50, 3.70, 9.70),
+					Block.box(14.20, 9.00, 5.95, 15.50, 10.40, 6.30),
+					Block.box(14.20, 9.00, 9.70, 15.50, 10.40, 10.05),
 					Block.box(13.50, 9.36, 7.66, 13.80, 10.04, 8.34)),
 			Direction.SOUTH, Shapes.or(Block.box(8.40, 3.05, 14.20, 9.70, 16.00, 15.50),
 					Block.box(6.30, 3.05, 14.20, 7.60, 16.00, 15.50),
-					Block.box(5.40, 9.00, 13.80, 10.60, 10.40, 14.22),
-					Block.box(6.30, 9.00, 14.22, 9.70, 10.40, 16.00),
+					Block.box(5.95, 9.00, 15.50, 10.05, 10.40, 16.00),
+					Block.box(5.95, 9.00, 13.80, 10.05, 10.40, 14.20),
 					Block.box(8.40, 0.70, 13.50, 9.70, 2.37, 15.10),
 					Block.box(6.30, 0.70, 13.50, 7.60, 2.37, 15.10),
 					Block.box(8.40, 0.40, 13.13, 9.70, 2.00, 14.80),
@@ -412,11 +645,13 @@ public class DcCableBlock extends Block implements DcTerminal {
 					Block.box(6.30, 0.00, 11.80, 7.60, 1.35, 13.57),
 					Block.box(8.40, 1.93, 14.15, 9.70, 3.70, 15.50),
 					Block.box(6.30, 1.93, 14.15, 7.60, 3.70, 15.50),
+					Block.box(9.70, 9.00, 14.20, 10.05, 10.40, 15.50),
+					Block.box(5.95, 9.00, 14.20, 6.30, 10.40, 15.50),
 					Block.box(7.66, 9.36, 13.50, 8.34, 10.04, 13.80)),
 			Direction.WEST, Shapes.or(Block.box(0.50, 3.05, 8.40, 1.80, 16.00, 9.70),
 					Block.box(0.50, 3.05, 6.30, 1.80, 16.00, 7.60),
-					Block.box(1.78, 9.00, 5.40, 2.20, 10.40, 10.60),
-					Block.box(0.00, 9.00, 6.30, 1.78, 10.40, 9.70),
+					Block.box(0.00, 9.00, 5.95, 0.50, 10.40, 10.05),
+					Block.box(1.80, 9.00, 5.95, 2.20, 10.40, 10.05),
 					Block.box(0.90, 0.70, 8.40, 2.50, 2.37, 9.70),
 					Block.box(0.90, 0.70, 6.30, 2.50, 2.37, 7.60),
 					Block.box(1.20, 0.40, 8.40, 2.87, 2.00, 9.70),
@@ -435,6 +670,8 @@ public class DcCableBlock extends Block implements DcTerminal {
 					Block.box(0.50, 1.93, 8.40, 1.85, 3.70, 9.70),
 					Block.box(2.43, 0.00, 6.30, 4.20, 1.35, 7.60),
 					Block.box(0.50, 1.93, 6.30, 1.85, 3.70, 7.60),
+					Block.box(0.50, 9.00, 9.70, 1.80, 10.40, 10.05),
+					Block.box(0.50, 9.00, 5.95, 1.80, 10.40, 6.30),
 					Block.box(2.20, 9.36, 7.66, 2.50, 10.04, 8.34)));
 
 	/** Which side is which bit of {@link #STRING_HUBS}'s key, in the order the generator numbers them. */
@@ -459,12 +696,20 @@ public class DcCableBlock extends Block implements DcTerminal {
 		// Which of the two cables this is, asked of the catalogue rather than of a string literal here.
 		boolean pair = spec.id().equals(CableCatalog.STRING_6.id());
 		for (BlockState state : stateDefinition.getPossibleStates()) {
-			shapes.put(state, pair ? stringShapeOf(state) : trunkShapeOf(state));
+			shapes.put(state, pair
+					? shapeOf(state, STRING_HUBS, STRING_ARMS, STRING_CLIMBS)
+					: shapeOf(state, TRUNK_HUBS, TRUNK_ARMS, null));
 		}
 	}
 
-	/** The string cable as it is drawn in this state: the middle its pattern gets, the arms, any climb. */
-	private static VoxelShape stringShapeOf(BlockState state) {
+	/**
+	 * Either cable as it is drawn in this state: the middle its connection pattern gets, plus an arm or a
+	 * climb for each side.  ``climbs`` is null for the trunk, which cannot turn up a wall inside one block
+	 * - its elbow would sit inside its own link box - so an up side there draws the arm and the block
+	 * above carries on.  gen_cable_models and gen_trunk_models print all six tables.
+	 */
+	private static VoxelShape shapeOf(BlockState state, Map<Integer, VoxelShape> hubs,
+			Map<Direction, VoxelShape> arms, Map<Direction, VoxelShape> climbs) {
 		if (state.getValue(BURIED)) return Shapes.block();
 
 		int mask = 0;
@@ -474,34 +719,14 @@ public class DcCableBlock extends Block implements DcTerminal {
 			}
 		}
 
-		VoxelShape shape = STRING_HUBS.get(mask);
+		VoxelShape shape = hubs.get(mask);
 		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
 			RedstoneSide connection = state.getValue(side.getValue());
 			if (connection == RedstoneSide.NONE) continue;
 
-			// A climb is the *whole* run for that side - along the ground
-			// wall, swept as one tube
-			shape = Shapes.or(shape, connection == RedstoneSide.UP
-					? STRING_CLIMBS.get(side.getKey())
-					: STRING_ARMS.get(side.getKey()));
-		}
-
-		return shape;
-	}
-
-	/** The trunk cable, still one painted bar: a hub, an arm a side, and a climb up a wall. */
-	private static VoxelShape trunkShapeOf(BlockState state) {
-		if (state.getValue(BURIED)) return Shapes.block();
-
-		VoxelShape shape = TRUNK_HUB;
-		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
-			RedstoneSide connection = state.getValue(side.getValue());
-			if (connection == RedstoneSide.NONE) continue;
-
-			shape = Shapes.or(shape, TRUNK_ARMS.get(side.getKey()));
-			if (connection == RedstoneSide.UP) {
-				shape = Shapes.or(shape, TRUNK_CLIMBS.get(side.getKey()));
-			}
+			// A climb is the *whole* run for that side - along the ground and then up the wall, one tube
+			boolean up = connection == RedstoneSide.UP && climbs != null;
+			shape = Shapes.or(shape, up ? climbs.get(side.getKey()) : arms.get(side.getKey()));
 		}
 
 		return shape;
@@ -529,7 +754,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return shapes.getOrDefault(state, TRUNK_HUB);
+		return shapes.getOrDefault(state, Shapes.empty());
 	}
 
 	/**
@@ -539,7 +764,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 	 */
 	@Override
 	public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return state.getValue(BURIED) ? Shapes.block() : shapes.getOrDefault(state, TRUNK_HUB);
+		return state.getValue(BURIED) ? Shapes.block() : shapes.getOrDefault(state, Shapes.empty());
 	}
 
 	/** What the light and the face culling see. */

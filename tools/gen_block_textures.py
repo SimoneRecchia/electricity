@@ -760,6 +760,75 @@ def dc_tie():
     return c
 
 
+# A 240 mm2 aluminium DC trunk: 27 mm across, XLPE over a stranded conductor.  Matter and greyer than a
+# string cable's polyolefin, because a big cable's sheath is thicker and duller.
+TRUNK_JACKET = (44, 45, 50, 255)
+LUG_TIN = (166, 170, 176, 255)          # a tinned copper compression lug
+
+
+def dc_trunk_core():
+    """The trunk's sheath: the same cylinder gradient as dc_core, on a heavier, matter cable.
+
+    Constant along v for the same reason dc_core is - see there.  256 rather than 128 because this tube is
+    three times across what a string core is, so a player gets three times as close to a texel.
+    """
+    size = 256
+    c = Canvas(size, size)
+    marks = stretched(size, along=size * 3.0, across=size / 20.0, octaves=2, salt=347)
+    profile = []
+    for i in range(size):
+        lit = max(0.0, math.cos(2.0 * math.pi * (i + 0.5) / size))
+        tone = -8 + lit * lit * 24
+        # a thick sheath is matt: a broad weak sheen where a string core has a narrow bright one
+        sheen = lit ** 8 * 0.16
+        grain = marks.signed(0.0, i) * 8 + hash01(i, 0, 349) * 4 - 2
+        profile.append(mix(shade(TRUNK_JACKET, tone + grain), (190, 198, 208, 255), sheen))
+    for i in range(size):
+        for j in range(size):
+            c.set(i, j, profile[i])
+    return c
+
+
+def dc_trunk_shrink():
+    """A heat-shrink straight joint, as a strip along its own length.
+
+    What joins two drums of trunk cable: a sleeve shrunk down over the crimp, glossier than the sheath it
+    sits on because the shrinking polishes it, with the mastic bled out at each shoulder.  The v bands are
+    modellib.SHRINK's own.
+    """
+    size = 256
+    c = Canvas(size, size)
+    bands = ((0.0000, 0.1765, -6), (0.1765, 0.2941, 4), (0.2941, 0.7059, 8),
+             (0.7059, 0.8235, 4), (0.8235, 1.0000, -6))
+    for j in range(size):
+        v = (j + 0.5) / size
+        step = next(b[2] for b in bands if b[0] <= v <= b[1])
+        for i in range(size):
+            lit = max(0.0, math.cos(2.0 * math.pi * (i + 0.5) / size))
+            tone = -6 + lit * lit * 30
+            c.set(i, j, mix(shade(shade(TRUNK_JACKET, step), tone),
+                            (200, 208, 218, 255), lit ** 12 * 0.34))
+    # the mastic squeezed out at each shoulder, which is the one thing that says heat-shrink
+    for v0 in (0.1765, 0.2941, 0.7059, 0.8235):
+        c.aa_rect(0, size * v0 - size * 0.012, size, size * v0 + size * 0.008, (14, 14, 16, 255),
+                  alpha=0.55)
+    grime(c, salt=353, amount=0.12, colour=(70, 68, 62, 255))
+    return c
+
+
+def dc_trunk_lug():
+    """A tinned copper compression lug: the barrel, the palm, and the crimp marks."""
+    size = 128
+    c = Canvas(size, size)
+    brushed(c, LUG_TIN, grain=11, blotch=10, salt=359, horizontal=False)
+    # the two crimp indents a hydraulic tool leaves, across the barrel
+    for v in (0.30, 0.52):
+        c.aa_rect(0, size * v, size, size * (v + 0.055), shade(LUG_TIN, -46), alpha=0.8)
+        c.aa_rect(0, size * (v + 0.055), size, size * (v + 0.075), shade(LUG_TIN, 26), alpha=0.6)
+    grime(c, salt=367, amount=0.16, colour=(84, 80, 72, 255))
+    return c
+
+
 def dc_gland():
     """An M16 cable gland, as a strip from the box wall out: the hex body, then the compression nut.
 
@@ -802,6 +871,21 @@ def dc_joint_plus():
 
 def dc_joint_minus():
     return _moulded(JOINT_BANDS, False)
+
+
+def dc_trench():
+    """The backfill over a buried run: disturbed soil"""
+    size = 256
+    c = Canvas(size, size)
+    concrete(c, (114, 96, 74, 255), salt=293, aggregate=True)
+    # the sand bed a cable is laid on shows as paler streaks through the spoil
+    band = stretched(size, along=size * 1.2, across=size / 26.0, octaves=2, salt=307)
+    c.over(lambda x, y, base: shade(base, band.signed(x, y) * 16))
+    for i in range(12):
+        cx, cy = size * hash01(i, 9, 311), size * hash01(i, 10, 313)
+        c.aa_disc(cx, cy, size * (0.01 + hash01(i, 11, 317) * 0.03), (78, 66, 52, 255), alpha=0.5)
+    grime(c, salt=331, amount=0.20, colour=(58, 48, 38, 255))
+    return c
 
 
 def dc_jbox():
@@ -913,25 +997,6 @@ def _line_tile(armoured=False):
 
 def dc_string_line():
     return _line_tile(armoured=False)
-
-
-def dc_trunk_line():
-    return _line_tile(armoured=True)
-
-
-def dc_trench():
-    """The backfill over a buried run: disturbed soil"""
-    size = 256
-    c = Canvas(size, size)
-    concrete(c, (114, 96, 74, 255), salt=293, aggregate=True)
-    # the sand bed a cable is laid on shows as paler streaks through the spoil
-    band = stretched(size, along=size * 1.2, across=size / 26.0, octaves=2, salt=307)
-    c.over(lambda x, y, base: shade(base, band.signed(x, y) * 16))
-    for i in range(12):
-        cx, cy = size * hash01(i, 9, 311), size * hash01(i, 10, 313)
-        c.aa_disc(cx, cy, size * (0.01 + hash01(i, 11, 317) * 0.03), (78, 66, 52, 255), alpha=0.5)
-    grime(c, salt=331, amount=0.20, colour=(58, 48, 38, 255))
-    return c
 
 
 # ------------------------------------------------------------------ the pole
@@ -1406,10 +1471,12 @@ TEXTURES = {
     'dc_joint_plus': dc_joint_plus,
     'dc_joint_minus': dc_joint_minus,
     'dc_tie': dc_tie,
+    'dc_trunk_core': dc_trunk_core,
+    'dc_trunk_shrink': dc_trunk_shrink,
+    'dc_trunk_lug': dc_trunk_lug,
     'dc_gland': dc_gland,
     'dc_jbox': dc_jbox,
     'dc_jbox_side': dc_jbox_side,
-    'dc_trunk_line': dc_trunk_line,
     'dc_trench': dc_trench,
     'pole_concrete': pole_concrete,
     'pole_plate': pole_plate,

@@ -138,6 +138,13 @@ height; the tube moved and the checker went on measuring the old axis, so it rep
 not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
 the renderer does.
 
+**One framework, one gauge each.** The string cable and the trunk share every bit of machinery — the
+sixteen middles, the blockstate, the disjointness proof, the Java tables — through `Product` in
+`gen_cable_models.py`. Only the figures and the fittings differ, and they differ because the objects do: a
+6 mm² string is plugged together with MC4s and tied down with nylon, a 240 mm² trunk is crimped into lugs,
+heat-shrunk at its joints and cleated in aluminium. A gauge may also *lack* a piece — the trunk has no
+climb, because a bend it can actually take puts the elbow inside its own link box.
+
 **A fitting a player never reaches is a fitting that does not exist.** The MC4 connectors were drawn only
 on the dead end and the dropped offcut, so anybody laying cable from a row to an inverter saw a smooth
 tube and nothing else, and three rounds of work on the connector changed nothing they could see. A string
@@ -151,7 +158,8 @@ python3 tools/gen_pv_textures.py        # item sprites and panel layouts
 python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
 python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
 python3 tools/gen_cab_models.py         # the substation cabin
-python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
+python3 tools/gen_cable_models.py       # the string cable (--java prints the shape tables)
+python3 tools/gen_trunk_models.py       # the trunk, on the same framework and its own fittings
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
 python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
@@ -169,6 +177,8 @@ python3 tools/check_generated_assets.py # "one generator a file, every file read
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches
 python3 tools/check_gui_fits.py         # "0 problems"
 python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
+python3 tools/gen_trunk_models.py       # the same, on the heavier gauge
+python3 tools/check_deployed.py         # "the client reads exactly what is in the tree"
 python3 tools/gen_conductor_models.py   # the same, per conductor, and the shapes match the block
 python3 tools/gen_tower_models.py       # "LatticeTowerBlock declares the cells this authors"
 python3 tools/render_blocks.py          # and then *look* at build/render/

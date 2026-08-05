@@ -476,6 +476,18 @@ MC4_JOINT = ((0.40, 0.68, 1.235, 0.0000, 0.1111),   # the strain relief in
 MC4_JOINT_LENGTH = sum(step[0] for step in MC4_JOINT)
 
 
+# A heat-shrink straight joint, as (length, radius, taper, v0, v1) in sixteenths of a block, for the
+# trunk: the sleeve shrunk down over a crimped joint, which is what joins two drums of 240 mm2 cable.
+# Sized off the trunk's own 1.40 px core radius.  dc_trunk_shrink's bands are these v.
+SHRINK = ((0.90, 1.40, 1.429, 0.0000, 0.1765),   # shrunk down onto the sheath
+          (0.60, 2.05, 1.000, 0.1765, 0.2941),   # the step off it
+          (2.10, 2.20, 1.000, 0.2941, 0.7059),   # the body, over the crimp
+          (0.60, 2.05, 1.000, 0.7059, 0.8235),
+          (0.90, 2.00, 0.700, 0.8235, 1.0000))
+SHRINK_LENGTH = sum(step[0] for step in SHRINK)
+SHRINK_RADIUS = max(step[1] * max(1.0, step[2]) for step in SHRINK)
+
+
 def mc4(mesh, faces, start, axis, unit=1.0, into=1, flip_v=False, pin=False, profile=MC4):
     """An MC4 moulding grown along one axis from ``start``, which is a point on its own centre line.
 

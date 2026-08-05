@@ -428,10 +428,15 @@ def _unit(v):
 
 SAND = 'electricity:block/dc_trench'
 CABLE = 'dc_string_cable_'
+TRUNK = 'dc_trunk_cable_'
 
 
 def cable_piece(kind, offset, yaw=0):
     return placed(block_model(CABLE + kind), offset, yaw)
+
+
+def trunk_piece(kind, offset, yaw=0):
+    return placed(block_model(TRUNK + kind), offset, yaw)
 
 
 def scene_cable_run():
@@ -487,16 +492,19 @@ def scene_cable_corner():
 NEIGHBOUR = {0: (0, -1), 90: (1, 0), 180: (0, 1), 270: (-1, 0)}
 
 
-def joined(kind, at, sides, yaw=0):
+def joined(kind, at, sides, yaw=0, prefix=CABLE):
     """A piece, its arms, and a straight in every block those arms reach into."""
-    triangles = cable_piece(kind, at, yaw=yaw)
+    def piece(name, offset, turn=0):
+        return placed(block_model(prefix + name), offset, turn)
+
+    triangles = piece(kind, at, yaw)
     for side in sides:
-        triangles += cable_piece('arm', at, yaw=side)
+        triangles += piece('arm', at, side)
         dx, dz = NEIGHBOUR[side]
         beyond = (at[0] + dx, at[1], at[2] + dz)
-        triangles += cable_piece('line', beyond, yaw=90 if dx else 0)
-        triangles += cable_piece('arm', beyond, yaw=side)
-        triangles += cable_piece('arm', beyond, yaw=(side + 180) % 360)
+        triangles += piece('line', beyond, 90 if dx else 0)
+        triangles += piece('arm', beyond, side)
+        triangles += piece('arm', beyond, (side + 180) % 360)
     return triangles
 
 
@@ -547,6 +555,27 @@ def scene_cable_climb():
     triangles += cable_piece('arm', (1, 1, 1), yaw=0)
     triangles += cable_piece('arm', (1, 1, 1), yaw=180)
     return triangles, (2.6, 1.9, 3.6), (1.5, 0.9, 1.4)
+
+
+def scene_trunk():
+    """The trunk beside the string, which is the only way to judge either of them.
+
+    The gauges are three times apart in diameter and the fittings are different objects: heat-shrink joints
+    staggered down the run, bolted lugs at a dead end, two-bolt cleats.
+    """
+    triangles = ground(-1, -1, 6, 6, SAND)
+    for kind, at, sides in (('tee', (2, 0, 2), (0, 90, 180)),):
+        triangles += joined(kind, at, sides, prefix=TRUNK)
+    triangles += trunk_piece('end', (3, 0, 2), yaw=90)
+    triangles += trunk_piece('arm', (3, 0, 2), yaw=270)
+    # the string cable alongside, for scale
+    triangles += cable_piece('line', (2, 0, 4), yaw=90)
+    for side in (90, 270):
+        triangles += cable_piece('arm', (2, 0, 4), yaw=side)
+        triangles += cable_piece('line', (2 + (1 if side == 90 else -1), 0, 4), yaw=90)
+        triangles += cable_piece('arm', (2 + (1 if side == 90 else -1), 0, 4), yaw=side)
+        triangles += cable_piece('arm', (2 + (1 if side == 90 else -1), 0, 4), yaw=(side + 180) % 360)
+    return triangles, (0.7, 2.4, 0.5), (2.4, 0.06, 2.6)
 
 
 def scene_cable_over():
@@ -716,6 +745,7 @@ SCENES = {
     'cable_hitbox': scene_cable_hitbox,
     'cable_states': scene_cable_states,
     'cable_over': scene_cable_over,
+    'trunk': scene_trunk,
     'cable_climb': scene_cable_climb,
     'cable_plug': scene_cable_plug,
     'inverter_front': scene_inverter_front,

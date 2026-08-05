@@ -152,7 +152,7 @@ class Barrel:
     """A round fitting: a cleat's screw, or a gland through a junction box's wall."""
 
     def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False,
-                 band=None, sides=FITTING, taper=1.0, outward=1):
+                 band=None, sides=FITTING, taper=1.0, outward=1, joint=None):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
         self.radius, self.low, self.high, self.cap = radius, low, high, cap
         # Which window of its texture this segment takes
@@ -162,6 +162,8 @@ class Barrel:
         self.sleeve = sleeve
         # ``outward`` is which end is the far one: cylinder() tapers its +axis end, so a fitting facing
         self.sides, self.taper, self.outward = sides, taper, outward
+        # Parts naming the same joint are one fitting - see Run.
+        self.joint = joint
 
     def draw(self, mesh):
         faces = mesh.faces(self.group, self.material)
@@ -196,22 +198,27 @@ class Plug:
     modellib.mc4 draws it; its boxes are the profile's own steps.
     """
 
-    def __init__(self, centre, base, index, start, profile=MC4, group='plug', joint=None):
+    def __init__(self, centre, base, index, start, profile=MC4, group='plug', joint=None,
+                 axis_y=None, pin=None, materials=None):
         self.centre, self.base, self.index, self.start = centre, base, index, start
         self.profile, self.group = profile, group
         self.positive = index == 0
         # A joint is one plug pushed into another, so it has no free pin to show.
-        self.pin = self.positive and profile is MC4
-        self.material = '%s_%s' % (group, 'plus' if self.positive else 'minus')
+        self.pin = (self.positive and profile is MC4) if pin is None else pin
+        # The two poles' materials, or one name twice where the fitting does not carry a polarity.
+        pair = materials or ('%s_plus' % group, '%s_minus' % group)
+        self.material = pair[0 if self.positive else 1]
         self.joint = joint
+        # How high its own axis sits: its widest radius, so a moulding lying on the ground rests on it.
+        self.axis_y = MC4_RADIUS if axis_y is None else axis_y
 
     def draw(self, mesh):
         mc4(mesh, mesh.faces(self.group, self.material),
-            at(self.centre, self.base + PLUG_Y, self.start), 'z', unit=1.0 / 16.0,
+            at(self.centre, self.base + self.axis_y, self.start), 'z', unit=1.0 / 16.0,
             profile=self.profile, pin=self.pin)
 
     def boxes(self):
-        y, result, cursor = self.base + PLUG_Y, [], self.start
+        y, result, cursor = self.base + self.axis_y, [], self.start
         steps = list(self.profile) + ([(MC4_PIN, 0.22, 1.0, 0.0, 0.0)] if self.pin else [])
         for length, radius, taper, _, _ in steps:
             span = radius * max(1.0, taper)
@@ -227,11 +234,13 @@ class Plug:
 class Slab:
     """A box of something that is not cable: a cleat's strap and feet, a junction box's shell."""
 
-    def __init__(self, group, material, lo, hi, uv_scale=1.0, uv=None):
+    def __init__(self, group, material, lo, hi, uv_scale=1.0, uv=None, joint=None):
         self.group, self.material = group, material
         self.lo, self.hi, self.uv_scale = tuple(lo), tuple(hi), uv_scale
         # Which band of the texture, for a part whose faces carry their own shading - see dc_tie.
         self.uv = uv
+        # Parts naming the same joint are one fitting - see Run.
+        self.joint = joint
 
     def draw(self, mesh):
         if isinstance(self.material, dict):
@@ -493,23 +502,32 @@ def piece_climb(base):
 
 
 def wall_cleat(base):
-    """The stainless cleat that holds a climb to the wall it runs up."""
-    inner = CORE_OFFSET + CORE_RADIUS
-    face = WALL_STANDOFF + CORE_RADIUS
+    """The stainless cleat that holds a climb to the wall it runs up.
+
+    A back plate on the wall, a strap in front of the pair and a cheek each side joining them - the pair
+    passes *through* it.  Drawn as one plate across the cable it went straight through the cable.
+    """
+    outer = CORE_OFFSET + CORE_RADIUS + 0.35
+    behind = WALL_STANDOFF - CORE_RADIUS
+    front = WALL_STANDOFF + CORE_RADIUS
     return [
-        Slab('cleat', 'cleat', (8.0 - inner, 9.0, 0.0), (8.0 + inner, 10.4, face - 0.02),
+        Slab('cleat', 'cleat', (8.0 - outer, 9.0, 0.0), (8.0 + outer, 10.4, behind), uv_scale=0.4),
+        Slab('cleat', 'cleat', (8.0 - outer, 9.0, front), (8.0 + outer, 10.4, front + 0.40),
              uv_scale=0.4),
-        Slab('cleat', 'cleat', (HUB_LO, 9.0, face - 0.02), (HUB_HI, 10.4, face + 0.40), uv_scale=0.6),
-        Barrel('cleat', 'cleat', (8.0, 9.7, 0.0), 'z', 0.34, face + 0.40, face + 0.70),
+        Slab('cleat', 'cleat', (8.0 - outer, 9.0, behind), (8.0 - outer + 0.35, 10.4, front),
+             uv_scale=0.3),
+        Slab('cleat', 'cleat', (8.0 + outer - 0.35, 9.0, behind), (8.0 + outer, 10.4, front),
+             uv_scale=0.3),
+        Barrel('cleat', 'cleat', (8.0, 9.7, 0.0), 'z', 0.34, front + 0.40, front + 0.70),
     ]
 
 
-def bedding():
+def bedding(ground, rim=RIM):
     """The sand a buried cable is laid in, and the rim that keeps the block boundary solid."""
-    parts = [Slab('bedding', 'trench', (0.0, 0.0, 0.0), (16.0, GROUND, 16.0))]
-    for x0, z0, x1, z1 in ((0.0, 0.0, 16.0, RIM), (0.0, 16.0 - RIM, 16.0, 16.0),
-                           (0.0, RIM, RIM, 16.0 - RIM), (16.0 - RIM, RIM, 16.0, 16.0 - RIM)):
-        parts.append(Slab('bedding', 'trench', (x0, GROUND, z0), (x1, 16.0, z1), uv_scale=0.5))
+    parts = [Slab('bedding', 'trench', (0.0, 0.0, 0.0), (16.0, ground, 16.0))]
+    for x0, z0, x1, z1 in ((0.0, 0.0, 16.0, rim), (0.0, 16.0 - rim, 16.0, 16.0),
+                           (0.0, rim, rim, 16.0 - rim), (16.0 - rim, rim, 16.0, 16.0 - rim)):
+        parts.append(Slab('bedding', 'trench', (x0, ground, z0), (x1, 16.0, z1), uv_scale=0.5))
     return parts
 
 
@@ -531,6 +549,28 @@ MIDDLES = {'loose': piece_loose, 'end': piece_end, 'line': piece_line, 'bend': p
 QUARTERS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
 
 
+# ---------------------------------------------------------------- one cable product
+
+class Product:
+    """What the shared framework needs to know about one cable, so it can write either of them.
+
+    Two products exist: the string pair and the trunk.  gen_trunk_models.py builds the second one on this
+    same framework - the pieces differ because the fittings are different objects, but the sixteen middles,
+    the blockstate, the disjointness proof and the Java tables are one implementation.
+    """
+
+    def __init__(self, name, source, materials, textures, middles, arm, climb, ground, rim,
+                 java_class, java_prefix):
+        self.name, self.source = name, source
+        self.materials, self.textures = materials, textures
+        # ``climb`` is None for a gauge that cannot turn up a wall inside one block: the trunk's elbow
+        # would sit inside its own link box, so an ``up`` side draws its arm and the block above carries on.
+        self.middles, self.arm, self.climb = middles, arm, climb
+        self.ground, self.rim = ground, rim
+        self.java_class, self.java_prefix = java_class, java_prefix
+        self.obj_dir = os.path.join(ASSETS, 'models', name)
+
+
 # ---------------------------------------------------------------- writing
 
 def write(path, data):
@@ -540,7 +580,7 @@ def write(path, data):
         f.write('\n')
 
 
-def write_piece(name, parts):
+def write_piece(p, name, parts):
     """One piece as an OBJ, its material library"""
     mesh = Mesh()
     for part in parts:
@@ -553,19 +593,19 @@ def write_piece(name, parts):
 
     check_inside_sprite(name, mesh)
     check_inside_block(name, mesh)
-    mesh.write(os.path.join(OBJ_DIR, name + '.obj'), name + '.mtl', 'gen_cable_models.py')
-    write_mtl(os.path.join(OBJ_DIR, name + '.mtl'), seen, MATERIALS, 'gen_cable_models.py')
+    mesh.write(os.path.join(p.obj_dir, name + '.obj'), name + '.mtl', p.source)
+    write_mtl(os.path.join(p.obj_dir, name + '.mtl'), seen, p.materials, p.source)
 
     write(os.path.join(BLOCK_MODELS, name + '.json'), {
         'loader': 'forge:obj',
-        'model': 'electricity:models/%s/%s.obj' % (NAME, name),
+        'model': 'electricity:models/%s/%s.obj' % (p.name, name),
         # Not flipped, and the reason is exact rather than a preference.
         'flip_v': False,
         # Culling off: the loader would drop the quads that lie on a block boundary, and on a cable
         'automatic_culling': False,
         # Shading off, and this is what makes a cable read as one solid object.
         'shade_quads': False,
-        'textures': dict(TEXTURES, particle=TEXTURES['core']),
+        'textures': dict(p.textures, particle=p.textures['core']),
     })
     return mesh.stats()[1]
 
@@ -588,29 +628,30 @@ def check_inside_block(name, mesh):
                              % (name, index + 1, x, y, z))
 
 
-def blockstate():
+def blockstate(p):
     """Multipart, and the sixteen middles are an exact partition of the states."""
     parts = []
     for buried, prefix in ((False, ''), (True, 'trench_')):
         if buried:
             parts.append({'when': {'buried': 'true'},
-                          'apply': {'model': 'electricity:block/%s_trench_bed' % NAME}})
+                          'apply': {'model': 'electricity:block/%s_trench_bed' % p.name}})
 
         for connected, (kind, turn) in sorted(HUBS.items()):
             when = {'buried': 'true' if buried else 'false'}
             for side in SIDES:
                 when[side] = 'side|up' if side in connected else 'none'
-            apply = {'model': 'electricity:block/%s_%s%s' % (NAME, prefix, kind)}
+            apply = {'model': 'electricity:block/%s_%s%s' % (p.name, prefix, kind)}
             if turn:
                 apply['y'] = turn
             parts.append({'when': when, 'apply': apply})
 
         # A trench has nothing to climb: the pair is already at the surface
         # the next block along without going anywhere.
-        wanted = (('arm', 'side|up'),) if buried else (('arm', 'side'), ('climb', 'up'))
+        wanted = ((('arm', 'side|up'),) if buried or p.climb is None
+                  else (('arm', 'side'), ('climb', 'up')))
         for side, turn in QUARTERS.items():
             for suffix, values in wanted:
-                apply = {'model': 'electricity:block/%s_%s%s' % (NAME, prefix, suffix)}
+                apply = {'model': 'electricity:block/%s_%s%s' % (p.name, prefix, suffix)}
                 if turn:
                     apply['y'] = turn
                 parts.append({'when': {'buried': 'true' if buried else 'false', side: values},
@@ -621,30 +662,31 @@ def blockstate():
 
 # ---------------------------------------------------------------- checks
 
-def parts_of(state):
+def parts_of(product, state):
     """Every part the given connection state draws, turned into the block's own frame and labelled."""
     connected = tuple(s for s in SIDES if state[s] != 'none')
     kind, turn = HUBS[connected]
     labelled = [(p.turned(turn), '%s[%s]' % (kind, getattr(p, 'joint', None) or i))
-                for i, p in enumerate(MIDDLES[kind](0.0))]
+                for i, p in enumerate(product.middles[kind](0.0))]
     for side in SIDES:
         if state[side] == 'none':
             continue
 
-        pieces = piece_climb(0.0) if state[side] == 'up' else piece_arm(0.0, 0.0)
+        pieces = (product.climb(0.0) if state[side] == 'up' and product.climb
+                  else product.arm(0.0, 0.0))
         labelled += [(p.turned(QUARTERS[side]), '%s:%s[%d]' % (side, state[side], i))
                      for i, p in enumerate(pieces)]
     return labelled
 
 
-def check_disjoint():
+def check_disjoint(product):
     """Proves nothing a run draws touches anything else it draws, in any of the 162 states."""
     problems = []
     for connected in HUBS:
         for values in itertools.product(*[('side', 'up') if s in connected else ('none',)
                                           for s in SIDES]):
             state = dict(zip(SIDES, values))
-            labelled = parts_of(state)
+            labelled = parts_of(product, state)
             for (a, la), (b, lb) in itertools.combinations(labelled, 2):
                 if la == lb:
                     continue
@@ -688,10 +730,13 @@ def check_disjoint():
     return sorted(set(problems))
 
 
-def clearances():
+def clearances(product):
     """How much room the two cores of a bend and of a climb keep"""
     out = {}
-    for name, builder in (('bend', piece_bend), ('climb', piece_climb)):
+    wanted = [('bend', product.middles['bend'])]
+    if product.climb:
+        wanted.append(('climb', product.climb))
+    for name, builder in wanted:
         runs = [p for p in builder(0.0) if isinstance(p, Run)]
         out[name] = min(_path_gap(a.path, b.path) for a, b in itertools.combinations(runs, 2))
     return out
@@ -751,44 +796,50 @@ def shape(boxes):
     return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
 
 
-def tables():
+def tables(p):
     """Every shape the block declares, as text"""
     hubs = {}
     for connected, (kind, turn) in sorted(HUBS.items(), key=lambda kv: mask(kv[0])):
-        boxes = [b for p in MIDDLES[kind](0.0) for b in p.turned(turn).boxes()]
+        boxes = [b for part in p.middles[kind](0.0) for b in part.turned(turn).boxes()]
         hubs['0b%s' % format(mask(connected), '04b')] = shape(boxes)
 
-    out = {'STRING_HUBS': hubs}
-    for label, builder in (('STRING_ARMS', lambda: piece_arm(0.0, 0.0)),
-                           ('STRING_CLIMBS', lambda: piece_climb(0.0))):
+    out = {p.java_prefix + '_HUBS': hubs}
+    wanted = [('_ARMS', lambda: p.arm(0.0, 0.0))]
+    if p.climb:
+        wanted.append(('_CLIMBS', lambda: p.climb(0.0)))
+    for suffix, builder in wanted:
         rows = {}
         for side, turn in (('NORTH', 0), ('EAST', 90), ('SOUTH', 180), ('WEST', 270)):
-            rows['Direction.%s' % side] = shape([b for p in builder() for b in p.turned(turn).boxes()])
-        out[label] = rows
+            rows['Direction.%s' % side] = shape([b for part in builder()
+                                                 for b in part.turned(turn).boxes()])
+        out[p.java_prefix + suffix] = rows
     return out
 
 
-def java():
-    print('\n\t// ---- printed by tools/gen_cable_models.py --java ----\n')
-    built = tables()
-    print('\tprivate static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(')
-    print(',\n'.join('\t\t\tMap.entry(%s, %s)' % item for item in built['STRING_HUBS'].items()) + ');')
-    for label in ('STRING_ARMS', 'STRING_CLIMBS'):
+def java(p):
+    print('\n\t// ---- printed by tools/%s --java ----\n' % p.source)
+    built = tables(p)
+    hubs = p.java_prefix + '_HUBS'
+    print('\tprivate static final Map<Integer, VoxelShape> %s = Map.ofEntries(' % hubs)
+    print(',\n'.join('\t\t\tMap.entry(%s, %s)' % item for item in built[hubs].items()) + ');')
+    for label in (p.java_prefix + '_ARMS', p.java_prefix + '_CLIMBS'):
+        if label not in built:
+            continue
         print('\n\tprivate static final Map<Direction, VoxelShape> %s = Map.of(' % label)
         print(',\n'.join('\t\t\t%s, %s' % item for item in built[label].items()) + ');')
 
 
-def check_java():
-    """Proves DcCableBlock still declares the shape this draws, in all twenty-four states."""
+def check_java(p):
+    """Proves the block still declares the shape this draws, in all twenty-four states."""
     path = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
-                        'DcCableBlock.java')
+                        p.java_class + '.java')
     source = ' '.join(open(path).read().split())
     problems = []
-    for label, rows in tables().items():
+    for label, rows in tables(p).items():
         for key, text in rows.items():
             wanted = ' '.join(('%s, %s' % (key, text)).split())
             if wanted not in source:
-                problems.append('%s[%s] is not what DcCableBlock declares' % (label, key))
+                problems.append('%s[%s] is not what %s declares' % (label, key, p.java_class))
     return problems
 
 
@@ -796,172 +847,73 @@ def mask(connected):
     return sum(1 << SIDES.index(s) for s in connected)
 
 
-# ---------------------------------------------------------------- the trunk, unchanged for now
-
-TRUNK = 'dc_trunk_cable'
-TRUNK_CABLE = '#cable'
-TRUNK_TRENCH = '#trench'
-TRUNK_GROUND = 15.0
+STRING = Product(
+    name=NAME, source='gen_cable_models.py', materials=MATERIALS, textures=TEXTURES,
+    middles=MIDDLES, arm=piece_arm, climb=piece_climb, ground=GROUND, rim=RIM,
+    java_class='DcCableBlock', java_prefix='STRING')
 
 
-def trunk_face(texture, uv, cull=None):
-    entry = {'uv': [round(v, 2) for v in uv], 'texture': texture}
-    if cull is not None:
-        entry['cullface'] = cull
-    return entry
+def emit(p, core_span):
+    """Writes one cable product: its sixteen middles, its arms, its blockstate, and its own proofs.
 
-
-def trunk_faces(lo, hi, cull=None):
-    x0, y0, z0 = lo
-    x1, y1, z1 = hi
-    faces = {'up': trunk_face(TRUNK_CABLE, (x0, z0, x1, z1))}
-    for name, uv in (('north', (x0, 16 - y1, x1, 16 - y0)), ('south', (x0, 16 - y1, x1, 16 - y0)),
-                     ('west', (z0, 16 - y1, z1, 16 - y0)), ('east', (z0, 16 - y1, z1, 16 - y0))):
-        faces[name] = trunk_face(TRUNK_CABLE, uv, cull=name if name == cull else None)
-    return faces
-
-
-def trunk_element(lo, hi, faces):
-    return {'from': list(lo), 'to': list(hi), 'faces': faces}
-
-
-def trunk_models():
-    half = thick = 1.0
-    path = 'electricity:block/dc_trunk_line'
-    flat = {'parent': 'block/block', 'ambientocclusion': False,
-            'textures': {'particle': TRUNK_CABLE, 'cable': path}}
-    trench = {'parent': 'block/block',
-              'textures': {'particle': TRUNK_TRENCH, 'cable': path,
-                           'trench': 'electricity:block/dc_trench'}}
-
-    def dot(y0, y1):
-        lo, hi = (8 - half, y0, 8 - half), (8 + half, y1, 8 + half)
-        return trunk_element(lo, hi, trunk_faces(lo, hi))
-
-    def bar(y0, y1, near):
-        lo, hi = (8 - half, y0, near), (8 + half, y1, 8 - half)
-        return trunk_element(lo, hi, trunk_faces(lo, hi, cull='north' if near == 0.0 else None))
-
-    def wall():
-        lo, hi = (8 - half, 0.0, 0.0), (8 + half, 16.0, thick)
-        return trunk_element(lo, hi, {
-            'north': trunk_face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16), cull='north'),
-            'south': trunk_face(TRUNK_CABLE, (8 - half, 0, 8 + half, 16)),
-            'west': trunk_face(TRUNK_CABLE, (0, 0, thick, 16)),
-            'east': trunk_face(TRUNK_CABLE, (0, 0, thick, 16)),
-        })
-
-    bed = [trunk_element((0.0, 0.0, 0.0), (16.0, TRUNK_GROUND, 16.0), {
-        'down': trunk_face(TRUNK_TRENCH, (0, 0, 16, 16), cull='down'),
-        'up': trunk_face(TRUNK_TRENCH, (0, 0, 16, 16)),
-        'north': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='north'),
-        'south': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='south'),
-        'west': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='west'),
-        'east': trunk_face(TRUNK_TRENCH, (0, 16 - TRUNK_GROUND, 16, 16), cull='east'),
-    })]
-    for x0, z0, x1, z1, outward in ((0.0, 0.0, 16.0, RIM, 'north'),
-                                    (0.0, 16.0 - RIM, 16.0, 16.0, 'south'),
-                                    (0.0, RIM, RIM, 16.0 - RIM, 'west'),
-                                    (16.0 - RIM, RIM, 16.0, 16.0 - RIM, 'east')):
-        bed.append(trunk_element((x0, TRUNK_GROUND, z0), (x1, 16.0, z1), {
-            'up': trunk_face(TRUNK_TRENCH, (x0, z0, x1, z1)),
-            'down': trunk_face(TRUNK_TRENCH, (x0, z0, x1, z1)),
-            'north': trunk_face(TRUNK_TRENCH, (x0, 0, x1, RIM),
-                                cull='north' if outward == 'north' else None),
-            'south': trunk_face(TRUNK_TRENCH, (x0, 0, x1, RIM),
-                                cull='south' if outward == 'south' else None),
-            'west': trunk_face(TRUNK_TRENCH, (z0, 0, z1, RIM),
-                               cull='west' if outward == 'west' else None),
-            'east': trunk_face(TRUNK_TRENCH, (z0, 0, z1, RIM),
-                               cull='east' if outward == 'east' else None),
-        }))
-
-    return {
-        TRUNK: dict(flat, elements=[dot(0.0, thick)]),
-        TRUNK + '_arm': dict(flat, elements=[bar(0.0, thick, 0.0)]),
-        TRUNK + '_climb': dict(flat, elements=[wall()]),
-        TRUNK + '_trench': dict(trench, elements=bed + [dot(TRUNK_GROUND, 16.0)]),
-        TRUNK + '_trench_arm': dict(trench, elements=[bar(TRUNK_GROUND, 16.0, RIM)]),
-    }
-
-
-def trunk_blockstate():
-    model = 'electricity:block/' + TRUNK
-    parts = [{'when': {'buried': 'false'}, 'apply': {'model': model}}]
-    rotations = (('north', 0), ('east', 90), ('south', 180), ('west', 270))
-    for side, turn in rotations:
-        for suffix, values in (('_arm', 'side|up'), ('_climb', 'up')):
-            apply = {'model': model + suffix}
-            if turn:
-                apply['y'] = turn
-            parts.append({'when': {'buried': 'false', side: values}, 'apply': apply})
-
-    parts.append({'when': {'buried': 'true'}, 'apply': {'model': model + '_trench'}})
-    for side, turn in rotations:
-        apply = {'model': model + '_trench_arm'}
-        if turn:
-            apply['y'] = turn
-        parts.append({'when': {'buried': 'true', side: 'side|up'}, 'apply': apply})
-
-    return {'multipart': parts}
-
-
-def main():
-    if os.path.isdir(OBJ_DIR):
-        for stale in os.listdir(OBJ_DIR):
-            os.remove(os.path.join(OBJ_DIR, stale))
+    ``core_span`` is the pair's diameter, for the clearance line only.  gen_trunk_models.py calls this
+    with its own Product, so the two gauges cannot drift apart - there is one implementation of the
+    sixteen middles, the blockstate, the disjointness proof and the Java tables.
+    """
+    os.makedirs(p.obj_dir, exist_ok=True)
+    for stale in os.listdir(p.obj_dir):
+        os.remove(os.path.join(p.obj_dir, stale))
 
     faces, pieces = 0, 0
-    for buried, prefix, base in ((False, '', 0.0), (True, 'trench_', GROUND)):
-        for kind, builder in MIDDLES.items():
-            parts = list(builder(base)) + (list(bedding()) if buried else [])
-            faces += write_piece('%s_%s%s' % (NAME, prefix, kind), parts)
+    for buried, prefix, base in ((False, '', 0.0), (True, 'trench_', p.ground)):
+        bed = list(bedding(p.ground, p.rim)) if buried else []
+        for kind, builder in p.middles.items():
+            faces += write_piece(p, '%s_%s%s' % (p.name, prefix, kind), list(builder(base)) + bed)
             pieces += 1
 
-        parts = piece_arm(base, RIM if buried else 0.0) + (list(bedding()) if buried else [])
-        faces += write_piece('%s_%sarm' % (NAME, prefix), parts)
+        faces += write_piece(p, '%s_%sarm' % (p.name, prefix),
+                             p.arm(base, p.rim if buried else 0.0) + bed)
         pieces += 1
-        if not buried:
-            faces += write_piece('%s_climb' % NAME, piece_climb(base))
+        if not buried and p.climb:
+            faces += write_piece(p, '%s_climb' % p.name, p.climb(base))
             pieces += 1
 
-    faces += write_piece('%s_trench_bed' % NAME, bedding())
+    faces += write_piece(p, '%s_trench_bed' % p.name, bedding(p.ground, p.rim))
     pieces += 1
-    print('%s: %d OBJ pieces, %d faces in all' % (NAME, pieces, faces))
+    print('%s: %d OBJ pieces, %d faces in all' % (p.name, pieces, faces))
 
-    state = blockstate()
-    write(os.path.join(BLOCKSTATES, NAME + '.json'), state)
-    print('%s: %d blockstate parts' % (NAME, len(state['multipart'])))
+    state = blockstate(p)
+    write(os.path.join(BLOCKSTATES, p.name + '.json'), state)
+    print('%s: %d blockstate parts' % (p.name, len(state['multipart'])))
 
-    problems = check_disjoint()
+    write(os.path.join(ITEM_MODELS, p.name + '.json'),
+          {'parent': 'minecraft:item/generated',
+           'textures': {'layer0': 'electricity:item/' + p.name}})
+
+    problems = check_disjoint(p)
     for line in problems:
         print('    OVERLAP %s' % line)
     if problems:
         print('%d clash(es)' % len(problems))
     else:
         print('nothing a run draws touches anything else it draws, in any of the 162 states')
-    for name, gap in sorted(clearances().items()):
+    for name, gap in sorted(clearances(p).items()):
         print("    the two cores of a %-5s stay %.2f px apart, on a %.2f px cable"
-              % (name, gap, CORE_RADIUS * 2.0))
+              % (name, gap, core_span))
 
-    for file_name, model in trunk_models().items():
-        write(os.path.join(BLOCK_MODELS, file_name + '.json'), model)
-    write(os.path.join(BLOCKSTATES, TRUNK + '.json'), trunk_blockstate())
-    print('%s: unchanged, 5 models' % TRUNK)
-
-    for cable in (NAME, TRUNK):
-        write(os.path.join(ITEM_MODELS, cable + '.json'),
-              {'parent': 'minecraft:item/generated',
-               'textures': {'layer0': 'electricity:item/' + cable}})
-
-    for line in check_java():
+    for line in check_java(p):
         print('    TABLE %s' % line)
         problems.append(line)
     if not problems:
-        print('DcCableBlock declares the same shape this draws, in all twenty-four states')
+        print('%s declares the same shape this draws, in all twenty-four states' % p.java_class)
 
     if '--java' in sys.argv:
-        java()
+        java(p)
+    return problems
+
+
+def main():
+    emit(STRING, CORE_RADIUS * 2.0)
 
 
 if __name__ == '__main__':
