@@ -92,7 +92,10 @@ def legs(mesh, steel):
 def frames(mesh, steel):
     """A horizontal frame at every panel joint, which is what stops the legs folding inwards."""
     levels = [BODY_TOP * i / (PANELS + 1) for i in range(1, PANELS + 2)]
-    levels += [BODY_TOP + (PEAK - 1.6 - BODY_TOP) * i / 4.0 for i in range(1, 5)]
+    # stopping short of the upper crossarm: a frame at exactly UPPER_ARM puts its own members on the same
+    # plane as the arm's, which is two surfaces at one depth and flickers
+    top = UPPER_ARM - 0.16
+    levels += [BODY_TOP + (top - BODY_TOP) * i / 4.0 for i in range(1, 5)]
     for y in levels:
         h = leg_half(y)
         for sx, sz, tx, tz in ((-1, -1, 1, -1), (1, -1, 1, 1), (1, 1, -1, 1), (-1, 1, -1, -1)):

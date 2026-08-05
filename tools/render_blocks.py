@@ -481,7 +481,21 @@ def scene_machine_cable():
     return triangles, (0.55, 0.85, -1.0), (2.2, 0.25, 1.4)
 
 
+def scene_tx_machine():
+    triangles = ground(-3, -3, 6, 6, SAND)
+    triangles += placed(machine_model('tx_machine'), (2, 0, 2))
+    return triangles, (0.85, 0.95, -0.2), (2.4, 0.55, 1.75)
+
+
+def scene_tx_substation():
+    triangles = ground(-4, -4, 8, 8, SAND)
+    triangles += placed(machine_model('tx_substation'), (3, 0, 3))
+    return triangles, (0.6, 2.1, -1.1), (3.4, 1.1, 2.7)
+
+
 SCENES = {
+    'tx_machine': scene_tx_machine,
+    'tx_substation': scene_tx_substation,
     'machine_cable': scene_machine_cable,
     'cable_run': scene_cable_run,
     'cable_corner': scene_cable_corner,

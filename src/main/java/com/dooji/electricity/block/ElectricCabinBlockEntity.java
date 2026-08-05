@@ -273,7 +273,8 @@ public class ElectricCabinBlockEntity extends BlockEntity implements InsulatorHo
 	 */
 	@Override
 	public boolean feeds(InsulatorHost other) {
-		return other instanceof UtilityPoleBlockEntity || other instanceof LatticeTowerBlockEntity;
+		return other instanceof UtilityPoleBlockEntity || other instanceof LatticeTowerBlockEntity
+				|| other instanceof TransformerBlockEntity;
 	}
 
 	/** Which of the two fittings this is, from the group's own name. */

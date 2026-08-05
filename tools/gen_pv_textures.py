@@ -748,6 +748,69 @@ def item_hv_conductor():
     return c
 
 
+# The two transformers as pixel art.  Legend: T tank, C corrugation or fin, K cover, B bushing porcelain,
+# t its terminal, D the conservator drum, R the tap changer, P the plinth or bund, G gravel.
+TX_ROWS = {
+    'machine': (
+        '................',
+        '.....t..t..t....',
+        '.....B..B..B....',
+        '.....B..B..B....',
+        '.....B..B..B....',
+        '..KKKKKKKKKKKK..',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '..TCTCTCTCTCTCT.',
+        '.PPPPPPPPPPPPPP.',
+        '.PPPPPPPPPPPPPP.',
+    ),
+    'substation': (
+        '...t..t..t......',
+        '...B..B..B......',
+        '...B..B..B..DDD.',
+        '...B..B..B.DDDDD',
+        '...B..B..B.DDDDD',
+        '.KKKKKKKKKKKDDD.',
+        'RTCTCTCTCTCTCTT.',
+        'RTCTCTCTCTCTCTT.',
+        'RTCTCTCTCTCTCTT.',
+        'RTCTCTCTCTCTCTT.',
+        '.TCTCTCTCTCTCTT.',
+        '.TCTCTCTCTCTCTT.',
+        '.TCTCTCTCTCTCTT.',
+        'GGGGGGGGGGGGGGGG',
+        'PPPPPPPPPPPPPPPP',
+        'PPPPPPPPPPPPPPPP',
+    ),
+}
+
+
+def transformer_sprite(duty):
+    """A transformer as an item: the tank, the corrugations and the bushings above it.
+
+    Face-on, like the towers: what tells a transformer from a cabinet is the bushings on its lid and the
+    corrugated flank, and both of those read face-on and neither reads in three-quarter view.
+    """
+    tank = (118, 124, 128, 255)
+    palette = {
+        'T': tank,
+        'C': shade(tank, -26),
+        'K': shade(tank, 22),
+        'D': shade(tank, 10),
+        'R': shade(tank, -12),
+        'B': (146, 78, 40, 255),
+        't': STEEL[1],
+        'P': (150, 148, 142, 255),
+        'G': (108, 104, 98, 255),
+    }
+    return sprite(TX_ROWS[duty], palette)
+
+
 # The three towers as pixel art, because at sixteen pixels a lattice drawn with strokes fills solid and
 # reads as a tent.  Legend: L a leg, B a brace, A a crossarm, P the peak, I an insulator string, F a
 # footing, S a stay.  What tells the three apart is the bracing and the way the strings hang.
@@ -1692,6 +1755,8 @@ ITEM_TEXTURES = {
     'dc_string_cable': item_string_cable,
     'dc_trunk_cable': item_trunk_cable,
     'abc_conductor': item_abc_conductor,
+    'tx_machine': lambda: transformer_sprite('machine'),
+    'tx_substation': lambda: transformer_sprite('substation'),
     'lattice_suspension': lambda: tower_sprite('suspension'),
     'lattice_tension': lambda: tower_sprite('tension'),
     'lattice_terminal': lambda: tower_sprite('terminal'),

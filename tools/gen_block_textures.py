@@ -850,9 +850,9 @@ def pole_concrete():
         c.aa_rect(x, 0, x + size * 0.012, size, (0, 0, 0, 255), alpha=0.22)
         c.aa_rect(x + size * 0.012, 0, x + size * 0.024, size, (255, 255, 255, 255), alpha=0.16)
     # the lifting hole and the bolt holes a crossarm is hung on
+    # No holes drawn. This is a cylinder's tile on the pole and a footing's on a tower, so a circle on it
+    # is an oval on one of the two; the rust stain that runs from a hole is what says there was one.
     for y in (size * 0.20, size * 0.62):
-        c.aa_disc(size * 0.27, y, size * 0.030, (52, 50, 46, 255))
-        c.aa_disc(size * 0.27, y, size * 0.020, (24, 24, 22, 255))
         rust(c, size * 0.24, y, size * 0.31, y + size * 0.16, salt=347, alpha=0.4)
         streak(c, size * 0.27, y + size * 0.03, y + size * 0.34, size * 0.035,
                colour=(116, 72, 40, 255), alpha=0.30, salt=349)
@@ -1019,12 +1019,13 @@ def tower_steel():
     # the rolled edges, which every angle has: a bright arris and a dark one
     c.aa_rect(0, 0, size, size * 0.045, shade(TOWER_ZINC, 26))
     c.aa_rect(0, size * 0.955, size, size, shade(TOWER_ZINC, -32))
-    # the bolt line down the middle at the pitch a tower is drilled
+    # No bolt heads. This tile clads every member of a lattice - legs, braces, crossarm ties - at a dozen
+    # different aspects, so anything round on it is an oval on most of them. The bolted joints are
+    # geometry, and what is left here is the punched line they sit in.
     for i in range(8):
         y = size * (0.08 + i * 0.118)
-        c.aa_disc(size * 0.5, y, size * 0.028, shade(TOWER_ZINC, -40))
-        dome(c, size * 0.5, y, size * 0.022, shade(TOWER_ZINC, 12), lift=30, drop=24)
-    # the rust that starts at a bolt and runs down from it, which is where it always starts
+        c.aa_rect(size * 0.47, y - size * 0.010, size * 0.53, y + size * 0.010,
+                  shade(TOWER_ZINC, -34))
     for i in range(4):
         streak(c, size * 0.5, size * (0.14 + i * 0.24), size * (0.30 + i * 0.24), size * 0.05,
                colour=(126, 84, 48, 255), alpha=0.26, salt=349 + i)
@@ -1038,15 +1039,98 @@ def tower_plate():
     c = Canvas(size, size)
     galvanised(c, shade(TOWER_ZINC, -8), salt=359)
     bevel(c, 0, 0, size, size, size * 0.05, lift=22, drop=28)
+    # No bolt heads: this tile goes on gussets, footing plates and the peak fitting, at three aspects.
+    # The punched holes they sit in are square enough to survive being stretched.
     for x, y in ((0.24, 0.24), (0.76, 0.24), (0.24, 0.76), (0.76, 0.76), (0.5, 0.5)):
-        c.aa_disc(size * x, size * y, size * 0.052, shade(TOWER_ZINC, -44))
-        dome(c, size * x, size * y, size * 0.042, shade(TOWER_ZINC, 10), lift=32, drop=26)
+        c.aa_rect(size * x - size * 0.026, size * y - size * 0.026,
+                  size * x + size * 0.026, size * y + size * 0.026, shade(TOWER_ZINC, -38))
     rust(c, size * 0.1, size * 0.6, size * 0.5, size * 1.0, salt=361, alpha=0.30)
     grime(c, salt=367, amount=0.22, colour=(80, 78, 74, 255))
     return c
 
 
 # ------------------------------------------------------------------ the register
+
+
+# ------------------------------------------------------------------ the transformers
+
+# The grey a utility paints a transformer tank. Darker than the switchgear grey and gloss rather than
+# powder: a tank is painted for weather and for heat, not for a switchroom.
+TANK = (128, 134, 138, 255)
+
+
+def tx_tank():
+    """A transformer tank's painted steel: gloss over welded plate, with the weld seams in it."""
+    size = 512
+    c = Canvas(size, size)
+    brushed(c, TANK, grain=6, blotch=11, salt=601, horizontal=True)
+    # the sheen a gloss coat has, brightest a third of the way down where the light lands
+    sheen = Field(size, cell=size, octaves=1, salt=603)
+    c.over(lambda x, y, base: shade(base, int(18 - 40 * min(1.0, abs(y / size - 0.38) * 2.2)
+                                              + sheen.signed(x, y) * 4)))
+    for y in (size * 0.34, size * 0.72):
+        c.aa_rect(0, y, size, y + size * 0.010, shade(TANK, 20))
+        c.aa_rect(0, y + size * 0.010, size, y + size * 0.020, shade(TANK, -26))
+    c.aa_rect(size * 0.50, 0, size * 0.50 + size * 0.008, size, shade(TANK, 16))
+    grime(c, salt=607, amount=0.16, colour=(62, 62, 58, 255))
+    for i in range(5):
+        streak(c, size * (0.12 + 0.19 * i), size * 0.30, size, size * 0.028, alpha=0.13, salt=611 + i)
+    return c
+
+
+def tx_tank_top():
+    """The tank cover: the same paint and the fall the rain runs off by.
+
+    No fittings drawn on it - the bushings, the relief valve and the eyebolts are all geometry, and a
+    painted copy of one would be a second lying flat.
+    """
+    size = 512
+    c = Canvas(size, size)
+    brushed(c, shade(TANK, 8), grain=5, blotch=9, salt=613, horizontal=True)
+    c.over(lambda x, y, base: shade(base, int(-18 + 30 * (1.0 - y / size))))
+    groove(c, 0, size * 0.5, size, 0, size * 0.012, dark=22, light=14)
+    grime(c, salt=617, amount=0.22, colour=(70, 70, 64, 255))
+    return c
+
+
+def tx_fin():
+    """A pressed radiator fin, or a corrugation of a sealed tank: rolled steel either way.
+
+    Streaked hard: a fin is the first thing on a transformer to hold dirt and the last anybody washes.
+    """
+    size = 256
+    c = Canvas(size, size)
+    brushed(c, shade(TANK, -12), grain=9, blotch=6, salt=619, horizontal=False)
+    for i in range(3):
+        streak(c, size * (0.2 + 0.3 * i), 0, size, size * 0.05, alpha=0.20, salt=623 + i,
+               colour=(58, 58, 54, 255))
+    grime(c, salt=629, amount=0.28, colour=(56, 56, 52, 255))
+    return c
+
+
+def tx_gravel():
+    """The gravel bed of an oil bund: what a transformer stands over so a leak drains rather than pools."""
+    size = 256
+    c = Canvas(size, size)
+    concrete(c, (118, 114, 108, 255), salt=631, aggregate=True)
+    stones = Field(size, cell=10, octaves=3, salt=637)
+    c.over(lambda x, y, base: shade(base, int((stones.at(x, y) - 0.5) * 96)))
+    grime(c, salt=641, amount=0.24, colour=(48, 46, 42, 255))
+    return c
+
+
+def tx_nameplate():
+    """A transformer's rating plate: stainless, etched, and the one document on the machine."""
+    size = 256
+    c = Canvas(size, size)
+    brushed(c, (196, 198, 202, 255), grain=6, blotch=4, salt=643)
+    bevel(c, 0, 0, size, size, size * 0.05, lift=30, drop=34)
+    c.aa_rect(size * 0.08, size * 0.08, size * 0.92, size * 0.20, shade((196, 198, 202, 255), -18))
+    plate_label(c, size * 0.08, size * 0.24, size * 0.92, size * 0.90, (196, 198, 202, 255), lines=8,
+                ink=(48, 50, 54, 255))
+    grime(c, salt=647, amount=0.10, colour=(120, 118, 112, 255))
+    return c
+
 
 TEXTURES = {
     'pv_module': pv_module,
@@ -1088,6 +1172,11 @@ TEXTURES = {
     'warning': warning,
     'tower_steel': tower_steel,
     'tower_plate': tower_plate,
+    'tx_tank': tx_tank,
+    'tx_tank_top': tx_tank_top,
+    'tx_fin': tx_fin,
+    'tx_gravel': tx_gravel,
+    'tx_nameplate': tx_nameplate,
 }
 
 

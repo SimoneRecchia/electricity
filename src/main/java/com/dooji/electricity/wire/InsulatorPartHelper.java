@@ -24,6 +24,8 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_PV_INVERTER = "pv_inverter";
 	/** A lattice transmission tower, in any of its three duties. */
 	public static final String TYPE_LATTICE_TOWER = "lattice_tower";
+	/** A transformer, of either duty. */
+	public static final String TYPE_TRANSFORMER = "transformer";
 
 	/** The part names a device's insulators are drawn as, read off the model's own definition. */
 	private static List<String> parts(BlockEntity entity) {

@@ -892,7 +892,8 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 	/** A generator, like a turbine. */
 	@Override
 	public boolean feeds(InsulatorHost other) {
-		return other instanceof ElectricCabinBlockEntity || other instanceof PvInverterBlockEntity;
+		return other instanceof ElectricCabinBlockEntity || other instanceof PvInverterBlockEntity
+				|| other instanceof TransformerBlockEntity;
 	}
 
 	@Override

@@ -6,6 +6,7 @@ import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.TowerSpec;
+import com.dooji.electricity.api.power.TransformerSpec;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.DcCableBlock;
 import com.dooji.electricity.block.ElectricCabinBlock;
@@ -22,6 +23,8 @@ import com.dooji.electricity.block.PvInverterBlock;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.LatticeTowerBlock;
+import com.dooji.electricity.block.TransformerBlock;
+import com.dooji.electricity.block.TransformerBlockEntity;
 import com.dooji.electricity.block.LatticeTowerBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -48,6 +51,7 @@ import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.PartCatalog;
 import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.registry.TowerCatalog;
+import com.dooji.electricity.main.registry.TransformerCatalog;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.power.PowerNetwork;
@@ -176,6 +180,10 @@ public class Electricity {
 	public static final Map<ResourceLocation, RegistryObject<Block>> LATTICE_TOWER_BLOCKS = registerTowerBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> LATTICE_TOWER_ITEMS = registerTowerItems();
 
+	/** The two transformers: a machine unit at every generator's foot, a substation unit at the grid. */
+	public static final Map<ResourceLocation, RegistryObject<Block>> TRANSFORMER_BLOCKS = registerTransformerBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMER_ITEMS = registerTransformerItems();
+
 	/** A meteorological mast: the seven instruments a plant measures the sky with. */
 	public static final RegistryObject<Block> MET_STATION_BLOCK = BLOCKS.register("met_station",
 			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
@@ -253,6 +261,27 @@ public class Electricity {
 		for (PvArraySpec spec : PvCatalog.all()) {
 			RegistryObject<Block> block = PV_ARRAY_BLOCKS.get(spec.id());
 			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new PvArrayBlockItem(block.get(), new Item.Properties(), spec)));
+		}
+
+		return items;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerTransformerBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (TransformerSpec spec : TransformerCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(),
+					() -> new TransformerBlock(Block.Properties.of().strength(3.0f, 12.0f).requiresCorrectToolForDrops().noOcclusion(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerTransformerItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (TransformerSpec spec : TransformerCatalog.all()) {
+			RegistryObject<Block> block = TRANSFORMER_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
+					() -> new TooltipBlockItem(block.get(), new Item.Properties(), "tooltip.electricity." + spec.id().getPath())));
 		}
 
 		return items;
@@ -353,6 +382,10 @@ public class Electricity {
 		return LATTICE_TOWER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
 
+	private static Block[] transformerBlocks() {
+		return TRANSFORMER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
+
 
 	public static final RegistryObject<CreativeModeTab> ELECTRICITY_TAB = CREATIVE_TABS.register("main",
 			() -> CreativeModeTab.builder().title(Component.translatable("itemGroup." + MOD_ID + ".main")).icon(() -> new ItemStack(CONDUCTOR_ITEMS.get(ConductorCatalog.AAAC_228.id()).get())).displayItems((parameters, output) -> {
@@ -360,6 +393,11 @@ public class Electricity {
 				for (var spec : ConductorCatalog.all()) {
 					output.accept(CONDUCTOR_ITEMS.get(spec.id()).get());
 				}
+				// the two transformers, in the order the current passes through them
+				for (TransformerSpec spec : TransformerCatalog.all()) {
+					output.accept(TRANSFORMER_ITEMS.get(spec.id()).get());
+				}
+
 				output.accept(UTILITY_POLE_ITEM.get());
 				// the transmission line: the towers a substation's output actually leaves on
 				for (TowerSpec spec : TowerCatalog.all()) {
@@ -417,6 +455,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<PvCombinerBlockEntity>> PV_COMBINER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<MetStationBlockEntity>> MET_STATION_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<LatticeTowerBlockEntity>> LATTICE_TOWER_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<TransformerBlockEntity>> TRANSFORMER_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -441,6 +480,9 @@ public class Electricity {
 		// whichever block it is sitting in
 		LATTICE_TOWER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("lattice_tower",
 				() -> BlockEntityType.Builder.of(LatticeTowerBlockEntity::new, latticeTowerBlocks()).build(null));
+
+		TRANSFORMER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("transformer",
+				() -> BlockEntityType.Builder.of(TransformerBlockEntity::new, transformerBlocks()).build(null));
 
 		// one type for the whole catalogue: the machines differ by their spec
 		// block entity reads back off whichever block it is sitting in

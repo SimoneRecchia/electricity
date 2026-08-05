@@ -308,5 +308,10 @@
   "block.electricity.lattice_tension": "Tension Tower",
   "tooltip.electricity.lattice_tension": "Takes the difference between the pulls either side of it.",
   "block.electricity.lattice_terminal": "Terminal Tower",
-  "tooltip.electricity.lattice_terminal": "Takes the whole pull of a line, and is stayed back for it."
+  "tooltip.electricity.lattice_terminal": "Takes the whole pull of a line, and is stayed back for it.",
+  "block.electricity.tx_machine": "Machine Transformer",
+  "tooltip.electricity.tx_machine": "Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.",
+  "block.electricity.tx_substation": "Substation Transformer",
+  "tooltip.electricity.tx_substation": "Steps 33 kV up to 400 kV. The transmission line starts here.",
+  "tooltip.electricity.transformer.reading": "Ratio %s  in %s kW  loss %s kW"
 }

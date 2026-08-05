@@ -65,6 +65,16 @@ public final class ObjDefinitions {
 			ALL.add(new ObjBlockDefinition(block, combinerModel, List.of()));
 		}
 
+		// The bushings, low-voltage side first: three on a machine unit, six on a substation one.
+		for (var spec : TransformerCatalog.all()) {
+			Block block = Electricity.TRANSFORMER_BLOCKS.get(spec.id()).get();
+			List<String> bushings = new ArrayList<>();
+			for (int i = 1; i <= spec.bushings(); i++) bushings.add("bushing_" + i + "_porcelain");
+			ALL.add(new ObjBlockDefinition(block,
+					new ResourceLocation(Electricity.MOD_ID, "models/" + spec.modelName() + "/" + spec.modelName() + ".obj"),
+					List.copyOf(bushings)));
+		}
+
 		// The six phase fittings of a tower, in the order gen_tower_models writes PHASES: the lower arm
 		// outward-in, then the upper arm. A wire is stored against the index, so this order is fixed.
 		for (var spec : TowerCatalog.all()) {

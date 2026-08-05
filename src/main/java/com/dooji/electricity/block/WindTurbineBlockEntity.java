@@ -865,10 +865,11 @@ public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost
 		return InsulatorPartHelper.TYPE_WIND_TURBINE;
 	}
 
-	/** A generator: into the collection substation, or on to the next machine in the string. */
+	/** A generator: into its own transformer or the substation, or on to the next machine in the string. */
 	@Override
 	public boolean feeds(InsulatorHost other) {
-		return other instanceof ElectricCabinBlockEntity || other instanceof WindTurbineBlockEntity;
+		return other instanceof ElectricCabinBlockEntity || other instanceof WindTurbineBlockEntity
+				|| other instanceof TransformerBlockEntity;
 	}
 
 	@Override

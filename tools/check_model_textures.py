@@ -28,7 +28,8 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'te
 
 # Models the mod draws itself.
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
-        'utility_pole', 'power_box')
+        'utility_pole', 'power_box', 'tx_machine', 'tx_substation',
+        'lattice_suspension', 'lattice_tension', 'lattice_terminal')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4

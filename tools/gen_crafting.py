@@ -166,6 +166,12 @@ RECIPES = [
     # ------------------------------------------------------------------- the met station
     ('met_station', 1, SHAPED, [' p ', 'pbp', 'SSS']),
 
+    # ------------------------------------------------------------------- the transformers
+    # A tank, a core with windings on it, and the bushings the windings leave through.  The substation
+    # unit is the same machine with radiators, a conservator and a tap changer on it.
+    ('tx_machine', 1, SHAPED, ['III', 'OeO', 'PPP']),
+    ('tx_substation', 1, SHAPED, ['III', 'ete', 'PQP']),
+
     # ---------------------------------------------------------------- the transmission towers
     # Steel sections, plate gussets and the insulator strings the phases hang from.  The duty is what
     # costs: a suspension tower is only holding weight, a tension tower is braced for the difference
@@ -270,6 +276,8 @@ def check(catalogue):
 # A machine drawn by the mod's own OBJ renderer has an INVISIBLE render shape, so its blockstate only
 # needs to name a particle texture - one variant a facing, all four the same.  Its item is a flat sprite.
 INVISIBLE_MACHINES = {
+    'tx_machine': 'metal_particle',
+    'tx_substation': 'metal_particle',
     'lattice_suspension': 'stone_particle',
     'lattice_tension': 'stone_particle',
     'lattice_terminal': 'stone_particle',
@@ -277,6 +285,10 @@ INVISIBLE_MACHINES = {
 
 # The names and tooltips for what is not a part: a block is named here rather than by hand.
 BLOCK_NAMES = {
+    'tx_machine': ('Machine Transformer',
+                   'Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.'),
+    'tx_substation': ('Substation Transformer',
+                      'Steps 33 kV up to 400 kV. The transmission line starts here.'),
     'lattice_suspension': ('Suspension Tower', 'Holds a 400 kV line up. Nine towers in ten are one.'),
     'lattice_tension': ('Tension Tower', 'Takes the difference between the pulls either side of it.'),
     'lattice_terminal': ('Terminal Tower', 'Takes the whole pull of a line, and is stayed back for it.'),

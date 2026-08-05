@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "OeO",
+    "PPP"
+  ],
+  "key": {
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "O": {
+      "item": "electricity:copper_coil"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "e": {
+      "item": "electricity:magnetic_core"
+    }
+  },
+  "result": {
+    "item": "electricity:tx_machine"
+  }
+}

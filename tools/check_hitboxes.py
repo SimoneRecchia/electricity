@@ -46,6 +46,8 @@ BLOCK_CLASS = {
     'pv_array': 'PvArrayBlock',
     'pv_inverter': 'PvInverterBlock',
     'pv_combiner': 'PvCombinerBlock',
+    'tx_machine': 'TransformerBlock',
+    'tx_substation': 'TransformerBlock',
 }
 
 # One block class, several models: which constant in its file holds the table cut from this one.
@@ -58,6 +60,9 @@ MODEL_TABLE = {
     'pv_tilt': 'TILT_CELLS',
     'pv_track': 'TRACK_CELLS',
     'pv_dual': 'DUAL_CELLS',
+    # one block class, two machines: a table each, told apart by name
+    'tx_machine': 'MACHINE_CELLS',
+    'tx_substation': 'SUBSTATION_CELLS',
 }
 
 # Machines with no facing at all, and why. Nothing about them can be turned wrongly. Empty as it stands:
