@@ -350,11 +350,22 @@ def cleat(base, low, high):
     ]
 
 
+# How tall the junction box stands.  At 2.9 px on a 5.2 px footprint it read as a plate lying on the sand
+# rather than as an enclosure - the walls were there, there was just not enough of them to see.  The trench
+# is the ceiling: GROUND plus this has to stay inside the block.
+JBOX_TOP = 4.1
+JBOX_LID = 0.30
+
+
 def junction_box(base, glanded):
     """A small IP68 polycarbonate box, glanded on the walls that have a cable in them."""
-    top = base + CORE_Y + CORE_RADIUS + 1.6
-    parts = [Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
-                  (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
+    top = base + JBOX_TOP
+    parts = [
+        Slab('jbox', {'*': 'jbox_side'}, (HUB_LO, base, HUB_LO), (HUB_HI, top - JBOX_LID, HUB_HI)),
+        # the lid, overhanging the body: the lip is what tells a player there is a lid at all
+        Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
+             (HUB_LO - 0.30, top - JBOX_LID, HUB_LO - 0.30), (HUB_HI + 0.30, top, HUB_HI + 0.30)),
+    ]
     for side in glanded:
         for centre in CORES:
             parts += gland(base, side, centre)

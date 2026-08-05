@@ -505,7 +505,9 @@ def scene_cable_junction():
     triangles = ground(-1, -1, 4, 4, SAND)
     # piece_tee glands north, east and south, and HUBS places it unturned for exactly that set
     triangles += joined('tee', (1, 0, 1), (0, 90, 180))
-    return triangles, (0.55, 0.62, 2.35), (1.5, 0.06, 1.45)
+    # A standing player's eye, not a crouching one: from 1.7 blocks up the box's walls are two pixels of
+    # a five-pixel square and it reads as a plate, which is the fault a close-up cannot show.
+    return triangles, (3.1, 1.70, 3.9), (1.5, 0.06, 1.45)
 
 
 def scene_cable_hitbox():
