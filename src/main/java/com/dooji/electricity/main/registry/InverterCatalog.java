@@ -52,10 +52,16 @@ public final class InverterCatalog {
 	private static final Map<ResourceLocation, InverterSpec> BY_ID = new LinkedHashMap<>();
 
 	/**
-	 * Ten kilowatts, two trackers, fan-less.
+	 * Ten kilowatts, two trackers, one regulated fan.
 	 *
-	 * A residential machine: it hangs on a wall, it cools through its own casing, and it draws a watt
-	 * overnight. Two trackers is what a house needs, because a roof usually has two orientations.
+	 * A small commercial machine. Two trackers is what a roof needs, because it usually has two
+	 * orientations.
+	 *
+	 * Fan-cooled rather than convection-cooled, and the reason is that one model is drawn for all four
+	 * sizes: this one has the same two roof fans on it as the big ones, so declaring it NATURAL gave a
+	 * machine with visible fans that never turned and a telemetry page reading zero. Ten-kilowatt
+	 * three-phase inverters exist in both flavours - a Fronius Symo 10.0-3-M has a controlled fan and an
+	 * SMA Sunny Tripower 10.0 does not - so this is the one with the fan.
 	 */
 	public static final InverterSpec VX_10 = register(new InverterSpec(
 			id("inverter_10"), "VX-10K",
@@ -64,7 +70,7 @@ public final class InverterCatalog {
 			0.986, 0.45,
 			1.0,
 			400.0, 50.0, 0.8,
-			45.0, 60.0, InverterSpec.Cooling.NATURAL));
+			45.0, 60.0, InverterSpec.Cooling.FAN));
 
 	/**
 	 * A hundred and ten kilowatts, nine trackers, 1000 volt strings.

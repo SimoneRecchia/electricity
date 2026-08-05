@@ -43,8 +43,9 @@ import org.joml.Matrix4f;
  * derating warning they can hear across a field, and a cabinet whose fan has stopped while the
  * temperature climbs is the failure this is worth drawing at all for.
  *
- * A convection-cooled machine has no fan group to turn, and the geometry simply has a blank grille -
- * which is what the small one looks like.
+ * A convection-cooled machine's fan is held still, and nothing in the catalogue is convection-cooled now
+ * for exactly that reason: one model is drawn for all four sizes, so a machine that is not allowed to
+ * turn its fan is a machine with two fans standing still on its roof.
  *
  * <h2>One asset, four machines</h2>
  *
@@ -104,9 +105,11 @@ public class PvInverterRenderer extends ObjRendererBase {
 		for (String groupName : model.groups.keySet()) {
 			if (groupName.startsWith("pivot_")) continue;
 			if (!entryVisible(groupName, "entry", entries)) continue;
-			// the direct-current section is only there when a combiner box has been fitted, and it is the
-			// whole visible difference between a cabinet that can take a string and one that cannot
-			if (!section && groupName.startsWith("section")) continue;
+			// the lower front is the DC compartment or the plate that blanks its aperture off, never
+			// both. The section stands proud of the door line and the plate is flush, which is why
+			// PvInverterBlock has a shape for each.
+			if (groupName.startsWith("section") && !section) continue;
+			if (groupName.startsWith("blank") && section) continue;
 
 			poseStack.pushPose();
 			// the whole machine scales about the middle of its own footprint, so a small one sits on

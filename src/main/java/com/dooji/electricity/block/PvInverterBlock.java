@@ -80,8 +80,8 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 15.39, 2.72, 15.52, 16.00, 12.96),
 					Block.box(0.56, 0.00, 2.80, 15.44, 0.88, 12.88),
 					Block.box(0.80, 0.88, 2.62, 15.20, 15.68, 12.64),
-					Block.box(1.52, 1.52, 2.21, 14.48, 15.04, 3.20),
-					Block.box(3.20, 0.85, 2.00, 12.80, 6.72, 2.64))));
+					Block.box(1.52, 7.04, 2.21, 14.48, 15.04, 3.20),
+					Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64))));
 
 	/**
 	 * The same table at the other two sizes the renderer draws.
@@ -102,7 +102,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	 * {@code tools/check_hitboxes.py} checks that this box really is in that table, so the two cannot
 	 * drift apart without something saying so.
 	 */
-	private static final VoxelShape DC_SECTION = Block.box(3.20, 0.85, 2.00, 12.80, 6.72, 2.64);
+	private static final VoxelShape DC_SECTION = Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64);
 
 	/** The three tables again with the compartment removed, for a machine that has no combiner in it. */
 	private static final List<Cell> PLAIN_CELLS = without(CELLS, 1.0);

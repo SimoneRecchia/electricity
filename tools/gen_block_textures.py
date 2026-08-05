@@ -477,60 +477,67 @@ def pv_cabinet_top():
 
 
 def pv_cabinet_door(plain=False):
-    """The one face of an inverter anybody stands in front of: plate, louvres, handle, LEDs.
+    """An inverter's door leaf: the rating plate, the status lights and the louvre bank.
 
-    Everything on it is where it is on a real machine - the rating plate high on the left where
-    it can be read, the status LEDs beside it, the ventilation low down where cool air is drawn
-    in, the handle on the leading edge and the hinges opposite.
+    Three bands down the leaf, and the middle one is empty on purpose - the model's display bezel sits
+    there, at DISPLAY_LOW..DISPLAY_HIGH in gen_pv_models.  Move either and move both.
 
-    ``plain`` drops the plate and the lights, which is the *second* leaf of a two-door cabinet.  A
-    machine with a rating plate and a set of status lights on each of its two doors reads as two
-    machines bolted together, and that is exactly how it looked when both leaves took this texture.
+    No handle, no lock and no hinges: the model draws all three as geometry, so painting them here gave
+    every leaf two of each.
+
+    ``plain`` is the right-hand leaf, which has the ventilation and none of the interface.
+
+    Everything round is drawn flat by DOOR_SQUASH; a leaf is 0.395 by 0.500 of a block.
     """
     size = 512
     c = Canvas(size, size)
+    squash = SQUASH['pv_cabinet_door']
     powder(c, SHEET, salt=191)
-    # the door's own line: a return all round, which is what makes it read as a door and not a face
     bevel(c, size * 0.02, size * 0.02, size * 0.98, size * 0.98, size * 0.016, lift=30, drop=34)
 
     if not plain:
-        plate_label(c, size * 0.10, size * 0.10, size * 0.52, size * 0.30, SHEET, lines=5)
-        # the status lights: run, grid, fault, which is the set every inverter has
+        plate_label(c, size * 0.08, size * 0.06, size * 0.56, size * 0.26, SHEET, lines=5)
+        # run, grid, fault - the set every inverter has
         for i, colour in enumerate(((62, 196, 92, 255), (78, 168, 236, 255), (226, 92, 62, 255))):
-            cy = size * (0.13 + i * 0.07)
-            c.aa_disc(size * 0.60, cy, size * 0.026, (40, 42, 46, 255))
-            dome(c, size * 0.60, cy, size * 0.020, colour, lift=40, drop=20)
-            c.aa_rect(size * 0.64, cy - size * 0.006, size * 0.78, cy + size * 0.006,
+            cx = size * (0.66 + i * 0.11)
+            c.aa_disc(cx, size * 0.11, size * 0.032, (40, 42, 46, 255), squash=squash)
+            dome(c, cx, size * 0.11, size * 0.025, colour, lift=40, drop=20, squash=squash)
+            c.aa_rect(cx - size * 0.030, size * 0.185, cx + size * 0.030, size * 0.200,
                       shade(SHEET, -34))
 
-    # the louvre panel low on the door, with its screen behind
-    lx0, ly0, lx1, ly1 = size * 0.10, size * 0.55, size * 0.66, size * 0.88
+    # the louvre bank, below the window, with its screen behind
+    lx0, ly0, lx1, ly1 = size * 0.10, size * 0.745, size * 0.90, size * 0.955
     c.aa_rect(lx0 - size * 0.014, ly0 - size * 0.014, lx1 + size * 0.014, ly1 + size * 0.014,
               shade(SHEET, -18))
     bevel(c, lx0 - size * 0.014, ly0 - size * 0.014, lx1 + size * 0.014, ly1 + size * 0.014,
           size * 0.008, lift=24, drop=30)
     mesh_screen(c, lx0, ly0, lx1, ly1, size * 0.012, SHEET, alpha=0.9)
-    louvre(c, lx0, ly0, lx1, ly1, 7, shade(SHEET, -4))
-
-    # the handle, on the edge away from the hinges
-    hx = size * 0.86
-    c.aa_rect(hx - size * 0.05, size * 0.40, hx + size * 0.05, size * 0.62, shade(SHEET, -14))
-    bevel(c, hx - size * 0.05, size * 0.40, hx + size * 0.05, size * 0.62, size * 0.010)
-    c.aa_rect(hx - size * 0.022, size * 0.44, hx + size * 0.022, size * 0.58, (72, 74, 78, 255))
-    dome(c, hx, size * 0.51, size * 0.030, (188, 192, 198, 255), lift=44, drop=30)
-    # and the lock barrel under it
-    c.aa_disc(hx, size * 0.66, size * 0.022, (86, 88, 92, 255))
-    c.aa_rect(hx - size * 0.014, size * 0.657, hx + size * 0.014, size * 0.663, (30, 30, 32, 255))
-
-    # the hinges
-    for y in (size * 0.16, size * 0.84):
-        c.aa_rect(size * 0.955, y - size * 0.05, size * 0.995, y + size * 0.05, shade(SHEET, -30))
-        for k in range(2):
-            screw(c, size * 0.975, y + (k - 0.5) * size * 0.06, size * 0.012, shade(SHEET, -50))
+    louvre(c, lx0, ly0, lx1, ly1, 6, shade(SHEET, -4))
 
     grime(c, salt=193, amount=0.12, colour=(96, 94, 88, 255))
     for i in range(4):
         streak(c, size * (0.2 + 0.2 * i), size * 0.30, size, size * 0.025, alpha=0.09, salt=197 + i)
+    return c
+
+
+def pv_blank():
+    """The plate that covers the DC aperture on a machine with no combiner in it.
+
+    A bolted sheet and nothing else, which is what a blanking plate is - and the whole visible
+    difference between a cabinet that can take a string and one that cannot.  0.810 by 0.327 of a block,
+    so it is wider than it is tall and the squash goes the other way.
+    """
+    size = 256
+    c = Canvas(size, size)
+    squash = SQUASH['pv_blank']
+    powder(c, SHEET, salt=211)
+    bevel(c, size * 0.03, size * 0.05, size * 0.97, size * 0.95, size * 0.020, lift=26, drop=30)
+    for i in range(6):
+        for y in (0.16, 0.84):
+            screw(c, size * (0.09 + i * 0.164), size * y, size * 0.022, shade(SHEET, -40),
+                  squash=squash)
+    groove(c, 0, size * 0.5, size, 0, size * 0.010, dark=18, light=12)
+    grime(c, salt=213, amount=0.14, colour=(94, 92, 86, 255))
     return c
 
 
@@ -765,9 +772,16 @@ def pv_switch():
 # So both cores are black, the polarity is on the connectors where the real one carries it, and the
 # detail that used to go into a paint scheme goes into the shape instead.
 
-JACKET = (26, 27, 31, 255)             # carbon-black cross-linked polyolefin
+# Carbon-black cross-linked polyolefin.  Lifted from (26, 27, 31), which was the pigment's own value and
+# came out as a silhouette: with the cylinder gradient's own -30 on the unlit side it clamped to nothing,
+# so half of every cable in the world was pure black and the run read as flat rather than round.  This is
+# what a black cable measures in daylight.
+JACKET = (48, 50, 56, 255)
 CLEAT_STEEL = (154, 158, 164, 255)     # a stainless cable clip
-CONNECTOR_BODY = (38, 39, 43, 255)     # glass-filled polyamide, the MC4 shell
+# Glass-filled polyamide, the MC4 shell.  Lifted from 38: the real shell is matt black, and matt black
+# under this mod's own lighting is a silhouette - the knurl on the gland nut and the latch window were
+# both inside two shades of the same near-black.  This is what a black connector reads as in daylight.
+CONNECTOR_BODY = (54, 56, 61, 255)
 CONNECTOR_RED = (150, 42, 36, 255)     # the collar that marks the positive pole
 ENCLOSURE = (188, 192, 196, 255)       # a small polycarbonate junction box
 
@@ -784,26 +798,47 @@ def dc_core():
     between its surface and the light, clamped at nothing, and that is periodic by construction.  The
     specular line sits just off the bright side, where a glossy sheath's is, and wraps with it.
 
-    The v axis runs along the cable and carries only the extruder's die marks - nothing with a shape, so
-    a face may stretch it as far as it likes.
+    The v axis runs along the cable, and this tile is **constant along it** - every row is the same row.
+    That is a requirement rather than a simplification.  A tube here wraps its texture once round and
+    once along, and a run is eighty times longer than it is round, so a tile with any feature down its
+    v axis arrives compressed eighty to one: the jacket's noise came out as a band every few pixels and
+    the die marks as rings, and a bend at eight segments read as knurled.  It was the ribbing a player
+    saw on every corner.
+
+    Constant in v is also the right drawing, which is the part worth having.  What an extruded sheath
+    actually carries is *longitudinal* die marks - lines along the cable, not across it - and a line
+    along the cable is a stripe in u held constant in v.  So the marks here are in the same axis as the
+    shading and they run the way the real ones run.
     """
     size = 128
     c = Canvas(size, size)
-    rubber(c, JACKET, salt=277, sheen=16)
 
-    lit_at = 0.34                          # where round the tube the light lands
+    # The bright side is u = 0, which is the tube's own 'up': modellib carries one reference vector
+    # along a path, and for any horizontal run that vector is +y.  So a highlight at zero sits on top of
+    # the cable and stays there round a bend, where at 0.34 it swung from the west face to the south face
+    # as the tube turned and read as the light moving.
+    lit_at = 0.0
+    # one profile round the tube, then written down every row: the die marks are picked from a noise
+    # field sampled along u only, so they are lines along the cable rather than rings round it
+    marks = stretched(size, along=size * 3.0, across=size / 26.0, octaves=2, salt=281)
+    profile = []
     for i in range(size):
         t = i / float(size)                # a whole turn, so t and t + 1 are the same place
         angle = 2.0 * math.pi * (t - lit_at)
-        tone = -30 + max(0.0, math.cos(angle)) * 104
-        gloss = max(0.0, math.cos(angle)) ** 26 * 0.42
-        for j in range(size):
-            base = shade(c.get(i, j), tone)
-            c.set(i, j, mix(base, (196, 204, 214, 255), gloss))
+        # the unlit side stays above nothing, so the tube keeps its form in shadow rather than becoming
+        # a black outline - which it did when this started at -30 on a near-black jacket
+        # A black sheath returns almost no diffuse light, so what a real one shows is a narrow specular
+        # line and very little else.  A broad cosine lobe here turned the cable into a grey pipe.
+        lit = max(0.0, math.cos(angle))
+        tone = -8 + lit * lit * 44
+        gloss = lit ** 20 * 0.50
+        # the sheath's own grain, sampled across the turn so it comes out as fine longitudinal lines
+        grain = marks.signed(0.0, i) * 9 + hash01(i, 0, 277) * 4 - 2
+        profile.append(mix(shade(JACKET, tone + grain), (196, 204, 214, 255), gloss))
 
-    # the die marks, along the cable: fine, and the one thing that says which way it runs
-    marks = stretched(size, along=size * 2.0, across=size / 30.0, octaves=2, salt=281)
-    c.over(lambda x, y, base: shade(base, marks.signed(y, x) * 7))
+    for i in range(size):
+        for j in range(size):
+            c.set(i, j, profile[i])
     return c
 
 
@@ -875,10 +910,12 @@ def _connector(positive):
     y0, y1 = band(0.44, 0.90)
     c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 2))
     c.aa_rect(0, y0, size, y0 + size * 0.016, shade(CONNECTOR_BODY, 22))
-    c.aa_rect(size * 0.30, y0 + (y1 - y0) * 0.22, size * 0.70, y0 + (y1 - y0) * 0.62,
-              (16, 16, 18, 255))
-    c.aa_rect(size * 0.34, y0 + (y1 - y0) * 0.27, size * 0.66, y0 + (y1 - y0) * 0.44,
-              shade(CONNECTOR_BODY, 32))
+    # the latch window: a fifth of the way round rather than four tenths, which read as a hole punched
+    # through the plug rather than as the window the locking clip shows through
+    c.aa_rect(size * 0.40, y0 + (y1 - y0) * 0.24, size * 0.60, y0 + (y1 - y0) * 0.58,
+              shade(CONNECTOR_BODY, -30))
+    c.aa_rect(size * 0.43, y0 + (y1 - y0) * 0.29, size * 0.57, y0 + (y1 - y0) * 0.44,
+              shade(CONNECTOR_BODY, 34))
 
     # the nose
     y0, y1 = band(0.90, 1.0)
@@ -1159,11 +1196,16 @@ def porcelain_brown():
     return c
 
 
-# How much a door leaf's tile is stretched, as the face's width over its height.  The kiosk's leaf is
-# 0.277 by 0.585 of a block and the inverter's 0.395 by 0.845 - both a hair under a half - so a square
-# tile on either arrives two and a tenth times taller than it is wide.  Every circle and every symbol on
-# a door is drawn flat by this much so that it comes out right on the leaf.
-DOOR_SQUASH = 0.47
+# A square tile on a face that is not square stretches, so every circle on it has to be drawn flat by
+# the face's own width over its height.  SQUASH holds that ratio for each such texture, and
+# check_model_textures.py measures the faces the models actually give them and fails if they disagree -
+# which is the only thing that keeps these numbers true after a model moves.
+SQUASH = {
+    'box_door': 0.277 / 0.585,              # the kiosk's leaf
+    'pv_cabinet_door': 0.395 / 0.500,       # the inverter's, DOOR_LOW..DOOR_HIGH in gen_pv_models
+    'pv_blank': 0.810 / 0.327,              # the blanking plate, wider than tall
+}
+DOOR_SQUASH = SQUASH['box_door']
 
 
 # ------------------------------------------------------------------ the kiosk
@@ -1316,6 +1358,7 @@ TEXTURES = {
     'pv_cabinet': pv_cabinet,
     'pv_cabinet_top': pv_cabinet_top,
     'pv_cabinet_door': pv_cabinet_door,
+    'pv_blank': pv_blank,
     'pv_cabinet_leaf': lambda: pv_cabinet_door(plain=True),
     'pv_combiner_door': pv_combiner_door,
     'pv_vent': pv_vent,

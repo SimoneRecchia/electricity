@@ -33,7 +33,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, ROUND, Mesh, angle, arc, bolt, box, channel, clad_box, cylinder,
-                      hemisphere, ibeam, pin_insulator, pivot, rotate, strut, tube, write_mtl)
+                      eyebolt, hemisphere, ibeam, pin_insulator, pivot, rotate, strut, tube,
+                      write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -59,6 +60,7 @@ MATERIALS = {
     'dc_jacket': 'dc_jacket.png',
     'combiner_door': 'pv_combiner_door.png',
     'dc_section': 'pv_dc_section.png',
+    'blank': 'pv_blank.png',
     'switch': 'pv_switch.png',
     'concrete': 'box_plinth.png',
     'porcelain': 'porcelain_brown.png',
@@ -565,6 +567,13 @@ def dual_axis():
 
 # ------------------------------------------------------------------ the inverter
 
+# The inverter's front, as one set of figures: the doors, the window in the left leaf, and the band
+# below them the DC compartment or its blanking plate fills.  pv_cabinet_door draws round the window, so
+# these and the texture's own bands are one layout - move one and move the other.
+DOOR_LOW, DOOR_HIGH = 0.440, 0.940
+DISPLAY_LOW, DISPLAY_HIGH = 0.585, 0.735
+
+
 def inverter():
     """A station inverter: a cabinet on a plinth, double doors, a rain hood, roof fans.
 
@@ -599,88 +608,70 @@ def inverter():
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.8)
     box(mesh, mesh.faces('hood', 'cabinet'), (-0.47, body_y - 0.018, face - 0.03),
         (0.47, body_y + 0.006, face - 0.018), uv_scale=0.3)
-    for x in (-0.30, 0.28):
-        # the lifting eyes on the roof, which every cabinet this size is craned in by - back from the
-        # fans rather than beside them, so nothing of theirs lands on a fan's plane
-        eye = mesh.faces('hood', 'steel')
-        cylinder(mesh, eye, (x, body_y + 0.058, 0.16), 'z', 0.026, 0.008, sides=FITTING,
-                 uv_scale=0.2, caps=eye)
-        box(mesh, eye, (x - 0.008, body_y + 0.033, 0.152), (x + 0.008, body_y + 0.048, 0.168),
-            uv_scale=0.1)
+    # the lifting eyebolts, at the roof's four corners - clear of both fan guards and of the insulator
+    for x in (-0.435, 0.435):
+        for z in (face + 0.045, back + 0.005):
+            eyebolt(mesh, mesh.faces('hood', 'steel'), (x, body_y + 0.035, z), 0.018)
 
-    # The two door leaves, with the stile between them and a handle on each leading edge.
-    #
-    # Only the left leaf carries the interface.  A rating plate and a set of status lights on each
-    # of the two doors reads as two machines bolted together, which is exactly how it looked when
-    # both leaves took the same texture; a real two-door machine has one of each and ventilation on
-    # both, which is what the plain leaf is.
+    # doors: upper half only, so the DC compartment below them is not a box bolted over them
     for side, x0, x1 in ((-1, -0.405, -0.010), (1, 0.010, 0.405)):
-        clad_box(mesh, 'door', (x0, 0.095, face - 0.035), (x1, body_y - 0.04, face),
+        clad_box(mesh, 'door', (x0, DOOR_LOW, face - 0.035), (x1, DOOR_HIGH, face),
                  {'north': 'cabinet_door' if side < 0 else 'cabinet_leaf', '*': 'cabinet'})
         handle_x = x1 - 0.055 if side < 0 else x0 + 0.030
-        box(mesh, mesh.faces('door', 'frame'), (handle_x, 0.44, face - 0.062),
-            (handle_x + 0.025, 0.60, face - 0.035), uv_scale=0.12)
-        # the hinges, on the outer edge
+        box(mesh, mesh.faces('door', 'frame'), (handle_x, 0.60, face - 0.062),
+            (handle_x + 0.025, 0.76, face - 0.035), uv_scale=0.12)
+        # hinges on the outer edge
         hinge_x = x0 if side < 0 else x1 - 0.012
-        for y in (0.16, body_y - 0.12):
+        for y in (DOOR_LOW + 0.05, DOOR_HIGH - 0.10):
             box(mesh, mesh.faces('door', 'steel'), (hinge_x, y, face - 0.048),
                 (hinge_x + 0.012, y + 0.055, face - 0.035), uv_scale=0.1)
-    box(mesh, mesh.faces('cabinet', 'frame'), (-0.012, 0.095, face - 0.036),
-        (0.012, body_y - 0.04, face - 0.030), uv_scale=0.1)
+    box(mesh, mesh.faces('cabinet', 'frame'), (-0.012, DOOR_LOW, face - 0.036),
+        (0.012, DOOR_HIGH, face - 0.030), uv_scale=0.1)
 
-    # The screen, on the *left leaf* and on the front of its bezel and nowhere else.
-    #
-    # Two faults it used to have. It was lit on all six faces, so the machine appeared to have four
-    # displays and a lit underside. And it ran from x -0.28 to 0.02, which crosses the centre stile at
-    # x -0.012 to 0.012 - so the interface sat astride the joint between the two doors and moved with
-    # neither of them. It is inside the left leaf's own span now, which is -0.405 to -0.010.
-    clad_box(mesh, 'display', (-0.325, 0.66, face - 0.048), (-0.045, 0.80, face - 0.036),
+    # the screen, on the left leaf between its plate and its louvre bank - the door texture is drawn
+    # round this window, so DISPLAY_* and pv_cabinet_door have to move together
+    clad_box(mesh, 'display', (-0.330, DISPLAY_LOW, face - 0.048), (-0.060, DISPLAY_HIGH, face - 0.036),
              {'north': 'display', '*': 'cabinet'})
 
-    # The roof fans: two guarded impellers, which is how a station inverter exhausts.
-    #
-    # Rebuilt, because what was here was a flat disc with six bars laid across it and five flat plates
-    # for an impeller - which is not what a fan looks like from any angle.  A real one has a spun rim, a
-    # wire finger guard of concentric rings on radial spokes, a hub, and blades that are *pitched*: a
-    # flat plate turning about its own axis moves no air, and a fan drawn with flat blades reads as a
-    # paper windmill.
+    # The roof fans: two guarded impellers on an upstand, standing *on* the hood rather than inside it.
+    # They used to sit at body_y + 0.030, which is inside the hood's own 0.035 of thickness, so the
+    # impeller was buried under the roof's top face and only the wire guard showed above it.
+    roof = body_y + 0.035
     for x in (-0.22, 0.22):
-        pivot(mesh, 'fan_%s' % ('west' if x < 0 else 'east'), (x, body_y + 0.040, -0.01))
+        pivot(mesh, 'fan_%s' % ('west' if x < 0 else 'east'), (x, roof + 0.010, -0.01))
         guard = mesh.faces('fan_guard', 'steel')
-        centre = (x, body_y + 0.030, -0.01)
-        # the rim the whole assembly is bolted into: a spun ring, and the collar it stands in
-        cylinder(mesh, guard, centre, 'y', 0.112, 0.007, sides=ROUND, uv_scale=0.4)
-        cylinder(mesh, guard, (x, body_y + 0.037, -0.01), 'y', 0.104, 0.006, sides=ROUND,
-                 uv_scale=0.4)
+        # the upstand the assembly is bolted into, and the collar it stands in
+        cylinder(mesh, guard, (x, roof + 0.005, -0.01), 'y', 0.112, 0.005, sides=ROUND, uv_scale=0.4)
+        cylinder(mesh, guard, (x, roof + 0.013, -0.01), 'y', 0.104, 0.006, sides=ROUND, uv_scale=0.4)
         # the finger guard: three concentric rings on eight spokes, in wire rather than in bar
         for radius in (0.036, 0.064, 0.092):
-            ring = arc((x, body_y + 0.050, -0.01), radius, (0, 2), 0.0, 360.0, FITTING)
+            ring = arc((x, roof + 0.026, -0.01), radius, (0, 2), 0.0, 360.0, FITTING)
             tube(mesh, guard, ring + [ring[0]], 0.0035, sides=8, uv_scale=1.0)
         for i in range(8):
             angle = math.radians(i * 45.0)
-            tube(mesh, guard, [(x + math.cos(angle) * 0.016, body_y + 0.050,
+            tube(mesh, guard, [(x + math.cos(angle) * 0.016, roof + 0.026,
                                 -0.01 + math.sin(angle) * 0.016),
-                               (x + math.cos(angle) * 0.100, body_y + 0.050,
+                               (x + math.cos(angle) * 0.100, roof + 0.026,
                                 -0.01 + math.sin(angle) * 0.100)], 0.0035, sides=8, uv_scale=1.0)
-        # the four bolts that hold the rim down
+        # the four bolts that hold the upstand down
         for i in range(4):
             angle = math.radians(45.0 + i * 90.0)
-            bolt(mesh, guard, (x + math.cos(angle) * 0.106, body_y + 0.037,
+            bolt(mesh, guard, (x + math.cos(angle) * 0.106, roof + 0.010,
                                -0.01 + math.sin(angle) * 0.106), 'y', 0.006, 0.010, uv_scale=0.08)
 
     for x, name in ((-0.22, 'rotate_fan_west'), (0.22, 'rotate_fan_east')):
         fan = mesh.faces(name, 'steel')
-        hub = (x, body_y + 0.032, -0.01)
+        hub = (x, roof + 0.012, -0.01)
         # the hub: the motor's own can, closed at the top where the spinner is
-        cylinder(mesh, fan, (x, body_y + 0.030, -0.01), 'y', 0.026, 0.010, sides=FITTING,
+        cylinder(mesh, fan, (x, roof + 0.008, -0.01), 'y', 0.026, 0.008, sides=FITTING,
                  uv_scale=0.2, caps=fan)
-        cylinder(mesh, fan, (x, body_y + 0.041, -0.01), 'y', 0.020, 0.004, sides=FITTING,
+        cylinder(mesh, fan, (x, roof + 0.018, -0.01), 'y', 0.020, 0.004, sides=FITTING,
                  uv_scale=0.2, taper=0.7, caps=fan, cap_ends=(1,))
         # seven blades, each pitched thirty degrees about its own radius and then carried round the hub
         for i in range(7):
-            box(mesh, fan, (x + 0.022, body_y + 0.028, -0.038), (x + 0.098, body_y + 0.034, 0.018),
+            box(mesh, fan, (x + 0.022, roof + 0.008, -0.038), (x + 0.098, roof + 0.014, 0.018),
                 uv_scale=0.2,
-                rot=(((x + 0.060, body_y + 0.031, -0.01), 'x', 30.0),
+                rot=(((x + 0.060, roof + 0.011, -0.01), 'x', 30.0),
                      (hub, 'y', i * 360.0 / 7.0)))
 
     # the side louvre banks, on the outside of the cabinet's own face rather than inside it
@@ -688,31 +679,25 @@ def inverter():
         clad_box(mesh, 'grille', (x, 0.30, -0.24), (x + 0.0025, 0.86, 0.22),
                  {side: 'vent', '*': 'cabinet'})
 
-    # The insulator on the roof: this is where the plant joins the grid.  The mod's own
-    # ``pin_insulator``, in brown glazed porcelain like every other one - it was wearing the
-    # *instrument* material, which is a white painted enclosure, so the one fitting a player looks at
-    # from a metre away was the one that did not match any of the others.
+    # the wire fitting: on the roof at the east end, clear of both fans and both eyebolts.  A player
+    # clicks this, so ObjDefinitions names the group and WireManager stores wires by its index.
     steel = mesh.faces('hardware', 'steel')
-    # two thousandths above the roof rather than exactly on it: two faces on one plane flicker
-    #
-    # At the right-hand end of the roof, which is where a station machine's terminal box is - and, more
-    # to the point, clear of everything else up there. It used to stand at (0.30, 0.10), which is inside
-    # the east fan's guard: the fitting a player clicks a wire onto was sitting on a spinning impeller.
     box(mesh, steel, (0.356, body_y + 0.002, 0.096), (0.444, body_y + 0.018, 0.184), uv_scale=0.2)
     pin_insulator(mesh, mesh.faces('insulator', 'porcelain'), steel,
                   (0.40, body_y + 0.050, 0.14), 0.108)
 
-    # The direct-current section, drawn only when a combiner box has been fitted into the cabinet.
-    #
-    # A compartment across the bottom of the front, which is where a station inverter's own DC
-    # section is: a row of fuse ways behind a window and a gland plate under them.  It is the whole
-    # visible difference between a machine that can take a string and one that cannot.
-    clad_box(mesh, 'section', (-0.30, 0.10, face - 0.075), (0.30, 0.42, face - 0.035),
+    # The lower front, in two mutually exclusive groups the renderer picks between: 'section' is the DC
+    # compartment a fitted combiner puts there, 'blank' the plate that covers the aperture otherwise.
+    # The section stands proud and the blank is flush, which is why the block has two collision shapes.
+    clad_box(mesh, 'section', (-0.360, 0.100, face - 0.072), (0.360, 0.415, face - 0.035),
              {'north': 'dc_section', 'up': 'frame', '*': 'cabinet'})
     glands = mesh.faces('section', 'steel')
     for i in range(5):
-        cylinder(mesh, glands, (-0.22 + i * 0.11, 0.078, face - 0.055), 'y', 0.016, 0.025,
+        cylinder(mesh, glands, (-0.22 + i * 0.11, 0.076, face - 0.054), 'y', 0.016, 0.024,
                  sides=FITTING, uv_scale=0.2, caps=glands)
+
+    clad_box(mesh, 'blank', (-0.405, 0.098, face - 0.035), (0.405, 0.425, face),
+             {'north': 'blank', '*': 'cabinet'})
 
     # where the direct current comes in, one run per side, drawn only for the sides it comes in from
     stubs(mesh, 'entry')
@@ -983,7 +968,7 @@ MODELS = [
     ('pv_dual', dual_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, STRUCTURE + ('cabinet', 'cabinet_door', 'cabinet_leaf', 'cabinet_top', 'vent',
                                            'display', 'instrument', 'porcelain', 'dc_cable', 'dc_jacket',
-                                           'dc_section', 'concrete')),
+                                           'dc_section', 'blank', 'concrete')),
     ('pv_combiner', combiner, STRUCTURE + ('cabinet', 'cabinet_top', 'combiner_door', 'switch',
                                            'dc_cable', 'dc_jacket')),
     ('met_mast', met_mast, STRUCTURE + ('instrument', 'dome', 'cabinet', 'cabinet_top',

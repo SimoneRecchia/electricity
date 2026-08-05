@@ -251,6 +251,8 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
     cx, cy, cz = centre
     near = ring_points(radius, sides, phase)
     far = ring_points(radius * taper, sides, phase)
+    # kept under its own name so the cap's own uv function can see it without shadowing itself
+    window = uv
 
     def point(i, end):
         p, q = (far if end > 0 else near)[i]
@@ -303,7 +305,16 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
 
         def uv(i, ring=ring, span=span):
             p, q = ring[i]
-            return (0.5 + p / span, 0.5 + q / span)
+            u, v = 0.5 + p / span, 0.5 + q / span
+            if window is None:
+                return (u, v)
+
+            # A cap on a segment whose texture is a *strip along its own length* has to stay inside that
+            # segment's band, and at half scale so it takes the middle of it.  Sampling the whole tile
+            # instead put a shrunk copy of the entire drawing on the end face: an MC4's nose came out
+            # wearing the knurl of the gland nut and the latch window of the barrel.
+            return (window[0] + (window[2] - window[0]) * (0.25 + u * 0.5),
+                    window[1] + (window[3] - window[1]) * (0.25 + v * 0.5))
 
         order = list(range(sides)) if end > 0 else list(range(sides - 1, -1, -1))
         for i in range(1, sides - 2, 2):
@@ -478,6 +489,25 @@ def bolt(mesh, faces, centre, axis, radius, length, uv_scale=0.2, head=1.7, wash
              phase=math.pi / 6)
 
 
+def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
+    """A DIN 580 lifting eye: a forged ring with a hole through it, on a shank with a collar.
+
+    The hole is the whole point.  Drawn as a solid disc on a stalk - which is what was here - it is a
+    grey cylinder standing on a roof for no reason a player can see, and two of them next to the fans
+    were the thing that got asked about.  So the ring is a tube swept round a full circle, which has a
+    hole through it by construction, standing in the plane the crane's sling would pull in.
+    """
+    cx, cy, cz = base
+    section = ring_radius * wire
+    collar = ring_radius * 0.62
+    cylinder(mesh, faces, (cx, cy + collar * 0.30, cz), 'y', collar, collar * 0.30, sides=sides,
+             uv_scale=0.1, caps=faces, cap_ends=(1,))
+
+    centre_y = cy + collar * 0.60 + ring_radius
+    circle = arc((cx, centre_y, cz), ring_radius, (0, 1), -90.0, 270.0, sides)
+    tube(mesh, faces, circle + [circle[0]], section, sides=max(6, sides // 4), uv_scale=1.0)
+
+
 def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=0.5, taper=0.72):
     """An insulator: a stack of skirts on a core, each wider at its lower rim.
 
@@ -573,7 +603,8 @@ def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, spind
         ], sides=max(8, sides // 2), uv_scale=1.0, uv_along=1.0)
 
 
-def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=None):
+def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=None,
+         cap_ends=(-1, 1)):
     """A round tube swept along a polyline: the only way to draw a cable that turns.
 
     ``cylinder`` is axis-aligned, which is enough for a mast or a bushing and no use at all for a bend.
@@ -652,6 +683,12 @@ def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0,
 
     if caps is not None:
         for ring, tangent, sign in ((rings[0], tangents[0], -1), (rings[-1], tangents[-1], 1)):
+            # ``cap_ends`` the same way ``cylinder`` takes it, because a swept run usually wants one end
+            # only: a dropped offcut has a cut end where it was cut and an open one where the next piece
+            # of the run carries on, and a cap in the second place is a disc inside the neighbouring cable
+            if sign not in cap_ends:
+                continue
+
             normal = (tangent[0] * sign, tangent[1] * sign, tangent[2] * sign)
             corners = [point for point, _ in (ring if sign > 0 else list(reversed(ring)))]
             uvs = [(0.5 + 0.5 * math.cos(2.0 * math.pi * i / sides),

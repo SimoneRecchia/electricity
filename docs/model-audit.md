@@ -235,8 +235,7 @@ piece with any uv outside its sprite.
 
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
-python3 tools/gen_pv_textures.py        # GUI panels
-python3 tools/gen_item_sprites.py       # every item sprite
+python3 tools/gen_pv_textures.py        # item sprites and GUI panels
 python3 tools/gen_pv_models.py          # the arrays, the inverter, the combiner, the mast
 python3 tools/gen_grid_models.py        # the pole and the kiosk
 python3 tools/gen_tower_models.py       # the three lattice towers

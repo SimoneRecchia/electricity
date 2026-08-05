@@ -569,13 +569,13 @@ def hex_head(c, cx, cy, radius, base, salt=137):
     dome(c, cx, cy, radius * 0.42, shade(base, 10), lift=30, drop=18)
 
 
-def screw(c, cx, cy, radius, base):
-    """A pan-head screw with a cross slot."""
-    dome(c, cx, cy, radius, base, lift=40, drop=30)
+def screw(c, cx, cy, radius, base, squash=1.0):
+    """A pan-head screw with a cross slot.  ``squash`` as ``aa_disc`` takes it: face width over height."""
+    dome(c, cx, cy, radius, base, lift=40, drop=30, squash=squash)
     for angle in (0.35, 0.35 + math.pi / 2):
-        c.aa_line(cx - math.cos(angle) * radius * 0.72, cy - math.sin(angle) * radius * 0.72,
-                  cx + math.cos(angle) * radius * 0.72, cy + math.sin(angle) * radius * 0.72,
-                  shade(base, -62), width=max(1.0, radius * 0.34))
+        c.aa_line(cx - math.cos(angle) * radius * 0.72, cy - math.sin(angle) * radius * 0.72 * squash,
+                  cx + math.cos(angle) * radius * 0.72, cy + math.sin(angle) * radius * 0.72 * squash,
+                  shade(base, -62), width=max(1.0, radius * 0.34 * min(1.0, squash)))
 
 
 def louvre(c, x0, y0, x1, y1, count, base, depth=None):

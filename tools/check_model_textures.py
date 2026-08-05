@@ -25,14 +25,18 @@ And it reports texel density per face, because a texture stretched over a face f
 is the other half of "that looks blocky" - the half no rule can decide for you.
 """
 
+import ast
 import collections
 import functools
-import glob
 import math
 import os
 import struct
 import sys
 import zlib
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from gen_block_textures import SQUASH                                            # noqa: E402
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures', 'block')
@@ -64,6 +68,10 @@ DENSITY = 48.0
 # How far u and v may disagree on one face before a circle on that texture reads as an oval. A tenth is
 # below what the eye picks up on a disc; a third is unmistakable.
 ANISOTROPY = 1.12
+# The narrow way across a face, under which no oval on it can be seen whatever the ratio: a drip edge a
+# hundredth of a block tall wearing a stretched sheet is a stretched sliver, not a stretched circle.  Set
+# to a sixteenth of a block, which is one pixel of a vanilla model.
+MIN_FEATURE = 0.062
 # Faces meant to sample one texture at two scales. A cable core's tile is a cross-section gradient with
 # nothing along its length, so stretching it along the run is exactly what it is drawn for.
 STRETCH_EXEMPT = {'dc_core.png',
@@ -130,81 +138,57 @@ def png_pixels(path):
     return rows, width, step
 
 
+# The texlib primitives that put something round on a tile.  A texture drawn with any of them has a
+# circle on it, so the face it lands on has to sample u and v at the same rate or the circle is an oval.
+ROUND_PRIMITIVES = {'aa_disc', 'disc', 'dome', 'screw', 'hex_head', 'warning_triangle'}
+
+
 @functools.lru_cache(maxsize=None)
-def round_features(path):
-    """Whether a texture carries something round enough that stretching it would show.
+def round_textures():
+    """Which generated textures have something round on them, read out of the generator's own source.
 
-    Declared nowhere and detected instead, because the point is to catch the *next* texture with a
-    circle in it as well as the ones already drawn.  A status lamp, a lock barrel, a screw head, a
-    bolted boss, the ring round a warning triangle: all of them come out as ovals the moment the face
-    they are on is not square, and that is the single most common fault in this mod's models.
+    Static rather than detected in the pixels.  The version this replaces looked for discs by level sets
+    and could not see a small one: the three status lights on the inverter's door are thirteen pixels
+    across on a five-hundred-and-twelve pixel tile, which is one cell of the grid it thresholded, so the
+    fault a player photographed was invisible to the check written to find it.
 
-    Found by level sets: the tile is reduced to a small grid, thresholded at a few brightnesses, and its
-    connected regions measured.  A region counts as round when its bounding box is nearly square and it
-    fills about pi over four of it, which is what a disc does and what a rectangle, a stripe and a blob
-    of noise do not.
+    The generator knows the answer exactly - a texture has a circle on it if the function that draws it
+    reaches one of ROUND_PRIMITIVES - so this walks the call graph of gen_block_textures with ast and
+    asks that.  It over-approximates, which is the safe direction: a texture wrongly listed as round only
+    means its faces are held to an isotropic mapping they should have anyway.
     """
-    rows, width, step = png_pixels(path)
-    if rows is None or width < 16:
-        return False
+    source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_block_textures.py')
+    tree = ast.parse(open(source).read())
 
-    grid = 48
-    height = len(rows)
-    field = []
-    for gy in range(grid):
-        row = []
-        for gx in range(grid):
-            x, y = gx * width // grid, gy * height // grid
-            pixel = rows[y][x * step:x * step + 3]
-            row.append(sum(pixel) / 3.0)
-        field.append(row)
+    calls, builders = {}, {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            calls[node.name] = {inner.func.id for inner in ast.walk(node)
+                                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)} | \
+                               {inner.func.attr for inner in ast.walk(node)
+                                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)}
 
-    values = sorted(v for row in field for v in row)
-    for fraction in (0.12, 0.25, 0.5, 0.75, 0.88):
-        level = values[int(fraction * (len(values) - 1))]
-        for want in (True, False):
-            seen = [[False] * grid for _ in range(grid)]
-            for sy in range(grid):
-                for sx in range(grid):
-                    if seen[sy][sx] or (field[sy][sx] > level) != want:
-                        continue
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                continue
+            named = value.body.func if isinstance(value, ast.Lambda) and isinstance(value.body, ast.Call) \
+                else value
+            if isinstance(named, ast.Name):
+                builders[key.value + '.png'] = named.id
 
-                    stack, cells = [(sx, sy)], []
-                    seen[sy][sx] = True
-                    while stack:
-                        cx, cy = stack.pop()
-                        cells.append((cx, cy))
-                        for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
-                            if 0 <= nx < grid and 0 <= ny < grid and not seen[ny][nx] \
-                                    and (field[ny][nx] > level) == want:
-                                seen[ny][nx] = True
-                                stack.append((nx, ny))
+    def reaches(name, seen=None):
+        seen = seen or set()
+        if name in seen or name not in calls:
+            return False
+        seen.add(name)
+        if calls[name] & ROUND_PRIMITIVES:
+            return True
+        return any(reaches(inner, seen) for inner in calls[name])
 
-                    if len(cells) < 24:
-                        continue
-
-                    xs = [c[0] for c in cells]
-                    ys = [c[1] for c in cells]
-                    w = max(xs) - min(xs) + 1
-                    h = max(ys) - min(ys) + 1
-                    # a region touching the tile's edge is a background, not a feature on it
-                    if min(xs) == 0 or min(ys) == 0 or max(xs) == grid - 1 or max(ys) == grid - 1:
-                        continue
-                    # Below a fifteenth of the tile a round feature cannot show an aspect error - a
-                    # bolt head stretched by half is still a bolt head - and every lid in the mod has
-                    # four of them, so without this the check reports nothing but screws.
-                    #
-                    # And above half the tile it is the *ground* rather than a feature on it: a
-                    # backsheet with a few dark things on it has a square bounding box and fills just
-                    # under all of it, which passes the roundness test by accident.
-                    if w < grid * 0.13 or h < grid * 0.13 or max(w, h) / min(w, h) > 1.12:
-                        continue
-                    if w > grid * 0.55 or h > grid * 0.55:
-                        continue
-                    if 0.86 <= len(cells) / (math.pi / 4.0 * w * h) <= 1.14:
-                        return True
-
-    return False
+    return {texture for texture, builder in builders.items() if reaches(builder)}
 
 
 def bordered(path):
@@ -464,14 +448,21 @@ def report(name):
             if densities and min(densities) < DENSITY:
                 stretched.append((min(densities), obj, material, texture, max(along_u, along_v)))
 
-            # Anisotropy: the same texture at two different scales on one face, which is what turns a
-            # circle into an oval.  Only reported where it can be seen - a face wearing plain noise may
-            # be stretched as far as it likes, and a cable core's gradient is constant along the run on
-            # purpose, so what decides it is whether the tile has anything round on it.
-            if len(densities) == 2 and min(densities) > 1e-9:
-                ratio = max(densities) / min(densities)
-                if ratio > ANISOTROPY and texture not in STRETCH_EXEMPT and round_features(file_path):
-                    skew.append((ratio, obj, material, texture))
+            # Anisotropy: how differently this face samples u and v, which is what turns a circle into
+            # an oval.  Only checked where it can be seen - a tile of plain noise may be stretched as far
+            # as it likes - so what decides it is whether the drawing has anything round on it.
+            #
+            # A texture in SQUASH is drawn pre-squashed for a face that is *meant* to be anisotropic, so
+            # what it has to match is its declared factor rather than one.  That number is the face's
+            # width over its height, and density_v / density_u is the same thing measured off the model -
+            # so this is what keeps the drawing and the geometry from drifting apart.
+            if len(densities) == 2 and min(densities) > 1e-9 and texture in round_textures() \
+                    and texture not in STRETCH_EXEMPT and min(along_u, along_v) > MIN_FEATURE:
+                want = densities[1] / densities[0]
+                expected = SQUASH.get(texture[:-4], 1.0)
+                ratio = max(want / expected, expected / want)
+                if ratio > ANISOTROPY:
+                    skew.append((ratio, obj, material, texture, want, expected))
 
     by_material = {}
     for density, obj, material, texture, size in stretched:
@@ -482,13 +473,13 @@ def report(name):
               % (material, obj, density, size, texture))
 
     worst = {}
-    for ratio, obj, material, texture in skew:
+    for ratio, obj, material, texture, want, expected in skew:
         if (obj, texture) not in worst or ratio > worst[(obj, texture)][0]:
-            worst[(obj, texture)] = (ratio, material)
-    for (obj, texture), (ratio, material) in sorted(worst.items(), key=lambda item: -item[1][0]):
+            worst[(obj, texture)] = (ratio, want, expected)
+    for (obj, texture), (ratio, want, expected) in sorted(worst.items(), key=lambda item: -item[1][0]):
         problems += 1
-        print('    OVAL     %s wears %s at %.2f to 1, and it has something round on it'
-              % (obj, texture, ratio))
+        print('    OVAL     %s samples %s at %.2f across to 1 along, wants %.2f - a circle on it comes '
+              'out %.2f to 1' % (obj, texture, want, expected, ratio))
 
     sides = collections.defaultdict(set)
     for obj, material, corners, _, normal in model_faces:

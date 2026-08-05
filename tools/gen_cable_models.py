@@ -56,8 +56,8 @@ The version this replaces had every joint made of two boxes meeting on a plane a
 there - two surfaces at the same depth, which is the flicker a player saw at every corner.  A swept tube
 has no internal joint: a bend is one continuous tube per core, and a climb is one tube from the middle
 of the block, round the elbow, and up the wall.  Where two pieces really do meet - an arm against the
-middle - both stop on the same plane and neither draws a cap, because a cap there is always inside the
-neighbouring cable.
+middle - both stop on the same plane and both close their end, which is a disc inside the neighbouring
+cable and cannot be seen.  Left open, it is a hole wherever the cover is not exact.
 
 The trunk cable
 ---------------
@@ -103,7 +103,19 @@ TEXTURES = {
 # ---------------------------------------------------------------- the pair, in sixteenths
 #
 # Authored in sixteenths, like every other figure in this mod's models, and divided down on the way
-# out: an OBJ here runs -0.5 to 0.5 in x and z and from 0 upwards in y.
+# out.  The frame the division lands in is the block's *own*, corner at the origin, 0 to 1 on all three
+# axes - which is not the frame the rest of this mod's OBJ files use and is not a choice either.
+#
+# The machines are drawn by the mod's own renderer, which places a model about the centre of the block,
+# so those are authored -0.5 to 0.5.  These are drawn by Forge's block-model OBJ loader, and that one
+# takes the coordinates a vanilla block model uses: ``automatic_culling`` decides a quad lies on a block
+# face by testing its vertices against 0 and 1, and a blockstate's ``y`` is applied through
+# ``Transformation.blockCenterToCorner``, which turns about (0.5, 0.5, 0.5).  Authored about the origin
+# instead, every piece came out half a block to the north-west, and the rotated states were thrown to a
+# different corner each - which is what a player saw as cable lying nowhere near its own outline.
+#
+# ``check_inside_block`` fails the build if a piece leaves the frame, because the fault is invisible in
+# any previewer: it draws correctly and it is the *game* that puts it in the wrong place.
 
 # A 6 mm2 H1Z2Z2-K is 6.9 mm across.  Thin: a core is 1.3 px, so the pair is a pair of cables rather
 # than a pair of ducts - which is what the first two attempts at this looked like.
@@ -128,11 +140,20 @@ HUB_HI = 16.0 - HUB_LO
 #
 # Each segment names the band of ``dc_connector_*`` it takes, because that tile is a strip along the
 # plug's own length: a nut cannot show the latch window and a barrel cannot show the knurl.
-PLUG = ((0.45, 0.80, 0.00, 0.12),      # the collar, which carries the polarity
+# The collar is longer than scale: a real plug's coloured seal is a couple of millimetres and at this
+# size that is a quarter of a pixel, which is the polarity marking invisible.  It is what the fitting is
+# *for* to a player, so it gets a ring they can see - and the barrel gives up the length.
+PLUG = ((0.80, 0.80, 0.00, 0.12),      # the collar, which carries the polarity
         (1.05, 0.85, 0.12, 0.44),      # the knurled gland nut
-        (2.60, 0.95, 0.44, 0.90),      # the barrel, with the latch window
+        (2.25, 0.95, 0.44, 0.90),      # the barrel, with the latch window
         (0.70, 0.62, 0.90, 1.00))      # the nose
 PLUG_START = 8.4
+# A plug is fatter than the cable it is moulded onto, so a plug resting on the ground holds its own axis
+# higher than the cable's - and the cable rises into it over the last two pixels, which is what a stiff
+# 6 mm2 core lying on the ground actually does.  Coaxial at the cable's own height instead, the barrel's
+# underside was a third of a pixel below the ground.
+PLUG_Y = max(radius for _, radius, _, _ in PLUG)
+PLUG_RISE = 2.4
 
 # How many segments a quarter turn is swept in.  Eight is smooth at the tighter of the two radii and
 # costs eight rings of thirty-two.
@@ -152,8 +173,8 @@ def out(value):
 
 
 def at(x, y, z):
-    """A point in sixteenths, in the OBJ's frame: x and z about the centre, y off the floor."""
-    return (out(x) - 0.5, out(y), out(z) - 0.5)
+    """A point in sixteenths, in the block's own frame: 0 to 1 on every axis, corner at the origin."""
+    return (out(x), out(y), out(z))
 
 
 # ---------------------------------------------------------------- the parts
@@ -162,7 +183,13 @@ def at(x, y, z):
 # the collision tables cannot drift apart.
 
 class Run:
-    """A length of cable swept along a path given in sixteenths."""
+    """A length of cable swept along a path given in sixteenths.
+
+    Both ends are closed, always.  A cap at a joint is a disc inside the neighbouring cable and costs
+    thirty quads; an *uncapped* end is a hole the moment the neighbour does not cover it exactly, and
+    open ends at the joints were what made a laid run read as hollow rather than solid.  Cheaper to close
+    every one than to reason about which ones are covered.
+    """
 
     def __init__(self, path, radius=CORE_RADIUS, material='core'):
         self.path = _dedupe([tuple(float(c) for c in p) for p in path])
@@ -175,7 +202,7 @@ class Run:
         # door rather than repeating - which is what put white bands across every cable.  Nothing on the
         # core's tile has a shape along its length, so stretching it there costs nothing.
         tube(mesh, faces, [at(*p) for p in self.path], out(self.radius), sides=FITTING,
-             uv_scale=1.0, uv_along=1.0)
+             uv_scale=1.0, uv_along=1.0, caps=faces)
 
     def length(self):
         return sum(math.dist(self.path[i], self.path[i + 1]) for i in range(len(self.path) - 1))
@@ -316,11 +343,24 @@ def plug(centre, base, positive):
     material = 'plug_plus' if positive else 'plug_minus'
     parts, cursor = [], PLUG_START
     for index, (length, radius, v0, v1) in enumerate(PLUG):
-        parts.append(Barrel('plug', material, (centre, base + CORE_Y, 0.0), 'z', radius,
+        parts.append(Barrel('plug', material, (centre, base + PLUG_Y, 0.0), 'z', radius,
                             cursor, cursor + length, cap=index == len(PLUG) - 1,
                             band=(0.0, v0, 1.0, v1)))
         cursor += length
     return parts
+
+
+def tail(centre, base, start):
+    """The length of core between a piece's own boundary and a plug, rising into it.
+
+    Three points rather than two: the run keeps the pair's own height until it is clear of the boundary,
+    then lifts to the plug's axis.  Which has to happen inside the middle and not at its edge, because
+    the edge is where the arm from the next block along meets it and that one is at the pair's height.
+    """
+    y = base + CORE_Y
+    return Run([(centre, y, start), (centre, y, PLUG_START - PLUG_RISE),
+                (centre, base + PLUG_Y, PLUG_START - PLUG_RISE + 0.9),
+                (centre, base + PLUG_Y, PLUG_START)])
 
 
 def cleat(base, low, high):
@@ -409,20 +449,18 @@ def piece_bend(base):
 
 def piece_end(base):
     """One side connected: the pair comes in and ends in two MC4 plugs."""
-    y = base + CORE_Y
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(Run([(c, y, HUB_LO), (c, y, PLUG_START)]))
+        parts.append(tail(c, base, HUB_LO))
         parts += plug(c, base, index == 0)
     return parts
 
 
 def piece_loose(base):
     """Nothing connected: a length of pair lying where it was dropped, with its plugs on."""
-    y = base + CORE_Y
     parts = []
     for index, c in enumerate(CORES):
-        parts.append(Run([(c, y, 3.2), (c, y, PLUG_START)]))
+        parts.append(tail(c, base, 3.2))
         parts += plug(c, base, index == 0)
     return parts
 
@@ -521,6 +559,7 @@ def write_piece(name, parts):
             seen.append(material)
 
     check_inside_sprite(name, mesh)
+    check_inside_block(name, mesh)
     mesh.write(os.path.join(OBJ_DIR, name + '.obj'), name + '.mtl', 'gen_cable_models.py')
     write_mtl(os.path.join(OBJ_DIR, name + '.mtl'), seen, MATERIALS, 'gen_cable_models.py')
 
@@ -537,6 +576,13 @@ def write_piece(name, parts):
         # those are the ones that carry a run across a seam.  A few extra quads on a piece this small
         # costs nothing.
         'automatic_culling': False,
+        # Shading off, and this is what makes a cable read as one solid object.  With it on, Minecraft
+        # multiplies each quad by the face direction its normal is nearest to - 1.0 up, 0.8 north and
+        # south, 0.6 east and west - and a tube's normals sweep all of them, so a bend came out in bands
+        # of three brightnesses across the curve and the unlit half of a black cable went to nothing.
+        # dc_core already carries a lit cylinder's own gradient, drawn from this mod's one light
+        # direction, so the shading is in the texture where it belongs.
+        'shade_quads': False,
         'textures': dict(TEXTURES, particle=TEXTURES['core']),
     })
     return mesh.stats()[1]
@@ -555,6 +601,28 @@ def check_inside_sprite(name, mesh):
         if not (-1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6):
             raise SystemExit('%s: uv (%.3f, %.3f) is outside its sprite, so it would sample the '
                              'texture next to it in the atlas' % (name, u, v))
+
+
+def check_inside_block(name, mesh):
+    """Fails if a piece leaves its block, which is the frame Forge's loader reads these in.
+
+    The reason it is worth a check of its own rather than a careful read of ``at``: this fault does not
+    show anywhere except in the game.  The OBJ is self-consistent, a previewer draws it correctly, the
+    hitbox tables printed from the same figures are correct - and the block appears with its cable half a
+    block away from its own outline, because the loader's frame has the block's corner at the origin and
+    not its centre.  A whole cable set was drawn twice before that was found by looking rather than by
+    measuring.
+
+    A pixel of slack, and it is spent on one thing: a fitting wider than the cable it is on - a plug's
+    barrel, a gland's nut - beds a fraction of a pixel into the ground, the way the real one sits in the
+    dirt.  The fault this is looking for is eight pixels, so a pixel of tolerance does not hide it.
+    """
+    margin = 1.0 / 16.0
+    for index, (x, y, z) in enumerate(mesh.v):
+        if not all(-margin <= v <= 1.0 + margin for v in (x, y, z)):
+            raise SystemExit('%s: vertex %d at (%.3f, %.3f, %.3f) is outside the block, so Forge\'s '
+                             'loader would draw it in the wrong place and cull the wrong faces'
+                             % (name, index + 1, x, y, z))
 
 
 def blockstate():

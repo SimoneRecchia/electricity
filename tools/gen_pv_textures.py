@@ -825,6 +825,83 @@ def item_trunk_cable():
     return c
 
 
+# Aluminium as a bare conductor reads, which is duller than the mill finish on a frame: a stranded
+# surface scatters, so it never gets the specular a rolled section does.
+BARE_ALU = ((104, 108, 114, 255), (156, 160, 166, 255), (198, 202, 208, 255))
+
+
+def item_abc_conductor():
+    """A coil of aerial bundled cable: four insulated cores laid up round a bare messenger.
+
+    A coil rather than a drum, and that is the distinction the yard makes - forty metres of street
+    bundle comes coiled and a transmission conductor never does.  The messenger shows through as the one
+    bare strand in it, which is what tells it from the string coil.
+    """
+    c = Canvas(16, 16)
+    c.disc(7.5, 7.5, 7.0, CABLE_BLACK[1])
+    c.disc(7.5, 7.5, 5.8, CABLE_BLACK[0])
+    c.disc(7.5, 7.5, 5.2, BARE_ALU[1])
+    c.disc(7.5, 7.5, 4.2, CABLE_BLACK[1])
+    c.disc(7.5, 7.5, 3.0, (0, 0, 0, 0))
+    # the lay: three short lights across the turns, which is what says four cores twisted rather than one
+    for i in range(3):
+        c.stroke(3.0 + i * 1.1, 5.8 - i * 1.1, 5.2 + i * 1.1, 3.4 - i * 1.1, CABLE_BLACK[2], 1.3)
+    c.stroke(4.6, 6.0, 6.0, 4.6, BARE_ALU[2], 1.2)
+
+    c.stroke(11.0, 11.6, 15.0, 14.8, CABLE_BLACK[1], 2.2)
+    c.stroke(1.0, 8.6, 3.2, 8.6, CLIP, 2.0)
+    return c
+
+
+def item_mv_conductor():
+    """A drum of bare all-aluminium-alloy conductor, one wire a phase.
+
+    Bright and bare all over: at twenty kilovolts a metre of air is the insulation, so there is no
+    polymer on it anywhere, and that is the whole visible difference from the two black ones.
+    """
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    for y in range(3, 13):
+        c.rect(4, y, 12, y + 1, BARE_ALU[1])
+        c.rect(4, y, 6, y + 1, BARE_ALU[2])
+        c.rect(11, y, 12, y + 1, BARE_ALU[0])
+    for x0 in (2, 12):
+        c.rect(x0, 1, x0 + 2, 15, mid)
+        c.rect(x0, 1, x0 + 1, 15, light)
+        c.rect(x0 + 1, 1, x0 + 2, 15, dark)
+    c.disc(3, 8, 1.2, (52, 54, 58, 255))
+    c.disc(13, 8, 1.2, (52, 54, 58, 255))
+    c.stroke(12.5, 11.5, 15.2, 13.8, BARE_ALU[1], 2.0)
+    return c
+
+
+def item_hv_conductor():
+    """A drum of steel-reinforced conductor with a bundle spacer on it.
+
+    The spacer is the identifying part and it is why this is four wires rather than one: a single
+    conductor thick enough for the current would ionise the air round it, and four thinner ones on a
+    frame do not.  Drawn as the frame lying across the drum, because at sixteen pixels a fourth strand
+    is a pixel and a spacer is a shape.
+    """
+    c = Canvas(16, 16)
+    dark, mid, light = STEEL
+    for y in range(2, 14):
+        c.rect(3, y, 13, y + 1, BARE_ALU[1] if y % 4 else (96, 98, 104, 255))
+        c.rect(3, y, 5, y + 1, BARE_ALU[2] if y % 4 else (120, 122, 128, 255))
+        c.rect(12, y, 13, y + 1, BARE_ALU[0])
+    for x0 in (1, 13):
+        c.rect(x0, 0, x0 + 2, 16, mid)
+        c.rect(x0, 0, x0 + 1, 16, light)
+        c.rect(x0 + 1, 0, x0 + 2, 16, dark)
+
+    # the spacer: a square frame with a sub-conductor clamped at each corner
+    c.outline(5, 5, 11, 11, dark)
+    c.rect(6, 6, 10, 10, (0, 0, 0, 0))
+    for x, y in ((5, 5), (10, 5), (5, 10), (10, 10)):
+        c.rect(x, y, x + 1, y + 1, BARE_ALU[2])
+    return c
+
+
 def item_flat():
     c = Canvas(16, 16)
     c.rect(1, 9, 15, 12, (24, 32, 74, 255))
@@ -1775,6 +1852,9 @@ ITEM_TEXTURES = {
     'pv_combiner': item_combiner,
     'dc_string_cable': item_string_cable,
     'dc_trunk_cable': item_trunk_cable,
+    'abc_conductor': item_abc_conductor,
+    'mv_conductor': item_mv_conductor,
+    'hv_conductor': item_hv_conductor,
     'power_wrench': item_wrench,
     'turbine_tower': item_tower,
     'pv_flat': item_flat,
