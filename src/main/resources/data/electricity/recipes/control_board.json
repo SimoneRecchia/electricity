@@ -2,17 +2,17 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     " U ",
-    "CWC"
+    "CBC"
   ],
   "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
     "C": {
       "item": "electricity:circuit_board"
     },
     "U": {
       "item": "electricity:cpu"
-    },
-    "W": {
-      "item": "electricity:wire"
     }
   },
   "result": {

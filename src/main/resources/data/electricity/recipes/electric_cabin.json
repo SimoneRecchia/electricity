@@ -16,7 +16,7 @@
       "item": "electricity:circuit_board"
     },
     "W": {
-      "item": "electricity:wire"
+      "item": "electricity:busbar"
     }
   },
   "result": {

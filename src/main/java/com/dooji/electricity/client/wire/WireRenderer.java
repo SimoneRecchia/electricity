@@ -5,7 +5,10 @@ import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
+import com.dooji.electricity.api.power.ConductorSpec;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.main.registry.ConductorCatalog;
 import com.dooji.electricity.main.wire.WireConnection;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -30,6 +33,13 @@ import net.minecraftforge.fml.common.Mod;
 
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class WireRenderer {
+	/**
+	 * What a span looks like when this build does not know its conductor.
+	 *
+	 * Which is every span in a world saved before the conductors existed: those are typed {@code
+	 * "default"}, and drawing them as anything else would put a quad transmission bundle on every garden
+	 * pole in such a world. So they stay the thin black wire they were.
+	 */
 	private static final WireStyle ACTIVE_WIRE = new WireStyle(0, 0, 0, 255);
 	private static final int FULL_BRIGHT = 15728880;
 	private static final double MIN_LENGTH = 0.1;
@@ -70,13 +80,74 @@ public class WireRenderer {
 		bufferSource.endBatch();
 	}
 
+	/** The three drawing figures a conductor contributes: how thick, what colour, and how many wires. */
+	private record Conductor(double radius, WireStyle style, double sag, int count, double spacing) {
+	}
+
+	private static final Conductor PLAIN = new Conductor(WIRE_RADIUS, ACTIVE_WIRE,
+			WirePhysics.DEFLECTION_COEFFICIENT, 1, 0.0);
+
+	/**
+	 * How a span is drawn, off the conductor it was strung with.
+	 *
+	 * A conductor's appearance *is* its specification, which is why none of this is decided here: a quad
+	 * bundle is four wires because it is a bundle of four, and a street bundle sags twice as far as a
+	 * transmission one because it is hung slack on purpose while the other is tensioned to a fifth of its
+	 * breaking load.
+	 */
+	/** The conductor the player is holding, for the span that follows the cursor before it is placed. */
+	private static Conductor previewConductor() {
+		var player = Minecraft.getInstance().player;
+		if (player != null) {
+			for (var stack : new net.minecraft.world.item.ItemStack[]{player.getMainHandItem(),
+					player.getOffhandItem()}) {
+				if (stack.getItem() instanceof ConductorItem conductor) {
+					int colour = conductor.spec().colour();
+					return new Conductor(conductor.spec().radius(),
+							new WireStyle((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF, 255),
+							conductor.spec().sag(), conductor.spec().subConductors(),
+							conductor.spec().bundleSpacing());
+				}
+			}
+		}
+
+		return PLAIN;
+	}
+
+	private static Conductor conductorOf(WireConnection connection) {
+		ConductorSpec spec = ConductorCatalog.byPath(connection.getWireType());
+		if (spec == null) return PLAIN;
+
+		int colour = spec.colour();
+		return new Conductor(spec.radius(),
+				new WireStyle((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF, 255),
+				spec.sag(), spec.subConductors(), spec.bundleSpacing());
+	}
+
+	/**
+	 * Where each wire of a bundle sits, in the span's own frame: across it and above it.
+	 *
+	 * One wire is on the axis. Two sit side by side horizontally, which is what a twin bundle is. Four sit
+	 * on the corners of a square, which is what a quad bundle is - and the square is what the spacers
+	 * between them hold.
+	 */
+	private static double[][] bundle(int count, double spacing) {
+		double half = spacing * 0.5;
+		return switch (count) {
+			case 2 -> new double[][]{{-half, 0.0}, {half, 0.0}};
+			case 3 -> new double[][]{{-half, -half * 0.58}, {half, -half * 0.58}, {0.0, half * 1.15}};
+			case 4 -> new double[][]{{-half, -half}, {half, -half}, {half, half}, {-half, half}};
+			default -> new double[][]{{0.0, 0.0}};
+		};
+	}
+
 	private static void renderWire(ClientLevel level, WireConnection connection, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos) {
 		Vec3 startConnectionPoint = WireManagerClient.getWirePosition(level, connection.getStartInsulatorId(), connection.getStartBlockPos());
 		Vec3 endConnectionPoint = WireManagerClient.getWirePosition(level, connection.getEndInsulatorId(), connection.getEndBlockPos());
 
 		if (startConnectionPoint == null || endConnectionPoint == null) return;
 
-		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, ACTIVE_WIRE);
+		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, conductorOf(connection));
 	}
 
 	private static void renderWirePreview(Minecraft minecraft, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos) {
@@ -87,30 +158,38 @@ public class WireRenderer {
 		Vec3 endConnectionPoint = resolvePreviewEndpoint(minecraft, startConnectionPoint);
 		if (endConnectionPoint == null) return;
 
-		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, ACTIVE_WIRE);
+		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, previewConductor());
 	}
 
-	private static void renderWireSpan(Vec3 start, Vec3 end, Vec3 cameraPos, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style) {
+	private static void renderWireSpan(Vec3 start, Vec3 end, Vec3 cameraPos, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor) {
 		if (start == null || end == null) return;
 
 		Vec3 span = end.subtract(start);
 		if (span.lengthSqr() < MIN_LENGTH * MIN_LENGTH) return;
 
-		poseStack.pushPose();
-		Vec3 viewStart = start.subtract(cameraPos);
-		poseStack.translate(viewStart.x, viewStart.y, viewStart.z);
-
 		TextureAtlasSprite sprite = getWireSprite();
-		if (WirePhysics.shouldUseDeflection(start, end)) {
-			renderDeflectedSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, style, sprite);
-		} else {
-			renderStraightSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, style, sprite);
-		}
+		// One pass a sub-conductor, offset across the span and above it. The offsets are applied inside
+		// the span's own yawed frame, which is where each pass puts itself, so a bundle stays square
+		// whichever way the line runs.
+		for (double[] offset : bundle(conductor.count(), conductor.spacing())) {
+			poseStack.pushPose();
+			Vec3 viewStart = start.subtract(cameraPos);
+			poseStack.translate(viewStart.x, viewStart.y, viewStart.z);
 
-		poseStack.popPose();
+			if (WirePhysics.shouldUseDeflection(start, end)) {
+				renderDeflectedSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, conductor,
+						sprite, offset);
+			} else {
+				renderStraightSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, conductor,
+						sprite, offset);
+			}
+
+			poseStack.popPose();
+		}
 	}
 
-	private static void renderStraightSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style, TextureAtlasSprite sprite) {
+	private static void renderStraightSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor, TextureAtlasSprite sprite,
+			double[] offset) {
 		Vec3 direction = endVec.subtract(startVec);
 		double distance = direction.length();
 		if (distance < MIN_LENGTH) return;
@@ -122,19 +201,21 @@ public class WireRenderer {
 		double pitch = Math.toDegrees(Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)));
 		poseStack.mulPose(Axis.YP.rotationDegrees((float) yaw));
 		poseStack.mulPose(Axis.XP.rotationDegrees((float) pitch));
+		poseStack.translate(offset[0], offset[1], 0.0);
 		poseStack.scale(1.0f, 1.0f, (float) distance);
 
 		VertexConsumer consumer = bufferSource.getBuffer(RenderType.solid());
-		emitCylinder(consumer, poseStack, packedLight, style, WIRE_RADIUS, WIRE_SIDES, sprite);
+		emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), WIRE_SIDES, sprite);
 
 		poseStack.popPose();
 	}
 
-	private static void renderDeflectedSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style, TextureAtlasSprite sprite) {
+	private static void renderDeflectedSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor, TextureAtlasSprite sprite,
+			double[] offset) {
 		Vec3 direction = endVec.subtract(startVec);
 		double lx = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
 		if (lx < MIN_LENGTH) {
-			renderStraightSpan(startVec, endVec, poseStack, bufferSource, packedLight, style, sprite);
+			renderStraightSpan(startVec, endVec, poseStack, bufferSource, packedLight, conductor, sprite, offset);
 			return;
 		}
 
@@ -145,7 +226,10 @@ public class WireRenderer {
 		poseStack.mulPose(Axis.YP.rotationDegrees((float) yaw));
 
 		double ly = direction.y;
-		double alpha = WirePhysics.DEFLECTION_COEFFICIENT * (1.0 + WirePhysics.LENGTH_COEFFICIENT * lx);
+		poseStack.translate(offset[0], offset[1], 0.0);
+		// How far the span dips, which is the conductor's own figure: a street bundle is hung slack and
+		// sags twice as far as a transmission bundle tensioned to a fifth of its breaking load.
+		double alpha = conductor.sag() * (1.0 + WirePhysics.LENGTH_COEFFICIENT * lx);
 		double a = lx > 0.0 ? (lx - ly / (alpha * lx)) / 2.0 : 0.0;
 
 		VertexConsumer consumer = bufferSource.getBuffer(RenderType.solid());
@@ -168,7 +252,7 @@ public class WireRenderer {
 			poseStack.mulPose(Axis.XP.rotationDegrees(pitchC + 90.0f));
 			poseStack.scale(1.0f, (float) (actualSegmentDistance / SEGMENT_UNIT), 1.0f);
 
-			emitCylinderSegment(consumer, poseStack, packedLight, style, WIRE_RADIUS, DEFLECTION_SIDES, sprite);
+			emitCylinderSegment(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), DEFLECTION_SIDES, sprite);
 
 			poseStack.popPose();
 			x = nextX;

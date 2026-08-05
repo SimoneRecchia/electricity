@@ -2,7 +2,8 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "BBB",
-    "FFF"
+    "FFF",
+    "SSS"
   ],
   "key": {
     "B": {
@@ -10,10 +11,13 @@
     },
     "F": {
       "item": "electricity:resin"
+    },
+    "S": {
+      "item": "electricity:steel_section"
     }
   },
   "result": {
-    "item": "electricity:dc_string_cable",
-    "count": 6
+    "item": "electricity:abc_conductor",
+    "count": 8
   }
 }

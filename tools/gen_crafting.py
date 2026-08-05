@@ -56,7 +56,6 @@ ITEMS = {
     'm': 'minecraft:slime_ball',
     'l': 'minecraft:iron_block',
     # the mod's own older parts
-    'W': 'electricity:wire',
     'C': 'electricity:circuit_board',
     'U': 'electricity:cpu',
     'I': 'electricity:insulator',
@@ -109,7 +108,7 @@ RECIPES = [
     ('steel_plate', 3, SHAPED, ['iii', 'ooo']),
     ('steel_section', 2, SHAPED, ['P', 'P']),
     ('busbar', 2, SHAPED, ['ccc']),
-    ('copper_coil', 1, SHAPED, ['WWW', ' n ']),
+    ('copper_coil', 1, SHAPED, ['BBB', ' n ']),
     # a film of polymer and a wax: what a laminate is glued together with and what a blade's fibre is
     # bound in
     ('resin', 2, SHAPED, ['mh']),
@@ -119,10 +118,11 @@ RECIPES = [
     # ------------------------------------------------------------------------ components
     #
     # A cell is a wafer with a junction diffused into it and its fingers printed on: silicon, a dopant,
-    # and silver paste, which here is the mod's own wire.
-    ('solar_cell', 3, SHAPED, ['ZZZ', ' r ', 'WWW']),
+    # and the drawn metal that becomes the fingers - which is the mod's busbar, since the wire item it
+    # used to be has become three overhead line conductors and none of them belongs in a cell.
+    ('solar_cell', 3, SHAPED, ['ZZZ', ' r ', 'BBB']),
     ('bypass_diode', 2, SHAPED, ['q', 'r', 'g']),
-    ('mc4_connector', 4, SHAPED, ['II', 'WW']),
+    ('mc4_connector', 4, SHAPED, ['II', 'BB']),
     # three diodes, because a sixty-cell module has three substrings and each one gets its own
     ('junction_box', 1, SHAPED, [' d ', 'dMd', ' j ']),
     # switching dies on a substrate over a baseplate, which is what a power module is
@@ -131,14 +131,14 @@ RECIPES = [
     ('capacitor_bank', 1, SHAPED, ['FrF', 'FrF', 'PPP']),
     # laminated iron with a winding through it
     ('magnetic_core', 1, SHAPED, ['PPP', 'OOO', 'PPP']),
-    ('control_board', 1, SHAPED, [' U ', 'CWC']),
+    ('control_board', 1, SHAPED, [' U ', 'CBC']),
     ('bearing', 2, SHAPED, [' P ', 'nPn', ' P ']),
     ('gear_set', 2, SHAPED, [' S ', 'SPS', ' S ']),
     # a glass barrel, silver element and sand filler, which is exactly what a photovoltaic fuse is
     ('gpv_fuse', 4, SHAPED, ['yay', ' B ']),
     # contacts, an arc chamber and the snap mechanism that makes it break rather than draw
     ('load_break_switch', 1, SHAPED, [' I ', 'BSB', ' H ']),
-    ('sensor_head', 2, SHAPED, [' A ', 'CWC']),
+    ('sensor_head', 2, SHAPED, [' A ', 'CBC']),
 
     # ------------------------------------------------------------------------ assemblies
     #
@@ -159,11 +159,22 @@ RECIPES = [
     # the same blade with more fibre on a stronger spar: a longer rotor for a quieter site
     ('long_blade', 1, SHAPED, ['AAA', 'FsF', 'AAA']),
 
+    # ------------------------------------------------------------------- the line conductors
+    #
+    # Three products, and the recipes say which is which.  Aerial bundled cable is insulated cores over a
+    # steel messenger that carries the weight.  Medium-voltage conductor is bare metal drawn over plate
+    # and nothing else, because at 20 kV the insulation is the air.  And the high-voltage bundle is twice
+    # the aluminium round a steel core, which is what "steel-reinforced" means and why one span of it
+    # weighs two and a half tonnes.
+    ('abc_conductor', 8, SHAPED, ['BBB', 'FFF', 'SSS']),
+    ('mv_conductor', 6, SHAPED, ['BBB', 'PPP']),
+    ('hv_conductor', 4, SHAPED, ['BBB', 'SSS', 'BBB']),
+
     # --------------------------------------------------------------------------- the cables
     #
     # Tinned copper in a polymer jacket. The trunk is bar rather than wire and carries armour, which is
     # the difference between a string cable and a home run.
-    ('dc_string_cable', 6, SHAPED, ['WWW', 'FFF']),
+    ('dc_string_cable', 6, SHAPED, ['BBB', 'FFF']),
     ('dc_trunk_cable', 4, SHAPED, ['BBB', 'FFF', 'PPP']),
 
     # --------------------------------------------------------------------------- the arrays

@@ -30,7 +30,7 @@ import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.compat.computercraft.ComputerCraftBridge;
 import com.dooji.electricity.item.DcCableItem;
 import com.dooji.electricity.item.PvCombinerBlockItem;
-import com.dooji.electricity.item.ItemWire;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.item.PowerWrenchItem;
 import com.dooji.electricity.item.PvArrayBlockItem;
 import com.dooji.electricity.item.PvInverterBlockItem;
@@ -38,6 +38,7 @@ import com.dooji.electricity.item.TooltipBlockItem;
 import com.dooji.electricity.item.TooltipItem;
 import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.main.registry.CableCatalog;
+import com.dooji.electricity.main.registry.ConductorCatalog;
 import com.dooji.electricity.main.registry.CombinerCatalog;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -113,7 +114,24 @@ public class Electricity {
 			() -> new MachineShellBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops()
 					.noOcclusion().noLootTable().pushReaction(PushReaction.BLOCK)));
 
-	public static final RegistryObject<Item> WIRE_ITEM = ITEMS.register("wire", ItemWire::new);
+	/**
+	 * The three overhead line conductors, one item a class.
+	 *
+	 * They replace the mod's single "wire": a real line uses aerial bundled cable at low voltage, bare
+	 * alloy conductor at medium and a bundle of steel-reinforced aluminium at high, and which of the three
+	 * a span is made of decides how far it may go, how much of it a reel buys and how it is drawn. See
+	 * {@link ConductorCatalog}.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Item>> CONDUCTOR_ITEMS = conductorItems();
+
+	private static Map<ResourceLocation, RegistryObject<Item>> conductorItems() {
+		Map<ResourceLocation, RegistryObject<Item>> out = new LinkedHashMap<>();
+		for (var spec : ConductorCatalog.all()) {
+			out.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new ConductorItem(spec)));
+		}
+
+		return Map.copyOf(out);
+	}
 	public static final RegistryObject<Item> POWER_WRENCH_ITEM = ITEMS.register("power_wrench", PowerWrenchItem::new);
 	public static final RegistryObject<Item> UTILITY_POLE_ITEM = ITEMS.register("utility_pole", () -> new TooltipBlockItem(UTILITY_POLE_BLOCK.get(), new Item.Properties(), "tooltip.electricity.utility_pole"));
 	public static final RegistryObject<Item> ELECTRIC_CABIN_ITEM = ITEMS.register("electric_cabin", () -> new TooltipBlockItem(ELECTRIC_CABIN_BLOCK.get(), new Item.Properties(), "tooltip.electricity.electric_cabin"));
@@ -360,9 +378,11 @@ public class Electricity {
 
 
 	public static final RegistryObject<CreativeModeTab> ELECTRICITY_TAB = CREATIVE_TABS.register("main",
-			() -> CreativeModeTab.builder().title(Component.translatable("itemGroup." + MOD_ID + ".main")).icon(() -> new ItemStack(WIRE_ITEM.get())).displayItems((parameters, output) -> {
+			() -> CreativeModeTab.builder().title(Component.translatable("itemGroup." + MOD_ID + ".main")).icon(() -> new ItemStack(CONDUCTOR_ITEMS.get(ConductorCatalog.AAAC_228.id()).get())).displayItems((parameters, output) -> {
 				output.accept(POWER_WRENCH_ITEM.get());
-				output.accept(WIRE_ITEM.get());
+				for (var spec : ConductorCatalog.all()) {
+					output.accept(CONDUCTOR_ITEMS.get(spec.id()).get());
+				}
 				output.accept(UTILITY_POLE_ITEM.get());
 				output.accept(ELECTRIC_CABIN_ITEM.get());
 				output.accept(POWER_BOX_ITEM.get());

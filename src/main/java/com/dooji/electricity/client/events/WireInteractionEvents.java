@@ -12,7 +12,7 @@ import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.wire.WireAnchorHelper;
 import com.dooji.electricity.client.wire.WireManagerClient;
-import com.dooji.electricity.item.ItemWire;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
@@ -41,10 +41,10 @@ public class WireInteractionEvents {
 
 		InteractionHand hand = InteractionHand.MAIN_HAND;
 		ItemStack heldItem = player.getItemInHand(hand);
-		if (!(heldItem.getItem() instanceof ItemWire)) {
+		if (!(heldItem.getItem() instanceof ConductorItem)) {
 			hand = InteractionHand.OFF_HAND;
 			heldItem = player.getItemInHand(hand);
-			if (!(heldItem.getItem() instanceof ItemWire)) return;
+			if (!(heldItem.getItem() instanceof ConductorItem)) return;
 		}
 
 		Minecraft mc = Minecraft.getInstance();

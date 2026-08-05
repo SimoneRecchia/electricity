@@ -1,6 +1,6 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.item.ItemWire;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.main.Electricity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -160,12 +160,12 @@ public class MachineShellBlock extends Block {
 	 * Except for a wire, which is aimed at an insulator rather than at the machine. A block's use runs
 	 * before the item in hand gets a look, so forwarding here would mean a pole answering every wire
 	 * click with its own panel - and its insulators stand on the crossarms, which is to say behind these
-	 * cells. So the cell stands aside and lets {@code ItemWire} have the click.
+	 * cells. So the cell stands aside and lets {@code ConductorItem} have the click.
 	 */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
 		BlockPos host = MachineShell.hostOf(level, pos);
-		if (host == null || player.getItemInHand(hand).getItem() instanceof ItemWire) return InteractionResult.PASS;
+		if (host == null || player.getItemInHand(hand).getItem() instanceof ConductorItem) return InteractionResult.PASS;
 
 		return level.getBlockState(host).use(level, player, hand,
 				new BlockHitResult(hit.getLocation(), hit.getDirection(), host, hit.isInside()));

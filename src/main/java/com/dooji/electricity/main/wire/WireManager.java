@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.wire;
 
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
@@ -10,6 +11,8 @@ import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
+import com.dooji.electricity.item.ConductorItem;
+import com.dooji.electricity.main.registry.ConductorCatalog;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,6 +32,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -37,8 +41,16 @@ import net.minecraft.world.phys.Vec3;
 
 public class WireManager {
 	private static final Map<ServerLevel, WireSavedData> SAVED_DATA_CACHE = new ConcurrentHashMap<>();
+	/**
+	 * The longest span for a connection whose conductor this build does not know.
+	 *
+	 * Which is every connection in a world saved before the conductors existed: those are typed
+	 * {@code "default"} and there is nothing to ask, so the old global figure still governs them. A span
+	 * strung with a real conductor is limited by that conductor instead - forty blocks for a street
+	 * bundle, a hundred and sixty for a transmission one - because how far a line can go between
+	 * structures is a property of what is strung, not of the game.
+	 */
 	private static final double MAX_WIRE_DISTANCE = 64.0;
-	private static final double MAX_WIRE_DISTANCE_SQ = MAX_WIRE_DISTANCE * MAX_WIRE_DISTANCE;
 
 	public InteractionResult handleWireUse(UseOnContext context) {
 		Player player = context.getPlayer();
@@ -87,20 +99,105 @@ public class WireManager {
 		}
 
 		double spanDistanceSq = startAnchor.distanceToSqr(endAnchor);
-		if (spanDistanceSq > MAX_WIRE_DISTANCE_SQ) {
-			notifyPlayer(player, Component.translatable("message.electricity.wire.too_far", String.format("%.1f", Math.sqrt(spanDistanceSq)), MAX_WIRE_DISTANCE));
-			return;
-		}
 
 		String startPowerType = sanitizePowerType(startEntity, startInsulator.get().partName(), payload.startPowerType());
 		String endPowerType = sanitizePowerType(endEntity, endInsulator.get().partName(), payload.endPowerType());
 
-		WireConnection connection = new WireConnection(startInsulator.get().insulatorId(), endInsulator.get().insulatorId(), "default", payload.startBlockPos(), payload.endBlockPos(),
-				startInsulator.get().blockType(), endInsulator.get().blockType(), startPowerType, endPowerType);
+		// A span that is already there is not strung again.
+		//
+		// Without this a client that sends the payload twice - by lag, by a macro, or on purpose - pays
+		// twice and gets one span, because the saved data keys a connection by its two insulators and the
+		// second save overwrites the first. Both orders are checked, since the two ends are stored in the
+		// order they were clicked.
+		if (alreadyStrung(level, startInsulator.get().insulatorId(), endInsulator.get().insulatorId())) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.already_connected"));
+			return;
+		}
+
+		// Which conductor this is, read off the player's own hand rather than sent from the client: a
+		// client that lies about it gets whatever it is actually holding.
+		ConductorSpec spec = heldConductor(player);
+		double span = Math.sqrt(spanDistanceSq);
+		double limit = spec == null ? MAX_WIRE_DISTANCE : spec.maxSpan();
+		if (span > limit) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.too_far",
+					String.format("%.1f", span), (int) limit));
+			return;
+		}
+
+		// The charge, and it is the last thing before the connection is saved on purpose: everything that
+		// can refuse the span has refused it by now, so there is no path that takes the conductor and then
+		// fails to string it.
+		int charged = 0;
+		if (spec != null && !player.isCreative()) {
+			charged = spec.cost(span);
+			if (!takeConductor(player, spec, charged)) {
+				notifyPlayer(player, Component.translatable("message.electricity.wire.not_enough",
+						charged, Component.translatable("item.electricity." + spec.id().getPath())));
+				return;
+			}
+		}
+
+		WireConnection connection = new WireConnection(startInsulator.get().insulatorId(), endInsulator.get().insulatorId(),
+				spec == null ? "default" : spec.id().getPath(), payload.startBlockPos(), payload.endBlockPos(),
+				startInsulator.get().blockType(), endInsulator.get().blockType(), startPowerType, endPowerType, charged);
 
 		saveWireConnection(level, connection);
 		broadcastWireCreation(level, connection);
 		notifyPlayer(player, Component.translatable("message.electricity.wire.connected", startInsulator.get().insulatorId(), endInsulator.get().insulatorId()));
+	}
+
+	/** Whether these two fittings are already joined, in either order. */
+	private boolean alreadyStrung(ServerLevel level, int first, int second) {
+		for (WireConnection existing : getOrCreateSavedData(level).getAllWireConnections()) {
+			if ((existing.getStartInsulatorId() == first && existing.getEndInsulatorId() == second)
+					|| (existing.getStartInsulatorId() == second && existing.getEndInsulatorId() == first)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** The conductor in the player's hand, or null if they are holding the old plain wire or nothing. */
+	@javax.annotation.Nullable
+	private static ConductorSpec heldConductor(ServerPlayer player) {
+		for (ItemStack stack : new ItemStack[]{player.getMainHandItem(), player.getOffhandItem()}) {
+			if (stack.getItem() instanceof ConductorItem conductor) return conductor.spec();
+		}
+
+		return null;
+	}
+
+	/**
+	 * Takes the conductor out of the player's inventory, all of it or none of it.
+	 *
+	 * Counted first and taken second, which matters: taking as it goes and giving up half way through
+	 * leaves the player short of conductor and without a span, and there is no transaction to roll back
+	 * inside a Minecraft inventory.
+	 */
+	private static boolean takeConductor(ServerPlayer player, ConductorSpec spec, int wanted) {
+		int held = 0;
+		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+			ItemStack stack = player.getInventory().getItem(slot);
+			if (stack.getItem() instanceof ConductorItem conductor && conductor.spec() == spec) {
+				held += stack.getCount();
+			}
+		}
+
+		if (held < wanted) return false;
+
+		int left = wanted;
+		for (int slot = 0; slot < player.getInventory().getContainerSize() && left > 0; slot++) {
+			ItemStack stack = player.getInventory().getItem(slot);
+			if (!(stack.getItem() instanceof ConductorItem conductor) || conductor.spec() != spec) continue;
+
+			int take = Math.min(left, stack.getCount());
+			stack.shrink(take);
+			left -= take;
+		}
+
+		return true;
 	}
 
 	private void saveWireConnection(ServerLevel level, WireConnection connection) {
@@ -188,6 +285,33 @@ public class WireManager {
 		savedData.setDirty();
 		for (WireConnection connection : removedConnections) {
 			broadcastWireRemoval(level, connection);
+			refund(level, connection);
+		}
+	}
+
+	/**
+	 * Gives back exactly what a span was charged, as an item on the ground where it was strung.
+	 *
+	 * Exactly what was charged, off the connection, and not what the same span would cost now - see
+	 * {@link WireConnection#getChargedItems()}. Dropped rather than handed to a player because nothing
+	 * here knows which player took the structure down, and often nobody did: a line comes down when the
+	 * pole under it is blown up, decays, or is removed by another mod.
+	 */
+	private void refund(ServerLevel level, WireConnection connection) {
+		int count = connection.getChargedItems();
+		if (count <= 0) return;
+
+		ConductorSpec spec = ConductorCatalog.byPath(connection.getWireType());
+		if (spec == null) return;
+
+		var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(spec.id());
+		if (item == null) return;
+
+		BlockPos at = connection.getStartBlockPos();
+		while (count > 0) {
+			int drop = Math.min(count, 64);
+			net.minecraft.world.level.block.Block.popResource(level, at, new ItemStack(item, drop));
+			count -= drop;
 		}
 	}
 
@@ -248,6 +372,7 @@ public class WireManager {
 				wireTag.putString("endBlockType", connection.getEndBlockType());
 				wireTag.putString("startPowerType", connection.getStartPowerType());
 				wireTag.putString("endPowerType", connection.getEndPowerType());
+				wireTag.putInt("chargedItems", connection.getChargedItems());
 				wiresList.add(wireTag);
 			}
 			tag.put("wires", wiresList);
@@ -271,7 +396,8 @@ public class WireManager {
 				String startPowerType = wireTag.getString("startPowerType");
 				String endPowerType = wireTag.getString("endPowerType");
 
-				WireConnection connection = new WireConnection(startInsulatorId, endInsulatorId, wireType, startBlockPos, endBlockPos, startBlockType, endBlockType, startPowerType, endPowerType);
+				WireConnection connection = new WireConnection(startInsulatorId, endInsulatorId, wireType, startBlockPos, endBlockPos, startBlockType, endBlockType, startPowerType, endPowerType,
+						wireTag.getInt("chargedItems"));
 				String key = startInsulatorId + "_" + endInsulatorId;
 				wireConnections.put(key, connection);
 			}

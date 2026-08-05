@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "electricity:item/wire"
+    "layer0": "electricity:item/hv_conductor"
   }
 }

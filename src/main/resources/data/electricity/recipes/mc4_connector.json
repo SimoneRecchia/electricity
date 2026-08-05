@@ -2,14 +2,14 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "II",
-    "WW"
+    "BB"
   ],
   "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
     "I": {
       "item": "electricity:insulator"
-    },
-    "W": {
-      "item": "electricity:wire"
     }
   },
   "result": {

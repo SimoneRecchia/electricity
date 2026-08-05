@@ -2,18 +2,19 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "BBB",
-    "FFF"
+    "SSS",
+    "BBB"
   ],
   "key": {
     "B": {
       "item": "electricity:busbar"
     },
-    "F": {
-      "item": "electricity:resin"
+    "S": {
+      "item": "electricity:steel_section"
     }
   },
   "result": {
-    "item": "electricity:dc_string_cable",
-    "count": 6
+    "item": "electricity:hv_conductor",
+    "count": 4
   }
 }

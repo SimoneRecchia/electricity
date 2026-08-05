@@ -988,23 +988,62 @@ def power_wrench():
     return finish(c, grain=(226, 228, 232, 255), salt=293)
 
 
-def wire():
-    """A hank of bare stranded conductor: what the mod's own wire item is until the line conductors land.
+def abc_conductor():
+    """Aerial bundled cable: four insulated cores laid up round a bare messenger.
 
-    Drawn in the same style as everything else rather than left at the size it was, because one sprite out
-    of sixty at a different resolution and a different viewpoint is exactly what made the old set look
-    like a collection instead of a set.
+    Drawn as a hank with the *lay* showing - the twist of the cores round each other is the one thing
+    that says bundle rather than cable, and it is what a coil of the real stuff looks like from ten paces.
     """
     c = new()
-    _coil(c, (176, 122, 74, 255), turns=4, radius=34, thickness=5.0)
-    # the strands, which is what tells a conductor from a rod: a few lighter lines across the turns
-    for i in range(9):
-        a = 0.5 + i * 0.62
-        x0, y0 = math.cos(a) * 30, math.sin(a) * 30 * 0.62
-        c.aa_line(SIZE * 0.5 + x0, SIZE * 0.56 + y0 - 3, SIZE * 0.5 + x0 * 0.86,
-                  SIZE * 0.56 + y0 * 0.86 + 3, shade((176, 122, 74, 255), 26), width=1.4, alpha=0.6)
-    iso_tube(c, (20, -28, 8), (42, -32, 4), 3.0, (176, 122, 74, 255), steps=12)
-    return finish(c, grain=(232, 176, 124, 255), salt=317)
+    _coil(c, (38, 39, 44, 255), turns=3, radius=34, thickness=9.0)
+    # the lay: light bands crossing the turns at the pitch the cores are twisted at
+    for i in range(26):
+        a = 0.2 + i * 0.24
+        x0, y0 = math.cos(a) * 34, math.sin(a) * 34 * 0.62
+        c.aa_line(SIZE * 0.5 + x0 - 3, SIZE * 0.56 + y0 - 5, SIZE * 0.5 + x0 + 3,
+                  SIZE * 0.56 + y0 + 5, (86, 88, 96, 255), width=1.8, alpha=0.55)
+    # the messenger, bare, showing where the bundle is cut
+    iso_tube(c, (20, -28, 10), (42, -32, 6), 3.4, (168, 172, 178, 255), steps=12)
+    return finish(c, grain=(110, 112, 120, 255), salt=317)
+
+
+def mv_conductor():
+    """Bare all-aluminium-alloy conductor: one wire a phase, and the strands are the whole of it."""
+    c = new()
+    _coil(c, (162, 167, 174, 255), turns=4, radius=34, thickness=6.0)
+    # the strands: a conductor is nineteen wires laid up, and the diagonal of the lay is what shows
+    for i in range(34):
+        a = 0.1 + i * 0.185
+        x0, y0 = math.cos(a) * 33, math.sin(a) * 33 * 0.62
+        c.aa_line(SIZE * 0.5 + x0 - 2, SIZE * 0.56 + y0 - 3.5, SIZE * 0.5 + x0 + 2,
+                  SIZE * 0.56 + y0 + 3.5, (206, 210, 216, 255), width=1.3, alpha=0.5)
+    iso_tube(c, (20, -28, 8), (42, -32, 4), 2.6, (162, 167, 174, 255), steps=12)
+    return finish(c, grain=(226, 228, 232, 255), salt=331)
+
+
+def hv_conductor():
+    """A quad bundle of steel-reinforced conductor: four sub-conductors and a spacer holding them apart.
+
+    The spacer is the point of the sprite.  A single heavy conductor and a bundle of four look the same
+    coiled up, and what tells a transmission conductor from a distribution one is that it comes with the
+    hardware that keeps four of them at 45 centimetres - so a spacer is drawn on the coil, which is where
+    they are shipped.
+    """
+    c = new()
+    _coil(c, (170, 175, 182, 255), turns=3, radius=34, thickness=7.0)
+    for i in range(30):
+        a = 0.15 + i * 0.21
+        x0, y0 = math.cos(a) * 33, math.sin(a) * 33 * 0.62
+        c.aa_line(SIZE * 0.5 + x0 - 2, SIZE * 0.56 + y0 - 4, SIZE * 0.5 + x0 + 2,
+                  SIZE * 0.56 + y0 + 4, (212, 216, 222, 255), width=1.4, alpha=0.45)
+    # the spacer: a square frame with a clamp at each corner, lying on the coil
+    frame = (128, 132, 138, 255)
+    for a, b in (((-16, -16), (16, -16)), ((16, -16), (16, 16)), ((16, 16), (-16, 16)),
+                 ((-16, 16), (-16, -16))):
+        iso_tube(c, (a[0], a[1], 46), (b[0], b[1], 46), 2.2, frame, steps=10)
+    for x, y in ((-16, -16), (16, -16), (16, 16), (-16, 16)):
+        iso_disc(c, (x, y, 47), 5.0, shade(frame, 20), tone=14)
+    return finish(c, grain=(226, 228, 232, 255), salt=337)
 
 
 def weather_tablet():
@@ -1048,7 +1087,9 @@ SPRITES = {
     'turbine_tower': turbine_tower, 'sw_10': sw_10, 'c52_085': c52_085, 'c80_20': c80_20,
     'c90_30': c90_30, 'c112_30': c112_30, 'wind_turbine': wind_turbine,
     'dc_string_cable': dc_string_cable, 'dc_trunk_cable': dc_trunk_cable,
-    'power_wrench': power_wrench, 'weather_tablet': weather_tablet, 'wire': wire,
+    'power_wrench': power_wrench, 'weather_tablet': weather_tablet,
+    'abc_conductor': abc_conductor, 'mv_conductor': mv_conductor,
+    'hv_conductor': hv_conductor,
 }
 
 

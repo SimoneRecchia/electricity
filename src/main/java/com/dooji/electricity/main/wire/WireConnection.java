@@ -12,6 +12,15 @@ public class WireConnection {
 	private final String endBlockType;
 	private final String startPowerType;
 	private final String endPowerType;
+	/**
+	 * How many items the span was charged for, so taking it down refunds exactly that.
+	 *
+	 * Stored rather than recomputed on removal, and that is the whole reason the field exists: a cost
+	 * worked out again later from a span length that has since changed - a machine moved, a world loaded
+	 * by a different build, a spec retuned - refunds the wrong number, and refunding more than was
+	 * charged is a duplication bug. Zero for a connection made before conductors cost anything.
+	 */
+	private final int chargedItems;
 
 	public WireConnection(int startInsulatorId, int endInsulatorId) {
 		this(startInsulatorId, endInsulatorId, "default", BlockPos.ZERO, BlockPos.ZERO, "unknown", "unknown", "unknown", "unknown");
@@ -27,6 +36,11 @@ public class WireConnection {
 
 	public WireConnection(int startInsulatorId, int endInsulatorId, String wireType, BlockPos startBlockPos, BlockPos endBlockPos, String startBlockType, String endBlockType, String startPowerType,
 			String endPowerType) {
+		this(startInsulatorId, endInsulatorId, wireType, startBlockPos, endBlockPos, startBlockType, endBlockType, startPowerType, endPowerType, 0);
+	}
+
+	public WireConnection(int startInsulatorId, int endInsulatorId, String wireType, BlockPos startBlockPos, BlockPos endBlockPos, String startBlockType, String endBlockType, String startPowerType,
+			String endPowerType, int chargedItems) {
 		this.startInsulatorId = startInsulatorId;
 		this.endInsulatorId = endInsulatorId;
 		this.wireType = wireType;
@@ -36,6 +50,11 @@ public class WireConnection {
 		this.endBlockType = endBlockType;
 		this.startPowerType = startPowerType;
 		this.endPowerType = endPowerType;
+		this.chargedItems = Math.max(0, chargedItems);
+	}
+
+	public int getChargedItems() {
+		return chargedItems;
 	}
 
 	public int getStartInsulatorId() {
