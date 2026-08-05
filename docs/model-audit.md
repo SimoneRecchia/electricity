@@ -10,8 +10,8 @@ its collision cut from its own geometry. This is what that means and how it is k
 Two things, said about the game rather than about the code.
 
 **"The turbine and the cabin look right and the rest doesn't."** Those two are a modelling package's
-output over 1024-pixel textures; everything else was either boxes with 128-pixel drawings on them or,
-in the case of the lamp and the workbench, a cube with a picture of the object on all six faces. The
+output over 1024-pixel textures; everything else was either boxes with 128-pixel drawings on them or, in
+a couple of cases, a cube with a picture of the object on all six faces. The
 difference is not resolution. It is that a photograph of concrete has structure at every scale -
 blotches, aggregate, form lines, a rust stain - and a drawing of concrete has structure at exactly
 one.
@@ -29,7 +29,7 @@ The turbine answers this, because the turbine is the model the rest were brought
 | its insulator, 0.53 across | **32** |
 
 So `modellib.ROUND` is 80 and `modellib.FITTING` is 32. A principal body gets 80 — the pole shaft,
-the met mast, a torque tube, a pedestal column, a lamp column, a kiosk bushing's core. A fitting gets
+the met mast, a torque tube, a pedestal column, a lattice tower's peak, a kiosk bushing's core. A fitting gets
 32 — an insulator shed, a cable gland, an instrument body, a fan hub.
 
 What deliberately keeps fewer is the geometry that is genuinely faceted, where more sides would not
@@ -46,8 +46,6 @@ jumper is one pixel of noise.
 |---|---|---|
 | **Utility pole** | A spun concrete pole, tapered, mould seam and rust bloom, two galvanised channel crossarms with strap plates and braces, eight brown-glazed porcelain pin insulators, climbing steps, an earth strap, a number plate | A square post with two flat bars, 2364 faces of which nearly all were the insulators |
 | **Power box** | A pad-mounted kiosk: cast plinth, sheet body, two moss-green door leaves with louvres low down, a crowned hood with a drip edge, an HV label, a roof bushing, a cable conduit | 43 faces. A cuboid with a door drawn on one side, hugging the west edge of its block and hanging outside it |
-| **Electric lamp** | A post-top LED area light: base plate on bolts, galvanised column, a die-cast finned head, and a glass bowl with a diode array behind it at six brightnesses | A full cube with a picture of a light on all six faces |
-| **Workbench** | A steel bench: four legs, two shelves, a drawer stack whose fronts face the player, a plate top scribed and scratched, a perforated tool board, a vice, a parts tray | A cube with a top texture and a side texture |
 | **Flat array** | A ballasted table: precast blocks, channel perimeter, two rails, two whole modules, mid and end clamps | Four leg stubs, a frame, two plates |
 | **Fixed rack** | Driven I-section piers, a bolted cleat on each, channel purlins open side down, a diagonal brace per row, four rails up the slope, clamps at every module edge | Four posts and a plate at 25° |
 | **Single-axis tracker** | A 1P row: an I pier, a slew drive with a finned geared motor, an 80-sided torque tube, module rails across it with saddles, one whole module either side of the drive bay | A post, a 16-sided tube, four part-modules and purlins running the wrong way |
@@ -175,7 +173,8 @@ All four pass with nothing outstanding. Two of them learned something in this pa
   thousandths of a block wide. Every 80-sided prism in the mod therefore read as stretched by a
   factor of two hundred, and the one real case would have been lost among them. It now measures the
   world distance along the face's own u and v, and skips the wedge-shaped quads a cap is fanned into.
-* the coplanar check knows that the lamp's six glass bowls are one bowl: they sit in the same place,
+* the coplanar check knows which parts are never drawn together - a tracked row's cable run and its
+  end plugs are the case, since the renderer draws one or the other and never both,
   one per glow state, and the renderer draws exactly one of them.
 
 ## Rendering with the game itself
@@ -209,29 +208,41 @@ Two things it needs: a world with cheats on (it works by sending commands), and 
 *client* tool, so a machine whose screen is asleep cannot run it — GLFW has no monitor to open a
 window on, and the game will not start at all.
 
-## The two model formats, and which gets which
+## The three model formats, and which gets which
 
-| | OBJ, drawn by Java | vanilla JSON |
-|---|---|---|
-| **who** | the turbine, the cabin, the pole, the kiosk, the lamp, the arrays, the inverter, the combiner, the mast | the workbench, the cables |
-| **why** | anything with a round part, anything that moves, anything scaled per product | anything that is all boxes |
+| | OBJ drawn by Java | OBJ in a vanilla block model | vanilla JSON boxes |
+|---|---|---|---|
+| **who** | the turbine, the cabin, the pole, the kiosk, the arrays, the inverter, the combiner, the mast, the lattice towers | the string cable | the trunk cable |
+| **why** | it moves, or it is scaled per product, or a wire hangs off a named part of it | it is round *and* laid by the hundred | it is all boxes and not yet redrawn |
 
-The lamp moved from JSON to OBJ in this pass and the workbench did not, for the same reason in both
-cases. A rotated element in the vanilla format is a **union** rather than an intersection, so three
-boxes at 22.5° make a twelve-pointed star and not a twelve-sided prism — there is no way to write a
-cylinder in it at all. The lamp's column is round. Nothing on a workbench is: a bench is a frame, a
-drawer stack, a plate, a board and a vice, so it stays JSON and keeps what comes free with that —
-chunk batching, ambient occlusion, and an inventory model rather than a sprite.
+The middle column is the one worth knowing about. A vanilla JSON model **cannot express a cylinder**: an
+element with a rotation is a *union* rather than an intersection, so three boxes at 22.5° make a
+twelve-pointed star and not a twelve-sided prism. Two attempts at a cable out of axis-aligned boxes
+proved it — a flat painted bar read as a ribbon, a stack of stepped boxes read as a square duct.
+
+But a cable is laid by the hundred, and the machines' pipeline draws one block entity at a time. So the
+string cable's pieces are real swept tubes loaded through **Forge's own OBJ block-model loader**
+(`"loader": "forge:obj"`), which bakes them into the chunk mesh like any other block model: full geometry,
+and two hundred cables cost what two hundred blocks cost.
+
+That path has one trap, and it is silent. A block model's texture is a **sprite in an atlas**, so a uv
+past one does not tile — it samples whatever sprite the atlas put next door. The first version ran its v
+to 1.9 along every tube and came out with white bands across the cable, and none of it showed in a
+previewer, which binds one texture at a time and wraps. `gen_cable_models.py` now refuses to write a
+piece with any uv outside its sprite.
 
 ## Regenerating any of it
 
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
-python3 tools/gen_pv_textures.py        # item sprites and GUI panels
+python3 tools/gen_pv_textures.py        # GUI panels
+python3 tools/gen_item_sprites.py       # every item sprite
 python3 tools/gen_pv_models.py          # the arrays, the inverter, the combiner, the mast
-python3 tools/gen_grid_models.py        # the pole, the kiosk, the lamp
-python3 tools/gen_json_models.py        # the workbench, and it prints the shape its block declares
-python3 tools/gen_cable_models.py       # the cables
+python3 tools/gen_grid_models.py        # the pole and the kiosk
+python3 tools/gen_tower_models.py       # the three lattice towers
+python3 tools/gen_insulators.py         # the one insulator, into the two inherited models
+python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
+python3 tools/gen_crafting.py           # recipes, part item models, language entries
 ```
 
 Everything is deterministic — every random-looking value comes from a hash of the coordinates and a

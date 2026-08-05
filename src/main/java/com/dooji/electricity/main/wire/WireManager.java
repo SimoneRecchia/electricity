@@ -180,7 +180,7 @@ public class WireManager {
 		int held = 0;
 		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
 			ItemStack stack = player.getInventory().getItem(slot);
-			if (stack.getItem() instanceof ConductorItem conductor && conductor.spec() == spec) {
+			if (stack.getItem() instanceof ConductorItem conductor && conductor.spec().id().equals(spec.id())) {
 				held += stack.getCount();
 			}
 		}
@@ -190,7 +190,8 @@ public class WireManager {
 		int left = wanted;
 		for (int slot = 0; slot < player.getInventory().getContainerSize() && left > 0; slot++) {
 			ItemStack stack = player.getInventory().getItem(slot);
-			if (!(stack.getItem() instanceof ConductorItem conductor) || conductor.spec() != spec) continue;
+			if (!(stack.getItem() instanceof ConductorItem conductor)
+					|| !conductor.spec().id().equals(spec.id())) continue;
 
 			int take = Math.min(left, stack.getCount());
 			stack.shrink(take);

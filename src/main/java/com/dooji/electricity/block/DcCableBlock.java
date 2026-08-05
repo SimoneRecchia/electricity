@@ -1,6 +1,7 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.DcCableSpec;
+import com.dooji.electricity.main.registry.CableCatalog;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -365,7 +366,8 @@ public class DcCableBlock extends Block implements DcTerminal {
 				.setValue(WEST, RedstoneSide.NONE)
 				.setValue(BURIED, false));
 
-		boolean pair = spec.id().getPath().equals("dc_string_cable");
+		// Which of the two cables this is, asked of the catalogue rather than of a string literal here.
+		boolean pair = spec.id().equals(CableCatalog.STRING_6.id());
 		for (BlockState state : stateDefinition.getPossibleStates()) {
 			shapes.put(state, pair ? stringShapeOf(state) : trunkShapeOf(state));
 		}
