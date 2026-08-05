@@ -26,11 +26,25 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_LATTICE_TOWER = "lattice_tower";
 	/** A transformer, of either duty. */
 	public static final String TYPE_TRANSFORMER = "transformer";
+	/** A length of conductor laid on the ground, which offers one fitting. */
+	public static final String TYPE_GROUND_CONDUCTOR = "ground_conductor";
 
 	/** The part names a device's insulators are drawn as, read off the model's own definition. */
 	private static List<String> parts(BlockEntity entity) {
 		ObjBlockDefinition definition = ObjDefinitions.get(entity.getBlockState().getBlock());
-		return definition == null ? List.of() : definition.insulators();
+		if (definition != null && !definition.insulators().isEmpty()) return definition.insulators();
+
+		// A machine with no OBJ definition can still have fittings: a ground-laid conductor is drawn by a
+		// block model rather than by the mod's renderer, so it has no definition to name a group in, and its
+		// one fitting is named for it here. Without this its insulator resolves to nothing and no span can
+		// be anchored to it.
+		if (entity instanceof InsulatorHost host) {
+			List<String> named = new java.util.ArrayList<>();
+			for (int i = 0; i < host.getInsulatorIds().length; i++) named.add(host.fittingType() + "_" + (i + 1));
+			return List.copyOf(named);
+		}
+
+		return List.of();
 	}
 
 	private InsulatorPartHelper() {

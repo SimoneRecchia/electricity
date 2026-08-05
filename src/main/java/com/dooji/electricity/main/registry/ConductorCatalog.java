@@ -38,7 +38,11 @@ public final class ConductorCatalog {
 			id("hv_conductor"), "Curlew ACSR, quad",
 			VoltageClass.HIGH,
 			592.0, 420000.0, 1150.0, 0.0136,
-			4, 0.045,
+			// The spacing has to exceed the sub-conductors' own diameter, and at 0.045 it did not: four
+			// wires 0.052 across sitting 0.045 apart is a bundle drawn through itself, strung and laid.
+			// Real quad Curlew is 450 mm on a 31.6 mm conductor; this one is drawn ten times oversize and
+			// the spacing is not, which is what keeps a bundle a bundle at the size it is seen from.
+			4, 0.075,
 			0.026, 0xA8ADB4,
 			0.022, 160.0, 16));
 

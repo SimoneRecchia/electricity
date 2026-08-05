@@ -1132,6 +1132,69 @@ def tx_nameplate():
     return c
 
 
+
+def line_abc():
+    """Aerial bundled cable: four insulated cores laid up round a bare messenger, as one black bundle.
+
+    Constant along v for the reason dc_core is - a tube wraps its tile once round and once along, and a run
+    is far longer than it is round, so anything down the v axis arrives compressed into rings.  What that
+    leaves is the lay: the helical line where two cores meet, which on a bundle is a stripe in u.
+    """
+    size = 128
+    c = Canvas(size, size)
+    lit_at = 0.0
+    profile = []
+    for i in range(size):
+        t = i / float(size)
+        angle = 2.0 * math.pi * (t - lit_at)
+        lit = max(0.0, math.cos(angle))
+        tone = -6 + lit * lit * 40
+        # the four cores' own boundaries, at quarter turns: what says bundle rather than one cable
+        seam = min(abs(((t * 4.0) % 1.0) - 0.5) * 2.0, 1.0)
+        profile.append(mix(shade(JACKET, tone - int((1.0 - seam) * 26)),
+                           (196, 204, 214, 255), lit ** 22 * 0.42))
+    for i in range(size):
+        for j in range(size):
+            c.set(i, j, profile[i])
+    return c
+
+
+def line_alu():
+    """Bare stranded aluminium, as a conductor's tile: the strands, and the grey they weather to.
+
+    Constant along v, same as line_abc.  The strands run along the conductor, which is a stripe in u - and
+    that is what a stranded surface looks like from anywhere a player stands.
+    """
+    size = 128
+    c = Canvas(size, size)
+    base = (146, 150, 156, 255)
+    strands = 11
+    profile = []
+    for i in range(size):
+        t = i / float(size)
+        lit = max(0.0, math.cos(2.0 * math.pi * t))
+        # each strand is its own little cylinder, so the tile is a cosine inside a cosine
+        across = ((t * strands) % 1.0) * 2.0 - 1.0
+        strand = math.sqrt(max(0.0, 1.0 - across * across))
+        tone = -34 + lit * 46 + strand * 22
+        profile.append(mix(shade(base, tone), (232, 236, 240, 255), lit ** 16 * strand * 0.34))
+    for i in range(size):
+        for j in range(size):
+            c.set(i, j, profile[i])
+    return c
+
+
+def line_fitting():
+    """A line fitting: an aluminium-alloy compression clamp or a bundle spacer, hot-dip galvanised."""
+    size = 128
+    c = Canvas(size, size)
+    galvanised(c, (162, 166, 172, 255), salt=659, spangle=True)
+    for y in (size * 0.30, size * 0.70):
+        c.aa_rect(0, y, size, y + size * 0.03, shade((162, 166, 172, 255), -30))
+    grime(c, salt=661, amount=0.20, colour=(78, 76, 72, 255))
+    return c
+
+
 TEXTURES = {
     'pv_module': pv_module,
     'pv_module_back': pv_module_back,
@@ -1177,6 +1240,9 @@ TEXTURES = {
     'tx_fin': tx_fin,
     'tx_gravel': tx_gravel,
     'tx_nameplate': tx_nameplate,
+    'line_abc': line_abc,
+    'line_alu': line_alu,
+    'line_fitting': line_fitting,
 }
 
 

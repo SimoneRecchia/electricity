@@ -14,6 +14,7 @@ import re
 DATA = os.path.join('src', 'main', 'resources', 'data', 'electricity', 'recipes')
 ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models', 'item')
 BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'blockstates')
+LOOT = os.path.join('src', 'main', 'resources', 'data', 'electricity', 'loot_tables', 'blocks')
 LANG = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'lang', 'en_us.json')
 CATALOGUE = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'main', 'registry',
                          'PartCatalog.java')
@@ -295,6 +296,34 @@ BLOCK_NAMES = {
 }
 
 
+# What a broken block gives back: itself, unless it is a run of conductor, which gives back the reel.
+DROPS = {
+    'tx_machine': 'tx_machine',
+    'tx_substation': 'tx_substation',
+    'lattice_suspension': 'lattice_suspension',
+    'lattice_tension': 'lattice_tension',
+    'lattice_terminal': 'lattice_terminal',
+    'abc_conductor_run': 'abc_conductor',
+    'mv_conductor_run': 'mv_conductor',
+    'hv_conductor_run': 'hv_conductor',
+}
+
+
+def loot_tables():
+    """One drop per block this file owns.  Without one a block breaks into nothing, silently."""
+    for block_id, item_id in DROPS.items():
+        write(os.path.join(LOOT, block_id + '.json'), {
+            'type': 'minecraft:block',
+            'pools': [{
+                'rolls': 1,
+                'entries': [{'type': 'minecraft:item', 'name': 'electricity:' + item_id}],
+                'conditions': [{'condition': 'minecraft:survives_explosion'}],
+            }],
+        })
+
+    return len(DROPS)
+
+
 def machine_assets():
     """The blockstate and item model for every machine this file owns, and their names."""
     for name, particle in INVISIBLE_MACHINES.items():
@@ -310,6 +339,7 @@ def machine_assets():
 def main():
     catalogue = parts()
     machines = machine_assets()
+    drops = loot_tables()
 
     # one item model per part: a flat sprite, like every other ingredient in the game
     for part_id, _, _, _ in catalogue:
@@ -344,8 +374,8 @@ def main():
               {'type': 'minecraft:smelting', 'ingredient': {'item': source},
                'result': 'electricity:' + result, 'experience': 0.1, 'cookingtime': 200})
 
-    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates'
-          % (len(catalogue), ingots, machines))
+    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates, %d loot tables'
+          % (len(catalogue), ingots, machines, drops))
     print('%d recipe files on disk, hand-written ones included' % len(written_recipes()))
     print('lang now has %d keys' % len(lang))
     problems = check(catalogue)

@@ -1,0 +1,13 @@
+{
+  "loader": "forge:obj",
+  "model": "electricity:models/hv_conductor_run/cross.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
+  "textures": {
+    "conductor": "electricity:block/line_alu",
+    "fitting": "electricity:block/line_fitting",
+    "spacer": "electricity:block/line_fitting",
+    "particle": "electricity:block/line_alu"
+  }
+}

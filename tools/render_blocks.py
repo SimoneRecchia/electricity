@@ -493,7 +493,32 @@ def scene_tx_substation():
     return triangles, (0.6, 2.1, -1.1), (3.4, 1.1, 2.7)
 
 
+def scene_ground_conductor():
+    """The three conductors laid on the ground: a run along x, a bend, a dead end and an offcut of each.
+
+    A run along x is the `line` piece turned a quarter with arms east and west - the same thing the
+    blockstate applies, which is what makes this a picture of the game rather than of the OBJ files.
+    """
+    triangles = ground(-1, -1, 10, 8, SAND)
+    for row, name in enumerate(('abc_conductor_run', 'mv_conductor_run', 'hv_conductor_run')):
+        z = 1 + row * 2
+        for x in range(0, 4):
+            triangles += placed(block_model(name + '_line'), (x, 0, z), yaw=90)
+            for side in (90, 270):
+                triangles += placed(block_model(name + '_arm'), (x, 0, z), yaw=side)
+        # the bend: in from the west, out to the north
+        triangles += placed(block_model(name + '_bend'), (4, 0, z), yaw=180)
+        triangles += placed(block_model(name + '_arm'), (4, 0, z), yaw=270)
+        triangles += placed(block_model(name + '_arm'), (4, 0, z), yaw=0)
+        # the dead end, one block on from the bend
+        triangles += placed(block_model(name + '_end'), (4, 0, z - 1), yaw=180)
+        triangles += placed(block_model(name + '_arm'), (4, 0, z - 1), yaw=180)
+        triangles += placed(block_model(name + '_loose'), (7, 0, z))
+    return triangles, (1.2, 2.4, -2.2), (4.0, 0.1, 3.0)
+
+
 SCENES = {
+    'ground_conductor': scene_ground_conductor,
     'tx_machine': scene_tx_machine,
     'tx_substation': scene_tx_substation,
     'machine_cable': scene_machine_cable,

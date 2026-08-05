@@ -5,6 +5,7 @@ import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.api.power.TowerSpec;
 import com.dooji.electricity.api.power.TransformerSpec;
 import com.dooji.electricity.api.power.TurbineSpec;
@@ -22,6 +23,8 @@ import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvInverterBlock;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.GroundConductorBlock;
+import com.dooji.electricity.block.GroundConductorBlockEntity;
 import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.TransformerBlock;
 import com.dooji.electricity.block.TransformerBlockEntity;
@@ -180,6 +183,9 @@ public class Electricity {
 	public static final Map<ResourceLocation, RegistryObject<Block>> LATTICE_TOWER_BLOCKS = registerTowerBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> LATTICE_TOWER_ITEMS = registerTowerItems();
 
+	/** A block of conductor lying on the ground, per conductor: the reel lays it and the reel strings it. */
+	public static final Map<ResourceLocation, RegistryObject<Block>> GROUND_CONDUCTOR_BLOCKS = registerGroundConductorBlocks();
+
 	/** The two transformers: a machine unit at every generator's foot, a substation unit at the grid. */
 	public static final Map<ResourceLocation, RegistryObject<Block>> TRANSFORMER_BLOCKS = registerTransformerBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMER_ITEMS = registerTransformerItems();
@@ -264,6 +270,17 @@ public class Electricity {
 		}
 
 		return items;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerGroundConductorBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (ConductorSpec spec : ConductorCatalog.all()) {
+			// "_run", because the conductor's own id belongs to the reel and a block cannot share it
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath() + "_run",
+					() -> new GroundConductorBlock(Block.Properties.of(), spec)));
+		}
+
+		return blocks;
 	}
 
 	private static Map<ResourceLocation, RegistryObject<Block>> registerTransformerBlocks() {
@@ -382,6 +399,10 @@ public class Electricity {
 		return LATTICE_TOWER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
 
+	private static Block[] groundConductorBlocks() {
+		return GROUND_CONDUCTOR_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
+
 	private static Block[] transformerBlocks() {
 		return TRANSFORMER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
@@ -456,6 +477,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<MetStationBlockEntity>> MET_STATION_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<LatticeTowerBlockEntity>> LATTICE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TransformerBlockEntity>> TRANSFORMER_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<GroundConductorBlockEntity>> GROUND_CONDUCTOR_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -483,6 +505,9 @@ public class Electricity {
 
 		TRANSFORMER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("transformer",
 				() -> BlockEntityType.Builder.of(TransformerBlockEntity::new, transformerBlocks()).build(null));
+
+		GROUND_CONDUCTOR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("ground_conductor",
+				() -> BlockEntityType.Builder.of(GroundConductorBlockEntity::new, groundConductorBlocks()).build(null));
 
 		// one type for the whole catalogue: the machines differ by their spec
 		// block entity reads back off whichever block it is sitting in

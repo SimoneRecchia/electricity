@@ -116,7 +116,9 @@ python3 tools/gen_grid_models.py        # the pole and the kiosk
 python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
 python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it
-python3 tools/gen_tower_models.py       # the three lattice towers
+python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
+python3 tools/gen_transformer_models.py # the two transformers
+python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
 ```
 
 ## 7. What must pass before anything is done
@@ -127,6 +129,8 @@ python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle"
 python3 tools/check_gui_fits.py         # "0 problems"
 python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
+python3 tools/gen_conductor_models.py   # the same, per conductor, and the shapes match the block
+python3 tools/gen_tower_models.py       # "LatticeTowerBlock declares the cells this authors"
 python3 tools/render_blocks.py          # and then *look* at build/render/
 ./gradlew build -x test
 ```
