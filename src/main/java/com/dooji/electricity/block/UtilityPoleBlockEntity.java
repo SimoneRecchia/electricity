@@ -165,10 +165,11 @@ public class UtilityPoleBlockEntity extends BlockEntity implements InsulatorHost
 		return InsulatorPartHelper.TYPE_UTILITY_POLE;
 	}
 
-	/** A pole carries a line on to the next pole and delivers it to a kiosk. */
+	/** A pole carries a line on to the next pole, to a kiosk, or into a run laid on the ground. */
 	@Override
 	public boolean feeds(InsulatorHost other) {
-		return other instanceof UtilityPoleBlockEntity || other instanceof PowerBoxBlockEntity;
+		return other instanceof UtilityPoleBlockEntity || other instanceof PowerBoxBlockEntity
+				|| other instanceof GroundConductorBlockEntity;
 	}
 
 	@Override

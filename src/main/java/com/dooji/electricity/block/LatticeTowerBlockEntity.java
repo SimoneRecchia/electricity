@@ -102,11 +102,16 @@ public class LatticeTowerBlockEntity extends BlockEntity implements InsulatorHos
 		return InsulatorPartHelper.TYPE_LATTICE_TOWER;
 	}
 
-	/** A tower carries a line on to the next tower and delivers it to a substation or a pole. */
+	/**
+	 * A tower carries a line on to the next tower and delivers it to a substation or a pole.
+	 *
+	 * And to a run laid on the ground, which is what a line does at its end: it comes off the tower's
+	 * dead-end into a trench or a ground bus. A run feeds a tower too, so the link is two-way.
+	 */
 	@Override
 	public boolean feeds(InsulatorHost other) {
 		return other instanceof LatticeTowerBlockEntity || other instanceof ElectricCabinBlockEntity
-				|| other instanceof UtilityPoleBlockEntity;
+				|| other instanceof UtilityPoleBlockEntity || other instanceof GroundConductorBlockEntity;
 	}
 
 	@Override

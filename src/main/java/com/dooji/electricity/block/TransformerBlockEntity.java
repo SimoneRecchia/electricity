@@ -118,10 +118,14 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 	@Override
 	public boolean feeds(InsulatorHost other) {
 		return switch (spec().duty()) {
+			// a machine unit puts a collector network out: into the substation, into another machine unit,
+			// or into a run laid along the ground between them
 			case MACHINE -> other instanceof ElectricCabinBlockEntity
-					|| (other instanceof TransformerBlockEntity tx && tx.spec().duty() == TransformerSpec.Duty.MACHINE)
-					|| (other instanceof TransformerBlockEntity tx2 && tx2.spec().duty() == TransformerSpec.Duty.SUBSTATION);
-			case SUBSTATION -> other instanceof LatticeTowerBlockEntity;
+					|| other instanceof TransformerBlockEntity
+					|| other instanceof GroundConductorBlockEntity;
+			// and a substation unit puts a transmission line out, which starts at a tower or at a run
+			case SUBSTATION -> other instanceof LatticeTowerBlockEntity
+					|| other instanceof GroundConductorBlockEntity;
 		};
 	}
 
