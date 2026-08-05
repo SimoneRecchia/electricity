@@ -1,45 +1,14 @@
 #!/usr/bin/env python3
-"""Generates the lattice transmission towers: the three European types.
+"""The three lattice transmission towers: suspension, tension, terminal.
 
     python3 tools/gen_tower_models.py
 
-Writes into src/main/resources/assets/electricity/models/{lattice_suspension,lattice_tension,
-lattice_terminal}/.
+Donaumast arrangement - two crossarm levels, three phases a side, earth wire at the peak.  The duty is
+what makes them different objects: a suspension tower hangs its chains vertically, a tension tower takes
+the difference between two pulls on horizontal chains and is braced for it, a terminal tower takes the
+whole pull on one side and is stayed back against it.
 
-What a lattice tower is, and why there are three of them
--------------------------------------------------------
-A transmission line is not a row of identical structures.  Every tower on it is one of a handful of
-*duties*, and the duty decides the shape:
-
-* a **suspension** tower carries the line straight through.  Its insulators hang vertically, it takes no
-  sideways pull, and nine out of ten towers on a line are these - which is why it is the lightest and the
-  cheapest and the one whose silhouette people mean when they say pylon.
-* a **tension** tower is where the line changes direction, and it has to hold the difference between the
-  pulls either side.  So its insulators are horizontal - the conductor *terminates* on each side and is
-  jumpered across - and its steelwork is far heavier, with the legs splayed wider and diagonal bracing
-  right up the body.
-* a **terminal** tower is the last one, at a substation.  It takes the whole pull of the line on one side
-  and nothing on the other, so it is braced backwards, and the conductors leave it downwards to the
-  gantry rather than onwards.
-
-The arrangement here is the **Donaumast**, the two-level barrel that is the commonest form in continental
-Europe for a double circuit: the lower crossarm carries two phases a side and the upper one carries one.
-It is the compromise between the single-plane tower, which needs a wider corridor cut through whatever
-the line crosses, and the three-level barrel, which needs to be taller.  Both of the others exist and
-this is the one built most.
-
-Every tower also carries an **earth wire** at its peak - above the phases, so a lightning strike hits it
-rather than a conductor - which is why the top of a pylon is a point and not a flat.
-
-How the steelwork is drawn
---------------------------
-Out of angle sections, because that is what a tower is: rolled steel angle, bolted through gusset
-plates, galvanised.  Four legs battered inwards, a horizontal frame every few metres, and a diagonal in
-every panel between them - and the diagonals are what makes it a *lattice* rather than a frame, since a
-rectangle of pinned members is a mechanism and a triangle is not.
-
-The count of members is what it is: this is the heaviest geometry in the mod by some way, and drawing a
-pylon with fewer would be drawing something else.
+PHASES is in wire-index order and cannot be reordered without moving every wire in every world.
 """
 
 import math
@@ -63,13 +32,6 @@ MATERIALS = {
 }
 
 # ---------------------------------------------------------------- the tower's own figures
-#
-# In blocks, and every one of them is a real ratio rather than a shape that looked right.  A 400 kV
-# Donaumast is about 50 m to the earth peak with a 25 m base spread, so at the mod's ten metres to a block
-# that is five blocks tall on a two-and-a-half-block base - which does not fit a Minecraft build at all.
-# So the tower is drawn at the *tallest* thing the mod already has for scale, the turbine tower, and its
-# proportions are the real one's: the base spread is a third of the height, the body is two thirds of it,
-# and the crossarms are where a Donaumast's are.
 
 HEIGHT = 11.5                 # to the earth peak
 BODY_TOP = 7.60               # where the legs stop battering and the head begins
@@ -79,7 +41,7 @@ LEG = 0.085                   # the leg angle's leg length
 BRACE = 0.052                 # a diagonal's
 PANELS = 7                    # horizontal frames up the battered body
 
-# The two crossarms of a Donaumast: the lower one carries two phases a side, the upper one one.
+# The two crossarms of a Donaumast: the lower one carries two phases a side
 LOWER_ARM = 8.30
 UPPER_ARM = 9.90
 LOWER_REACH = 2.55
@@ -87,16 +49,14 @@ UPPER_REACH = 1.55
 # and the earth wire's peak above them
 PEAK = HEIGHT
 
-# Where the six phases hang.  Two circuits, three phases each: on the lower arm at two reaches a side,
-# on the upper arm at one.  This order is the index a wire is stored against, so it is the one thing
-# about a tower that cannot be rearranged without moving every conductor in every world that has one.
+# Where the six phases hang.
 PHASES = (
     (-LOWER_REACH, LOWER_ARM), (-LOWER_REACH * 0.55, LOWER_ARM),
     (LOWER_REACH * 0.55, LOWER_ARM), (LOWER_REACH, LOWER_ARM),
     (-UPPER_REACH, UPPER_ARM), (UPPER_REACH, UPPER_ARM),
 )
 
-# An insulator string: how many discs and how big.  A 400 kV string is about twenty glass caps; drawn at
+# An insulator string: how many discs and how big.
 # eighteen, which is what reads as a string rather than as a rod at the distance a tower is seen from.
 DISCS = 18
 DISC_RADIUS = 0.052
@@ -104,7 +64,7 @@ DISC_PITCH = 0.038
 
 
 def leg_half(height):
-    """Half the tower's width at a height: battered below the waist, parallel above it."""
+    """Half the tower's width at a height: battered below the waist"""
     if height >= BODY_TOP:
         return WAIST_HALF
 
@@ -143,12 +103,7 @@ def frames(mesh, steel):
 
 
 def diagonals(mesh, steel, levels):
-    """A diagonal in every panel of every face: what makes it a lattice rather than a mechanism.
-
-    A rectangle of members pinned at its corners folds; a triangle cannot.  So every panel gets one
-    diagonal, and the direction alternates up the tower, which is how a real one is braced and is also
-    what gives a pylon the zigzag everybody draws when they draw one.
-    """
+    """A diagonal in every panel of every face: what makes it a lattice rather than a mechanism."""
     stack = [0.0] + levels
     for panel in range(len(stack) - 1):
         y0, y1 = stack[panel], stack[panel + 1]
@@ -168,12 +123,7 @@ def diagonals(mesh, steel, levels):
 
 
 def crossarm(mesh, steel, y, reach, depth):
-    """One crossarm: a triangulated cantilever each side, which is how a real one carries its load.
-
-    Not a beam.  A crossarm sticking two and a half blocks out of a tower is held by a *tie* running up
-    to the body above it and a *strut* running down to the body below - the same triangle the diagonals
-    make, turned on its side - and that pair is most of what a crossarm looks like.
-    """
+    """One crossarm: a triangulated cantilever each side, which is how a real one carries its load."""
     for side in (-1, 1):
         tip = (side * reach, y, 0.0)
         root_out = (side * WAIST_HALF, y, 0.0)
@@ -203,11 +153,7 @@ def crossarm(mesh, steel, y, reach, depth):
 
 
 def peak(mesh, steel):
-    """The earth-wire peak: a short pyramid above the phases, which is what the top of a pylon is.
-
-    Above everything, because that is its job: a lightning strike hits the earth wire rather than a
-    conductor, and it only does that if it is the highest thing on the structure.
-    """
+    """The earth-wire peak: a short pyramid above the phases"""
     base = PEAK - 1.6
     for sx in (-1, 1):
         for sz in (-1, 1):
@@ -225,12 +171,7 @@ def peak(mesh, steel):
 
 
 def insulator_string(mesh, index, x, y, horizontal=False):
-    """A cap-and-pin insulator string: eighteen glass discs on a steel link, and the clamp under it.
-
-    Its own object per phase, because ``ObjDefinitions`` names one group per fitting and a conductor hangs
-    from that group's centre.  Vertical on a suspension tower, where the string only carries the
-    conductor's weight; horizontal on a tension tower, where it carries the pull of the line.
-    """
+    """A cap-and-pin insulator string: eighteen glass discs on a steel link"""
     porcelain = mesh.faces('insulator_%d' % index, 'porcelain')
     steel = mesh.faces('string_%d' % index, 'steel')
 
@@ -244,7 +185,7 @@ def insulator_string(mesh, index, x, y, horizontal=False):
             centre = (x, y - along, 0.0)
             axis = 'y'
 
-        # one disc: a shallow cap over a pin, which is what a cap-and-pin unit is
+        # one disc: a shallow cap over a pin
         cylinder(mesh, porcelain, centre, axis, DISC_RADIUS, DISC_PITCH * 0.34, sides=FITTING,
                  uv_scale=1.0, taper=0.62)
         cylinder(mesh, steel, centre, axis, DISC_RADIUS * 0.30, DISC_PITCH * 0.5, sides=FITTING,
@@ -274,19 +215,7 @@ def footings(mesh):
 
 
 def tower(duty):
-    """One tower, by duty: what changes between the three and what does not.
-
-    The body, the peak and the crossarms are the same structure in all three - that is what makes them a
-    family and what makes a line built of them look like one line. What changes is the bracing and how the
-    insulators hang, which is exactly what changes on a real one:
-
-    * ``suspension`` - strings hang vertically, one diagonal a panel
-    * ``tension`` - strings are horizontal because the conductor terminates on each side, and every panel
-      is cross-braced instead of single-braced, because the tower is holding the difference between two
-      pulls rather than nothing
-    * ``terminal`` - horizontal strings on one side only, and a back-stay down to the ground on the other,
-      because the whole pull of the line is on one side of it
-    """
+    """One tower, by duty: what changes between the three and what does not."""
     mesh = Mesh()
     steel = mesh.faces('body', 'steel')
 

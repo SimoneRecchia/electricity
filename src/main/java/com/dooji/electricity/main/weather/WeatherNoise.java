@@ -2,23 +2,7 @@ package com.dooji.electricity.main.weather;
 
 import net.minecraft.util.Mth;
 
-/**
- * Smooth, seeded, three-dimensional noise: the one source of randomness the whole
- * atmosphere is built from.
- *
- * A pure function of its coordinates, which is the property everything else here
- * depends on. The weather model asks for the pressure at a place and a time and gets
- * the same answer whoever asks, whenever they ask, and whether or not the chunks
- * around that place happen to be loaded. That is what lets the model hold no state at
- * all: nothing to save, nothing to migrate, nothing to drift out of step between two
- * players standing in different corners of the same world.
- *
- * It is value noise rather than gradient noise. Gradient noise has the nicer
- * derivatives, but the fields built on this one are differentiated numerically
- * anyway - see {@link Atmosphere#geostrophicWind} - and value noise is the shorter
- * thing to state, so its arithmetic can be reproduced exactly outside the game when
- * the model needs checking against real wind statistics.
- */
+/** Smooth, seeded, three-dimensional noise: the one source of randomness the whole atmosphere is built from. */
 public final class WeatherNoise {
 	private static final long X_PRIME = 0x9E3779B97F4A7C15L;
 	private static final long Y_PRIME = 0xC2B2AE3D27D4EB4FL;
@@ -27,11 +11,7 @@ public final class WeatherNoise {
 	private WeatherNoise() {
 	}
 
-	/**
-	 * One octave, in roughly -1..1. Its standard deviation is 0.40 rather than
-	 * anything tidier, which is why every caller that cares about the spread of its
-	 * output divides by a measured constant instead of a guessed one.
-	 */
+	/** One octave, in roughly -1..1. */
 	public static double sample(long seed, double x, double y, double z) {
 		int x0 = Mth.floor(x);
 		int y0 = Mth.floor(y);

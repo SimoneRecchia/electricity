@@ -222,8 +222,8 @@ public class ObjRaycaster {
 	}
 
 	public static List<Component> getPowerDisplayText(BlockEntity blockEntity) {
-		// no turbine branch: a turbine's readings come from its own control panel, and this
-		// text is only reached through PowerInfoScreen, which the wrench no longer opens for one
+		// no turbine branch: a turbine's readings come from its own control panel
+		// text is only reached through PowerInfoScreen
 		if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
 			return List.of(
 					blockEntity.getBlockState().getBlock().getName(),

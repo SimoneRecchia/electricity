@@ -1,28 +1,13 @@
 #!/usr/bin/env python3
-"""Finds the four texture faults that keep getting shipped, by reading the geometry rather than by eye.
+"""Texture faults that are mechanical: flicker, hidden geometry, sub-sampling, and ovals.
 
-    python3 tools/check_model_textures.py            # everything the mod authors
-    python3 tools/check_model_textures.py pv_flat    # one model
+    python3 tools/check_model_textures.py            # every model the mod authors
+    python3 tools/check_model_textures.py pv_flat    # one
 
-Every one of these has shipped at least once and every one was found by a player looking at it:
-
-1. **Coplanar faces that both show.** Two solids sharing a volume put two faces on the same plane
-   pointing the same way, and the depth buffer picks between them per pixel per frame - which flickers.
-   It was every corner of every cable run, a saddle that shared a ground plane with the pair it held,
-   and two arms meeting at a block's middle.
-
-2. **Geometry nothing can see.** A box wholly inside another one costs vertices and draws nothing.
-
-3. **A bordered picture sub-sampled.** A face whose UVs cover part of its texture takes a slice out of
-   the middle of it, so a drawn frame lands off-centre or vanishes: the combiner lid, the steel end cap
-   and the DC section all did this, and all three read as "cut".
-
-4. **One picture on all six faces.** A box given a single material wears the same drawing on its sides,
-   which is right for a pattern and wrong for anything with a picture on it - a lid's bolt grid squeezed
-   into a face one pixel tall, a pair of conductors on the *side* of a cable.
-
-And it reports texel density per face, because a texture stretched over a face four times its own size
-is the other half of "that looks blocky" - the half no rule can decide for you.
+The oval check is the one that matters.  Every face is measured for how differently it samples u and v;
+a texture with something round on it has to sample them the same, unless SQUASH (in gen_block_textures)
+declares it drawn pre-squashed for a face of a known shape - in which case the face has to match that.
+Which textures have something round on them is read out of the generator's own call graph.
 """
 
 import ast
@@ -41,41 +26,31 @@ from gen_block_textures import SQUASH                                           
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures', 'block')
 
-# Models the mod draws itself. The inherited ones - the turbine, the cabin, the pole, the power box - are
-# a modelling package's output with a 1024 pixel atlas, and none of the four faults below can be fixed
-# from here without redrawing them from scratch.
-# Every model the mod generates for itself, which is now every model it has: the pole and the kiosk were
-# inherited art and are generated too.
+# Models the mod draws itself.
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
         'utility_pole', 'power_box')
 
-# How much of a face has to overlap another coplanar face before it is worth reporting. A shared edge is
-# not a fault; a shared area is.
+# How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4
 
-# Pairs of parts that are never drawn at the same time, so sharing a plane costs nothing. A tracked row's
-# run and its end plugs are the case: the run is drawn when the row is cabled and the plug when it is not,
-# and the renderer's drawn() is where that is decided.
+# Pairs of parts that are never drawn at the same time, so sharing a plane costs nothing.
 EXCLUSIVE = (('harness', 'harness_plug'),)
-# Below this fraction of a texture's own size, a face is sub-sampling it.
+# Below this fraction of a texture's own size
 SUBSAMPLE = 0.98
-# Textures a face is *meant* to take the middle out of. A glass dome is a circle drawn on a light ground,
-# and the side of the dome wants the glass rather than the circle - so sampling the middle is the point.
+# Textures a face is *meant* to take the middle out of.
 FRAME_EXEMPT = {'pv_dome.png'}
-# Pixels of texture per block of surface, under which a face is stretched enough to look soft. A block is
+# Pixels of texture per block of surface, under which a face is stretched enough to look soft.
 # ten metres in this mod, so this is not a vanilla figure: 16 would be one texel per 60 centimetres.
 DENSITY = 48.0
-# How far u and v may disagree on one face before a circle on that texture reads as an oval. A tenth is
+# How far u and v may disagree on one face before a circle on that texture reads as an oval.
 # below what the eye picks up on a disc; a third is unmistakable.
 ANISOTROPY = 1.12
 # The narrow way across a face, under which no oval on it can be seen whatever the ratio: a drip edge a
-# hundredth of a block tall wearing a stretched sheet is a stretched sliver, not a stretched circle.  Set
-# to a sixteenth of a block, which is one pixel of a vanilla model.
 MIN_FEATURE = 0.062
-# Faces meant to sample one texture at two scales. A cable core's tile is a cross-section gradient with
+# Faces meant to sample one texture at two scales.
 # nothing along its length, so stretching it along the run is exactly what it is drawn for.
 STRETCH_EXEMPT = {'dc_core.png',
-                  # a dome's side faces want the glass the circle is drawn on, which is the
+                  # a dome's side faces want the glass the circle is drawn on
                   # same reason it is in FRAME_EXEMPT: sampling it unevenly is the intent
                   'pv_dome.png'}
 
@@ -138,25 +113,14 @@ def png_pixels(path):
     return rows, width, step
 
 
-# The texlib primitives that put something round on a tile.  A texture drawn with any of them has a
+# The texlib primitives that put something round on a tile.
 # circle on it, so the face it lands on has to sample u and v at the same rate or the circle is an oval.
 ROUND_PRIMITIVES = {'aa_disc', 'disc', 'dome', 'screw', 'hex_head', 'warning_triangle'}
 
 
 @functools.lru_cache(maxsize=None)
 def round_textures():
-    """Which generated textures have something round on them, read out of the generator's own source.
-
-    Static rather than detected in the pixels.  The version this replaces looked for discs by level sets
-    and could not see a small one: the three status lights on the inverter's door are thirteen pixels
-    across on a five-hundred-and-twelve pixel tile, which is one cell of the grid it thresholded, so the
-    fault a player photographed was invisible to the check written to find it.
-
-    The generator knows the answer exactly - a texture has a circle on it if the function that draws it
-    reaches one of ROUND_PRIMITIVES - so this walks the call graph of gen_block_textures with ast and
-    asks that.  It over-approximates, which is the safe direction: a texture wrongly listed as round only
-    means its faces are held to an isotropic mapping they should have anyway.
-    """
+    """Which generated textures have something round on them, read out of the generator's own source."""
     source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_block_textures.py')
     tree = ast.parse(open(source).read())
 
@@ -192,13 +156,7 @@ def round_textures():
 
 
 def bordered(path):
-    """Whether a texture is a picture in a frame rather than a pattern.
-
-    A frame is what makes sub-sampling visible: take the middle 60 percent of a bolted lid and the bolts
-    round the edge are gone, so what lands on the face is a plain sheet with the frame cut off. Decided by
-    asking whether the outermost ring is nearly uniform and different from the middle - which is what a
-    frame is and what a pattern is not.
-    """
+    """Whether a texture is a picture in a frame rather than a pattern."""
     rows, width, step = png_pixels(path)
     if rows is None or width < 4:
         return False
@@ -301,12 +259,7 @@ def exclusive(a, b):
 
 
 def coplanar_pairs(model_faces):
-    """Pairs of faces on the same plane, pointing the same way, that overlap in area.
-
-    Two exemptions, both because a fight nobody can see is not a fault. The floor of the block is one:
-    a machine standing on the ground has a solid block under it, so every downward face at y=0 is
-    covered. And parts that are never drawn together are the other.
-    """
+    """Pairs of faces on the same plane, pointing the same way, that overlap in area."""
     by_plane = collections.defaultdict(list)
     for face in model_faces:
         plane = plane_of(face[2], face[4])
@@ -315,7 +268,7 @@ def coplanar_pairs(model_faces):
 
     problems = []
     for (axis, offset, sign), group in by_plane.items():
-        # the block's own floor, which has a block under it
+        # the block's own floor
         if axis == 1 and abs(offset) < 1e-6 and sign < 0:
             continue
 
@@ -323,7 +276,7 @@ def coplanar_pairs(model_faces):
         for i in range(len(group)):
             for j in range(i + 1, len(group)):
                 if group[i][0] == group[j][0] and group[i][1] == group[j][1]:
-                    # the same part's own faces, e.g. a cylinder's cap fanned into quads
+                    # the same part's own faces, e.g.
                     continue
                 if exclusive(group[i][0], group[j][0]):
                     continue
@@ -383,7 +336,7 @@ def report(name):
             if name_a == name_b or name_a.startswith('pivot') or name_b.startswith('pivot'):
                 continue
             # only a part that really is one box encloses anything: a door with a handle on it has a
-            # bounding box far larger than the plate, and a display sitting on its face is not inside it
+            # bounding box far larger than the plate
             if name_b not in solid:
                 continue
             if all(lo_b[i] <= lo_a[i] and hi_a[i] <= hi_b[i] for i in range(3)) and \
@@ -408,8 +361,6 @@ def report(name):
         span_u = max(u for u, _ in uvs) - min(u for u, _ in uvs)
         span_v = max(v for _, v in uvs) - min(v for _, v in uvs)
         # a cylinder's end cap maps the whole texture across a circle and each of its quads takes a
-        # wedge of that on purpose, which is not sub-sampling. A box face's UVs are a rectangle; a
-        # wedge's are not, and that is how the two are told apart
         rectangular = len({round(u, 5) for u, _ in uvs}) <= 2 and len({round(v, 5) for _, v in uvs}) <= 2
         if rectangular and texture not in FRAME_EXEMPT and max(span_u, span_v) < SUBSAMPLE \
                 and bordered(file_path):
@@ -421,16 +372,6 @@ def report(name):
                       % (obj, max(span_u, span_v), texture))
 
         # Texels per block, measured along the face's own u and v rather than along the world axes.
-        #
-        # The axis pairing matters and used to be wrong: it took the face's two largest world extents and
-        # paired u with the larger of them, which is right for a box and backwards for the side of a
-        # cylinder - there u runs *round* the tube, over a chord a few thousandths of a block wide, and v
-        # runs along its length. Every eighty-sided prism in the mod therefore read as stretched by a
-        # factor of two hundred, and the one real case would have been lost in them. The corners and the
-        # uvs are both to hand, so the honest measure is the world distance along each of them.
-        # A cap is fanned into quads whose first corner is the centre of the ring, so its uv step from
-        # corner to corner is not along u or v at all - it is a wedge, and measuring it gives a density
-        # of nothing over a distance of nothing. The same distinction the SLICED check already makes.
         wedge = False
         if len(uvs) >= 4:
             wedge = (abs(uvs[1][1] - uvs[0][1]) > abs(uvs[1][0] - uvs[0][0])
@@ -448,14 +389,8 @@ def report(name):
             if densities and min(densities) < DENSITY:
                 stretched.append((min(densities), obj, material, texture, max(along_u, along_v)))
 
-            # Anisotropy: how differently this face samples u and v, which is what turns a circle into
-            # an oval.  Only checked where it can be seen - a tile of plain noise may be stretched as far
-            # as it likes - so what decides it is whether the drawing has anything round on it.
-            #
-            # A texture in SQUASH is drawn pre-squashed for a face that is *meant* to be anisotropic, so
-            # what it has to match is its declared factor rather than one.  That number is the face's
-            # width over its height, and density_v / density_u is the same thing measured off the model -
-            # so this is what keeps the drawing and the geometry from drifting apart.
+            # Anisotropy: how differently this face samples u and v
+            # A texture in SQUASH is drawn pre-squashed for a face that is *meant* to be anisotropic
             if len(densities) == 2 and min(densities) > 1e-9 and texture in round_textures() \
                     and texture not in STRETCH_EXEMPT and min(along_u, along_v) > MIN_FEATURE:
                 want = densities[1] / densities[0]

@@ -30,52 +30,19 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * The cabinet a photovoltaic plant actually is.
- *
- * A field of modules is not a power station until something turns their direct current into
- * alternating current at grid voltage, holds a power factor, and reports what it is doing. That is
- * this block: the generator as far as the rest of the mod is concerned, the node a computer talks to,
- * and the thing that clips.
- *
- * <h2>Size</h2>
- *
- * Four products spanning a factor of two hundred and fifty in nameplate, drawn at three sizes,
- * because that is roughly how the real ones scale: a residential machine hangs on a wall, a
- * commercial one stands about as tall as a person, and a central inverter is a shipping container
- * with a transformer next to it. The door faces the way it was placed, because a technician has to be
- * able to open it.
- */
+/** The cabinet a photovoltaic plant actually is. */
 public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing pv_inverter.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/**
-	 * A combiner box fitted inside the cabinet, giving it fused string terminals it did not have.
-	 *
-	 * A real option on a real product: a central inverter's direct-current section is a factory-fitted
-	 * combiner, and the *virtual central* arrangement - boxes spread through the field, machines together
-	 * at one end - is the other way of solving the same problem. So both are here, and this is the first.
-	 *
-	 * A block state rather than block entity data because a cable has to know whether the machine takes
-	 * strings while a chunk is being meshed. Which box it is lives in the block entity, since that only
-	 * decides how many strings, not whether any.
-	 */
+	/** A combiner box fitted inside the cabinet, giving it fused string terminals it did not have. */
 	public static final BooleanProperty COMBINER = BooleanProperty.create("combiner");
 
-	/**
-	 * The machine as collision, cut from pv_inverter.obj at the size it is drawn.
-	 *
-	 * The plinth, the cabinet, the hood, the doors and the direct-current compartment, each where the model
-	 * puts it - and it turns with the block, which three hand-written boxes did not. Written by
-	 * {@code tools/check_hitboxes.py --java}, and it is the 1:1 table: the machine is drawn at the size of
-	 * the commercial cabinet and scaled per product, so the other two sizes come from this one.
-	 */
+	/** The machine as collision, cut from pv_inverter.obj at the size it is drawn. */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 15.39, 2.72, 15.52, 16.00, 12.96),
 					Block.box(0.56, 0.00, 2.80, 15.44, 0.88, 12.88),
@@ -83,28 +50,14 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 					Block.box(1.52, 7.04, 2.21, 14.48, 15.04, 3.20),
 					Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64))));
 
-	/**
-	 * The same table at the other two sizes the renderer draws.
-	 *
-	 * Scaled rather than written out, because the renderer scales the model rather than swapping it, and a
-	 * second table would be a second thing to keep in step. The scale is about the middle of the block's
-	 * footprint and its floor, which is where {@code PvInverterRenderer} applies it - so a small machine
-	 * sits on the ground in the middle of its block rather than hovering in a corner of it.
-	 */
+	/** The same table at the other two sizes the renderer draws. */
 	private static final List<Cell> CABINET_CELLS = scaledCells(0.92);
 	private static final List<Cell> WALL_CELLS = scaledCells(0.62);
 
-	/**
-	 * The direct-current compartment on its own, so it can be taken back out again.
-	 *
-	 * It is one of the boxes of {@link #CELLS} above, restated here rather than picked out of the table -
-	 * which would mean deciding by position which box it is, and the table is regenerated from the model.
-	 * {@code tools/check_hitboxes.py} checks that this box really is in that table, so the two cannot
-	 * drift apart without something saying so.
-	 */
+	/** The direct-current compartment on its own, so it can be taken back out again. */
 	private static final VoxelShape DC_SECTION = Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64);
 
-	/** The three tables again with the compartment removed, for a machine that has no combiner in it. */
+	/** The three tables again with the compartment removed */
 	private static final List<Cell> PLAIN_CELLS = without(CELLS, 1.0);
 	private static final List<Cell> PLAIN_CABINET_CELLS = without(CABINET_CELLS, 0.92);
 	private static final List<Cell> PLAIN_WALL_CELLS = without(WALL_CELLS, 0.62);
@@ -135,7 +88,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 						0.5 + (box.maxX - 0.5) * factor, box.maxY * factor, 0.5 + (box.maxZ - 0.5) * factor));
 			}
 
-			// every cell of this machine is its own, so the offset is the one it was declared with
+			// every cell of this machine is its own
 			out.add(new Cell(0, 0, 0, scaled));
 		}
 
@@ -164,14 +117,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		builder.add(FACING, COMBINER);
 	}
 
-	/**
-	 * Which gauge lands on this machine, off its own datasheet.
-	 *
-	 * The distinction a real catalogue makes and this one now makes too: a residential or commercial
-	 * machine has plug connectors, so strings go straight in and a combiner's trunk has nowhere to go. A
-	 * utility string machine has both. A central machine has bare busbars, so it takes a trunk and cannot
-	 * take a string at all - which is why it needs combiner boxes rather than merely liking them.
-	 */
+	/** Which gauge lands on this machine, off its own datasheet. */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		if (cable.trunk()) return spec.trunkTerminals();
@@ -179,13 +125,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		return spec.stringTerminals() || state.getValue(COMBINER);
 	}
 
-	/**
-	 * Whether a combiner box can be worked into this cabinet, and the state it takes when it is.
-	 *
-	 * Only a machine that has no fused string terminals of its own, which is the central one. Refusing it
-	 * on the others is not pedantry: a string inverter's terminals *are* its fuses, so a box inside one
-	 * would be a second set of fuses in series with the first, and no vendor sells that.
-	 */
+	/** Whether a combiner box can be worked into this cabinet */
 	@Nullable
 	public BlockState withCombinerFitted(BlockState state) {
 		if (spec.stringTerminals() || state.getValue(COMBINER)) return null;
@@ -249,13 +189,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		};
 	}
 
-	/**
-	 * Takes the cabinet out of the plant when it is actually broken.
-	 *
-	 * This and not the block entity's own removal, which also happens every time the chunk unloads: the
-	 * plant reaches into other chunks here, and reaching out of an unloading chunk is what stops a world
-	 * from ever finishing its save.
-	 */
+	/** Takes the cabinet out of the plant when it is actually broken. */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {

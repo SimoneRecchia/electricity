@@ -1,29 +1,10 @@
 #!/usr/bin/env python3
-"""Draws a generated OBJ as an SVG, from the angles a player actually looks from.
+"""Flat-colour SVG previews of a model's shape, from three angles.
 
-    python3 tools/preview_models.py                     # every pv model, three views each
-    python3 tools/preview_models.py pv_flat --view plan
-    python3 tools/preview_models.py pv_tilt --only harness,harness_entry_south --no-cable
+    python3 tools/preview_models.py pv_tilt --view=plan
 
-Writes into build/preview/, which any browser opens.
-
-Why this exists
----------------
-Every defect in the cabling was found by a player looking at it and only afterwards by a script
-measuring it. The clearance checker proves nothing intersects and the model validator proves every
-texture resolves, and neither of them can say whether a cable *reads* as plugged in - which is the
-thing that was wrong four times running. So this draws the geometry, with a length of laid cable in
-the block alongside at the figures gen_cable_models.py writes, and the question "do the two meet"
-becomes one you can answer by looking.
-
-What it is not: the game. There are no textures here, one flat colour per material, and a painter's
-sort rather than a depth buffer - so it will not show a z-fight, which is what check_pv_clearance.py
-is for. It shows shape, position and whether two parts line up.
-
-One thing worth knowing about the output of gen_pv_models.py, which this had to be taught: the up
-face's corner list is wound clockwise seen from above and carries an explicit vn of +y. The game is
-fine with that because the OBJ render type does not cull, but deriving a normal from the winding here
-lit every face upside down and culled the wrong half of them. So the stated normal is what is read.
+For reading shape and position only - one colour per material, painter's sort, no textures.  Use
+render_blocks.py to see what a surface actually looks like.
 """
 
 import math
@@ -33,8 +14,7 @@ import sys
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 OUT = os.path.join('build', 'preview')
 
-# One flat colour per material. Not the textures - the point is to read shape, and a cell pattern at
-# this size is noise. The pair is red because the pair texture is mostly red conductor.
+# One flat colour per material.
 COLOURS = {
     'module': '#1b2246', 'module_back': '#3a3a3a', 'module_edge': '#9aa0a6',
     'frame': '#b9bfc4', 'steel': '#8d949a', 'steel_end': '#7e858b',
@@ -135,7 +115,7 @@ def render(quads, yaw, pitch, path, size=1100.0):
 
         points = [(dot(p, frame[1]), dot(p, frame[2])) for p in corners]
         near = sum(dot(p, frame[0]) for p in corners) / len(corners)
-        # the ground is one quad as wide as the scene, so its centroid sorts in front of half of what
+        # the ground is one quad as wide as the scene
         # stands on it - it goes to the back by fiat instead
         drawn.append((-9.0 if obj == 'ground' else near, points, shade(COLOURS.get(material, '#888888'), normal)))
 

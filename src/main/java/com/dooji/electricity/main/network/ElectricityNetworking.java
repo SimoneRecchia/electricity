@@ -132,7 +132,7 @@ public class ElectricityNetworking {
 
 							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
 							if (!world.mayInteract(player, pos)) return;
-							// a plain distance check, unlike the turbine's: an array and an inverter are one
+							// a plain distance check
 							// block each, so there is no structure to stand anywhere along
 							if (player.distanceToSqr(Vec3.atCenterOf(pos)) > MAX_CONTROL_DISTANCE_SQ) return;
 
@@ -171,20 +171,7 @@ public class ElectricityNetworking {
 				}).add();
 	}
 
-	/**
-	 * Whether the player is close enough to the machine to be working its panel.
-	 *
-	 * Measured to the nearest point of the tower rather than to the machine, because the
-	 * machine is at the top of its tower and the panel is worked from the ground. Measuring
-	 * to the nacelle put a player at the foot of a C130 thirteen blocks away and silently
-	 * discarded every command they gave it.
-	 *
-	 * So the reference point slides up and down the tower to meet the player: it is the
-	 * horizontal distance to the column, plus whatever vertical distance remains once they
-	 * are past either end. Standing anywhere along the structure counts as standing at it,
-	 * which is the whole intent, while still stopping a crafted packet from shutting down
-	 * turbines from across the world.
-	 */
+	/** Whether the player is close enough to the machine to be working its panel. */
 	private static boolean withinReach(ServerPlayer player, WindTurbineBlockEntity turbine) {
 		BlockPos pos = turbine.getBlockPos();
 		Vec3 axis = Vec3.atCenterOf(pos);
@@ -194,13 +181,7 @@ public class ElectricityNetworking {
 		return player.distanceToSqr(axis.x, nearestY, axis.z) <= MAX_CONTROL_DISTANCE_SQ;
 	}
 
-	/**
-	 * Applies one panel command.
-	 *
-	 * Nothing here trusts the payload's number: the block entity's own setter clamps the
-	 * curtailment setpoint to the machine's nameplate, so the worst a crafted packet
-	 * achieves is a setting the player could have dialled in by hand anyway.
-	 */
+	/** Applies one panel command. */
 	private static void applyTurbineControl(WindTurbineBlockEntity turbine, TurbineControlPayload msg) {
 		switch (msg.action()) {
 			case TOGGLE_RUNNING -> turbine.setStoppedByPlayer(!turbine.isStoppedByPlayer());
@@ -209,13 +190,7 @@ public class ElectricityNetworking {
 		}
 	}
 
-	/**
-	 * Applies one command from an inverter's panel.
-	 *
-	 * The array actions are ignored rather than rejected, which is the right way round: one payload
-	 * serves both node kinds, and a command aimed at a tracker arriving at a cabinet is a mistake in the
-	 * client rather than an attack.
-	 */
+	/** Applies one command from an inverter's panel. */
 	private static void applyInverterControl(PvInverterBlockEntity inverter, SolarControlPayload msg) {
 		switch (msg.action()) {
 			case INVERTER_TOGGLE_RUNNING -> inverter.setStoppedByPlayer(!inverter.isStoppedByPlayer());
@@ -227,7 +202,7 @@ public class ElectricityNetworking {
 		}
 	}
 
-	/** Applies one command from an array's panel. Nothing here is trusted; the setters clamp. */
+	/** Applies one command from an array's panel. */
 	private static void applyArrayControl(PvArrayBlockEntity array, SolarControlPayload msg) {
 		switch (msg.action()) {
 			case ARRAY_CYCLE_TRACKER_MODE -> array.setTrackerMode(array.trackerMode().next());

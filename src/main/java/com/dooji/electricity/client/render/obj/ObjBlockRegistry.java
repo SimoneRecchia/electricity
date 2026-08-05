@@ -20,13 +20,7 @@ public class ObjBlockRegistry {
 		ENTRIES.put(block, new Entry(modelLocation, textureLocation));
 	}
 
-	/**
-	 * Makes a block renderable and marks its insulators clickable.
-	 *
-	 * The two registries always go together, and every renderer opened with the same four lines
-	 * to fill them. Saying it once means a machine cannot be given a model and then quietly left
-	 * unclickable.
-	 */
+	/** Makes a block renderable and marks its insulators clickable. */
 	public static void register(ObjBlockDefinition definition) {
 		register(definition.block(), definition.model(), null);
 		for (String insulator : definition.insulators()) {

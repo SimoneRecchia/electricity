@@ -33,13 +33,7 @@ import net.minecraftforge.fml.common.Mod;
 
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class WireRenderer {
-	/**
-	 * What a span looks like when this build does not know its conductor.
-	 *
-	 * Which is every span in a world saved before the conductors existed: those are typed {@code
-	 * "default"}, and drawing them as anything else would put a quad transmission bundle on every garden
-	 * pole in such a world. So they stay the thin black wire they were.
-	 */
+	/** What a span looks like when this build does not know its conductor. */
 	private static final WireStyle ACTIVE_WIRE = new WireStyle(0, 0, 0, 255);
 	private static final int FULL_BRIGHT = 15728880;
 	private static final double MIN_LENGTH = 0.1;
@@ -87,14 +81,7 @@ public class WireRenderer {
 	private static final Conductor PLAIN = new Conductor(WIRE_RADIUS, ACTIVE_WIRE,
 			WirePhysics.DEFLECTION_COEFFICIENT, 1, 0.0);
 
-	/**
-	 * How a span is drawn, off the conductor it was strung with.
-	 *
-	 * A conductor's appearance *is* its specification, which is why none of this is decided here: a quad
-	 * bundle is four wires because it is a bundle of four, and a street bundle sags twice as far as a
-	 * transmission one because it is hung slack on purpose while the other is tensioned to a fifth of its
-	 * breaking load.
-	 */
+	/** How a span is drawn, off the conductor it was strung with. */
 	/** The conductor the player is holding, for the span that follows the cursor before it is placed. */
 	private static Conductor previewConductor() {
 		var player = Minecraft.getInstance().player;
@@ -124,13 +111,7 @@ public class WireRenderer {
 				spec.sag(), spec.subConductors(), spec.bundleSpacing());
 	}
 
-	/**
-	 * Where each wire of a bundle sits, in the span's own frame: across it and above it.
-	 *
-	 * One wire is on the axis. Two sit side by side horizontally, which is what a twin bundle is. Four sit
-	 * on the corners of a square, which is what a quad bundle is - and the square is what the spacers
-	 * between them hold.
-	 */
+	/** Where each wire of a bundle sits */
 	private static double[][] bundle(int count, double spacing) {
 		double half = spacing * 0.5;
 		return switch (count) {
@@ -169,8 +150,6 @@ public class WireRenderer {
 
 		TextureAtlasSprite sprite = getWireSprite();
 		// One pass a sub-conductor, offset across the span and above it. The offsets are applied inside
-		// the span's own yawed frame, which is where each pass puts itself, so a bundle stays square
-		// whichever way the line runs.
 		for (double[] offset : bundle(conductor.count(), conductor.spacing())) {
 			poseStack.pushPose();
 			Vec3 viewStart = start.subtract(cameraPos);

@@ -1,21 +1,9 @@
 #!/usr/bin/env python3
-"""Measures the panels' text against Minecraft's own font, and fails if anything collides.
+"""Whether every string in a GUI panel fits the space the layout gives it.
 
     python3 tools/check_gui_fits.py
 
-Why this exists: a label and a right-aligned value in the same column overlap silently.  Nothing
-throws, nothing logs, and the text just draws on top of itself - "Plane of array" and "0 W/m2"
-became "Plane of arr@yW/m2" on the met mast's panel and stayed that way through a review that
-read every line of the code, because the collision is a property of the *font* and not of the
-source.
-
-So the font is measured rather than guessed.  Minecraft's default glyphs live in a 16 by 16 grid
-of 8 by 8 cells in ascii.png, and the advance of each one is the rightmost lit column plus two -
-one to clear the glyph and one of spacing.  That is the same rule the game uses, so these widths
-are the game's widths and not an estimate of them.
-
-The layout constants and the strings are read from the source and the language file, so a label
-that grows or a column that moves is checked as it is, without anything being restated here.
+Measured at the widest each field can get, not at the value it happens to hold.
 """
 
 import json
@@ -29,8 +17,7 @@ FONT = os.path.join('build', 'gui-check', 'ascii.png')
 LANG = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'lang', 'en_us.json')
 SCREENS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'screen')
 
-# Glyphs that are not in ascii.png come from unifont, which is a fixed grid.  Only two appear on
-# these panels and both are narrow; six is what the game advances them by.
+# Glyphs that are not in ascii.png come from unifont, which is a fixed grid.
 UNIFONT_ADVANCE = 6
 SPACE_ADVANCE = 4
 
@@ -80,7 +67,7 @@ def read_png(path):
 
 
 def advances(path):
-    """The advance of every ASCII codepoint, measured the way the game measures it."""
+    """The advance of every ASCII codepoint"""
     width, height, rows = read_png(path)
     cell = width // 16
     table = {}
@@ -113,13 +100,7 @@ def constants(source):
 
 
 def resolved(text, key, source, typical=False):
-    """The text with its %s placeholders replaced by what the screen actually formats into them.
-
-    Without this a checker has to guess, and a guess has to be pessimistic - four digits into every
-    slot - which condemns lines that are perfectly fine.  The screen writes {@code fmt("%.1f", ...)}
-    beside the key it is filling, so the formats are right there to be read: find the key, walk
-    forward counting brackets to the end of the translatable call, and take the formats in order.
-    """
+    """The text with its %s placeholders replaced by what the screen actually formats into them."""
     at = source.find('"%s"' % key)
     if at < 0:
         return text
@@ -141,13 +122,7 @@ def resolved(text, key, source, typical=False):
 
 
 def widest_value(fmt):
-    """The widest string a format could plausibly produce.
-
-    Plausibly rather than possibly: four significant figures covers every quantity on these panels -
-    irradiance to 1400, voltage to 1500, energy to 9999 - and a checker that assumed five would
-    demand a panel nobody needs.  Signed only where the quantity can actually go negative, which on
-    a panel of irradiances and temperatures is the temperatures.
-    """
+    """The widest string a format could plausibly produce."""
     out = fmt
     out = out.replace('%.0f', '1400').replace('%+.0f', '-60').replace('%.1f', '-40.0')
     out = out.replace('%.2f', '1.00').replace('%.3f', '1.000')
@@ -156,13 +131,7 @@ def widest_value(fmt):
 
 
 def typical_value(fmt):
-    """What the slot holds on an ordinary afternoon.
-
-    A gate that fails on the widest number a format *could* hold condemns copy that is never
-    actually too long - a module at minus forty and an irradiance of fourteen hundred do not happen
-    in the same panel on the same day. So overflow at typical values is a failure and overflow only
-    at extremes is a warning, which is the difference between "this is broken" and "mind this line".
-    """
+    """What the slot holds on an ordinary afternoon."""
     out = fmt
     out = out.replace('%.0f', '35').replace('%+.0f', '-45').replace('%.1f', '34.8')
     out = out.replace('%.2f', '0.98').replace('%.3f', '0.985')
@@ -170,26 +139,16 @@ def typical_value(fmt):
     return out
 
 
-# Which drawing helpers share a line legitimately.  A label and its right-aligned value are one row,
-# and so are a faint label and a faint value; a state line owns its row alone, and so does anything
-# written straight through drawString.  Two calls from *different* groups at the same y draw through
-# each other, which is a bug no amount of measuring string widths will find - and did: the combiner
-# panel had its state line and its ways row both at forty-eight, which read as a corrupted panel.
+# Which drawing helpers share a line legitimately.
 DRAW_GROUPS = (('label', 'value'), ('faint', 'faintValue'), ('state',), ('drawString',))
 
-# Strings the screen hands to font.split itself, so their length is the game's business and not this
+# Strings the screen hands to font.split itself
 # file's.  The mast's footnote is one sentence over two lines on purpose.
 WRAPPED = {'met_station.no_reference'}
 
 
 def rows(source, where):
-    """Every text row a screen draws, as {y: set of helper names}.
-
-    The y is the last argument of the call, which is the convention every one of these helpers
-    follows.  Named constants are resolved through the screen's own {@code private static final int}
-    declarations, and anything more complicated than a name or a number is skipped rather than
-    guessed at.
-    """
+    """Every text row a screen draws, as {y: set of helper names}."""
     found = {}
     for match in re.finditer(r'\b(label|value|faint|faintValue|state)\(graphics,', source):
         helper = match.group(1)
@@ -220,14 +179,7 @@ def rows(source, where):
 
 
 def widgets(source):
-    """Where the buttons and sliders sit, as (top, bottom) bands.
-
-    Text is not the only thing that occupies a row.  The inverter's panel had a line of readings drawn
-    at 176 and a slider placed at 180, and a checker that only compared text against text had nothing to
-    say about it - the line came out half hidden behind a button, which is worse than a collision between
-    two strings because at least those are both readable.  Twenty pixels is the height every widget in
-    these panels is built at.
-    """
+    """Where the buttons and sliders sit, as (top, bottom) bands."""
     return [(int(match.group(1)), int(match.group(1)) + 20)
             for match in re.finditer(r'topPos \+ (\d+),\s*\w+[^;]*?,\s*20\)', source)]
 

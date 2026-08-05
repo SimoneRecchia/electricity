@@ -116,13 +116,7 @@ public class WireInteractionEvents {
 		}
 	}
 
-	/**
-	 * Whether a wire may be attached to this block at all.
-	 *
-	 * Written once rather than as a chain of instanceof tests at each end of a wire, because the list has
-	 * grown a member and would otherwise have needed adding to in two places that read identically and
-	 * are eighty characters long.
-	 */
+	/** Whether a wire may be attached to this block at all. */
 	@OnlyIn(Dist.CLIENT)
 	private static boolean wireable(net.minecraft.world.level.block.entity.BlockEntity entity) {
 		return entity instanceof UtilityPoleBlockEntity || entity instanceof ElectricCabinBlockEntity

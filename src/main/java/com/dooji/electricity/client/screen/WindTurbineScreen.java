@@ -17,26 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-/**
- * The control panel at the foot of a wind turbine.
- *
- * Deliberately short on readings. The machine reports about fifty signals through
- * its ComputerCraft peripheral and none of them belong here: standing at a turbine
- * you want to know what it is, what it is doing right now, and why it is not doing
- * more. The gearbox oil temperature is a question for a monitor watching a whole
- * site, not for the panel on the tower.
- *
- * There is no menu behind it and no slots, because nothing goes inside a turbine.
- * Nor does it change the tower: height is built by hand, block by block, so the panel
- * only reports it - and prices the next block, which is the one thing about the tower
- * worth knowing while standing at it. Everything shown is read from the client's copy
- * of the block entity, all of which arrives in its update tag already, so the panel
- * needs no traffic of its own in that direction. It only sends the three commands.
- *
- * The bevel, the bar geometry, the six colours and the label-and-value rhythm come from
- * {@link PlantScreen}, which is shared with the three photovoltaic panels so that all four
- * read alike rather than each having to be learned.
- */
+/** The control panel at the foot of a wind turbine. */
 public class WindTurbineScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
 	// 240 wide rather than the vanilla 176: the nameplate lines are the longest thing
@@ -80,21 +61,14 @@ public class WindTurbineScreen extends PlantScreen {
 		}
 	}
 
-	/**
-	 * Keeps the buttons telling the truth.
-	 *
-	 * Their labels and enabled state come from the turbine rather than from what was
-	 * clicked, so a machine stopped by a computer or by redstone while the panel is open
-	 * shows it, and the tower buttons grey out at the ends of the range its model is sold
-	 * on instead of sending commands the server would refuse.
-	 */
+	/** Keeps the buttons telling the truth. */
 	private void refreshWidgets() {
 		WindTurbineBlockEntity turbine = turbine();
 		if (turbine == null) return;
 
 		TurbineSpec spec = turbine.spec();
 		stopButton.setMessage(Component.translatable(turbine.isStoppedByPlayer() ? "screen.electricity.wind_turbine.start" : "screen.electricity.wind_turbine.stop"));
-		// the label is one word so it fits the button; what the word means goes in the
+		// the label is one word so it fits the button
 		// tooltip rather than being squeezed in beside it
 		String mode = turbine.getRedstoneMode().name().toLowerCase(Locale.ROOT);
 		redstoneButton.setMessage(Component.translatable("screen.electricity.wind_turbine.redstone",
@@ -137,14 +111,7 @@ public class WindTurbineScreen extends PlantScreen {
 		separator(graphics, 40);
 	}
 
-	/**
-	 * Why the machine is or is not running.
-	 *
-	 * The reason matters more than the fact. A turbine sitting at zero output is the one
-	 * thing a player cannot diagnose from outside, and there are four different causes -
-	 * a gale, a computer, a redstone signal, or their own hand on the brake - which look
-	 * identical from the ground.
-	 */
+	/** Why the machine is or is not running. */
 	private void drawStatus(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		String key;
 		int colour;
@@ -171,12 +138,7 @@ public class WindTurbineScreen extends PlantScreen {
 		state(graphics, Component.translatable(key), colour, 46);
 	}
 
-	/**
-	 * Produced, and what the wind was offering before anything got in the way.
-	 *
-	 * Drawn as one bar with the potential behind the actual, so curtailment is visible as
-	 * a gap rather than having to be inferred from two numbers.
-	 */
+	/** Produced, and what the wind was offering before anything got in the way. */
 	private void drawPower(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
 		double rated = spec.ratedPowerKw();
@@ -195,21 +157,11 @@ public class WindTurbineScreen extends PlantScreen {
 		notch(graphics, POWER_BAR_Y, barWidth(turbine.getActivePowerLimit() / rated), 0xFF202020);
 	}
 
-	/**
-	 * The wind, against the thresholds of this particular machine.
-	 *
-	 * The zones are the whole point: a bare number cannot tell a player that 2 m/s is
-	 * below cut-in and therefore hopeless, while 23 is above the storm onset and therefore
-	 * being deliberately thrown away. The scale runs to the cut-out, so the same gauge
-	 * reads correctly for every model in the catalogue.
-	 */
+	/** The wind, against the thresholds of this particular machine. */
 	private void drawWind(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
 		double scale = spec.cutOutSpeed();
 		// the mean, not the instantaneous wind: this is the figure the machine supervises on and
-		// the one a wind report quotes, and a needle chasing every gust would be unreadable. The
-		// gust gets its own mark below, because it is what explains a shutdown in wind that looks
-		// well short of the cut-out
 		double wind = turbine.getMeanWindSpeed();
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 86, LABEL_COLOUR, false);
@@ -231,26 +183,15 @@ public class WindTurbineScreen extends PlantScreen {
 		separator(graphics, 112);
 	}
 
-	/**
-	 * The tower, in segments and in the hub height they add up to.
-	 *
-	 * Both numbers are shown because they are the same fact in the two units the player
-	 * needs: segments are what it costs, metres are what it earns.
-	 */
+	/** The tower, in segments and in the hub height they add up to. */
 	private void drawTower(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
-		// the hub height this adds up to is already on the nameplate line, and repeating it
+		// the hub height this adds up to is already on the nameplate line
 		// here is what ran the string under the tower buttons
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower",
 				turbine.getTowerSegments(), spec.maxTowerSegments()), leftPos + 8, topPos + 117, LABEL_COLOUR, false);
 
-		// what one more block of tower would be worth, so the climb is a decision rather than
-		// a gamble.
-		//
-		// The exponent comes from the server with the rest of the machine's state, because it is
-		// a property of the ground this tower stands on and the air over it tonight: the same
-		// block is worth two percent on a beach and eight in a forest, and a figure baked in
-		// here would have told every player the same lie.
+		// what one more block of tower would be worth
 		int segments = turbine.getTowerSegments();
 		if (segments < spec.maxTowerSegments()) {
 			double here = turbine.getReportedPowerKw();
@@ -279,13 +220,7 @@ public class WindTurbineScreen extends PlantScreen {
 		ElectricityNetworking.INSTANCE.sendToServer(TurbineControlPayload.of(targetPos, action));
 	}
 
-	/**
-	 * The curtailment setpoint.
-	 *
-	 * Sends on release rather than on every pixel of travel, because dragging across the
-	 * whole range would otherwise be a hundred packets and a hundred block updates for one
-	 * decision.
-	 */
+	/** The curtailment setpoint. */
 	private class LimitSlider extends AbstractSliderButton {
 		private boolean beingDragged;
 

@@ -1,29 +1,15 @@
 #!/usr/bin/env python3
-"""Generates the OBJ geometry for the photovoltaic blocks and the meteorological mast.
+"""The photovoltaic models: four mountings, the inverter, the combiner, the met mast.
 
     python3 tools/gen_pv_models.py
 
-Writes into src/main/resources/assets/electricity/models/.
+Authored about the block's centre, facing north, because the mod's own renderer places them that way.
 
-The primitives are in ``modellib.py``; the group-name contracts with the renderers are documented
-there.  What is here is the design of each machine: which parts it is made of and where they go.
+CORE_RADIUS / CORE_OFFSET / CORE_Y / MC4 are gen_cable_models' figures repeated here: every length of
+cable a machine shows has to be the same product as the run a player lays next to it.  DOOR_LOW,
+DOOR_HIGH and DISPLAY_* are the inverter's front, and pv_cabinet_door is drawn round them.
 
-How much of a real machine is drawn
------------------------------------
-Every part a photograph of the real thing shows from ten metres away, and nothing smaller.  So a
-rack has driven I-section piers with a bolted cleat at each purlin, a diagonal brace between the
-front and back rows, channel purlins with their open side down, module rails on top of those, and a
-clamp at every module edge - because all of that is what you see - and no earth bonding jumpers,
-because at a block to ten metres they would be one pixel and their only effect would be noise.
-
-One module everywhere
----------------------
-``pv_module.png`` is one whole laminate, frame and all, so every piece of glass in the mod is
-exactly one texture tile: 0.42 of a block across by 0.94 along, which is the 1134 by 2278 of the
-product every one of these mountings carries.  That is a constraint on the layouts rather than on
-the texture - a bay has to come out a whole module - and it is what makes a mixed field read as one
-plant, because a module is the same size on a table, on a rack and on a tracker.  ``uv_rot`` turns
-the mapping for the two mountings whose modules lie across the row instead of along it.
+Group names are a contract - see CLAUDE.md section 5.
 """
 
 import math
@@ -38,7 +24,7 @@ from modellib import (FITTING, ROUND, Mesh, angle, arc, bolt, box, channel, clad
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
-# Materials, and the texture each one resolves to.  ObjModel prefixes textures/block/ to whatever
+# Materials, and the texture each one resolves to.
 # map_Kd names, so these are bare file names.
 MATERIALS = {
     'module': 'pv_module.png',
@@ -68,40 +54,26 @@ MATERIALS = {
     'warning': 'warning.png',
 }
 
-# Which material each face of a laminate carries.  A module is not one material: the sun side is
-# cells, the back is a backsheet with a junction box on it, and the four edges are the aluminium
-# frame that clamps the glass.
+# Which material each face of a laminate carries.
 LAMINATE = {'up': 'module', 'down': 'module_back', '*': 'module_edge'}
 
-# One module, in blocks.  Every laminate in the mod is exactly this, and a mounting's bays are laid
-# out to suit rather than the other way round.
+# One module, in blocks.
 MODULE_WIDE = 0.42
 MODULE_LONG = 0.94
 MODULE_THICK = 0.030
 
-# The tilt a fixed rack is built at, in degrees.  The same figure PvMounting declares, restated
-# here rather than imported because a Python script cannot read a Java enum - so if one changes the
-# other has to, and this comment is the note saying so.
+# The tilt a fixed rack is built at, in degrees.
 FIXED_TILT_DEG = 25.0
 
 
 def laminate(mesh, name, lo, hi, across='x', rot=None):
-    """One module: cells up, backsheet down, frame on all four edges.
-
-    ``across`` is the axis the module's *width* runs along.  A module whose length runs east-west
-    needs its picture turned a quarter, or the cell rows come out across the panel instead of along
-    it - which is the difference between a laminate and a barcode.
-
-    ``rot`` is for the one mounting whose tilt is baked rather than posed at draw time.  A tracked
-    row is authored flat and turned by a matrix; a fixed rack cannot be, because nothing about it
-    moves and it would then be the only model in the mod that needs a renderer to look right.
-    """
+    """One module: cells up, backsheet down, frame on all four edges."""
     clad_box(mesh, name, lo, hi, LAMINATE, uv_rot=0 if across == 'x' else 90, rot=rot)
 
 
 # ------------------------------------------------------------------ cable, and the contract
 
-# The pair's own figure: two pixels across, one tall, one conductor to a pixel.  Everything that
+# The pair's own figure: two pixels across, one tall, one conductor to a pixel.
 # draws cable uses it, so nothing swells at a join.
 LEAD = 0.0625
 # What a run laid across the ground is, from gen_cable_models.py.
@@ -111,10 +83,7 @@ LAID = 2 * LEAD
 EDGE = 0.50 - LEAD
 
 
-# The string cable's own figures, from gen_cable_models.py, in blocks rather than sixteenths.  Every
-# length of cable a machine shows has to be *the same product* as the one a player lays next to it - same
-# radius, same lane spacing, same height off the ground - or the run steps in thickness where it meets the
-# machine.  Change one of these and change it there.
+# The string cable's own figures, from gen_cable_models.py, in blocks rather than sixteenths.
 CORE_RADIUS = 0.65 / 16.0
 CORE_OFFSET = 1.05 / 16.0
 CORE_Y = CORE_RADIUS
@@ -124,25 +93,19 @@ MC4 = ((0.80 / 16.0, 0.80 / 16.0, 0.00, 0.12),
        (2.25 / 16.0, 0.95 / 16.0, 0.44, 0.90),
        (0.70 / 16.0, 0.62 / 16.0, 0.90, 1.00))
 MC4_Y = max(radius for _, radius, _, _ in MC4)
-# How far short of the middle a machine's stub stops, so four of them never cross under it.
+# How far short of the middle a machine's stub stops
 UNDER = 0.20
 
 
 def spin_y(point, degrees):
-    """A point turned about the block's own vertical axis, which the machines' frame centres on."""
+    """A point turned about the block's own vertical axis"""
     angle = math.radians(degrees)
     c, s = math.cos(angle), math.sin(angle)
     return (point[0] * c + point[2] * s, point[1], -point[0] * s + point[2] * c)
 
 
 def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADIUS):
-    """The pair swept along a path, one tube a core - the string cable's own geometry.
-
-    ``points`` is the centreline for a run along z, and each core takes it offset in x by a lane; ``turn``
-    then puts the whole thing on whichever side of the block it belongs to.  Both ends of every tube are
-    closed, for the reason gen_cable_models closes them: an open end is a hole wherever whatever should
-    cover it does not, and these ends run under machines.
-    """
+    """The pair swept along a path, one tube a core - the string cable's own geometry."""
     faces = mesh.faces(name, 'core')
     for lane in (-lanes, lanes):
         path = [spin_y((x + lane, y, z), turn) for x, y, z in points]
@@ -150,21 +113,13 @@ def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADI
 
 
 def tail_rise(z_from, z_to):
-    """A pair's last stretch before a plug, lifting from the cable's axis onto the plug's.
-
-    Same shape gen_cable_models gives it: a plug is fatter than the cable it is moulded onto, so one
-    lying on the ground holds its axis higher and the cable rises into it.
-    """
+    """A pair's last stretch before a plug, lifting from the cable's axis onto the plug's."""
     step = 0.9 / 16.0 * (1.0 if z_to > z_from else -1.0)
     return [(0.0, CORE_Y, z_from), (0.0, MC4_Y, z_from + step), (0.0, MC4_Y, z_to)]
 
 
 def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, lanes=CORE_OFFSET, at_x=0.0):
-    """Two MC4 plugs on the end of a pair, red collar on the positive pole.
-
-    ``into`` is which way the plug points along z, ``y`` its axis - default is the plug's own radius,
-    which is a plug resting on the ground; a pair up on a rack passes the pair's own height instead.
-    """
+    """Two MC4 plugs on the end of a pair, red collar on the positive pole."""
     y = MC4_Y if y is None else y
     axis = 'z' if turn % 180 == 0 else 'x'
     for index, lane in enumerate((at_x - lanes, at_x + lanes)):
@@ -179,15 +134,7 @@ def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, lanes=CORE_OFFSET, at
 
 
 def stubs(mesh, name='stub'):
-    """A run of cable from each of the four block edges in under the machine, one group apiece.
-
-    Four groups rather than one rotated four ways, because a renderer draws a group once: the pose map is
-    keyed by group name, and the renderer includes only the sides a run has actually been laid against.
-
-    Each stops short of the middle, at UNDER, and that is what lets four coexist: a north pair's lanes run
-    in x and an east pair's in z, so they would cross in the middle.  A laid run solves that with a
-    junction box; a machine has its plinth over the top.
-    """
+    """A run of cable from each of the four block edges in under the machine, one group apiece."""
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
         group = '%s_%s' % (name, side)
         cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -UNDER)], turn=turn)
@@ -201,35 +148,21 @@ def stubs(mesh, name='stub'):
 
 
 def row_lead(mesh, x0, height, start=-0.44):
-    """The lead out of one end of a row, along the edge it is wired on.
-
-    A string has two ends - where the next row's string arrives and where this one's leaves - so
-    everything a row shows is on one edge.  A run round all four reads as a plant wrapped in wire.
-    """
+    """The lead out of one end of a row"""
     y = height + CORE_Y
     cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)])
 
 
 def row_socket(mesh, x0, height, name='harness_input', end=-1):
-    """Where the row behind plugs in: a pair of MC4s on the edge a row is wired on.
-
-    Its own group, because it is drawn only when there is something to plug into it - a socket on every
-    panel whether or not anything feeds it is a warehouse of parts rather than a wired plant.
-    """
-    # The plugs and nothing else: the lead is already there, and a short length of cable inside it put a
+    """Where the row behind plugs in: a pair of MC4s on the edge a row is wired on."""
+    # The plugs and nothing else: the lead is already there
     # second tube end on the same plane as the lead's own.
     mc4_pair(mesh, name, -0.44 if end < 0 else 0.44, y=height + CORE_Y,
              into=-1.0 if end < 0 else 1.0, lanes=CORE_OFFSET, at_x=x0 - CORE_OFFSET)
 
 
 def row_entry(mesh, x0, height, end=-1):
-    """The corner between a laid run and the edge a row is wired on, and the riser up onto the rack.
-
-    A run arrives down the middle of the block, where a laid run sits, and a row's leads are out at its
-    edge.  Each core turns at its own z - the outer one later than the inner one - so the pair keeps its
-    spacing round the corner instead of the two converging on it, which is the same swap a bend in
-    gen_cable_models makes with concentric arcs and is a mitre here because it is three pixels wide.
-    """
+    """The corner between a laid run and the edge a row is wired on, and the riser up onto the rack."""
     name = 'harness_entry_north' if end < 0 else 'harness_entry_south'
     edge = -0.5 if end < 0 else 0.5
     corner = -EDGE if end < 0 else EDGE
@@ -243,12 +176,7 @@ def row_entry(mesh, x0, height, end=-1):
 
 
 def row_harness(mesh):
-    """A tracked row's harness: a run along the ground down the middle, and nothing else.
-
-    Down the middle rather than along an edge because a tracked row has no edge to run along - the
-    modules above it turn through sixty degrees and a cable on the flank would spend half the day
-    underneath them.  Which puts it on the block's own axis, exactly where a laid run sits.
-    """
+    """A tracked row's harness: a run along the ground down the middle, and nothing else."""
     cable_pair(mesh, 'harness', [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, 0.5)])
     for end, side in ((-1, 'north'), (1, 'south')):
         name = 'harness_plug_%s' % side
@@ -260,15 +188,7 @@ def row_harness(mesh):
 # ------------------------------------------------------------------ the flat table
 
 def flat_table():
-    """A ballasted table lying flat: two modules on an aluminium frame on concrete ballast.
-
-    What a flat-roof or a low-ground system actually is: nothing is driven into anything.  The
-    frame stands on precast ballast blocks whose weight is the only thing holding it down, which is
-    why the blocks are drawn at all - they are the largest single part of the machine and the one
-    that says at a glance it is *ballasted* rather than piled.
-
-    Low enough to walk over rather than round, which is what a table on a roof is.
-    """
+    """A ballasted table lying flat: two modules on an aluminium frame on concrete ballast."""
     mesh = Mesh()
 
     # the ballast: four precast blocks, one under each corner of the frame
@@ -278,7 +198,7 @@ def flat_table():
             box(mesh, ballast, (x, 0.0, z), (x + 0.14, 0.045, z + 0.14), uv_scale=0.6)
 
     frame = mesh.faces('frame', 'frame')
-    # the perimeter frame: channel, open side down so water leaves it
+    # the perimeter frame: channel
     for z0, z1 in ((-0.47, -0.41), (0.41, 0.47)):
         channel(mesh, frame, (-0.47, 0.045, z0), (0.47, 0.085, z1), along='x', opening='down',
                 uv_scale=0.35)
@@ -294,7 +214,7 @@ def flat_table():
     for x0 in (-0.44, 0.02):
         laminate(mesh, 'modules', (x0, 0.105, -MODULE_LONG / 2), (x0 + MODULE_WIDE, top, MODULE_LONG / 2))
 
-    # the clamps: a mid clamp between the two modules and an end clamp outside each, which is what
+    # the clamps: a mid clamp between the two modules and an end clamp outside each
     # actually holds a laminate onto a rail
     clamps = mesh.faces('modules', 'frame')
     # inside the rail's own span rather than flush with its edge, so no two faces share a plane
@@ -304,9 +224,7 @@ def flat_table():
         for x in (-0.455, 0.435):
             box(mesh, clamps, (x, 0.101, z), (x + 0.02, top + 0.004, z + 0.03), uv_scale=0.12)
 
-    # The harness: a short tail out of the corner and a socket on the far edge, and that is all.  A
-    # table's whole footprint is glass, so there is no edge to run a lead along - a cable across a
-    # cell is a cell out of the string.
+    # The harness: a short tail out of the corner and a socket on the far edge, and that is all.
     row_lead(mesh, EDGE, 0.0, start=0.38)
     row_socket(mesh, EDGE, 0.0)
     for end in (-1, 1):
@@ -318,31 +236,7 @@ def flat_table():
 # ------------------------------------------------------------------ the fixed rack
 
 def tilted_rack():
-    """A fixed rack at the mounting's own tilt, tipping towards -z.
-
-    Towards -z because the block's default facing is north and PvArrayBlock reads the plane's
-    bearing off that facing, so the geometry and the physics have to agree about which way is
-    downhill.
-
-    What a real fixed rack is made of, in the order it goes up: piers driven into the ground, a
-    bolted cleat on each, a purlin across the cleats front and back, a diagonal brace tying the two
-    rows together, rails along the slope, and the modules clamped to the rails.  Every one of those
-    is drawn here, because every one of them is visible from across a field - a rack seen from the
-    back is mostly structure.
-
-    Everything above the ground is in the plane's own frame
-    ------------------------------------------------------
-    The purlins, the rails, the modules and the clamps are all written flat and turned by one
-    rotation about the pivot, and the piers are cut to wherever that rotation leaves the purlin
-    above them.  Nothing is placed at a height worked out by hand, which is the fault that had the
-    purlins lying level under a plane at 25 degrees and the rear piers standing clear above it.
-
-    Where the pivot goes
-    --------------------
-    Not where it is convenient - where it has to be for the tilted plane to fit inside the block.
-    Tipping a plane 0.94 deep by 25 degrees moves its two edges 0.199 up and down, so a pivot
-    chosen by eye put the low edge below the block's floor.
-    """
+    """A fixed rack at the mounting's own tilt, tipping towards -z."""
     mesh = Mesh()
     tilt = FIXED_TILT_DEG
     sin_tilt = math.sin(math.radians(tilt))
@@ -361,7 +255,7 @@ def tilted_rack():
 
     piers = mesh.faces('piers', 'steel')
     plate = mesh.faces('piers', 'plate')
-    # two rows of piers, the front pair short and the back pair tall, each an I-section driven into
+    # two rows of piers, the front pair short and the back pair tall
     # the ground and cut to where its own purlin actually is
     heads = {}
     for x in (-0.38, 0.30):
@@ -370,13 +264,13 @@ def tilted_rack():
             heads[(x, z)] = head
             ibeam(mesh, piers, (x, 0.0, head[2] - 0.045), (x + 0.08, head[1] + 0.004, head[2] + 0.045),
                   uv_scale=0.3)
-            # the cleat: an angle bolted through the pier, which is what the purlin sits on
+            # the cleat: an angle bolted through the pier
             angle(mesh, piers, (x - 0.006, head[1] - 0.030, head[2] - 0.048),
                   (x + 0.086, head[1] + 0.004, head[2] + 0.048), along='x', web=0.40, uv_scale=0.2)
             bolt(mesh, plate, (x + 0.04, head[1] - 0.014, head[2] - 0.050), 'z', 0.007, 0.016,
                  uv_scale=0.15)
 
-    # the diagonal brace between the two rows, from the foot of the front pier to the head of the
+    # the diagonal brace between the two rows
     # back one, which is what stops a rack racking
     for x in (-0.38, 0.30):
         front = heads[(x, purlin_z[0])]
@@ -384,12 +278,8 @@ def tilted_rack():
         strut(mesh, piers, (x + 0.04, 0.055, front[2] + 0.045),
               (x + 0.04, back[1] - 0.050, back[2] - 0.040), 0.013, 0.010, uv_scale=0.25)
 
-    # The two purlins across the piers, in the plane's frame, channel with the open side down.
-    #
-    # One object each rather than both in one, and that is for the collision rather than the drawing:
+    # The two purlins across the piers, in the plane's frame
     # tools/check_hitboxes.py cuts a shape from each object it finds, and two purlins at different
-    # heights in one object have a bounding box that fills the air between them.  Apart they are two
-    # flat boxes where the two purlins actually are.
     for index, z in enumerate(purlin_z):
         channel(mesh, mesh.faces('purlin_%d' % index, 'steel'),
                 (-0.47, pivot_y - purlin_depth, z - 0.030), (0.47, pivot_y, z + 0.030),
@@ -407,7 +297,7 @@ def tilted_rack():
     for x0 in (-0.44, 0.02):
         laminate(mesh, 'modules', (x0, glass, -depth), (x0 + MODULE_WIDE, top, depth), rot=spin)
 
-    # the clamps along the rails, three a side, which is what a real rack shows most of
+    # the clamps along the rails, three a side
     clamps = mesh.faces('modules', 'frame')
     for z in (-0.36, 0.0, 0.36):
         box(mesh, clamps, (-0.030, glass - 0.004, z - 0.018), (0.030, top + 0.004, z + 0.018),
@@ -416,8 +306,8 @@ def tilted_rack():
             box(mesh, clamps, (x, glass - 0.004, z - 0.018), (x + 0.020, top + 0.004, z + 0.018),
                 uv_scale=0.1, rot=spin)
 
-    # The harness: the same pair as a table's, on the ground rather than on the modules.  A rack
-    # stands off the ground on piers, so the run crosses to the next row underneath it.
+    # The harness: the same pair as a table's, on the ground rather than on the modules.
+    # stands off the ground on piers
     row_lead(mesh, EDGE, 0.0)
     row_socket(mesh, EDGE, 0.0)
     for end in (-1, 1):
@@ -429,38 +319,18 @@ def tilted_rack():
 # ------------------------------------------------------------------ the single-axis tracker
 
 # Half-length of the drive bay at the centre of a tracked row, in blocks.
-#
-# A plane rotating about an axis sweeps a disc of radius equal to its own semi-width, so any fixed
-# part inside that disc gets swept through.  Rather than trying to thread the pier and the drive
-# between the module edges - which cannot be done, because the plane passes through every angle -
-# the fixed parts live in a bay at the centre of the row and the modules stop short of it.
-#
-# It is also what a real independent-row tracker looks like: one bay with no module in it, because
-# that is where the slew drive is.
 DRIVE_BAY = 0.055
 
 
 def single_axis():
-    """A 1P horizontal tracker: one module in portrait across a torque tube, on driven piers.
-
-    1P is what most of the world now builds - a single row of portrait modules whose long edge runs
-    across the tube - and it is also the layout that lets every module here be one whole texture
-    tile: two tiles laid across the row, 0.94 of a block along their length by 0.42 across.
-
-    The plane is authored flat because its tilt is a matrix at draw time: the buffer cache is keyed
-    by block position and rebuilt only when the light changes, so baking a rotation into the
-    vertices would freeze the row wherever it happened to be.
-
-    The tube runs north-south, which is the only axis from which a row can follow a sun that travels
-    east to west - and it is why PvArrayBlock forces a tracker to that orientation.
-    """
+    """A 1P horizontal tracker: one module in portrait across a torque tube, on driven piers."""
     mesh = Mesh()
     axis_y = 0.62
     bay = DRIVE_BAY
 
     pier = mesh.faces('pier', 'steel')
     plate = mesh.faces('pier', 'plate')
-    # one central pier rather than a pair, because a pair either side of the bay would stand in the
+    # one central pier rather than a pair
     # swept disc: within one block a real row has a pier every six metres
     ibeam(mesh, pier, (-0.075, 0.0, -bay + 0.008), (0.075, axis_y - 0.105, bay - 0.008),
           uv_scale=0.3)
@@ -469,10 +339,6 @@ def single_axis():
         bolt(mesh, plate, (x + 0.015, 0.028, 0.0), 'y', 0.009, 0.020, uv_scale=0.15)
 
     # The slew drive: a housing round the tube, wholly inside the bay, with the motor off its side.
-    #
-    # One housing rather than a bearing block under a drive block: the two shared the bay and therefore
-    # shared a volume and a plane, and on a real row the drive pier *is* the bearing at that pier -
-    # the plain bearings are on the piers either side, which are in the next block along.
     clad_box(mesh, 'motor', (-0.105, axis_y - 0.105, -bay + 0.002), (0.105, axis_y + 0.105, bay - 0.002),
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=1.0)
     motor = mesh.faces('motor', 'steel')
@@ -486,18 +352,12 @@ def single_axis():
     pivot(mesh, 'tube', (0.0, axis_y, 0.0))
 
     tube = mesh.faces('rotate_tube', 'steel')
-    # eighty sides: the tube is the one part of a tracker a player walks up to, and at 0.045 of a
+    # eighty sides: the tube is the one part of a tracker a player walks up to
     # block radius it is nearly a metre across in this mod's scale
     cylinder(mesh, tube, (0.0, axis_y, 0.0), 'z', 0.045, 0.49, sides=ROUND, uv_scale=1.0,
              uv_along=6.0, caps=mesh.faces('rotate_tube', 'steel_end'))
 
-    # The module rails, across the tube, which is what a 1P row is clamped to - and the modules, one
-    # bay each side of the drive.
-    #
-    # A group per bay rather than one for both, and that is not tidiness: a group's bounding box is what
-    # the clearance checker sweeps and what the collision is cut from, and one group spanning both bays
-    # has a box that covers the drive between them.  Everything named rotate_ turns with the tube, so
-    # two groups turn exactly as one did.
+    # The module rails, across the tube, which is what a 1P row is clamped to - and the modules
     glass = axis_y + 0.062
     for index, (z0, rails_z) in enumerate(((-0.48, (-0.44, -0.10)), (bay, (0.10, 0.44)))):
         rails = mesh.faces('rotate_rails_%d' % index, 'frame')
@@ -524,29 +384,7 @@ def single_axis():
 # ------------------------------------------------------------------ the dual-axis pedestal
 
 def dual_axis():
-    """A pedestal, an azimuth collar, and an elevation frame carrying two modules.
-
-    Two moving groups, and the reason the azimuth one exists is worth stating: it turns to face the
-    sun's bearing, which in this world is due east all morning and due west all afternoon.  It
-    therefore swings a half turn at noon - and that is invisible, because at noon the elevation frame
-    is lying flat and a flat plate turned about its own vertical axis looks identical.  Which is
-    exactly what a real azimuth-elevation machine does as the sun crosses its zenith.
-
-    Everything fixed is inside the drive bay, and that is what sets every dimension here
-    -------------------------------------------------------------------------------------
-    A plane turning about the elevation axis sweeps a *disc* of radius equal to its own semi-width -
-    0.47 of a block - so it passes through anything standing at a z where the plane exists, whatever
-    height that thing is.  The disc's lowest point is 0.28 up, which is below the top of the column,
-    so the column, the slew ring, the bearing housing and the drive motor all have to be narrower
-    than the gap the modules leave down the middle.  That gap is 0.066, so the column is 0.10 of a
-    block across and the ring 0.124 - a metre and a bit at this mod's scale, which is what a real
-    pedestal is - and the elevation drive is a worm box on the bearing rather than the linear
-    actuator this had, because an actuator reaching out under the frame stands exactly where the
-    frame goes.
-
-    The elevation tube inside the bearing housing is the one place geometry is allowed to intersect,
-    because that is a bearing: a cylinder turning about its own axis inside a housing sweeps nothing.
-    """
+    """A pedestal, an azimuth collar, and an elevation frame carrying two modules."""
     mesh = Mesh()
     top = 0.55
     bay = 0.066
@@ -595,8 +433,6 @@ def dual_axis():
              uv_along=5.0, caps=mesh.faces('rotate_elevation', 'steel_end'))
     glass = pivot_y + 0.032
     # a group per bay, for the same reason the tracked row has one: everything named rotate_elevation
-    # turns together whether it is one group or two, and two have bounding boxes that leave the
-    # bearing between them alone
     for index, (z0, rails_z) in enumerate(((-0.486, (-0.45, -0.10)), (bay, (0.10, 0.45)))):
         frame = mesh.faces('rotate_elevation_%d' % index, 'frame')
         for z in rails_z:
@@ -614,10 +450,7 @@ def dual_axis():
                 box(mesh, clamps, (x, glass - 0.004, z), (x + 0.03, glass + MODULE_THICK + 0.004,
                                                           z + 0.024), uv_scale=0.1)
 
-    # The harness: the run along the ground and nothing else, the same as a single-axis row.  It had a
-    # service coil round the column - a couple of turns left slack so a pedestal that spins can wind and
-    # unwind - and that is what a real azimuth drive is given, but at this scale it read as a knot of
-    # cable round the post rather than as slack.
+    # The harness: the run along the ground and nothing else, the same as a single-axis row.
     row_harness(mesh)
     return mesh
 
@@ -625,30 +458,18 @@ def dual_axis():
 # ------------------------------------------------------------------ the inverter
 
 # The inverter's front, as one set of figures: the doors, the window in the left leaf, and the band
-# below them the DC compartment or its blanking plate fills.  pv_cabinet_door draws round the window, so
-# these and the texture's own bands are one layout - move one and move the other.
 DOOR_LOW, DOOR_HIGH = 0.440, 0.940
 DISPLAY_LOW, DISPLAY_HIGH = 0.585, 0.735
 
 
 def inverter():
-    """A station inverter: a cabinet on a plinth, double doors, a rain hood, roof fans.
-
-    Authored at the size of the commercial machine and scaled per product by the renderer, the same
-    trick the turbines use: the catalogue spans a factor of two hundred and fifty in nameplate and
-    the difference on screen is a transform rather than four assets.
-
-    What makes it read as switchgear rather than as a grey box: the hood overhangs and has a drip
-    edge, the doors are two leaves with a centre stile between them, the ventilation is where a real
-    machine draws air - low on the doors, out through the roof - and there is a plinth under it,
-    because a cabinet standing straight on the ground rusts from the bottom.
-    """
+    """A station inverter: a cabinet on a plinth, double doors, a rain hood, roof fans."""
     mesh = Mesh()
     body_y = 0.98
     face = -0.30
     back = 0.28
 
-    # the plinth: a channel base, wider than the cabinet, which is what the cabinet is bolted to
+    # the plinth: a channel base, wider than the cabinet
     clad_box(mesh, 'plinth', (-0.465, 0.0, -0.325), (0.465, 0.055, 0.305),
              {'up': 'plate', '*': 'concrete'}, uv_scale=0.7)
 
@@ -660,7 +481,7 @@ def inverter():
             box(mesh, mesh.faces('cabinet', 'frame'), (x, 0.055, z), (x + 0.01, body_y, z + 0.01),
                 uv_scale=0.1)
 
-    # the rain hood: crowned, overhanging on all four sides, with a drip edge turned down
+    # the rain hood: crowned, overhanging on all four sides
     clad_box(mesh, 'hood', (-0.47, body_y, face - 0.03), (0.47, body_y + 0.035, back + 0.03),
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.8)
     box(mesh, mesh.faces('hood', 'cabinet'), (-0.47, body_y - 0.018, face - 0.03),
@@ -690,14 +511,12 @@ def inverter():
     clad_box(mesh, 'display', (-0.330, DISPLAY_LOW, face - 0.048), (-0.060, DISPLAY_HIGH, face - 0.036),
              {'north': 'display', '*': 'cabinet'})
 
-    # The roof fans: two guarded impellers on an upstand, standing *on* the hood rather than inside it.
-    # They used to sit at body_y + 0.030, which is inside the hood's own 0.035 of thickness, so the
-    # impeller was buried under the roof's top face and only the wire guard showed above it.
+    # The roof fans: two guarded impellers on an upstand
     roof = body_y + 0.035
     for x in (-0.22, 0.22):
         pivot(mesh, 'fan_%s' % ('west' if x < 0 else 'east'), (x, roof + 0.010, -0.01))
         guard = mesh.faces('fan_guard', 'steel')
-        # the upstand the assembly is bolted into, and the collar it stands in
+        # the upstand the assembly is bolted into
         cylinder(mesh, guard, (x, roof + 0.005, -0.01), 'y', 0.112, 0.005, sides=ROUND, uv_scale=0.4)
         cylinder(mesh, guard, (x, roof + 0.013, -0.01), 'y', 0.104, 0.006, sides=ROUND, uv_scale=0.4)
         # the finger guard: three concentric rings on eight spokes, in wire rather than in bar
@@ -719,7 +538,7 @@ def inverter():
     for x, name in ((-0.22, 'rotate_fan_west'), (0.22, 'rotate_fan_east')):
         fan = mesh.faces(name, 'steel')
         hub = (x, roof + 0.012, -0.01)
-        # the hub: the motor's own can, closed at the top where the spinner is
+        # the hub: the motor's own can
         cylinder(mesh, fan, (x, roof + 0.008, -0.01), 'y', 0.026, 0.008, sides=FITTING,
                  uv_scale=0.2, caps=fan)
         cylinder(mesh, fan, (x, roof + 0.018, -0.01), 'y', 0.020, 0.004, sides=FITTING,
@@ -736,7 +555,7 @@ def inverter():
         clad_box(mesh, 'grille', (x, 0.30, -0.24), (x + 0.0025, 0.86, 0.22),
                  {side: 'vent', '*': 'cabinet'})
 
-    # the wire fitting: on the roof at the east end, clear of both fans and both eyebolts.  A player
+    # the wire fitting: on the roof at the east end, clear of both fans and both eyebolts.
     # clicks this, so ObjDefinitions names the group and WireManager stores wires by its index.
     steel = mesh.faces('hardware', 'steel')
     box(mesh, steel, (0.356, body_y + 0.002, 0.096), (0.444, body_y + 0.018, 0.184), uv_scale=0.2)
@@ -744,8 +563,6 @@ def inverter():
                   (0.40, body_y + 0.050, 0.14), 0.108)
 
     # The lower front, in two mutually exclusive groups the renderer picks between: 'section' is the DC
-    # compartment a fitted combiner puts there, 'blank' the plate that covers the aperture otherwise.
-    # The section stands proud and the blank is flush, which is why the block has two collision shapes.
     clad_box(mesh, 'section', (-0.360, 0.100, face - 0.072), (0.360, 0.415, face - 0.035),
              {'north': 'dc_section', 'up': 'frame', '*': 'cabinet'})
     glands = mesh.faces('section', 'steel')
@@ -756,7 +573,7 @@ def inverter():
     clad_box(mesh, 'blank', (-0.405, 0.098, face - 0.035), (0.405, 0.425, face),
              {'north': 'blank', '*': 'cabinet'})
 
-    # where the direct current comes in, one run per side, drawn only for the sides it comes in from
+    # where the direct current comes in, one run per side
     stubs(mesh, 'entry')
     return mesh
 
@@ -764,17 +581,7 @@ def inverter():
 # ------------------------------------------------------------------ the combiner box
 
 def combiner():
-    """A string combiner on a post: an enclosure, a hood, a window, and the switch that isolates it.
-
-    Authored at the size the collision box claims, which is a box about waist high on this mod's
-    scale rather than the eight hundred millimetres a real one is.  Everything in this mod is drawn
-    for legibility rather than to scale, and the collision shape agrees with the drawing, which is
-    the part that matters.
-
-    The handle is its own rotating group so the renderer can put it up or down off the block state.
-    A load-break switch reads at a distance, which is the whole reason it is drawn: a player walking
-    a field can see which group is isolated.
-    """
+    """A string combiner on a post: an enclosure, a hood, a window"""
     mesh = Mesh()
     box_y0, box_y1 = 0.38, 0.78
 
@@ -805,7 +612,7 @@ def combiner():
         box(mesh, mesh.faces('door', 'steel'), (0.185, y, -0.110), (0.198, y + 0.040, -0.096),
             uv_scale=0.1)
 
-    # the gland plate underneath, where every string arrives: one row of them, which is what the
+    # the gland plate underneath, where every string arrives: one row of them
     # underside of a real box looks like and the only view that says how many ways it has
     clad_box(mesh, 'glands', (-0.195, box_y0 - 0.025, -0.070), (0.195, box_y0, 0.070),
              {'down': 'plate', '*': 'steel'}, uv_scale=0.4)
@@ -825,9 +632,7 @@ def combiner():
     # where the strings come in and the trunk leaves, one run per side of the block, and the riser
     # that carries them up the post into the glands
     stubs(mesh, 'entry')
-    # the riser up the post, at exactly the cross-section of the run it continues - a join that
-    # changes thickness halfway is the one thing a player's eye lands on.  From the top of the hub
-    # rather than from the ground, so it does not share a volume with it.
+    # the riser up the post, at exactly the cross-section of the run it continues
     riser = mesh.faces('post', 'core')
     for lane in (-CORE_OFFSET, CORE_OFFSET):
         tube(mesh, riser, [(lane, CORE_Y, UNDER - 0.02), (lane, CORE_Y, 0.04),
@@ -847,22 +652,7 @@ def combiner():
 # ------------------------------------------------------------------ the met station
 
 def met_mast():
-    """A ten-metre mast with nine instruments, each at the height its own standard puts it.
-
-    A block is ten metres throughout this mod, so a one-block mast is a ten-metre one - which is
-    exactly where the world's weather services measure wind, and where the anemometer goes.
-    Everything else belongs much lower:
-
-      * radiometers on a boom at 3.5 m, pointing away from the mast so its shadow cannot fall on them
-      * the radiation shield at 2 m, which is the standard screen height for air temperature
-      * the snow gauge on its own arm at 2 m looking down at clear ground - the same two metres
-        MetStationBlockEntity works its depth out from
-      * wind at the top, clear of all of it
-
-    A real mast is a tube in two sections with a coupling, standing on a hinged base plate, with a
-    logger enclosure at chest height and a lightning finial above everything.  All four are here:
-    they are what a met mast looks like from twenty metres, which is the distance it is seen from.
-    """
+    """A ten-metre mast with nine instruments"""
     mesh = Mesh()
 
     wind_y = 1.0
@@ -874,10 +664,6 @@ def met_mast():
     ends = mesh.faces('mast', 'steel_end')
     plate = mesh.faces('mast', 'plate')
     # Two sections with a coupling, tapering: the lower one heavier than the upper.
-    #
-    # Only the ends anything can see are capped.  The four internal ones - where a section meets the
-    # coupling - would be four discs on two planes with the tube's own wall in front of them, which is
-    # exactly the coplanar pair that flickers, and there were two hundred and sixty-six of them here.
     cylinder(mesh, mast, (0.0, 0.28, 0.0), 'y', 0.038, 0.24, sides=ROUND, uv_scale=1.0,
              uv_along=3.0, taper=0.86)
     cylinder(mesh, mast, (0.0, 0.30, 0.0), 'y', 0.043, 0.022, sides=ROUND, uv_scale=0.3)
@@ -894,9 +680,7 @@ def met_mast():
     cylinder(mesh, mast, (0.0, 1.055, 0.0), 'y', 0.008, 0.045, sides=FITTING, uv_scale=0.2,
              taper=0.35, caps=ends, cap_ends=(1,))
 
-    # the logger: a small enclosure strapped to the mast at chest height, where it is read from
-    # plain sheet rather than the inverter's door: that texture is a picture with a frame drawn round
-    # it, and six tenths of a framed picture is a frame with its edges cut off
+    # the logger: a small enclosure strapped to the mast at chest height
     clad_box(mesh, 'logger', (-0.062, 0.10, -0.105), (0.062, 0.20, -0.038),
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=1.0)
     for y in (0.115, 0.185):
@@ -911,29 +695,18 @@ def met_mast():
              caps=boom)
     box(mesh, boom, (-0.010, radiometer_y - 0.115, 0.155), (0.010, radiometer_y - 0.014, 0.175),
         uv_scale=0.2, rot=((0.0, radiometer_y - 0.014, 0.165), 'x', 34.0))
-    # the screen boom, lower down
+    # the screen boom
     box(mesh, boom, (-0.016, screen_y - 0.016, 0.030), (0.016, screen_y + 0.016, 0.30), uv_scale=0.3)
     cylinder(mesh, boom, (0.0, screen_y, 0.0), 'y', 0.044, 0.026, sides=FITTING, uv_scale=0.2,
              caps=boom)
 
     def radiometer(name, z, radius, dome_radius, ring=False, downward=False):
-        """One radiometer: a machined body on three levelling feet, under a glass dome.
-
-        Thirty-two sides rather than eighty, and that is the rule this whole mod's geometry follows
-        rather than an exception to it: the turbine's tower is eighty because it is twelve blocks of
-        steel a player stands under, and its insulator is thirty-two because it is half a block.  A
-        pyranometer dome is six hundredths of a block across.  Eighty sides on it would be sixty
-        faces nobody can resolve, on the model that already carries the most of them.
-        """
+        """One radiometer: a machined body on three levelling feet, under a glass dome."""
         body = mesh.faces(name, 'instrument')
         glass = mesh.faces(name, 'dome')
         cylinder(mesh, body, (0.0, radiometer_y + 0.030, z), 'y', radius, 0.018, sides=FITTING,
                  uv_scale=0.4, caps=body)
         # The sun shield: the white disc every pyranometer wears round its dome.
-        #
-        # Fifteen per cent proud of the body rather than thirty-five: at thirty-five the three
-        # instruments' shields overlapped each other on the boom, which is a hundred and eight coplanar
-        # faces and, on a real boom, three instruments that cannot be levelled.
         cylinder(mesh, body, (0.0, radiometer_y + 0.046, z), 'y', radius * 1.15, 0.004,
                  sides=FITTING, uv_scale=0.5, caps=body)
         hemisphere(mesh, glass, (0.0, radiometer_y + 0.050, z), dome_radius, sides=FITTING, rings=5,
@@ -949,9 +722,7 @@ def met_mast():
             cylinder(mesh, mesh.faces(name, 'steel'), (0.0, radiometer_y + 0.058, z), 'x', 0.070,
                      0.006, sides=FITTING, uv_scale=0.2)
         if downward:
-            # an albedometer is two pyranometers, one of them upside down
-            # an albedometer is two pyranometers, one of them upside down: the second dome hangs off
-            # the underside of the same body, two thousandths inside it so the two are not coplanar
+            # an albedometer is two pyranometers
             hemisphere(mesh, glass, (0.0, radiometer_y + 0.010, z), dome_radius, sides=FITTING,
                        rings=5, up=-1, squash=0.85, uv_scale=1.0)
 
@@ -960,7 +731,7 @@ def met_mast():
     radiometer('albedometer', 0.425, 0.044, 0.024, downward=True)
 
     shield = mesh.faces('shield', 'instrument')
-    # a naturally aspirated radiation shield: a stack of plates on three tie rods, each plate a
+    # a naturally aspirated radiation shield: a stack of plates on three tie rods
     # shallow cone so rain runs off it
     for i in range(6):
         y = screen_y + i * 0.018
@@ -994,9 +765,6 @@ def met_mast():
     for i in range(3):
         turn = i * 120.0
         # A cup is a hemisphere open at the top, which is the one face of the whole mast a player
-        # looks straight down into.  A hemisphere is symmetric about its own axis, so it is placed by
-        # turning its centre rather than its geometry - and its arm, which is not, is turned by the
-        # box's own rotation.
         hub = (0.0, wind_y, 0.0)
         centre = rotate((0.135, wind_y + 0.008, 0.0), hub, 'y', turn)
         hemisphere(mesh, cups, centre, 0.034, sides=FITTING, rings=4, up=-1, squash=0.9,

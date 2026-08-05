@@ -13,14 +13,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
-/**
- * An inverter in the hand, reading like the front page of its datasheet.
- *
- * The four figures a buyer actually chooses on: what it puts out, how much direct current it will take,
- * how many maximum power point trackers it has, and how efficient it is. The European efficiency is
- * derived from the load curve rather than printed beside the peak, so the tooltip and the machine cannot
- * disagree about it.
- */
+/** An inverter in the hand, reading like the front page of its datasheet. */
 public class PvInverterBlockItem extends BlockItem {
 	private final InverterSpec spec;
 

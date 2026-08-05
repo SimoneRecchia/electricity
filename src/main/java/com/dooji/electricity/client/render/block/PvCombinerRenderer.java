@@ -31,17 +31,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
-/**
- * Draws the combiner boxes, and throws their switches.
- *
- * The handle is the only moving part and it is the reason this class exists rather than a static model:
- * a load-break switch reads at a distance, so a player walking a field can see which group of rows is
- * isolated without opening anything. It swings rather than snapping, because a real one is a heavy thing
- * with a spring in it and an instant flip would be missed entirely.
- *
- * All three products share one model. The difference between a six-way box and a thirty-two way box is
- * the label on the door and the count on the panel, which is also all it is in a catalogue.
- */
+/** Draws the combiner boxes, and throws their switches. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvCombinerRenderer extends ObjRendererBase {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;

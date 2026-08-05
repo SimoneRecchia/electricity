@@ -17,14 +17,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
-/**
- * An array in the hand, reading like the header of a datasheet.
- *
- * The figures come off the spec rather than out of a translation file, so a product added by a datapack
- * describes itself without anyone writing lines for it, and the numbers in the tooltip cannot drift away
- * from the ones the array will actually run at. Efficiency and DC nameplate in particular are derived, so
- * a tooltip that disagreed with the block would mean the spec disagreed with itself.
- */
+/** An array in the hand, reading like the header of a datasheet. */
 public class PvArrayBlockItem extends BlockItem {
 	private final PvArraySpec spec;
 

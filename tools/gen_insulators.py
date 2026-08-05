@@ -1,34 +1,10 @@
 #!/usr/bin/env python3
-"""Puts the mod's one insulator into the two models that were not generated.
+"""Patches the one pin insulator into the machines that already carry one, in place.
 
     python3 tools/gen_insulators.py
 
-Rewrites the named insulator objects inside src/main/resources/assets/electricity/models/{electric_cab,
-wind_turbine}/ and adds the materials they need to those models' .mtl files.
-
-Why a patcher rather than a generator
--------------------------------------
-The turbine and the cabin are inherited art - a modelling package's output against a 1024-pixel atlas -
-and they are the two models a player already liked, so they are not being redrawn.  But their wire
-fittings were the two worst things in the mod: the turbine's was a stack of five flat green plastic
-discs and the cabin's a tall brown bushing, neither of them the brown porcelain pin insulator the pole
-and the kiosk carry.  Five objects, four different fittings, one of which was white because it had been
-given the wrong material.
-
-A distribution insulator is a catalogue part.  Whoever built the line bought the same ANSI 55-4 for
-every structure on it, so the mod should draw one insulator and put it everywhere - which for these two
-means replacing the faces of one object inside a file and leaving every other object in it alone.
-
-How the replacement is safe
----------------------------
-The wire hangs from the *centre of the insulator group's bounding box*, read off the model at runtime by
-``calculateOrientedInsulatorCenter`` - so the new geometry carries its own anchor and a wire in an
-existing world follows it.  What must not change is the *order* of the names in ``ObjDefinitions``,
-because a wire is stored against its index in that list.  Nothing here touches the names.
-
-The placements below are measured off the models they replace and then stated as constants, so running
-this twice gives the same file: reading them back out of a file this script has already rewritten would
-make the second run depend on the first.
+Rewrites the named objects in cab.obj and wind_turbine.obj and compacts the shared tables, so a second
+run is byte-identical.  Placements are constants here for the same reason.
 """
 
 import os
@@ -41,20 +17,13 @@ from modellib import Mesh, pin_insulator                                        
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
-# The materials the replacement needs, and the textures they resolve to.  Added to each model's own .mtl
-# rather than reusing whatever it had: the cabin's insulator wore seven materials off the inherited
-# atlas and the turbine's wore one called Plastic, and none of them is porcelain.
+# The materials the replacement needs
 NEEDED = {
     'insulator_porcelain': 'porcelain_brown.png',
     'insulator_steel': 'pv_steel.png',
 }
 
-# Where each one goes, measured off the object it replaces: the centre of its footprint, the height its
-# porcelain sits down at, and the diameter of its widest shed.
-#
-# The two on the cabin sat where the old bushings did, at their own width.  The turbine's stood under
-# the nacelle and was half a block across and flat - a fitting that wide would dwarf the real thing, so
-# it takes the same diameter the pole's do and keeps the old one's top, which is where the wire was.
+# Where each one goes, measured off the object it replaces: the centre of its footprint
 PLACEMENTS = {
     'electric_cab/cab.obj': (
         ('insulator_input', (-0.0255, 2.6062, -0.67165), 0.2146),
@@ -109,13 +78,7 @@ def emit(mesh, name):
 
 
 def compact(sections, verts, uvs, normals):
-    """Rewrites the shared tables to hold only what the faces still reference.
-
-    Which is what makes running this twice give the same file.  Replacing an object by appending its
-    geometry leaves the object it replaced still in the vertex table, unreferenced - so the file grows
-    every run and the second run is not the first.  Rebuilding the tables from what is actually used
-    also means the file shrinks by whatever the old fitting cost.
-    """
+    """Rewrites the shared tables to hold only what the faces still reference."""
     keep = {'v': {}, 'vt': {}, 'vn': {}}
     tables = {'v': [], 'vt': [], 'vn': []}
     source = {'v': verts, 'vt': uvs, 'vn': normals}

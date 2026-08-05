@@ -26,36 +26,13 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class ElectricCabinBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/**
-	 * The facing cab.obj was modelled at, which is not north.
-	 *
-	 * An inherited model, and it faces east. Declared here because two things have to agree about it - the
-	 * renderer, which turns the geometry, and the cells below, which turn with it - and when only the
-	 * renderer knew, the cabin's collision stood at a right angle to the cabin.
-	 */
+	/** The facing cab.obj was modelled at, which is not north. */
 	public static final Direction AUTHORED = Direction.EAST;
 
 	/**
 	 * The whole cabin as collision, cell by cell, cut from cab.obj rather than guessed.
-	 *
-	 * The machine stands in nine cells and exactly one of them used to be solid. The numbers, in the
-	 * block's own coordinates: the body runs x -0.009 to 1.009 and z -0.604 to 1.604 and is 2.358 tall;
-	 * the roof over it is wider, x -0.054 to 1.054 and z -0.657 to 1.657, and stops at 2.627; the two
-	 * insulators stand on the roof and reach 3.001.
-	 *
-	 * So most of these cells hold a piece of a box rather than a box. The four beside the body are filled
-	 * to 6.34 pixels because that is exactly how far the body reaches into them, the roof stops at 10.03
-	 * because that is where the steel stops, and above the roof there is nothing but the two insulators,
-	 * which are 3.4 pixels across and get 3.4 pixels of collision. A whole cell anywhere here, or a slab
-	 * rounded to the nearest eight pixels, is a third of a block of air the player cannot walk through.
-	 *
-	 * Written by {@code tools/check_hitboxes.py --java}, which also fails the build's check if the model
-	 * and this table ever drift apart. In the model's own frame, facing {@link #AUTHORED}, and turned with
-	 * the geometry.
-	 *
-	 * What is left out is what is thinner than a pixel: the roof's 0.054 overhang past the block beside
-	 * it, and the door leaf standing 0.05 past the east wall. Claiming a cell for either would cost the
-	 * player a cubic metre of the world for nine tenths of a pixel of ledge.
+	  *
+	 * In the model's own frame, facing {@link #AUTHORED}, and turned with the geometry.
 	 */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.block()),
@@ -113,7 +90,7 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 			if (blockEntity instanceof ElectricCabinBlockEntity electricCabin) {
 				electricCabin.tick();
 				// and the cells, because a cabin placed before they existed has none: the collision was
-				// one cube under three blocks of steel, and nothing else would ever go back and fix it
+				// one cube under three blocks of steel
 				MachineShell.heal(lvl, pos, blockState);
 			}
 		};

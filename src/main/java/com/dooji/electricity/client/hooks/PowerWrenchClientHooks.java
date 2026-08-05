@@ -121,13 +121,7 @@ public final class PowerWrenchClientHooks {
 		return result;
 	}
 
-	/**
-	 * Whether the machine's own geometry is what the player can see, rather than something in front of it.
-	 *
-	 * A machine's collision cells count as the machine. They are what stands between the eye and the wall
-	 * of a cabin at head height - the cabin's own block is at its feet - so without this a wrench worked
-	 * on the bottom metre of a machine and nowhere else.
-	 */
+	/** Whether the machine's own geometry is what the player can see */
 	private static boolean hasLineOfSight(Minecraft mc, Player player, Vec3 start, Vec3 end, BlockPos targetPos) {
 		if (mc.level == null) return false;
 		ClipContext context = new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player);
@@ -136,15 +130,7 @@ public final class PowerWrenchClientHooks {
 		return MachineShell.hostOr(mc.level, hitResult.getBlockPos()).equals(targetPos);
 	}
 
-	/**
-	 * One of this mod's blocks under the crosshair, found by ordinary picking.
-	 *
-	 * A fallback for the blocks the geometry scan above cannot help with, and there are two kinds.
-	 * A turbine tower has no block entity for that scan to find at all. And the photovoltaic blocks
-	 * have real collision that vanilla picking already resolves exactly - a flat array in particular
-	 * is three pixels tall and a ray march at that grazing angle is a poor way to find it when the
-	 * crosshair is already on it.
-	 */
+	/** One of this mod's blocks under the crosshair, found by ordinary picking. */
 	@Nullable
 	private static BlockPos solidBlockUnderCursor(Minecraft mc) {
 		if (mc.level == null || !(mc.hitResult instanceof BlockHitResult hit)) return null;
@@ -156,13 +142,7 @@ public final class PowerWrenchClientHooks {
 		return null;
 	}
 
-	/**
-	 * The block a wrench click should act on.
-	 *
-	 * A tower carries no block entity of its own, and the panel it belongs to is at the top
-	 * of it - often out of reach. Walking up from the hit block means the wrench works
-	 * anywhere on the structure, which is where a player standing at the foot will use it.
-	 */
+	/** The block a wrench click should act on. */
 	private static BlockPos resolveTarget(Minecraft mc, BlockPos hit) {
 		if (mc.level == null) return hit;
 		if (!(mc.level.getBlockState(hit).getBlock() instanceof TurbineTowerBlock)) return hit;

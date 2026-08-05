@@ -28,69 +28,19 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * One block of photovoltaic array, on whichever mounting its product came with.
- *
- * The block carries the {@link PvArraySpec} the way {@link WindTurbineBlock} carries a turbine's:
- * one block per catalogue entry, so a spec cannot exist without something that places it, and a
- * placed array cannot disagree with the item that placed it because there is nothing saved to drift.
- *
- * <h2>Why the height differs per mounting</h2>
- *
- * Because the mountings really are different heights, and a player has to be able to tell them apart
- * from across a field. A flat table is ankle high and walked over. A tilted rack stands about half a
- * block. A tracker's torque tube is carried on piers, so it is higher again and there is room to walk
- * underneath - which is the real reason trackers are built that way, since a row that has to rotate
- * through sixty degrees needs the clearance. A dual-axis pedestal is the tallest of the four.
- *
- * The collision is a single conservative box in every case, including the tracked ones. A rotating
- * collision shape would be correct and would also mean a player standing on a tracker at dawn is
- * inside it by mid-morning, which is worse than slightly wrong.
- *
- * <h2>Orientation</h2>
- *
- * A tilted rack faces the way it was placed, and that decides which way it tips - so it is a real
- * choice, unlike on Earth where a fixed rack faces the equator and there is nothing to decide. A
- * tracker's axis has to run north-south, because that is the only orientation from which it can
- * follow a sun that travels east to west, so a tracker snaps to that whatever direction the player
- * was looking.
- */
+/** One block of photovoltaic array */
 public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing the four mounting models was modelled at: the mod's own, so they face north - and the physics reads a plane's bearing off the same facing.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/**
-	 * Whether the strings have leads on them.
-	 *
-	 * A block state rather than block entity data, because it decides what the cable alongside gets to
-	 * draw and that answer is wanted while a chunk is being meshed. It is also the honest place for it:
-	 * a set of leads worked onto an array is part of the array, the way a plug is part of an appliance.
-	 *
-	 * An array without them makes exactly nothing. That is not a technicality invented for the game -
-	 * strings with no leads on them are not connected to anything, and a field of glass wired to nothing
-	 * is a field of glass.
-	 */
+	/** Whether the strings have leads on them. */
 	public static final BooleanProperty HARNESSED = BooleanProperty.create("harnessed");
 
-	/**
-	 * The four mountings as collision, each cut from its own model.
-	 *
-	 * A box the full width of the block and a hand-picked height was wrong in both directions at once: a
-	 * ballasted table three pixels tall claimed three, when it is two and its ballast is under the frame
-	 * rather than beside it; and a rack claimed eight pixels over its whole footprint, so a player walked
-	 * into a wall of air in front of its low edge and stood on air above it.
-	 *
-	 * The two fixed mountings are cut to the model to a hundredth of a pixel, the rack's tilted plane as a
-	 * staircase of two-pixel treads that follows the slope. The two tracked ones cannot be: their plane
-	 * turns through the day, so their collision is the fixed body cut from the model plus the volume the
-	 * plane sweeps - see {@link #SWEPT_ROW} and {@link #SWEPT_FRAME}. Written by
-	 * {@code tools/check_hitboxes.py --java}.
-	 */
+	/** The four mountings as collision, each cut from its own model. */
 	private static final List<Cell> FLAT_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.72, 0.48, 15.52, 1.68, 15.52),
 					Block.box(0.72, 1.62, 0.48, 15.28, 2.45, 15.52),
@@ -121,22 +71,10 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 					Block.box(2.35, 3.75, 9.48, 13.65, 5.04, 11.48),
 					Block.box(2.35, 4.69, 11.48, 13.65, 5.98, 13.48))));
 
-	/**
-	 * What a tracked row's plane can be anywhere in, over a day.
-	 *
-	 * A plane 0.94 of a block wide turning about a tube 0.62 up sweeps a disc of that radius, so the box
-	 * is the disc's extent in x and y and the modules' own extent along the tube. It reaches the top of
-	 * the block because the plane does, at 55 degrees and beyond.
-	 */
+	/** What a tracked row's plane can be anywhere in, over a day. */
 	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 2.26, 0.32, 15.66, 16.00, 15.68);
 
-	/**
-	 * The same for a pedestal frame, which turns about two axes.
-	 *
-	 * The elevation axis is 0.75 up and the frame also spins in azimuth, so the swept volume is a sphere
-	 * rather than a disc - and a sphere of that radius is wider than the block, which is why this one is
-	 * the whole of the block above the frame's lowest reach.
-	 */
+	/** The same for a pedestal frame, which turns about two axes. */
 	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.42, 0.00, 16.00, 16.00, 16.00);
 
 	private static final List<Cell> TRACK_CELLS = List.of(
@@ -175,28 +113,15 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	/**
 	 * String cable only, and only where the row has something for it to land on.
-	 *
-	 * A string has two ends. They are where the next row's string arrives and where this one's leaves, so
-	 * a run of cable joins a row there and not down its flank - which is both what a real plant looks like
-	 * and the reason the model has one lead along one edge instead of a run round all four.
-	 *
-	 * Which end takes what is {@link #meets}, the same method the plant is wired by and the models are
-	 * drawn from. It used to require the leads to be on at either end, and that was the fault behind the
-	 * question this all came from: a run laid to a bare row's *socket* refused to point at it, so a panel
-	 * put down against a cable was connected to nothing until it had a reel of cable in it. A socket is
-	 * for arriving at.
+	  *
+	 * Which end takes what is {@link #meets}, the same method the plant is wired by and the models are drawn from.
 	 */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		return !cable.trunk() && meets(state, side);
 	}
 
-	/**
-	 * Fitting the leads, which is what right-clicking an array with a reel of string cable does.
-	 *
-	 * Refused for trunk cable, and not out of pedantry: a 240 mm² conductor cannot be terminated in the
-	 * plug on the end of a module, so there is nowhere for it to go.
-	 */
+	/** Fitting the leads, which is what right-clicking an array with a reel of string cable does. */
 	@Override
 	@Nullable
 	public BlockState withCableFitted(BlockState state, DcCableSpec cable) {
@@ -217,21 +142,8 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	/**
 	 * Whether a connection can arrive at this face of the row.
-	 *
-	 * <h2>The rule the whole plant is wired by</h2>
-	 *
-	 * Two things are connected when the cables drawn at the boundary between them meet. Nothing else,
-	 * and that is on purpose: a plant that looks wired and is not would be the worst thing this could
-	 * be, so the picture is the rule rather than a description of it. {@link PvArrayRenderer} decides
-	 * what to draw from these same two methods.
-	 *
-	 * What is drawn to be plugged into is the socket, and it is always there: a table or a rack has one
-	 * on the end it faces, and a tracked row has one on each of the two ends its tube runs to, since
-	 * placement forces that tube north-south whichever way the player was looking.
-	 *
-	 * So a row whose socket end faces a run of copper is wired with no harness in it at all. That is the
-	 * answer to the question this was written for - place a cable, then a panel against it, and the panel
-	 * is connected, the way redstone is.
+	  *
+	 * {@link PvArrayRenderer} decides what to draw from these same two methods.
 	 */
 	public static boolean takes(BlockState state, @Nullable Direction face) {
 		if (face == null || !(state.getBlock() instanceof PvArrayBlock array)) return false;
@@ -240,17 +152,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return face == state.getValue(FACING);
 	}
 
-	/**
-	 * Whether the row's own cable leaves by this face, which is the whole of what a harness is for.
-	 *
-	 * A reel of cable fits a row's *outgoing* leads. So a row with no harness can be fed and cannot pass
-	 * anything on, and the last row of a string needs none - while every row before it does, because
-	 * that is the cable reaching the row behind.
-	 *
-	 * A table's and a rack's lead is on the end away from the socket. A tracked row's run goes the whole
-	 * length of the block, so it leaves by both ends, and which one is the way on depends on which one it
-	 * was fed at.
-	 */
+	/** Whether the row's own cable leaves by this face */
 	public static boolean gives(BlockState state, @Nullable Direction face) {
 		if (face == null || !harnessed(state) || !(state.getBlock() instanceof PvArrayBlock array)) return false;
 		if (array.spec().tracked()) return face.getAxis() == Direction.Axis.Z;
@@ -258,23 +160,12 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return face == state.getValue(FACING).getOpposite();
 	}
 
-	/**
-	 * Whether a row has anything at all at this face for something to meet.
-	 *
-	 * Its socket, or its own outgoing lead. Everything that has an opinion about whether two things are
-	 * connected asks this one method - the cable, which will not point anywhere else; {@link PvStrings},
-	 * which wires the plant; and the renderer, which draws it - so the three cannot disagree.
-	 */
+	/** Whether a row has anything at all at this face for something to meet. */
 	public static boolean meets(BlockState state, @Nullable Direction face) {
 		return takes(state, face) || gives(state, face);
 	}
 
-	/**
-	 * Hands the leads back when the array is taken away.
-	 *
-	 * A player who fitted a reel of cable into a machine should get it out again by breaking the
-	 * machine, or the cable is a tax on rearranging a plant rather than a part of it.
-	 */
+	/** Hands the leads back when the array is taken away. */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!level.isClientSide && !state.is(newState.getBlock()) && state.getValue(HARNESSED)) {
@@ -288,8 +179,6 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	@Nullable
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
 		// a tracker's axis is north-south or it cannot track at all, so it takes that orientation
-		// however the player was standing. Everything else faces them, which for a tilted rack is
-		// the direction it tips
 		Direction facing = spec.tracked() ? Direction.NORTH : context.getHorizontalDirection().getOpposite();
 		return defaultBlockState().setValue(FACING, facing).setValue(HARNESSED, false);
 	}
@@ -304,13 +193,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return CELLS.get(spec.mounting());
 	}
 
-	/**
-	 * Which way the collision is turned.
-	 *
-	 * The same answer the renderer gives, and it has to be: a tracked row is drawn facing north whatever
-	 * its state says, because its tube has to run north-south to follow the sun, so a shape turned by the
-	 * state would stand across a row that is drawn along it.
-	 */
+	/** Which way the collision is turned. */
 	@Override
 	public Direction shellFacing(BlockState state) {
 		return spec.tracked() ? AUTHORED : state.getValue(FACING);
@@ -321,14 +204,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return AUTHORED;
 	}
 
-	/**
-	 * Which way the module plane faces, on the mod's compass: 0 east, 90 south, 180 west, 270 north.
-	 *
-	 * The same convention the sun and the wind use, so an incidence angle can be worked out without
-	 * converting between two ideas of north. A flat plane's bearing means nothing - it is looking
-	 * straight up - and it is answered anyway, because the transposition arithmetic multiplies it by
-	 * the sine of a zero tilt and does not care.
-	 */
+	/** Which way the module plane faces, on the mod's compass: 0 east, 90 south, 180 west, 270 north. */
 	public static double planeAzimuthDeg(Direction facing) {
 		return switch (facing) {
 			case EAST -> 0.0;

@@ -4,31 +4,18 @@ import java.util.Map;
 
 /**
  * The tags a photovoltaic plant's SCADA publishes, in three sets.
- *
- * Three sets because a real plant has three kinds of node and they are wired differently. The
- * inverter is the plant: it is what the grid sees, what a control room talks to, and where the
- * energy meters live. Each array publishes the optics and the mechanism of its own patch of glass.
- * And the mast publishes the sky, once, for the whole site.
- *
- * The names follow what a real plant's tag list looks like, down to the ones that read oddly.
- * {@code irradiation} rather than irradiance, because that is what the industry writes on a screen.
- * {@code pvActivePower} beside {@code activePower}, because a plant reports the direct-current side
- * and the alternating-current side separately and the difference between them is the inverter's
- * efficiency. And {@code snowDistance} beside {@code snowHeight}, because the gauge measures a
- * distance and the depth is worked out from it - two tags for one quantity is how an operator finds
- * out the sensor has iced over.
- *
+  *
  * The snapshot machinery, the builder and the three kinds are in {@link Telemetry}.
  */
 public final class SolarTelemetry {
 
 	// ---- the inverter: measured ----
 
-	/** Active power at the terminals, kW. Negative overnight, which is the machine's own supply. */
+	/** Active power at the terminals, kW. */
 	public static final String ACTIVE_POWER = "activePower";
 	/** Direct-current power arriving from the arrays, kW. */
 	public static final String PV_ACTIVE_POWER = "pvActivePower";
-	/** What the arrays could deliver at their maximum power point, kW. Above the above while clipping. */
+	/** What the arrays could deliver at their maximum power point, kW. */
 	public static final String AVAILABLE_DC_POWER = "availableDcPower";
 	/** Lifetime generation, kWh. */
 	public static final String ACTIVE_ENERGY = "activeEnergy";
@@ -44,26 +31,20 @@ public final class SolarTelemetry {
 	public static final String ACTIVE_POWER_LIMIT = "activePowerLimit";
 	public static final String POWER_LIMITATION_ACTIVE = "powerLimitationActive";
 	public static final String RUNNING = "running";
-	/** The array is offering more than the nameplate can pass. Deliberate, not a fault. */
+	/** The array is offering more than the nameplate can pass. */
 	public static final String CLIPPING = "clipping";
-	/** The air is hot enough that the machine is holding itself back. Looks like clipping and is not. */
+	/** The air is hot enough that the machine is holding itself back. */
 	public static final String DERATING = "derating";
 	public static final String STOPPED_BY_COMPUTER = "stoppedByComputer";
 	public static final String STOPPED_BY_PLAYER = "stoppedByPlayer";
 	public static final String STOPPED_BY_REDSTONE = "stoppedByRedstone";
 	public static final String ARRAYS_CONNECTED = "arraysConnected";
 	public static final String STRINGS_CONNECTED = "stringsConnected";
-	/** Combiner boxes wired to the cabinet on trunk cable. Zero on a plant wired string-direct. */
+	/** Combiner boxes wired to the cabinet on trunk cable. */
 	public static final String COMBINERS_CONNECTED = "combinersConnected";
-	/** String terminals the machine has. Arrays past this are not wired in, however much capacity is left. */
+	/** String terminals the machine has. */
 	public static final String STRING_CAPACITY = "stringCapacity";
-	/**
-	 * Direct-current input the machine has left, in amps.
-	 *
-	 * The tag that explains a refusal. An array standing beside an inverter with terminals to spare and
-	 * still not wired in is an array whose current would not fit, and a plant's own SCADA reports its
-	 * spare input capacity for exactly that reason.
-	 */
+	/** Direct-current input the machine has left, in amps. */
 	public static final String DC_CURRENT_HEADROOM = "dcCurrentHeadroom";
 
 	// ---- the inverter: derived ----
@@ -94,16 +75,10 @@ public final class SolarTelemetry {
 
 	public static final String HEAT_SINK_TEMP = "heatSinkTemp";
 	public static final String INTERNAL_AIR_TEMP = "internalAirTemp";
-	/**
-	 * Insulation resistance of the array to earth, in kilohms.
-	 *
-	 * Measured before every start on a real machine and the commonest reason one refuses to: a wet
-	 * connector or a damaged cable drops it, and the inverter will not energise a string it cannot
-	 * prove is isolated. Falls in the rain here, as it does outside.
-	 */
+	/** Insulation resistance of the array to earth, in kilohms. */
 	public static final String INSULATION_RESISTANCE = "insulationResistance";
 	public static final String DC_BUS_VOLTAGE = "dcBusVoltage";
-	/** Fan duty, 0 to 1. Zero on a convection-cooled machine, which has no fan to run. */
+	/** Fan duty */
 	public static final String FAN_SPEED = "fanSpeed";
 
 	// ---- an array: measured ----
@@ -117,30 +92,34 @@ public final class SolarTelemetry {
 	/** Front plus whatever the back is worth after bifaciality: what the modules answer to. */
 	public static final String EFFECTIVE_IRRADIANCE = "effectiveIrradiance";
 	public static final String WIND_SPEED = "windSpeed";
-	/** Fraction of output lost to dust, 0 to 1. */
+	/** Fraction of output lost to dust */
 	public static final String SOILING = "soiling";
 	/** Snow lying on the modules, in metres. */
 	public static final String SNOW_DEPTH = "snowDepth";
-	/** Fraction of the rows the row in front is shading, 0 to 1. What backtracking exists to hold at zero. */
+	/** Fraction of the rows the row in front is shading */
 	public static final String ROW_SHADING = "rowShading";
 	/** Fraction of the beam surviving whatever is built, grown or standing over the array. */
 	public static final String OBSTRUCTION = "obstruction";
-	/** Fraction of the sky dome the array can see, which is what the diffuse is scaled by. */
+	/** Fraction of the sky dome the array can see */
 	public static final String SKY_VIEW = "skyView";
 	public static final String DELIVERED_DC_POWER = "deliveredDcPower";
 	public static final String TRACKER_ANGLE = "trackerAngle";
 	public static final String TRACKER_TARGET = "trackerTarget";
 	public static final String TRACKER_MODE = "trackerMode";
-	/** Why the row is stowed, or NONE. NIGHT, WIND, SNOW, DIFFUSE and COMMANDED all mean different things. */
+	/**
+	 * Why the row is stowed, or NONE.
+	  *
+	 * NIGHT, WIND, SNOW, DIFFUSE and COMMANDED all mean different things.
+	 */
 	public static final String TRACKER_STOW = "trackerStow";
 	public static final String TRACKER_SLEWING = "trackerSlewing";
 	public static final String BACKTRACKING = "backtracking";
 	public static final String WIRED = "wired";
-	/** Whether the strings have leads on them. Without them the array is not connected to anything. */
+	/** Whether the strings have leads on them. */
 	public static final String HARNESSED = "harnessed";
 	/** Length of the run from this array to whatever collects it, in metres. */
 	public static final String DC_RUN_LENGTH = "dcRunLength";
-	/** How much of that run is in the ground, 0 to 1. Buried cable carries less. */
+	/** How much of that run is in the ground */
 	public static final String DC_RUN_BURIED = "dcRunBuried";
 	/** What the run burns, as a fraction of what goes down it. */
 	public static final String DC_CABLE_LOSS = "dcCableLoss";
@@ -228,9 +207,7 @@ public final class SolarTelemetry {
 	}
 
 	/**
-	 * @return whether {@code tag} is measured, derived or simulated, or null when the tag is not one
-	 *         this mod reports. Across all three nodes, because a few tags appear on more than one and
-	 *         they are the same kind of thing on each.
+	 * @return whether {@code tag} is measured, derived or simulated, or null when the tag is not one this mod reports.
 	 */
 	public static Telemetry.Kind kind(String tag) {
 		return ALL.get(tag);

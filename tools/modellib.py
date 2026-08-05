@@ -1,34 +1,11 @@
 #!/usr/bin/env python3
-"""The geometry the mod's own OBJ models are built from.
+"""The primitives every model in this mod is built from, and the subdivisions they use.
 
-Why a library rather than a modelling package: this geometry has to be reviewable in a diff and
-reproducible from the figures it is built from - a rack really is at the mounting's 25 degrees
-because the number comes from the same place the physics reads it - and it has to keep the group
-names the renderers bind to, which a package would rename on every export.
+ROUND / FITTING / HEX are the standard - see CLAUDE.md section 1.  Never lower one to save faces.
 
-Everything is authored in block units with x and z running -0.5 to 0.5 and y from 0 upwards,
-because ``ObjRenderUtil`` puts the frame at the block's centre in x and z and at its floor in y.
-
-What the renderers need from the output
----------------------------------------
-The OBJ pipeline splits by object and then by material, and keys each group ``<object>_<material>``.
-So every part that has to move independently is its own ``o`` block:
-
-* ``rotate_*``  a moving part; the renderer knows its pivot
-* ``pivot_*``   a zero-size marker naming where something turns, never drawn
-* ``harness*``  drawn only once a reel of cable has been worked into the machine
-* ``insulator*``a wire fitting; ``ObjDefinitions`` names these and wires hang off their centres
-
-How round is round
-------------------
-The turbine is the model everything else is being brought up to, and it answers this: its tower is
-an **eighty**-sided prism and its insulator a **thirty-two**-sided one.  So a principal body - a
-pole shaft, a mast, a torque tube, a pedestal column, a lantern - gets ``ROUND``, and a fitting a
-player only ever sees from two metres away gets ``FITTING``.
-
-What deliberately keeps six or four sides is the geometry that is genuinely faceted: a bolt head is
-a hexagon, an I-beam pier is an I, a crossarm is a channel, a square torque tube is square.  Giving
-those more sides would not be smoother, it would be wrong.
+Worth knowing before using these: uv is mapped off world coordinates so a circle stays a circle (see
+box's ``uv=``); ``tube`` carries one reference vector along the path so the mesh cannot twist; ``lathe``
+closes by construction, which is why the insulator is drawn with it rather than stacked cones.
 """
 
 import math
@@ -52,10 +29,7 @@ class Mesh:
         self._pool = {}
 
     def _index(self, table, value, pool_key):
-        # OBJ indices are 1-based and shared across the whole file, so identical vertices are
-        # pooled rather than repeated: it keeps the files a third of the size and costs nothing to
-        # read back.  A dictionary rather than a linear scan, because at eighty sides a prism has
-        # enough vertices that a scan over the whole table per vertex is minutes rather than seconds.
+        # OBJ indices are 1-based and shared across the whole file
         key = tuple(round(c, 6) for c in value)
         pool = self._pool.setdefault(pool_key, {})
         found = pool.get(key)
@@ -137,13 +111,7 @@ def rotate(point, pivot_point, axis, degrees):
 
 
 def pivot(mesh, name, point, material='steel'):
-    """Marks where a moving part turns, as a zero-size group of its own.
-
-    The renderer used to find a pivot by taking the centre of the rotating group's bounding box,
-    which is exact for anything symmetric about its own axis and wrong for everything else - three
-    anemometer cups at 120 degrees have a box centre nowhere near the mast.  Six degenerate quads
-    draw nothing, the bounding box is the point exactly, and the renderer reads it.
-    """
+    """Marks where a moving part turns"""
     box(mesh, mesh.faces('pivot_' + name, material), point, point)
 
 
@@ -153,17 +121,7 @@ FACES = ('down', 'up', 'north', 'south', 'west', 'east')
 
 
 def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=0):
-    """Six quads, outward normals, each face mapped across the whole texture.
-
-    ``rot`` is one ``(pivot, axis, degrees)`` or a sequence of them applied in order.
-
-    ``uv_scale`` under one insets the mapping, which is how a long rail gets a strip of its texture
-    rather than the whole thing stretched along it.  ``uv`` gives an explicit sub-rectangle instead,
-    which is what keeps a cell the same size on every mounting: a module drawn on a shorter box
-    takes fewer rows of the picture rather than squeezing all of them in.  ``uv_rot`` turns the
-    mapping by whole quarters, for a module whose long axis runs the other way.  ``only`` emits a
-    single named face, which is what lets clad_box split a box across materials.
-    """
+    """Six quads, outward normals, each face mapped across the whole texture."""
     x0, y0, z0 = lo
     x1, y1, z1 = hi
 
@@ -181,12 +139,6 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=
     }
 
     # Which corner of the texture goes on which corner of the face, and it is not the same for all
-    # six.  The corner lists above are wound for outward normals, which is what the renderer needs,
-    # and a texture laid on them in the obvious order comes out mirrored on all four sides: the
-    # first corner of a side face is its low-x (or low-z) end, and from outside the block that end
-    # is on the right rather than the left.  The lid has the opposite problem - its first corner is
-    # the one nearest north, which is the top of the picture on screen, while the loader reads
-    # texture v from the bottom.  So the sides get their u reversed and the lid its v.
     u0, v0, u1, v1 = uv if uv else (0.0, 0.0, uv_scale, uv_scale)
     plain = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
     flipped_u = [(u1, v0), (u0, v0), (u0, v1), (u1, v1)]
@@ -206,9 +158,7 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=
             uvs = uvs[shift:] + uvs[:shift]
         normal = normals[face]
         if rot is not None:
-            # One rotation or a list of them, applied in order.  Two are needed by anything that is both
-            # pitched and spun - a fan blade has an angle of attack *and* a position round the hub, and
-            # with a single rotation it can only have one of the two.
+            # One rotation or a list of them, applied in order.
             for pivot_point, axis, degrees in ([rot] if isinstance(rot[1], str) else rot):
                 pts = [rotate(p, pivot_point, axis, degrees) for p in pts]
                 normal = rotate(normal, (0, 0, 0), axis, degrees)
@@ -216,12 +166,7 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=
 
 
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None, uv=None, uv_rot=0):
-    """A box whose six faces are not all the same material.
-
-    ``sides`` maps face names to materials, with ``'*'`` standing for the rest.  Each face goes
-    into its own material's section, which is how a module can be cells on top, a backsheet
-    underneath and frame all round while still being one part as far as the renderer is concerned.
-    """
+    """A box whose six faces are not all the same material."""
     for face in FACES:
         material = sides.get(face, sides['*'])
         box(mesh, mesh.faces(name, material), lo, hi, uv_scale=uv_scale, rot=rot, only=face,
@@ -237,17 +182,7 @@ def ring_points(radius, sides, phase=0.0):
 
 def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_scale=1.0,
              caps=None, taper=1.0, phase=0.0, uv_along=1.0, cap_ends=(-1, 1), uv=None):
-    """A prism standing in for a tube.
-
-    ``taper`` is the radius at the far end as a fraction of the near one, which is how a spun
-    concrete pole and a two-section mast are made: both are cones, and drawing them as cylinders is
-    the single clearest sign of a model nobody measured.
-
-    ``caps`` closes the ends listed in ``cap_ends`` into that face list.  Without them a mast is a hole
-    when you look down it and a radiometer has no dome to catch the light.  Fanned into quads rather
-    than left as one polygon, because the render type consumes quads and the loader triangulates fans
-    cleanly.
-    """
+    """A prism standing in for a tube."""
     cx, cy, cz = centre
     near = ring_points(radius, sides, phase)
     far = ring_points(radius * taper, sides, phase)
@@ -282,8 +217,6 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
             v0, v1 = 0.0, uv_along * uv_scale
         else:
             # An explicit window, for a fitting whose texture is a strip along its own length rather
-            # than a tile: a plug's knurled nut, its barrel and its nose are three bands of one
-            # drawing, and each segment has to take its own.
             u = uv[0] + (uv[2] - uv[0]) * i / sides
             u2 = uv[0] + (uv[2] - uv[0]) * (i + 1) / sides
             v0, v1 = uv[1], uv[3]
@@ -294,10 +227,7 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
         return
 
     normal = {'x': (1.0, 0.0, 0.0), 'y': (0.0, 1.0, 0.0), 'z': (0.0, 0.0, 1.0)}[axis]
-    # ``cap_ends`` is which ends are closed, and it matters wherever sections are stacked: a mast in two
-    # pieces with a coupling between them has four internal ends, and capping all of them puts four
-    # discs on two planes where nothing can see them and the depth buffer resolves them differently
-    # per pixel per frame.
+    # ``cap_ends`` is which ends are closed
     for end in cap_ends:
         outward = tuple(component * end for component in normal)
         ring = far if end > 0 else near
@@ -310,9 +240,7 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
                 return (u, v)
 
             # A cap on a segment whose texture is a *strip along its own length* has to stay inside that
-            # segment's band, and at half scale so it takes the middle of it.  Sampling the whole tile
             # instead put a shrunk copy of the entire drawing on the end face: an MC4's nose came out
-            # wearing the knurl of the gland nut and the latch window of the barrel.
             return (window[0] + (window[2] - window[0]) * (0.25 + u * 0.5),
                     window[1] + (window[3] - window[1]) * (0.25 + v * 0.5))
 
@@ -323,11 +251,7 @@ def cylinder(mesh, faces, centre, axis, radius, half_length, sides=FITTING, uv_s
 
 
 def hemisphere(mesh, faces, centre, radius, sides=FITTING, rings=6, up=1, squash=1.0, uv_scale=1.0):
-    """A dome: a pole cap, a lantern top, a bollard head.
-
-    Rings of quads with a fan at the pole, which keeps every face a quad.  ``squash`` under one
-    flattens it, because most caps in the world are shallower than half a sphere.
-    """
+    """A dome: a pole cap, a lantern top, a bollard head."""
     cx, cy, cz = centre
     for r in range(rings):
         a0 = (math.pi / 2) * r / rings
@@ -358,14 +282,7 @@ def hemisphere(mesh, faces, centre, radius, sides=FITTING, rings=6, up=1, squash
 # ------------------------------------------------------------------ structural profiles
 
 def ibeam(mesh, faces, lo, hi, axis='y', web=0.28, flange=0.22, uv_scale=0.3, rot=None):
-    """An I-section: two flanges and a web between them.
-
-    What a driven pier and a rack post actually are, and the reason to draw the profile rather than
-    a plain box is that the flanges catch the light differently from the web - which is most of what
-    says *steel section* rather than *grey stick* at any distance.
-
-    ``web`` and ``flange`` are fractions of the section's own width.
-    """
+    """An I-section: two flanges and a web between them."""
     x0, y0, z0 = lo
     x1, y1, z1 = hi
     if axis == 'y':
@@ -387,11 +304,7 @@ def ibeam(mesh, faces, lo, hi, axis='y', web=0.28, flange=0.22, uv_scale=0.3, ro
 
 
 def channel(mesh, faces, lo, hi, along='z', web=0.26, uv_scale=0.3, opening='up', rot=None):
-    """A C-section: a back with two legs turned off it.
-
-    A crossarm, a rack purlin and a module rail are all channels.  ``opening`` is which way the
-    legs point, because a purlin's open side faces down so water leaves it.
-    """
+    """A C-section: a back with two legs turned off it."""
     x0, y0, z0 = lo
     x1, y1, z1 = hi
     height = y1 - y0
@@ -434,12 +347,7 @@ def angle(mesh, faces, lo, hi, along='z', web=0.30, uv_scale=0.3, rot=None):
 
 
 def strut(mesh, faces, p0, p1, half, thick=None, uv_scale=0.2):
-    """A beam between two arbitrary points: a brace, a stay, an actuator, a guy.
-
-    Written as an orthonormal frame rather than as a box with a rotation, because a diagonal is the
-    one part whose two ends are both given: a rotation has to be solved for from them, and solving
-    it by eye is what had a rack's braces crossing each other and poking out of the block.
-    """
+    """A beam between two arbitrary points: a brace, a stay, an actuator, a guy."""
     thick = half if thick is None else thick
     d = [p1[i] - p0[i] for i in range(3)]
     length = math.sqrt(sum(c * c for c in d)) or 1.0
@@ -472,11 +380,7 @@ def strut(mesh, faces, p0, p1, half, thick=None, uv_scale=0.2):
 
 
 def bolt(mesh, faces, centre, axis, radius, length, uv_scale=0.2, head=1.7, washer=True):
-    """A bolt: a hexagon head on a shank, with a washer under it.
-
-    Six sides, and that is not a saving - a bolt head *is* a hexagon.  This is the one part of the
-    mod where the low count is the accurate one.
-    """
+    """A bolt: a hexagon head on a shank"""
     cx, cy, cz = centre
     step = {'x': (length, 0, 0), 'y': (0, length, 0), 'z': (0, 0, length)}[axis]
     shank = (cx + step[0] / 2, cy + step[1] / 2, cz + step[2] / 2)
@@ -490,13 +394,7 @@ def bolt(mesh, faces, centre, axis, radius, length, uv_scale=0.2, head=1.7, wash
 
 
 def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
-    """A DIN 580 lifting eye: a forged ring with a hole through it, on a shank with a collar.
-
-    The hole is the whole point.  Drawn as a solid disc on a stalk - which is what was here - it is a
-    grey cylinder standing on a roof for no reason a player can see, and two of them next to the fans
-    were the thing that got asked about.  So the ring is a tube swept round a full circle, which has a
-    hole through it by construction, standing in the plane the crane's sling would pull in.
-    """
+    """A DIN 580 lifting eye: a forged ring with a hole through it, on a shank with a collar."""
     cx, cy, cz = base
     section = ring_radius * wire
     collar = ring_radius * 0.62
@@ -509,18 +407,13 @@ def eyebolt(mesh, faces, base, ring_radius, sides=FITTING, wire=0.30):
 
 
 def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=0.5, taper=0.72):
-    """An insulator: a stack of skirts on a core, each wider at its lower rim.
-
-    A pin insulator's whole job is to make the surface path from conductor to pin long, and the way
-    it does that is the shape - a petticoat under each shed.  Drawn as a stack of shallow cones,
-    which is what it is.
-    """
+    """An insulator: a stack of skirts on a core, each wider at its lower rim."""
     cx, cy, cz = centre
     step = height / count
     for i in range(count):
         y = cy + i * step
         wide = radius * (1.0 - i * (1.0 - taper) / max(1, count))
-        # the shed: a cone, widest at the bottom rim, and the rim itself as a thin band so the
+        # the shed: a cone, widest at the bottom rim
         # skirt has an edge rather than a knife edge
         cylinder(mesh, faces, (cx, y + step * 0.30, cz), 'y', wide, step * 0.30, sides=sides,
                  uv_scale=uv_scale, taper=0.55)
@@ -534,33 +427,7 @@ def sheds(mesh, faces, centre, radius, height, count=3, sides=FITTING, uv_scale=
 
 
 def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, spindle=True):
-    """The mod's one insulator: an ANSI 55-4 pin insulator in brown glazed porcelain.
-
-    One shape, on every machine a wire clips to.  There used to be four - brown pin insulators on the
-    pole and the kiosk, a *white* one on the inverter because it had been given the instrument material
-    by mistake, a stack of green plastic discs on the turbine and a tall bushing on the cabin.  A fitting
-    that appears on five objects should be the same fitting on all five: a distribution insulator is a
-    catalogue part, and whoever built the line bought the same one for every structure on it.
-
-    The proportions are the real ones.  ANSI 55-4 - the 11 kV workhorse - is 142 mm across its widest
-    shed and 111 mm tall, so it is *wider than it is tall*, which is the one thing every old version got
-    wrong: all of them were tall stacks and a pin insulator is a squat one.
-
-    One profile, revolved
-    ---------------------
-    Drawn as a single surface of revolution rather than as a stack of cones, and that is a correctness
-    fix rather than a tidy-up.  Stacked, each shed was a cone whose top was wider than the core above
-    it, so between the two sat an annulus with no surface in it - and since these models are drawn
-    without back-face culling, those annuli were holes you could see through the porcelain.  A profile
-    closes by construction: a radius that steps in draws the step.
-
-    Reading the contour from the bottom up, it is the real object part by part: the underside of the
-    lower petticoat, its rim, the cone up to the neck, the neck, the upper shed and its rim, the head,
-    the groove round the head's flank for a conductor running past, the groove round the top that a
-    conductor terminating here is tied into, and the crown over it that keeps the tie wire on.  Those
-    last three are what makes the silhouette recognisable at ten metres; without them a shed stack reads
-    as a stack of plates.
-    """
+    """The mod's one insulator: an ANSI 55-4 pin insulator in brown glazed porcelain."""
     cx, cy, cz = centre
     d, h = diameter, diameter * 0.78
 
@@ -590,11 +457,9 @@ def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, spind
     lathe(mesh, porcelain, centre, [(r * d, y * h) for r, y in contour], sides=sides,
           uv_scale=1.0, uv_along=1.0)
 
-    # The spindle: hot-dip galvanised steel, with the lead thimble the porcelain is cemented onto.  Its
-    # own group, because the wire hangs from the centre of the insulator group's bounding box and steel
-    # inside that group would drag the anchor down towards the crossarm.
+    # The spindle: hot-dip galvanised steel, with the lead thimble the porcelain is cemented onto.
     if spindle:
-        # half the sides: it is a spindle 8 mm across, mostly inside the porcelain, and eight of these
+        # half the sides: it is a spindle 8 mm across, mostly inside the porcelain
         # on one pole is the heaviest geometry in the mod
         lathe(mesh, steel, (cx, cy, cz), [
             (0.000, -0.34 * h), (0.085 * d, -0.34 * h),
@@ -605,24 +470,7 @@ def pin_insulator(mesh, porcelain, steel, centre, diameter, sides=FITTING, spind
 
 def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=None,
          cap_ends=(-1, 1)):
-    """A round tube swept along a polyline: the only way to draw a cable that turns.
-
-    ``cylinder`` is axis-aligned, which is enough for a mast or a bushing and no use at all for a bend.
-    This carries a ring of ``sides`` vertices along the path, orienting each ring to the average of the
-    directions either side of its point - so a corner comes out mitred rather than kinked, and a run of
-    short segments round a quarter circle comes out as a curve.
-
-    The frame is built by carrying a reference vector along the path rather than by choosing one per
-    ring, because choosing per ring twists the tube: two consecutive rings whose 'up' happened to be
-    picked differently put a quarter turn into the mesh between them, and on a black cable that reads
-    as a crease.
-
-    ``uv_scale`` is how much of the texture goes round the circumference and ``uv_along`` how much runs
-    along the length.  Both default to exactly one, and that is not a style choice: a block model's
-    texture lives in the block atlas, so a uv past one does not tile - it samples whatever sprite the
-    atlas happens to have put next door.  Which is precisely what broke the first version of the cable,
-    and it is invisible in a previewer that binds one texture at a time.
-    """
+    """A round tube swept along a polyline: the only way to draw a cable that turns."""
     path = [tuple(float(c) for c in point) for point in points]
     if len(path) < 2:
         return
@@ -684,8 +532,6 @@ def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0,
     if caps is not None:
         for ring, tangent, sign in ((rings[0], tangents[0], -1), (rings[-1], tangents[-1], 1)):
             # ``cap_ends`` the same way ``cylinder`` takes it, because a swept run usually wants one end
-            # only: a dropped offcut has a cut end where it was cut and an open one where the next piece
-            # of the run carries on, and a cap in the second place is a disc inside the neighbouring cable
             if sign not in cap_ends:
                 continue
 
@@ -697,11 +543,7 @@ def tube(mesh, faces, points, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0,
 
 
 def arc(centre, radius, plane, start, end, steps):
-    """Points round a quarter circle, for sweeping a bend along.
-
-    ``plane`` names the two axes the turn happens in, as a pair of indices, and ``start`` and ``end``
-    are angles in degrees measured in that plane.  The fixed axis keeps the centre's value.
-    """
+    """Points round a quarter circle, for sweeping a bend along."""
     a, b = plane
     fixed = 3 - a - b
     out = []
@@ -716,21 +558,7 @@ def arc(centre, radius, plane, start, end, steps):
 
 
 def lathe(mesh, faces, centre, profile, sides=FITTING, uv_scale=1.0, uv_along=1.0):
-    """A surface of revolution through a profile: the honest way to draw anything turned.
-
-    ``profile`` is a list of ``(radius, height)`` in order from one end to the other, in the same units
-    as ``centre``, and the surface is closed by construction - consecutive points are joined whatever
-    their radii, so there is no way to leave a gap.
-
-    Which is why the insulator is drawn this way now.  Built from stacked ``cylinder`` calls it had
-    holes in it: a shed is a cone whose top is wider than the core above it, so between the two there was
-    an annulus with nothing in it, and since the machines' render type does not cull back faces you
-    could see straight through the porcelain.  A profile cannot have that fault - a radius that steps in
-    draws the step.
-
-    The uv runs once round the circumference and once along the profile by arc length, so a texture with
-    a lit-cylinder gradient across it lands the same way on every part of the turning.
-    """
+    """A surface of revolution through a profile: the honest way to draw anything turned."""
     cx, cy, cz = centre
     if len(profile) < 2:
         return

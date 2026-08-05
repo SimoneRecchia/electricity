@@ -21,23 +21,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-/**
- * One array's panel: the datasheet, what the light is doing, and the tracker.
- *
- * <h2>The plane-of-array bar</h2>
- *
- * Three colours in one bar, because the proportion between the beam, the sky and the ground is the single
- * most informative thing about a photovoltaic day and reading it off three numbers is exactly what a chart
- * is for. A clear noon is nearly all beam. An overcast afternoon is nearly all sky. A bifacial array over
- * snow has a third stripe worth having. And a shadow crossing the array takes the first stripe away and
- * leaves the others, which is the whole of why the model carries them separately.
- *
- * <h2>The tracker gauge</h2>
- *
- * Centred, because a tracker's rotation is signed: east in the morning, west in the afternoon, flat at
- * noon and flat when stowed. A bar filling from the left would make the middle of the day look like the
- * middle of a range, which it is not - it is the one moment the row is doing nothing at all.
- */
+/** One array's panel: the datasheet, what the light is doing, and the tracker. */
 public class PvArrayScreen extends PlantScreen {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_array.png");
 	private static final int WIDTH = 288;
@@ -50,7 +34,7 @@ public class PvArrayScreen extends PlantScreen {
 	private static final int FIRST_SEPARATOR_Y = 40;
 	private static final int SECOND_SEPARATOR_Y = 142;
 
-	/** Top of the plane-of-array scale, W/m2. A shade over what a clear zenith sun delivers. */
+	/** Top of the plane-of-array scale, W/m2. */
 	private static final double POA_SCALE = 1100.0;
 
 	private Button modeButton;
@@ -94,7 +78,7 @@ public class PvArrayScreen extends PlantScreen {
 				Component.translatable("screen.electricity.pv_array.mode." + mode)));
 		modeButton.setTooltip(Tooltip.create(Component.translatable("screen.electricity.pv_array.mode.tip." + mode)));
 
-		// the slider only makes sense in hand mode, and greying it out elsewhere says so better than a
+		// the slider only makes sense in hand mode
 		// tooltip would: in automatic mode the controller would overwrite anything it was set to
 		angleSlider.active = array.trackerMode() == TrackerMode.MANUAL;
 		if (!angleSlider.beingDragged) {
@@ -133,13 +117,7 @@ public class PvArrayScreen extends PlantScreen {
 		separator(graphics, FIRST_SEPARATOR_Y);
 	}
 
-	/**
-	 * Why the array is or is not making what it could.
-	 *
-	 * Snow first, because a buried array is the one state a player cannot see from the ground and cannot
-	 * fix by waiting. Then no inverter, which is the commonest mistake. Then the shadows, which are
-	 * transient. Then the tracker's own reason for being where it is.
-	 */
+	/** Why the array is or is not making what it could. */
 	private void drawState(GuiGraphics graphics, PvArrayBlockEntity array) {
 		String key;
 		int colour;
@@ -147,7 +125,7 @@ public class PvArrayScreen extends PlantScreen {
 			key = "screen.electricity.pv_array.state.snow";
 			colour = RED;
 		} else if (!array.wired()) {
-			// one state rather than two: a row with no harness is not a fault, it is the last row of a
+			// one state rather than two: a row with no harness is not a fault
 			// string. What is a fault is nothing reaching this one, whatever the reason
 
 			key = "screen.electricity.pv_array.state.no_collector";
@@ -175,7 +153,7 @@ public class PvArrayScreen extends PlantScreen {
 		state(graphics, Component.translatable(key), colour, 46);
 	}
 
-	/** The light on the plane, split into where it came from. */
+	/** The light on the plane */
 	private void drawIrradiance(GuiGraphics graphics, PvArrayBlockEntity array) {
 		label(graphics, Component.translatable("screen.electricity.pv_array.poa"), 56);
 		value(graphics, fmt("%.0f W/m²", array.poaFront())
@@ -186,7 +164,7 @@ public class PvArrayScreen extends PlantScreen {
 		stackedBar(graphics, POA_BAR_Y,
 				new double[]{array.poaBeam() / POA_SCALE, array.poaDiffuse() / POA_SCALE, array.poaGround() / POA_SCALE},
 				new int[]{GREEN, VIOLET, AMBER});
-		// where standard test conditions would put it, so a reading can be judged against the figure the
+		// where standard test conditions would put it
 		// nameplate was measured at rather than against the top of an arbitrary scale
 		notch(graphics, POA_BAR_Y, barWidth(1000.0 / POA_SCALE), 0xFF202020);
 	}
@@ -206,13 +184,7 @@ public class PvArrayScreen extends PlantScreen {
 		needle(graphics, RATIO_BAR_Y, barWidth(ratio), 0xFFF0F0F0);
 	}
 
-	/**
-	 * Where the plane is pointing, on a centred scale.
-	 *
-	 * A fixed mounting gets the same gauge with its tilt marked once and no needle moving, which is more
-	 * useful than hiding the row: it puts the fixed array and the tracker on the same picture, so a player
-	 * comparing two blocks can see what the tracker is buying.
-	 */
+	/** Where the plane is pointing, on a centred scale. */
 	private void drawTracker(GuiGraphics graphics, PvArrayBlockEntity array) {
 		TrackerSpec tracker = array.tracker();
 		int centre = barSpan / 2;
@@ -285,12 +257,7 @@ public class PvArrayScreen extends PlantScreen {
 		return array();
 	}
 
-	/**
-	 * The hand position for the tracker.
-	 *
-	 * Sends on release, like the turbine's curtailment slider, and for the same reason: dragging across the
-	 * range would otherwise be a hundred packets for one decision.
-	 */
+	/** The hand position for the tracker. */
 	private class AngleSlider extends AbstractSliderButton {
 		private boolean beingDragged;
 

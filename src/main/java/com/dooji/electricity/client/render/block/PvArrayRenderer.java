@@ -30,42 +30,16 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
-/**
- * Draws the arrays, and turns the ones that track.
- *
- * <h2>Where the motion lives</h2>
- *
- * In the matrix, never in the vertices, and that is not a preference - the OBJ pipeline caches one
- * vertex buffer per block position and rebuilds it only when the light or the texture changes. A
- * rotation baked into the geometry would therefore be frozen at whatever angle the row happened to
- * be at when a player walked into range, and would stay there until a cloud went over.
- *
- * So every moving part is its own group in the model, authored lying flat, and this class works out a
- * matrix per group. The tracked groups are named {@code rotate_*} by the generator, which is the whole
- * of the contract between the two.
- *
- * <h2>The pivots are measured, not written down</h2>
- *
- * A single-axis row turns about its torque tube and a dual-axis frame about its pedestal and then its
- * elevation axis, and all three of those are the centre of a group the model already contains. Reading
- * them off the geometry rather than restating them here means the models can be regenerated at a
- * different height without anything in Java having to be told.
- *
- * <h2>Two axes, and why the flip is invisible</h2>
- *
- * The dual-axis frame's azimuth drive turns to face the sun's bearing, which in this world is due east
- * all morning and due west all afternoon - so it swings a half turn at noon. That happens to be exactly
- * the moment the elevation frame is lying flat, and a flat plate turned about its own vertical axis
- * looks identical, so the flip cannot be seen. Which is what a real azimuth-elevation machine does as
- * the sun crosses its zenith, for the same reason.
- */
+/** Draws the arrays, and turns the ones that track. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvArrayRenderer extends ObjRendererBase {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
 	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
-	/** Where the azimuth drive has actually got to, per block, so the half turn at noon is a sweep rather than a jump. */
+	/**
+	 * Where the azimuth drive has actually got to, per block, so the half turn at noon is a sweep rather than a jump.
+	 */
 	private static final Map<BlockPos, Float> AZIMUTH_CACHE = new HashMap<>();
-	/** Degrees the azimuth drive turns per frame. Slow, because a pedestal frame has a great deal of inertia. */
+	/** Degrees the azimuth drive turns per frame. */
 	private static final float AZIMUTH_STEP = 2.0f;
 
 	@SubscribeEvent
@@ -116,30 +90,12 @@ public class PvArrayRenderer extends ObjRendererBase {
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
 	}
 
-	/**
-	 * The groups that only exist once a set of leads has been worked into the array.
-	 *
-	 * The whole of the contract between this and the generator, the same way {@code rotate_} is: the model
-	 * carries the junction box and the pair leaving it under one name, and this decides whether they are
-	 * there. So plugging a reel of cable into an array is visible from across the field, which is the only
-	 * way a player finds the one row they forgot.
-	 */
+	/** The groups that only exist once a set of leads has been worked into the array. */
 	private static boolean isHarness(String groupName) {
 		return groupName.startsWith("harness");
 	}
 
-	/**
-	 * What is at each end of the row's own axis.
-	 *
-	 * {@code fed} is anything at all - the row alongside with its leads in, or copper laid up to that
-	 * edge. {@code mid} is narrower: whatever is there brings its cable to the *middle* of the edge
-	 * rather than to the corner, and so this row has to grow the turn out to the corner its own leads
-	 * are on. The two want different things drawn, which is why they are counted apart.
-	 *
-	 * North and south are the model's own ends, not the world's. The model is authored with its input at
-	 * the north end and the base rotation maps that onto the block's facing, so north here means the
-	 * facing and south means the way the leads leave.
-	 */
+	/** What is at each end of the row's own axis. */
 	private record Ends(boolean fedNorth, boolean fedSouth, boolean midNorth, boolean midSouth) {
 	}
 
@@ -152,14 +108,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 				midRun(array, north), midRun(array, south));
 	}
 
-	/**
-	 * Whether something at this end has its own cable up against this row.
-	 *
-	 * Asked of {@link PvArrayBlock#gives} rather than worked out here, because that is the same method
-	 * {@link PvStrings} wires the plant by: a row whose lead reaches this boundary feeds this one, and a
-	 * row whose lead is at its other end does not, harness or no harness. So what is drawn and what is
-	 * counted cannot disagree - they are one rule read twice.
-	 */
+	/** Whether something at this end has its own cable up against this row. */
 	private static boolean fedFrom(PvArrayBlockEntity array, Direction direction) {
 		BlockPos beside = array.getBlockPos().relative(direction);
 		if (PvArrayBlock.gives(array.getLevel().getBlockState(beside), direction.getOpposite())) return true;
@@ -167,20 +116,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		return cableArrives(array.getLevel(), array.getBlockPos(), direction);
 	}
 
-	/**
-	 * Whether whatever is at this edge meets it in the middle rather than at the corner.
-	 *
-	 * Laid copper does, because a run lies down the middle of its block. So does a tracked row, and for
-	 * the same reason: a tracker's own harness goes the whole length of its block down the middle, and its
-	 * plug sits there too, so it reaches this boundary half a block from the corner a fixed row's leads
-	 * are on. Left as only the copper, a table or a rack next to a tracker showed a cable pointing at half
-	 * a block of nothing - the same fault a laid run had before it grew the turn, and the same turn fixes
-	 * it.
-	 *
-	 * Only on the two faces a tracker's tube actually runs to. Its tube is forced north-south, so its
-	 * cable never reaches its east or west side, and a turn out to a face with nothing behind it would be
-	 * this fault over again pointing the other way.
-	 */
+	/** Whether whatever is at this edge meets it in the middle rather than at the corner. */
 	private static boolean midRun(PvArrayBlockEntity array, Direction direction) {
 		if (cableArrives(array.getLevel(), array.getBlockPos(), direction)) return true;
 
@@ -195,32 +131,8 @@ public class PvArrayRenderer extends ObjRendererBase {
 
 	/**
 	 * Whether one group of an array's model is drawn.
-	 *
-	 * Two halves, and which half a group is in decides everything about it.
-	 *
-	 * The <b>input</b> half is the socket and the turn on the same end. It appears when something arrives
-	 * at that end - copper, or the row behind with its lead out - and it does not care whether this row
-	 * has a reel of cable in it, because a socket is where a cable arrives and a cable arriving does not
-	 * wait for the thing it is arriving at. It is also exactly what makes the row wired: see
-	 * {@link PvArrayBlock#takes}.
-	 *
-	 * The <b>output</b> half is the row's own lead and the turn at that end, and it appears once a reel has
-	 * been worked in, because that is what a harness is - the leads that reach the row behind. So plugging
-	 * an array in is visible from across the field, which is the only way a player finds the one row they
-	 * forgot.
-	 *
-	 * A tracked row's plugs are the other way about: its run goes the whole length of the block, so a
-	 * cabled row needs no plug at either end and an uncabled one shows the plug at whichever end has
-	 * something at it. Which is a rule the fixed mountings do not need and a tracker cannot do without -
-	 * placement forces a tracker's tube north-south whichever way the player was facing, so half the rows
-	 * in a field are chained the other way round, and a plug only ever at the north end is at the wrong end
-	 * of half of them.
-	 *
-	 * The entries are the turns out to the corner the leads are on, drawn for whatever meets this row in
-	 * the middle of an edge - laid copper, or a tracked row, whose harness runs down the middle of its own
-	 * block. Each belongs to the half its end belongs to: the one at the socket end appears with the
-	 * socket, the one at the lead end with the lead. A fixed row next door needs neither, since those two
-	 * meet corner to corner already.
+	  *
+	 * It is also exactly what makes the row wired: see {@link PvArrayBlock#takes}.
 	 */
 	private static boolean drawn(String groupName, boolean harnessed, Ends ends) {
 		if (!isHarness(groupName)) return true;
@@ -233,14 +145,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		return harnessed;
 	}
 
-	/**
-	 * One roll about the torque tube, and everything bolted to it comes with.
-	 *
-	 * Positive rotation rolls the face towards the west, which is the sign convention
-	 * {@link com.dooji.electricity.api.power.TrackerSpec} uses and the same one
-	 * {@link PvArrayBlockEntity#planeAzimuthDeg()} reads to decide which way the plane is pointing. The
-	 * two have to agree or the array would report facing one way and be drawn facing the other.
-	 */
+	/** One roll about the torque tube */
 	private static void poseSingleAxis(ObjModel model, PoseStack poseStack, Map<String, Matrix4f> poses, double rotation) {
 		Vec3 axis = pivot(model, "tube", new Vec3(0.0, 0.62, 0.0));
 
@@ -259,19 +164,11 @@ public class PvArrayRenderer extends ObjRendererBase {
 		}
 	}
 
-	/**
-	 * The azimuth collar first, then the elevation frame inside it.
-	 *
-	 * The order matters: the elevation axis is carried on the yoke, so it turns with the collar. Nesting
-	 * the two transforms is what makes that true, and it is why the elevation groups are named as a
-	 * prefix of the azimuth ones rather than being a separate family.
-	 */
+	/** The azimuth collar first */
 	private static void poseDualAxis(ObjModel model, PoseStack poseStack, Map<String, Matrix4f> poses, PvArrayBlockEntity array, double rotation) {
 		Vec3 collar = pivot(model, "azimuth", new Vec3(0.0, 0.60, 0.0));
 		Vec3 elevation = pivot(model, "elevation", new Vec3(0.0, 0.7475, 0.0));
-		// off the *target* rather than the current angle, because the target's sign comes from which
-		// half of the sky the sun is in and flips once at noon, while the drive's own angle hovers
-		// either side of zero as it crosses - and chasing that had the frame swinging back and forth
+		// off the *target* rather than the current angle
 		float azimuth = smoothAzimuth(array.getBlockPos(), array.targetRotationDeg() >= 0.0 ? 0.0f : 180.0f);
 
 		for (String groupName : model.groups.keySet()) {
@@ -295,13 +192,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 		}
 	}
 
-	/**
-	 * Walks the azimuth drive towards its target rather than snapping it.
-	 *
-	 * Only ever asked for a half turn, and only at noon when the frame is flat and the turn cannot be
-	 * seen. It is stepped anyway, because a matrix that jumps a hundred and eighty degrees in one frame
-	 * would be visible on the pedestal collar even when the plate above it is not.
-	 */
+	/** Walks the azimuth drive towards its target rather than snapping it. */
 	private static float smoothAzimuth(BlockPos pos, float target) {
 		float current = AZIMUTH_CACHE.getOrDefault(pos, target);
 		if (Minecraft.getInstance().isPaused()) return current;
@@ -321,27 +212,12 @@ public class PvArrayRenderer extends ObjRendererBase {
 		}
 	}
 
-	/**
-	 * Which way the model is turned before the tracker's own rotation is applied.
-	 *
-	 * North for anything tracked, whatever the block state says, because a tracker's tube runs
-	 * north-south or it cannot follow a sun that travels east to west - and turning the model would turn
-	 * the tube with it, leaving a row that sweeps beautifully and never points at anything. Placement
-	 * already forces north, so this only matters for a block put down by a command or moved by
-	 * something; the physics ignores the facing for a tracker in exactly the same way, and the two have
-	 * to agree about that or the array would collect on a plane it is not drawn on.
-	 */
+	/** Which way the model is turned before the tracker's own rotation is applied. */
 	private static Direction drawnFacing(BlockState state) {
 		if (state.getBlock() instanceof PvArrayBlock array && array.spec().tracked()) return Direction.NORTH;
 
 		return state.getValue(PvArrayBlock.FACING);
 	}
 
-	/**
-	 * How far to turn the model for a given facing.
-	 *
-	 * The models are authored tipping towards north, because that is the default facing and because
-	 * {@link PvArrayBlock#planeAzimuthDeg} reads the plane's bearing off the same facing - so north
-	 * needs no rotation and the rest follow round.
-	 */
+	/** How far to turn the model for a given facing. */
 }

@@ -3,17 +3,7 @@ package com.dooji.electricity.main.network.payloads;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 
-/**
- * One command from a turbine's control panel.
- *
- * An action plus a number rather than a message per control, because every one of
- * them is the same shape - pick a turbine, change one setting - and the server
- * validates them all identically. The value is only read by the actions that need
- * one; the rest ignore whatever arrives in it, which is why nothing here is
- * trusted: {@code setActivePowerLimit} clamps to the machine's own nameplate and
- * {@code setTowerSegments} to the range its model is sold on, so a crafted packet
- * cannot ask for a 40 MW turbine on a one-block tower.
- */
+/** One command from a turbine's control panel. */
 public record TurbineControlPayload(BlockPos blockPos, Action action, double value) {
 	public enum Action {
 		/** Release or apply the brake by hand. */

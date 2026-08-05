@@ -31,46 +31,16 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/**
-	 * Hung on a wall rather than stood on the ground.
-	 *
-	 * Set by clicking the side of a block, which is how every wall-mounted thing in the game is placed.
-	 * A pad-mounted kiosk and a wall enclosure are the same cabinet with two ways of fixing it, and the
-	 * mounting channels on its back are drawn either way because a real one is railed at the factory -
-	 * so the only visible difference is that a mounted box loses its plinth and sits back against the
-	 * wall instead of in the middle of its block.
-	 */
+	/** Hung on a wall rather than stood on the ground. */
 	public static final BooleanProperty MOUNTED = BooleanProperty.create("mounted");
 
-	/**
-	 * How far back a mounted box is pushed, so its own back lands on the block's.
-	 *
-	 * The model is centred and reaches z 0.220 at the rear, so this is what is left to the boundary.
-	 * The renderer translates the model by it and {@link #WALL_CELLS} moves the collision by the same
-	 * figure, in the model's own frame, before the facing turns either.
-	 */
+	/** How far back a mounted box is pushed, so its own back lands on the block's. */
 	public static final double BACKSET = 0.280;
 
-	/**
-	 * The facing power_box.obj is modelled at.
-	 *
-	 * North now, like every model the mod generates for itself: the doors are on the north face and the
-	 * kiosk is centred in its block. The inherited model faced east and hugged the west edge, hanging a
-	 * sixteenth of a block outside it - so a kiosk placed against a wall was half inside the wall, and its
-	 * collision was four hand-written boxes each a quarter turn from where the cabinet was drawn.
-	 */
+	/** The facing power_box.obj is modelled at. */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/**
-	 * The kiosk, where it actually is: cut from power_box.obj, part by part.
-	 *
-	 * The plinth, the body, the doors, the hood over them and the bushing on the roof, each as the box it
-	 * is drawn as - so a player walking round it collides with the cabinet and not with the air over the
-	 * plinth, and can stand on the hood's ledge because there is one.
-	 *
-	 * In the model's own frame, turned onto the facing by the same arithmetic the renderer poses by.
-	 * Written by {@code tools/check_hitboxes.py --java}, which reads both and fails if they have drifted.
-	 */
+	/** The kiosk, where it actually is: cut from power_box.obj, part by part. */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(2.53, 10.94, 4.77, 13.47, 11.81, 11.23),
 					Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20),
@@ -80,10 +50,14 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 					Block.box(6.80, 11.23, 6.80, 9.20, 12.18, 9.20),
 					Block.box(10.08, 0.00, 10.56, 11.04, 1.92, 11.52))));
 
-	/** The plinth, which a mounted box has not got. One of the boxes of {@link #CELLS}. */
+	/**
+	 * The plinth, which a mounted box has not got.
+	  *
+	 * One of the boxes of {@link #CELLS}.
+	 */
 	private static final VoxelShape PLINTH = Block.box(2.56, 0.00, 4.80, 13.44, 0.88, 11.20);
 
-	/** The same cabinet with no plinth under it, moved back against the wall it hangs on. */
+	/** The same cabinet with no plinth under it */
 	private static final List<Cell> WALL_CELLS = wallCells();
 
 	private static List<Cell> wallCells() {
@@ -102,11 +76,7 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 		builder.add(FACING, MOUNTED);
 	}
 
-	/**
-	 * Clicked on a wall it hangs on that wall; clicked on the ground it stands on the ground.
-	 *
-	 * The facing is the clicked face when mounted, so the doors look out of the wall rather than into it.
-	 */
+	/** Clicked on a wall it hangs on that wall; clicked on the ground it stands on the ground. */
 	@Override
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
 		Direction face = context.getClickedFace();

@@ -18,14 +18,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
-/**
- * A turbine in the hand, showing its nameplate the way a datasheet header reads.
- *
- * The figures come off the spec rather than out of a translation file, so a machine
- * added by a datapack describes itself without anyone writing lines for it, and the
- * numbers in the tooltip cannot drift away from the ones the turbine will actually
- * run at.
- */
+/** A turbine in the hand, showing its nameplate the way a datasheet header reads. */
 public class TurbineBlockItem extends BlockItem {
 	private final TurbineSpec spec;
 
@@ -38,14 +31,7 @@ public class TurbineBlockItem extends BlockItem {
 		return spec;
 	}
 
-	/**
-	 * Refuses to mount, and says why.
-	 *
-	 * {@code canSurvive} on the block already stops a turbine landing on a tower it is not
-	 * certified for, but silently: the player sees the block simply not appear, which reads
-	 * as a bug. The check is repeated here only to be able to name the number, which is the
-	 * one thing that turns the refusal into instructions.
-	 */
+	/** Refuses to mount, and says why. */
 	@Override
 	public InteractionResult place(BlockPlaceContext context) {
 		Level level = context.getLevel();
@@ -88,9 +74,7 @@ public class TurbineBlockItem extends BlockItem {
 	}
 
 	/**
-	 * kW below a megawatt and MW above it, because a catalogue spanning 10 kW to 4 MW
-	 * reads badly in either unit alone: "4000 kW" and "0.01 MW" are both harder to place
-	 * at a glance than the unit an engineer would have used.
+	 * kW below a megawatt and MW above it, because a catalogue spanning 10 kW to 4 MW reads badly in either unit alone: "4000 kW" and "0.01 MW" are both harder to place at a glance than the unit an engineer would have used.
 	 */
 	public static String formatPower(double kw) {
 		if (kw >= 1000.0) return format("%.1f MW", kw / 1000.0);

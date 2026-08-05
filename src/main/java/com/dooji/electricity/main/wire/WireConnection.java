@@ -12,14 +12,7 @@ public class WireConnection {
 	private final String endBlockType;
 	private final String startPowerType;
 	private final String endPowerType;
-	/**
-	 * How many items the span was charged for, so taking it down refunds exactly that.
-	 *
-	 * Stored rather than recomputed on removal, and that is the whole reason the field exists: a cost
-	 * worked out again later from a span length that has since changed - a machine moved, a world loaded
-	 * by a different build, a spec retuned - refunds the wrong number, and refunding more than was
-	 * charged is a duplication bug. Zero for a connection made before conductors cost anything.
-	 */
+	/** How many items the span was charged for */
 	private final int chargedItems;
 
 	public WireConnection(int startInsulatorId, int endInsulatorId) {

@@ -32,28 +32,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
-/**
- * Draws the inverter cabinets, and spins the fan that is keeping them alive.
- *
- * <h2>The fan is a reading</h2>
- *
- * Its speed comes off the cabinet temperature rather than the output, which is the useful way round and
- * also the real one: a temperature-controlled fan runs to hold a setpoint, so it idles on a cool
- * morning at full output and roars on a hot afternoon at half. A player who learns to read it has a
- * derating warning they can hear across a field, and a cabinet whose fan has stopped while the
- * temperature climbs is the failure this is worth drawing at all for.
- *
- * A convection-cooled machine's fan is held still, and nothing in the catalogue is convection-cooled now
- * for exactly that reason: one model is drawn for all four sizes, so a machine that is not allowed to
- * turn its fan is a machine with two fans standing still on its roof.
- *
- * <h2>One asset, four machines</h2>
- *
- * The same trick the turbines use: the catalogue spans a factor of two hundred and fifty in nameplate
- * and the difference on screen is a scale rather than four models. The three sizes match the three
- * collision shapes {@link PvInverterBlock} chooses between, so what a player can walk into is what they
- * can see.
- */
+/** Draws the inverter cabinets, and spins the fan that is keeping them alive. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvInverterRenderer extends ObjRendererBase {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
@@ -61,10 +40,10 @@ public class PvInverterRenderer extends ObjRendererBase {
 	/** Where each fan has got to, so it turns continuously rather than restarting every frame. */
 	private static final Map<BlockPos, Float> FAN_ANGLE = new HashMap<>();
 
-	/** Cabinet temperature at which the fan is at a standstill, and the one at which it is flat out. */
+	/** Cabinet temperature at which the fan is at a standstill */
 	private static final double FAN_IDLE_C = 25.0;
 	private static final double FAN_FULL_C = 60.0;
-	/** Degrees a frame at full speed. Fast enough to blur, slow enough not to strobe. */
+	/** Degrees a frame at full speed. */
 	private static final float FAN_MAX_STEP = 22.0f;
 
 	@SubscribeEvent
@@ -105,24 +84,15 @@ public class PvInverterRenderer extends ObjRendererBase {
 		for (String groupName : model.groups.keySet()) {
 			if (groupName.startsWith("pivot_")) continue;
 			if (!entryVisible(groupName, "entry", entries)) continue;
-			// the lower front is the DC compartment or the plate that blanks its aperture off, never
-			// both. The section stands proud of the door line and the plate is flush, which is why
-			// PvInverterBlock has a shape for each.
+			// the lower front is the DC compartment or the plate that blanks its aperture off
 			if (groupName.startsWith("section") && !section) continue;
 			if (groupName.startsWith("blank") && section) continue;
 
 			poseStack.pushPose();
-			// the whole machine scales about the middle of its own footprint, so a small one sits on
-			// the ground rather than hovering over it - but not the cable entry, which has to reach the
-			// edge of the block whatever size the cabinet is, because that is where the cable is
+			// the whole machine scales about the middle of its own footprint
 			if (!groupName.startsWith("entry")) poseStack.scale(scale, scale, scale);
 
 			// Each roof fan turns about its own hub, and about the vertical.
-			//
-			// Two things there. The machine has two extract fans on the roof now rather than one on its
-			// flank, so a single hub read off every group whose name starts with pivot_fan would be the
-			// point midway between them - and the west fan would orbit the east one's axis rather than
-			// spin. And a roof fan's axis is vertical: on the flank it was XP.
 			if (groupName.startsWith("rotate_fan")) {
 				Vec3 hub = pivot(model, "fan_" + groupName.substring("rotate_fan_".length()).split("_")[0],
 						new Vec3(0.0, 1.0, 0.0));
@@ -138,13 +108,7 @@ public class PvInverterRenderer extends ObjRendererBase {
 		renderGrouped(model, poses, projectionMatrix, texture, packedLight, inverter.getBlockPos(), BUFFER_CACHE);
 	}
 
-	/**
-	 * How large to draw a machine, from its nameplate.
-	 *
-	 * Three sizes rather than a continuous scale, and they are the same three
-	 * {@link PvInverterBlock} picks its collision shape from - so the thing a player bumps into is the
-	 * thing they can see. The authored model is the commercial cabinet, which is why that one is 1:1.
-	 */
+	/** How large to draw a machine, from its nameplate. */
 	private static double renderScale(InverterSpec spec) {
 		if (spec.acPowerKw() >= 1000.0) return 1.0;
 		if (spec.acPowerKw() <= 30.0) return 0.62;
@@ -152,12 +116,7 @@ public class PvInverterRenderer extends ObjRendererBase {
 		return 0.92;
 	}
 
-	/**
-	 * Turns the fan on by the cabinet temperature, and keeps the angle between frames.
-	 *
-	 * Held still while the game is paused, so a paused world does not have a fan creeping round in a
-	 * screenshot.
-	 */
+	/** Turns the fan on by the cabinet temperature, and keeps the angle between frames. */
 	private static float advanceFan(BlockPos pos, double cabinetTempC, InverterSpec.Cooling cooling) {
 		float current = FAN_ANGLE.getOrDefault(pos, 0.0f);
 		if (cooling == InverterSpec.Cooling.NATURAL || Minecraft.getInstance().isPaused()) return current;

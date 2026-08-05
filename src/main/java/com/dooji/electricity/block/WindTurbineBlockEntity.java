@@ -57,26 +57,17 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 	private double generatedPower = 0.0;
 	private double currentPower = 0.0;
-	/** What the rotor is in right now: the mean wind plus its turbulence. Drives the power curve. */
+	/** What the rotor is in right now: the mean wind plus its turbulence. */
 	private float lastEffectiveWindSpeed = 0.0f;
 	private float lastAlignedWindSpeed = 0.0f;
-	/**
-	 * Ten-minute mean and three-second gust at the hub.
-	 *
-	 * The controller supervises on these rather than on the instantaneous wind, exactly as a
-	 * real one does: a machine that tripped every time a gust brushed its cut-out would spend
-	 * a windy afternoon starting and stopping, and one that only watched the mean would ride a
-	 * squall it should have shut down for. So the mean decides the shutdown and the gust
-	 * decides the trip.
-	 */
+	/** Ten-minute mean and three-second gust at the hub. */
 	private float meanWindSpeed = 0.0f;
 	private float gustWindSpeed = 0.0f;
 	private float windDirection = 0.0f;
 	/** Turbulence intensity: the standard deviation of the wind over its mean, so 0.13 is ordinary. */
 	private double turbulence = 0.0;
 	/**
-	 * Exponent of the wind profile at this site, synced because the panel quotes what one more
-	 * block of tower is worth and only the server knows the ground the tower stands on.
+	 * Exponent of the wind profile at this site, synced because the panel quotes what one more block of tower is worth and only the server knows the ground the tower stands on.
 	 */
 	private float shearExponent = 0.14f;
 	private double ambientTempC = 15.0;
@@ -86,15 +77,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private float yaw = 0.0f;
 	private float lastSentYaw = Float.NaN;
 	private long lastSyncTick = 0L;
-	/**
-	 * Smallest gap below the cut-out at which a storm shutdown may release.
-	 *
-	 * Releasing at the storm onset rather than just under the cut-out brings the machine
-	 * back through the derating ramp at 80% instead of slamming straight to full output,
-	 * which is the same strain on the drivetrain that derating exists to avoid. A machine
-	 * with no storm control has its onset sitting on its cut-out and would chatter there,
-	 * so this is the floor that keeps it honest.
-	 */
+	/** Smallest gap below the cut-out at which a storm shutdown may release. */
 	private static final double MINIMUM_CUT_OUT_HYSTERESIS = 3.0;
 	private static final float YAW_STEP = 0.25f;
 	private static final float YAW_DEADBAND = 7.5f;
@@ -105,9 +88,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
 	// Telemetry is published as one finished snapshot per tick rather than read
-	// field by field, because ComputerCraft calls in from the computer thread: a
-	// reader would otherwise race the server thread and could mix values from two
-	// different ticks. Volatile makes the completed snapshot visible atomically.
 	private final TurbineTelemetrySimulator telemetrySimulator = new TurbineTelemetrySimulator();
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
 	private double yawCableTwist = 0.0;
@@ -116,22 +96,14 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// Control state. Volatile because a ComputerCraft program reads it from the
 	// computer thread; writes come back through the server thread, see the setters.
 	private volatile boolean stoppedByComputer = false;
-	/**
-	 * The brake a player applied from the control panel.
-	 *
-	 * Kept apart from {@link #stoppedByComputer} rather than sharing it, because a program
-	 * asks {@code isStopped()} to find out whether *it* stopped the machine. Folding a
-	 * player's hand-stop into the same flag would answer yes to a program that had issued
-	 * no such command, and a control loop written on that answer would then leave a
-	 * turbine down believing it had put it there.
-	 */
+	/** The brake a player applied from the control panel. */
 	private volatile boolean stoppedByPlayer = false;
 	private final RedstoneStop redstone = new RedstoneStop();
 	private volatile double activePowerLimitKw;
 	/** What the wind alone would have produced, before curtailment. */
 	private double uncappedPower = 0.0;
 
-	/** Air density at the nacelle, from ambient temperature. Cold air is denser and carries more power. */
+	/** Air density at the nacelle, from ambient temperature. */
 	private double airDensity = WorldConditions.REFERENCE_AIR_DENSITY;
 
 	public WindTurbineBlockEntity(BlockPos pos, BlockState state) {
@@ -142,29 +114,14 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		generateInsulatorIds();
 	}
 
-	/**
-	 * Which machine this is.
-	 *
-	 * Read back off the block rather than persisted, so a placed turbine cannot disagree
-	 * with the item that placed it and there is no saved model id to migrate. The
-	 * fallback only comes up if a turbine somehow outlives its own block.
-	 */
+	/** Which machine this is. */
 	public TurbineSpec spec() {
 		if (getBlockState().getBlock() instanceof WindTurbineBlock turbine) return turbine.spec();
 
 		return TurbineCatalog.fallback();
 	}
 
-	/**
-	 * How many tower segments stand under the machine.
-	 *
-	 * Counted out of the world rather than stored, which is the whole reason the tower is
-	 * real blocks: the height the physics uses and the tower a player can walk up are one
-	 * fact with one source, so they cannot come apart. Cheap enough to ask every tick -
-	 * thirteen block lookups is less than a redstone wire does idling.
-	 *
-	 * Both sides count for themselves, so none of this needs syncing.
-	 */
+	/** How many tower segments stand under the machine. */
 	public int getTowerSegments() {
 		if (level == null) return spec().minTowerSegments();
 
@@ -179,14 +136,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return airDensity;
 	}
 
-	/**
-	 * The output the server last published, in kW, without recomputing it.
-	 *
-	 * {@link #getGeneratedPower()} runs the generation model again, which is what the wire
-	 * network wants but wrong for a readout on the client: the client has no air density of
-	 * its own, so it would recompute a slightly different number than the machine is
-	 * actually making. This returns what was synced.
-	 */
+	/** The output the server last published, in kW */
 	public double getReportedPowerKw() {
 		return Math.max(0.0, generatedPower);
 	}
@@ -304,10 +254,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return shearExponent;
 	}
 	/**
-	 * What the wire network may carry away this tick: everything generated, minus
-	 * whatever another mod's cables already claimed. The subtraction is what stops
-	 * the same Joule being spent twice, because the wire network reads a generator
-	 * without ever debiting it.
+	 * What the wire network may carry away this tick: everything generated, minus whatever another mod's cables already claimed.
 	 */
 	public double getGeneratedPower() {
 		updateGeneratedPower();
@@ -315,12 +262,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	}
 
 	public boolean isSurging() {
-		// still possible right through the storm-control band, since the machine is
-		// running there; only a real shutdown rules a surge out.
-		//
-		// The threshold is on real turbulence intensity now the weather model reports one:
-		// 0.22 is rough air, the sort a forest or a squall makes, and the old 0.35 would
-		// never have been reached again - it belonged to a scale that ran to 1.0
+		// still possible right through the storm-control band
 		return turbulence >= 0.22 && meanWindSpeed < spec().cutOutSpeed() && !isBraked();
 	}
 
@@ -339,26 +281,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 			return;
 		}
 
-		// the cut-in, the plateau and the storm derating all live in the model's own curve, so
-		// this is the whole generation model. Air density goes in with it, which is why a
-		// turbine on a freezing night out-produces the same machine on a hot afternoon in
-		// identical wind.
-		//
-		// The wind going in is the instantaneous one, not the mean, so the output moves the way
-		// a real machine's does. The cut-out is not applied here because the controller above
-		// has already decided that, on the mean and the gust, with hysteresis on both.
+		// the cut-in, the plateau and the storm derating all live in the model's own curve
 		uncappedPower = spec().powerWhileRunningKw(Math.max(0.0, lastAlignedWindSpeed), airDensity);
 		generatedPower = Math.min(uncappedPower, Math.max(0.0, activePowerLimitKw));
 	}
 
-	/**
-	 * Wind speed at which a storm shutdown releases.
-	 *
-	 * The storm onset, so the machine comes back through the derating ramp at 80% rather
-	 * than slamming straight to full output. A machine with no storm control has its
-	 * onset sitting on its cut-out, where that rule would leave no hysteresis at all and
-	 * the brake would chatter, so the floor applies instead.
-	 */
+	/** Wind speed at which a storm shutdown releases. */
 	private static double cutOutResetSpeed(TurbineSpec spec) {
 		return Math.min(spec.stormOnsetSpeed(), spec.cutOutSpeed() - MINIMUM_CUT_OUT_HYSTERESIS);
 	}
@@ -366,10 +294,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	// ---- control ----
 
 	/**
-	 * Whether the rotor is held stopped, for any reason: the machine protecting
-	 * itself in a gale, a command from a computer, or a redstone signal. Everything
-	 * that should not happen on a stopped turbine keys off this rather than off the
-	 * wind cut-out alone.
+	 * Whether the rotor is held stopped, for any reason: the machine protecting itself in a gale, a command from a computer, or a redstone signal.
 	 */
 	public boolean isBraked() {
 		return cutOutActive || stoppedByComputer || stoppedByPlayer || redstone.stopping();
@@ -387,7 +312,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return stoppedByPlayer;
 	}
 
-	/** Applies or releases the hand brake. Server thread only, like the other controls. */
+	/** Applies or releases the hand brake. */
 	public void setStoppedByPlayer(boolean stopped) {
 		if (stoppedByPlayer == stopped) return;
 
@@ -411,11 +336,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return activePowerLimitKw;
 	}
 
-	/**
-	 * Stops or releases the turbine. Must be called from the server thread: it marks
-	 * the block entity dirty and pushes the new state to clients so the rotor stops
-	 * on screen too.
-	 */
+	/** Stops or releases the turbine. */
 	public void setStoppedByComputer(boolean stopped) {
 		if (stoppedByComputer == stopped) return;
 
@@ -450,9 +371,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW;
 	}
 
-	/**
-	 * The latest published snapshot. Safe to read from any thread; never null.
-	 */
+	/** The latest published snapshot. */
 	public Telemetry.Snapshot getTelemetry() {
 		return telemetry;
 	}
@@ -461,12 +380,10 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		if (level == null || level.isClientSide()) return;
 
 		// precipitation is checked at this position rather than globally, the same way
-		// GlobalWeatherManager samples it: it is not raining inside a desert or under
-		// a roof, and the thermometer should agree with what is actually overhead
 		boolean precipitating = level.isRainingAt(worldPosition.above());
 		boolean storming = level.isThundering() && precipitating;
 		TurbineSpec spec = spec();
-		// the machine is not giving everything it could: braked, pitching out above the
+		// the machine is not giving everything it could: braked
 		// rated wind, or held down by a curtailment setpoint
 		boolean powerLimited = isBraked() || lastAlignedWindSpeed > spec.ratedSpeed() || uncappedPower > generatedPower;
 
@@ -501,28 +418,16 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		));
 	}
 
-	/**
-	 * Opens a fresh budget for the current tick. The cap only limits what other mods
-	 * can draw; the wire network still receives everything left over.
-	 */
+	/** Opens a fresh budget for the current tick. */
 	private void refreshEnergyBudget() {
 		double cap = getMaxJoulesPerTick();
 		budget.open(cap <= 0.0 ? 0.0 : Math.min(Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW, cap));
 	}
 
 	/**
-	 * Mirrors Mekanism's Wind Generator, which exposes energy on its front and
-	 * bottom rather than on every face: cables belong at the foot of the tower.
+	 * Mirrors Mekanism's Wind Generator, which exposes energy on its front and bottom rather than on every face: cables belong at the foot of the tower.
 	 */
-	/**
-	 * Where this machine's cables come out: the foot of its tower.
-	 *
-	 * A real turbine gathers its cables at the tower base, and so does Mekanism's Wind
-	 * Generator, whose block sits on the ground with a decorative tower above it. Since this
-	 * machine moved to the top of a tower a player builds, the block that stands where
-	 * Mekanism's does is the foot - so that is where energy has to leave and arrive, not
-	 * thirteen blocks up beside the nacelle.
-	 */
+	/** Where this machine's cables come out: the foot of its tower. */
 	public BlockPos energyOrigin() {
 		return worldPosition.below(getTowerSegments());
 	}
@@ -548,9 +453,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	public double getMaxJoulesPerTick() {
 		if (level == null || level.isClientSide() || !ElectricityServerConfig.externalEnergyEnabled()) return 0.0;
 
-		// a share of this machine's own nameplate, not one figure for every machine: the
-		// catalogue spans 10 kW to 4 MW, so a fixed number of Joules would strangle the
-		// large models and hand the small ones more than they are able to make
+		// a share of this machine's own nameplate
 		double share = spec().ratedPowerKw() * EnergyBridge.JOULES_PER_KW * ElectricityServerConfig.turbineExportFraction();
 		return Math.min(share, ElectricityServerConfig.turbineMaxJoulesPerTick());
 	}
@@ -595,11 +498,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
 		Vec3 rotatedCenter = ModelFacing.turned(localCenter, WindTurbineBlock.AUTHORED, facing);
 		// The machine is the top block of the structure and the wire fitting is at the foot of
-		// the tower, so the connection point drops by the whole tower.
-		//
-		// ObjTransforms.resolve says the same thing for drawing and for hit-testing, and the two
-		// have to agree or a wire attaches somewhere it cannot be seen. They are stated twice
-		// because this runs on the server too and that class is client-only.
 		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, -getTowerSegments(), 0.5).add(rotatedCenter);
 	}
 
@@ -620,8 +518,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 
 		TurbineSpec spec = spec();
 		// asked for the wind at this machine's own hub over this machine's own ground: the
-		// profile down from the blending height depends on both, so a block of tower is worth
-		// several times as much in a forest as it is on a beach
 		WeatherSnapshot weather = GlobalWeatherManager.get((ServerLevel) level).sample(worldPosition, getTowerSegments());
 
 		meanWindSpeed = (float) weather.meanWind();
@@ -639,12 +535,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		lastAlignedWindSpeed = lastEffectiveWindSpeed * alignment;
 
 		// The brake waits for the cut-out: between the storm onset and there the machine stays
-		// on load, just derated.
-		//
-		// Supervised on the mean and on the gust separately, which is how the real limits are
-		// written - 25 m/s over ten minutes, or a gust a fifth past it. Watching only the
-		// instantaneous wind would trip the machine on the first gust that touched 25 and
-		// release it a second later, which is chatter rather than protection.
 		if (meanWindSpeed >= spec.cutOutSpeed() || gustWindSpeed >= spec.cutOutSpeed() * WorldConditions.GUST_TRIP_RATIO) {
 			cutOutActive = true;
 		} else if (cutOutActive && meanWindSpeed <= cutOutResetSpeed(spec)) {
@@ -652,14 +542,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		redstone.poll(this, this::onControlChanged);
-		// power first: the rotor speed reads the setpoint against what the wind was offering, so
+		// power first: the rotor speed reads the setpoint against what the wind was offering
 		// working them out in the other order would have it answering last tick's curtailment
 		updateGeneratedPower();
 		updateRotorSpeeds(lastAlignedWindSpeed);
 
 		// push before the wire network runs. Block entities tick inside the level tick,
-		// while PowerNetwork.updatePowerNetwork() runs on ServerTickEvent END, so the
-		// residual reaches the wires in this same tick instead of a tick late.
 		refreshEnergyBudget();
 		EnergyBridge.emit(this, this, energyOrigin(), energyFaces());
 
@@ -697,8 +585,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		lastEffectiveWindSpeed = tag.getFloat("lastEffectiveWindSpeed");
 		lastAlignedWindSpeed = tag.contains("lastAlignedWindSpeed") ? tag.getFloat("lastAlignedWindSpeed") : lastEffectiveWindSpeed;
 		// a turbine saved before the weather model reported a mean and a gust has only the one
-		// wind speed, so both read back off it rather than off zero, which would show a panel
-		// with a full power bar over a dead calm until the next tick corrected it
 		meanWindSpeed = tag.contains("meanWindSpeed") ? tag.getFloat("meanWindSpeed") : lastEffectiveWindSpeed;
 		gustWindSpeed = tag.contains("gustWindSpeed") ? tag.getFloat("gustWindSpeed") : lastEffectiveWindSpeed;
 		shearExponent = tag.contains("shearExponent") ? tag.getFloat("shearExponent") : 0.14f;
@@ -738,12 +624,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		ensureYawInitialized();
 
 		// An entry is null whenever calculateOrientedInsulatorCenter could not find the
-		// insulator's bounding box, and on a dedicated server that is *always*: every
-		// method that fills ObjBoundingBoxRegistry is @OnlyIn(Dist.CLIENT), so the
-		// registry is permanently empty there. Writing an empty tag as a placeholder
-		// keeps the list index-aligned with the array, which is what ElectricCabin and
-		// PowerBox already do; load() reads a missing key back as 0 and then recomputes
-		// the real positions anyway.
 		ListTag positionsList = new ListTag();
 		for (Vec3 pos : wirePositions) {
 			if (pos != null) {
@@ -770,8 +650,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putFloat("rotationSpeed2", rotationSpeed2);
 		tag.putDouble("generatedPower", generatedPower);
 		// both exist for the control panel: without them the client would have to redo the
-		// generation calculation, and it cannot - air density comes from the server's own
-		// weather sampling, so the two would quietly disagree by a few percent
 		tag.putDouble("uncappedPower", uncappedPower);
 		tag.putDouble("airDensity", airDensity);
 		tag.putDouble("currentPower", currentPower);
@@ -779,7 +657,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putFloat("lastAlignedWindSpeed", lastAlignedWindSpeed);
 		tag.putFloat("meanWindSpeed", meanWindSpeed);
 		tag.putFloat("gustWindSpeed", gustWindSpeed);
-		// the panel quotes what one more block of tower would be worth, and that depends on the
+		// the panel quotes what one more block of tower would be worth
 		// ground the tower stands on - which only the server has surveyed
 		tag.putFloat("shearExponent", shearExponent);
 		tag.putDouble("ambientTempC", ambientTempC);
@@ -789,8 +667,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		tag.putFloat("windDirection", windDirection);
 		tag.putDouble("turbulence", turbulence);
 		// the one telemetry value that is real accumulated state rather than a
-		// reading, so it has to survive a reload; the simulated temperatures do not,
-		// they just warm up from ambient again
 		tag.putDouble("yawCableTwist", yawCableTwist);
 
 		// all of these are written because getUpdateTag() routes through here: the client
@@ -849,23 +725,8 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
 	}
 
-	/**
-	 * How far the rotor turns in a tick, in degrees, at this wind.
-	 *
-	 * Straight off the model's own rotor speed rather than a figure tuned to look right:
-	 * 20 ticks a second and 360 degrees a revolution make it rpm times 0.3. The visible
-	 * consequence is that the catalogue no longer spins as one — the C130 comes out near
-	 * 3 degrees a tick and the small-wind machine near 60, so a big machine reads as
-	 * heavy from the ground and a small one as busy.
-	 */
-	/**
-	 * How fast the rotor should be turning, in degrees a tick.
-	 *
-	 * Three states, and the difference between the last two is the whole point: a machine
-	 * somebody has switched off has its brake on and is genuinely still, while a machine that
-	 * has shut itself down for the weather has feathered its blades and is idling. Turning that
-	 * distinction into one flag is what left a turbine standing frozen in the middle of a gale.
-	 */
+	/** How far the rotor turns in a tick, in degrees, at this wind. */
+	/** How fast the rotor should be turning, in degrees a tick. */
 	private float rotorDegreesPerTick(float windSpeed) {
 		if (isParked()) return 0.0f;
 
@@ -874,40 +735,18 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		return (float) (rpm * TurbineSpec.DEGREES_PER_TICK_PER_RPM);
 	}
 
-	/**
-	 * Whether the rotor is being held still on somebody's orders rather than by the weather.
-	 *
-	 * A maintenance stop, a program's stop and a redstone stop all put the brake on. A storm
-	 * shutdown does not - the brake is for emergencies, and holding a rotor against a gale with
-	 * it would be one.
-	 */
+	/** Whether the rotor is being held still on somebody's orders rather than by the weather. */
 	private boolean isParked() {
 		return stoppedByComputer || stoppedByPlayer || isStoppedByRedstone();
 	}
 
-	/**
-	 * Whether the rotor is turning without working: off load, blades feathered, free to spin.
-	 *
-	 * Two ways in, and they are the same state. A storm shutdown is one. A setpoint of zero is
-	 * the other, and that is worth stating because it is not a stop: curtailment is an
-	 * instruction from the grid, so a machine told to export nothing disconnects and idles
-	 * rather than braking, both because it has to be able to come back in seconds and because
-	 * standing still is what harms a main bearing. The brake is what the stop button is for, and
-	 * the two controls stay distinct.
-	 */
+	/** Whether the rotor is turning without working: off load, blades feathered, free to spin. */
 	private boolean isIdling() {
 		return cutOutActive || activePowerLimitKw <= 0.0;
 	}
 
 	/**
-	 * The wind the rotor is allowed to answer, which is less than the real one while a setpoint
-	 * is holding the machine down.
-	 *
-	 * Curtailment is done by pitching the blades out, and a rotor with its blades part way out
-	 * of the wind runs slower - so a curtailed machine is visibly lazier than a machine in the
-	 * same wind at full output, which is the whole point of the reading. Power goes with the
-	 * cube of the wind, so the wind that would have made the permitted power is the cube root
-	 * of the ratio: half output is four fifths of the speed, not half.
+	 * The wind the rotor is allowed to answer, which is less than the real one while a setpoint is holding the machine down.
 	 */
 	private double curtailedWind(double windSpeed) {
 		if (uncappedPower <= 0.0 || activePowerLimitKw >= uncappedPower) return windSpeed;
@@ -918,15 +757,13 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 	private void updateRotorSpeeds(float effectiveWindSpeed) {
 		float target = rotorDegreesPerTick(effectiveWindSpeed);
 
-		// slowing down is quicker than speeding up, because coming off load the brake or the
+		// slowing down is quicker than speeding up
 		// feathered blades are working against the rotor rather than the wind working with it
 		float acceleration = target < rotationSpeed1 ? 0.12f : 0.05f;
 		rotationSpeed1 += (target - rotationSpeed1) * acceleration;
 		rotationSpeed2 += (target - rotationSpeed2) * acceleration;
 
-		// a first-order ramp never quite arrives, so a rotor meant to be still would creep for
-		// ever at a millionth of a degree. Only snapped when the target really is zero, or an
-		// idling rotor would be snapped to a stop as well.
+		// a first-order ramp never quite arrives
 		if (target == 0.0f) {
 			if (Math.abs(rotationSpeed1) < 0.01f) rotationSpeed1 = 0.0f;
 			if (Math.abs(rotationSpeed2) < 0.01f) rotationSpeed2 = 0.0f;
@@ -953,15 +790,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		}
 
 		// scaled for drawing only, and the same scale for both: rotate_2 is the spinner cone
-		// bolted to the blade roots, so it is the same shaft. Driving the two at different rates
-		// let the cone creep round relative to the blades it is part of, which no amount of wind
-		// does to a real rotor.
-		//
-		// There used to be a ten percent sine wobble on top of this to keep the rotor from
-		// looking mechanical. The wind is genuinely gusty now and the rotor already breathes
-		// with it through its own inertia, so the wobble was a second, fake copy of an effect
-		// the physics provides - and it put the drawn speed ten percent away from the speed the
-		// machine was reporting.
 		TurbineSpec spec = spec();
 		rotation1 = (float) ((rotation1 + spec.drawnRotation(appliedSpeed1)) % 360.0);
 		rotation2 = (float) ((rotation2 + spec.drawnRotation(appliedSpeed2)) % 360.0);
@@ -985,8 +813,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		yawing = true;
 
 		// signed accumulation, so the twist tracks net rotation rather than total
-		// travel. The wind wanders both ways, so this random-walks around zero
-		// instead of growing without bound; the mod does not model an untwist cycle.
 		yawCableTwist += step;
 	}
 

@@ -23,14 +23,7 @@ public final class InsulatorPartHelper {
 	/** The photovoltaic plant's one connection to the grid. */
 	public static final String TYPE_PV_INVERTER = "pv_inverter";
 
-	/**
-	 * The part names a device's insulators are drawn as, read off the model's own definition.
-	 *
-	 * There used to be a table per device here, restating the group names {@link ObjDefinitions} already
-	 * declares - and when the pole and the power box were remodelled, those tables still named the
-	 * groups of the models that had gone, so a wire clicked onto either of them resolved to nothing at
-	 * all. One list, in one place, and the index into it is what a wire is stored against.
-	 */
+	/** The part names a device's insulators are drawn as, read off the model's own definition. */
 	private static List<String> parts(BlockEntity entity) {
 		ObjBlockDefinition definition = ObjDefinitions.get(entity.getBlockState().getBlock());
 		return definition == null ? List.of() : definition.insulators();
@@ -39,14 +32,7 @@ public final class InsulatorPartHelper {
 	private InsulatorPartHelper() {
 	}
 
-	/**
-	 * Which group of a model an insulator is drawn as, by index.
-	 *
-	 * The model's own list, in the order it declares them, which is why nothing here restates a part
-	 * name: a device with four insulators has four entries and the fourth is index three. Null for an
-	 * index the model does not have, which happens while a device is being built and its arrays have
-	 * been sized before its definition has loaded.
-	 */
+	/** Which group of a model an insulator is drawn as, by index. */
 	@Nullable
 	public static String insulatorName(@Nullable ObjBlockDefinition definition, int index) {
 		if (definition == null || index < 0 || index >= definition.insulators().size()) return null;
@@ -109,7 +95,7 @@ public final class InsulatorPartHelper {
 	}
 
 	public static String determinePowerType(BlockEntity entity, String partName) {
-		// a generator's one fitting is an output, whichever kind of generator it is
+		// a generator's one fitting is an output
 		if (entity instanceof WindTurbineBlockEntity || entity instanceof PvInverterBlockEntity) return "output";
 		if (entity instanceof ElectricCabinBlockEntity) {
 			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("output")) return "output";

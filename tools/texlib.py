@@ -1,33 +1,11 @@
 #!/usr/bin/env python3
-"""The drawing and material library the block textures are built from.
+"""Drawing primitives for the block textures: noise, materials, weathering, fittings.
 
-Why this exists as its own file
--------------------------------
-The textures a player picked out as the two that read well - the turbine's and the cabin's - are
-1024 pixels of *material*: a metal that is smooth with a grain in it, a concrete with aggregate
-and form lines and a rust stain down one face.  What the mod drew for itself was 128 pixels of
-*picture*: flat greys, features one hard-edged rectangle at a time, per-pixel white noise over the
-top.  At any size that reads as pixel art, because the difference is not resolution - it is that
-one has correlated structure at every scale and the other has structure at exactly one.
+Everything is lit from LIGHT, shared by the whole mod, so a painted highlight and a model's shading
+agree.  Build a surface as material, then weathering - never a flat colour.
 
-So this file has three things the old drawing code did not:
-
-* **Value noise with octaves.**  ``Field`` is a lattice of hashed values interpolated smoothly and
-  summed over halving cell sizes, which is what gives a surface blotches *and* grain *and* the
-  faint unevenness between them.  White noise cannot do that - it has one scale by construction.
-* **Soft edges.**  ``aa_rect``, ``aa_disc``, ``aa_line`` take real coordinates and cover partial
-  pixels partially.  A bolt head is round rather than a stepped square, and a swage line can sit
-  at 12.3 pixels instead of at 12.
-* **Lighting.**  ``bevel``, ``dome``, ``cylinder_shade`` and ``louvre`` shade a feature as though
-  the light came from over the viewer's left shoulder, which is the same direction the game's own
-  block shading favours.  A drawn highlight is what makes a flat pixel read as a raised edge.
-
-Everything is deterministic: every random-looking value comes from a hash of the coordinates and a
-salt, never from a random number generator, so running a generator twice produces byte-identical
-files and a rebuild is not a diff.
-
-There is no PIL and no numpy on the machine this was written on, and a PNG is not hard - a zlib
-stream of filtered scanlines with three chunks round it.
+``squash`` on the round primitives (aa_disc, dome, screw, warning_triangle) is the face's width over its
+height, for a tile that lands on something not square.  See SQUASH in gen_block_textures.
 """
 
 import math
@@ -39,7 +17,7 @@ import zlib
 # ------------------------------------------------------------------ hashing and noise
 
 def hash01(x, y, salt=0):
-    """A deterministic hash of two integers into 0..1. Not a good generator, and it does not need to be."""
+    """A deterministic hash of two integers into 0..1."""
     n = (int(x) * 73856093) ^ (int(y) * 19349663) ^ (int(salt) * 83492791)
     n = (n ^ (n >> 13)) * 1274126177
     return ((n ^ (n >> 16)) & 0xffff) / 65535.0
@@ -54,16 +32,7 @@ def smoothstep(t):
 
 
 class Field:
-    """Value noise over a lattice, summed over octaves, wrapping at the tile edge.
-
-    Wrapping matters more than it sounds: every one of these textures is laid on a face that
-    repeats, and a field that does not wrap puts a visible seam down every joint.  So the lattice
-    is indexed modulo its own width, which costs nothing and makes the tile tile.
-
-    ``cell`` is the coarsest lattice spacing in pixels and ``octaves`` how many times it halves.
-    Persistence 0.5 is the usual choice and is what makes the coarse blotches dominate while the
-    fine grain is still there to be seen up close.
-    """
+    """Value noise over a lattice, summed over octaves, wrapping at the tile edge."""
 
     def __init__(self, size, cell=64, octaves=4, salt=0, persistence=0.5):
         self.size = size
@@ -81,7 +50,7 @@ class Field:
         return hash01(gx % wrap, gy % wrap, salt)
 
     def at(self, x, y):
-        """The field at a pixel, in 0..1."""
+        """The field at a pixel"""
         out = 0.0
         for spacing, amplitude, salt in self.layers:
             fx, fy = x / spacing, y / spacing
@@ -102,11 +71,7 @@ class Field:
 
 
 def stretched(size, along, across, octaves=3, salt=0):
-    """A field whose lattice is long in one axis: what a brushed or drawn grain is.
-
-    A rolled or extruded surface has scratches far longer than they are wide, and a square
-    lattice cannot express that at any resolution - it gives blotches.  Two spacings can.
-    """
+    """A field whose lattice is long in one axis: what a brushed or drawn grain is."""
     field = Field(size, cell=across, octaves=octaves, salt=salt)
     ratio = along / across
 
@@ -144,21 +109,13 @@ def mix(a, b, t):
 
 
 # The light this file shades everything by: over the viewer's left shoulder and a little above,
-# which is the direction the game's own face brightness favours.  One direction for every texture
-# in the mod, because two would have a bolt lit from the left beside a louvre lit from the right.
 LIGHT = (-0.55, -0.62)
 
 
 # ------------------------------------------------------------------ the canvas
 
 class Canvas:
-    """An RGBA image with the drawing operations these textures need.
-
-    The old operations - set, rect, outline, disc, stroke - are kept exactly as they were, because
-    the item sprites are drawn with them and a sixteen-pixel sprite genuinely wants hard pixels.
-    Everything with ``aa_`` in its name takes floating point coordinates instead and covers a
-    boundary pixel in proportion, which is what a 512-pixel material surface wants.
-    """
+    """An RGBA image with the drawing operations these textures need."""
 
     def __init__(self, width, height, fill=(0, 0, 0, 0)):
         self.w = width
@@ -241,12 +198,7 @@ class Canvas:
                 self.blend(x, y, colour, alpha * cover_x * cover_y)
 
     def aa_disc(self, cx, cy, radius, colour, alpha=1.0, inner=0.0, squash=1.0):
-        """A disc, or a ring if ``inner`` is given, with a one-pixel soft rim.
-
-        ``squash`` multiplies the vertical extent, for a circle on a texture that lands on a face which
-        is not square: a tile on a door leaf twice as tall as it is wide has to be drawn flat to come out
-        round, and a circle drawn round comes out an oval.  It is the face's width over its height.
-        """
+        """A disc, or a ring if ``inner`` is given, with a one-pixel soft rim."""
         ry = radius * squash
         for y in range(max(0, int(cy - ry - 1)), min(self.h, int(cy + ry + 2))):
             for x in range(max(0, int(cx - radius - 1)), min(self.w, int(cx + radius + 2))):
@@ -318,19 +270,9 @@ def sprite(rows, palette):
 
 
 # ------------------------------------------------------------------ materials
-#
-# Each of these fills a whole canvas with one surface.  They are the part that decides whether a
-# texture reads as a material, and they all work the same way: a base colour, a coarse field for
-# the unevenness a real sheet has, a fine field for grain, and where the material has one, a
-# directional structure - a rolling direction, a wood grain, a spangle.
 
 def brushed(c, base=(168, 172, 178, 255), grain=13, blotch=9, salt=3, horizontal=True):
-    """Mill-finish or anodised aluminium: pale, slightly cool, drawn along one axis.
-
-    The grain is a *stretched* field rather than per-pixel noise, so the scratches are forty
-    times longer than they are wide the way drawn metal's are, and they stay scratches at any
-    resolution instead of turning into speckle.
-    """
+    """Mill-finish or anodised aluminium: pale, slightly cool, drawn along one axis."""
     fine = stretched(c.w, along=c.w * 0.9, across=max(2.0, c.w / 90.0), octaves=2, salt=salt)
     coarse = Field(c.w, cell=c.w / 2.2, octaves=3, salt=salt + 11)
 
@@ -342,12 +284,7 @@ def brushed(c, base=(168, 172, 178, 255), grain=13, blotch=9, salt=3, horizontal
 
 
 def galvanised(c, base=(150, 155, 158, 255), salt=5, spangle=True):
-    """Hot-dip galvanised steel: cooler and more mottled than aluminium, with zinc spangle.
-
-    The spangle is the crystal boundaries zinc freezes into.  Many and fine rather than few and
-    large - the first pass at this drew fourteen blotches and at four times the resolution they
-    came out four times across, which reads as camouflage rather than as zinc.
-    """
+    """Hot-dip galvanised steel: cooler and more mottled than aluminium, with zinc spangle."""
     coarse = Field(c.w, cell=c.w / 3.0, octaves=4, salt=salt)
     fine = Field(c.w, cell=max(2.0, c.w / 120.0), octaves=2, salt=salt + 7)
 
@@ -363,7 +300,7 @@ def galvanised(c, base=(150, 155, 158, 255), salt=5, spangle=True):
         cx = hash01(i, 1, salt + 17) * c.w
         cy = hash01(i, 2, salt + 19) * c.h
         radius = c.w / 130.0 * (0.6 + hash01(i, 3, salt + 23) * 1.9)
-        # a crystal is a facet of zinc, not a snowflake: half of them catch the light and half of
+        # a crystal is a facet of zinc
         # them are turned away from it, which is what stops a galvanised sheet reading as sleet
         lift = (hash01(i, 4, salt + 29) - 0.45) * 26
         c.aa_disc(cx, cy, radius, shade(base, lift), alpha=0.45)
@@ -372,11 +309,7 @@ def galvanised(c, base=(150, 155, 158, 255), salt=5, spangle=True):
 
 
 def powder(c, base=(198, 202, 206, 255), salt=31, peel=6):
-    """Powder-coated sheet steel: flat colour with the orange peel a cured coat always has.
-
-    Orange peel is the one thing that tells painted steel from plastic at a glance - a very
-    fine, very shallow dimpling, the same scale as the powder itself.
-    """
+    """Powder-coated sheet steel: flat colour with the orange peel a cured coat always has."""
     peel_field = Field(c.w, cell=max(3.0, c.w / 64.0), octaves=2, salt=salt)
     drift = Field(c.w, cell=c.w / 1.5, octaves=2, salt=salt + 5)
 
@@ -436,7 +369,7 @@ def rubber(c, base=(30, 31, 35, 255), salt=83, sheen=10):
 
 
 def porcelain(c, base=(112, 74, 46, 255), salt=97):
-    """Glazed porcelain: the brown of an insulator, glassy, with the depth a glaze has."""
+    """Glazed porcelain: the brown of an insulator, glassy"""
     depth = Field(c.w, cell=c.w / 2.0, octaves=3, salt=salt)
     fine = Field(c.w, cell=max(2.0, c.w / 200.0), octaves=1, salt=salt + 3)
 
@@ -449,12 +382,7 @@ def porcelain(c, base=(112, 74, 46, 255), salt=97):
 # ------------------------------------------------------------------ weathering
 
 def grime(c, salt=101, amount=0.20, colour=(58, 54, 48, 255), cell=None):
-    """Dirt in the low places: a soft, patchy darkening over whatever is already drawn.
-
-    Every one of these objects stands outdoors.  A surface with no dirt on it at all is the
-    single clearest tell of a generated texture, and dirt is also what ties a texture's separate
-    features together into one surface.
-    """
+    """Dirt in the low places: a soft, patchy darkening over whatever is already drawn."""
     field = Field(c.w, cell=cell or c.w / 1.6, octaves=4, salt=salt)
 
     def pixel(x, y, base):
@@ -465,7 +393,7 @@ def grime(c, salt=101, amount=0.20, colour=(58, 54, 48, 255), cell=None):
 
 
 def streak(c, x, top, bottom, width, colour=(96, 84, 66, 255), alpha=0.30, salt=113):
-    """A run of dirt down a face from a fixing or a lip: strongest at the top, fading out."""
+    """A run of dirt down a face from a fixing or a lip: strongest at the top"""
     field = Field(c.w, cell=max(3.0, c.w / 40.0), octaves=2, salt=salt)
     for y in range(max(0, int(top)), min(c.h, int(bottom))):
         t = (y - top) / max(1.0, bottom - top)
@@ -496,7 +424,7 @@ def rust(c, x0, y0, x1, y1, salt=127, alpha=0.5):
 # ------------------------------------------------------------------ features
 
 def bevel(c, x0, y0, x1, y1, depth, lift=26, drop=30):
-    """A raised panel: lit on the two edges facing the light, shaded on the other two."""
+    """A raised panel: lit on the two edges facing the light"""
     lx, ly = LIGHT
     for i in range(int(depth)):
         t = 1.0 - i / max(1.0, depth)
@@ -515,7 +443,7 @@ def bevel(c, x0, y0, x1, y1, depth, lift=26, drop=30):
 
 
 def groove(c, x0, y0, x1, y1, width, dark=44, light=30, vertical=False):
-    """A pressed line: a dark side and a bright side, which is all a swage or a panel joint is."""
+    """A pressed line: a dark side and a bright side"""
     if vertical:
         c.aa_rect(x0, y0, x0 + width, y1, (0, 0, 0, 255), alpha=dark / 255.0)
         c.aa_rect(x0 + width, y0, x0 + 2 * width, y1, (255, 255, 255, 255), alpha=light / 255.0)
@@ -525,11 +453,7 @@ def groove(c, x0, y0, x1, y1, width, dark=44, light=30, vertical=False):
 
 
 def dome(c, cx, cy, radius, base, lift=54, drop=40, alpha=1.0, squash=1.0):
-    """A hemisphere shaded from the light: a bolt head, a rivet, a boss, an instrument dome.
-
-    ``squash`` is the same correction ``aa_disc`` takes: the face's width over its height, for a tile
-    that lands on something not square.
-    """
+    """A hemisphere shaded from the light: a bolt head, a rivet, a boss, an instrument dome."""
     lx, ly = LIGHT
     ry = radius * squash
     for y in range(max(0, int(cy - ry - 1)), min(c.h, int(cy + ry + 2))):
@@ -550,7 +474,7 @@ def dome(c, cx, cy, radius, base, lift=54, drop=40, alpha=1.0, squash=1.0):
 
 
 def hex_head(c, cx, cy, radius, base, salt=137):
-    """A hexagon bolt head with a lit face, a shaded face and a washer under it."""
+    """A hexagon bolt head with a lit face"""
     c.aa_disc(cx, cy, radius * 1.32, shade(base, -16), alpha=0.55)
     points = [(cx + radius * math.cos(math.pi / 6 + i * math.pi / 3),
                cy + radius * math.sin(math.pi / 6 + i * math.pi / 3)) for i in range(6)]
@@ -579,11 +503,7 @@ def screw(c, cx, cy, radius, base, squash=1.0):
 
 
 def louvre(c, x0, y0, x1, y1, count, base, depth=None):
-    """A stack of pressed louvre blades: shadow under the lip, light on the blade.
-
-    Drawn as blades rather than as stripes.  A stripe pattern says *lines on a panel*; a blade
-    with a shadow beneath it and a highlight along its lower lip says *air can get in there*.
-    """
+    """A stack of pressed louvre blades: shadow under the lip, light on the blade."""
     height = (y1 - y0) / count
     depth = depth or max(1.0, height * 0.22)
     for i in range(count):
@@ -597,11 +517,7 @@ def louvre(c, x0, y0, x1, y1, count, base, depth=None):
 
 
 def plate_label(c, x0, y0, x1, y1, base, lines=3, ink=(52, 56, 62, 255)):
-    """A rating plate: a bright etched rectangle with rows of text too small to read.
-
-    Deliberately unreadable.  At the size any of these faces is ever seen, letters would be
-    noise; rows of ticks at the right spacing is what the eye reads as a label.
-    """
+    """A rating plate: a bright etched rectangle with rows of text too small to read."""
     c.aa_rect(x0, y0, x1, y1, shade(base, 34))
     bevel(c, x0, y0, x1, y1, max(1.0, (y1 - y0) * 0.06))
     step = (y1 - y0) / (lines + 1)
@@ -612,12 +528,7 @@ def plate_label(c, x0, y0, x1, y1, base, lines=3, ink=(52, 56, 62, 255)):
 
 
 def polygon(c, points, colour, alpha=1.0):
-    """A filled polygon by scanline, sampled four times a row so the edges come out soft.
-
-    Wanted because a symbol drawn from overlapping strokes is never quite the symbol: the lightning
-    bolt on the warning sign was three lines whose ends nearly met, and what it looked like was a
-    squiggle with a kink in it.  A shape with an outline is one polygon.
-    """
+    """A filled polygon by scanline, sampled four times a row so the edges come out soft."""
     if len(points) < 3:
         return
 
@@ -644,10 +555,7 @@ def polygon(c, points, colour, alpha=1.0):
             c.blend(x, y, colour, alpha * min(1.0, amount))
 
 
-# The lightning arrow of IEC 60417-5036, in units of the sign's own size with x right and y down from
-# its centre: two strokes stepping down to the left and an arrowhead on the end.  Three convex pieces
-# rather than one outline, because a single ring round a shape with a barbed head is easy to get wrong
-# and impossible to read once it is - the first attempt crossed itself and filled as a handful of shards.
+# The lightning arrow of IEC 60417-5036
 BOLT = (
     ((0.06, -0.44), (0.26, -0.44), (0.02, 0.05), (-0.18, 0.05)),      # the upper stroke
     ((0.00, 0.00), (0.18, 0.00), (-0.04, 0.33), (-0.22, 0.33)),       # the lower one, stepped right
@@ -656,17 +564,7 @@ BOLT = (
 
 
 def warning_triangle(c, cx, cy, size, salt=149, squash=1.0):
-    """The lightning-arrow triangle every piece of switchgear in the world carries.
-
-    Equilateral, which is what the standard says and what it looks wrong without - and ``squash`` is how
-    it stays equilateral on a face that is not square.  A kiosk's door leaf is 0.277 by 0.585 of a block,
-    so a square tile on it is stretched two and a tenth to one: a triangle drawn equilateral arrives
-    stretched, which is exactly how the first version looked.  Pass the face's width over its height.
-
-    Built as a black triangle with a yellow one inside it rather than as a yellow one with its edges
-    stroked.  Stroking gives a border whose width varies with the angle of each edge and which spreads
-    over the corners, and at the apex of a triangle that is most of the sign.
-    """
+    """The lightning-arrow triangle every piece of switchgear in the world carries."""
     yellow = (232, 196, 24, 255)
     black = (26, 26, 28, 255)
     half = size * 0.525
@@ -680,9 +578,6 @@ def warning_triangle(c, cx, cy, size, salt=149, squash=1.0):
     polygon(c, triangle(1.0), black)
     polygon(c, triangle(0.78), yellow)
     # The arrow is scaled to sit inside the yellow rather than drawn at the sign's own size: written out
-    # it spans nine tenths of the size in y, and the yellow triangle is only seven tenths tall, so at full
-    # size it hung out of the sign at both ends.  Down a little too, because a triangle has room low down
-    # and none at its apex.
     fit = 0.52
     for piece in BOLT:
         polygon(c, [(cx + x * size * fit, cy + (y * fit + 0.045) * size * squash)

@@ -2,13 +2,7 @@ package com.dooji.electricity.compat.computercraft;
 
 import net.minecraftforge.fml.ModList;
 
-/**
- * Guarded entry point for the ComputerCraft integration.
- *
- * Same arrangement as the Mekanism side: this class names no CC type, so it stays
- * loadable without CC:Tweaked installed, and {@link CCTweakedPeripherals} is only
- * reached once {@link #isLoaded()} has confirmed the mod is there.
- */
+/** Guarded entry point for the ComputerCraft integration. */
 public final class ComputerCraftBridge {
 	private static Boolean loaded;
 
@@ -23,15 +17,7 @@ public final class ComputerCraftBridge {
 		return loaded;
 	}
 
-	/**
-	 * Registers the turbine as a ComputerCraft peripheral. Call once from common
-	 * setup; does nothing when CC:Tweaked is absent.
-	 *
-	 * Registering a provider rather than exposing a capability is what makes wired
-	 * modems work: a modem placed against the turbine finds the peripheral through
-	 * the same lookup, so the turbine appears on a network cable without any extra
-	 * handling on our side.
-	 */
+	/** Registers the turbine as a ComputerCraft peripheral. */
 	public static void register() {
 		if (!isLoaded()) return;
 

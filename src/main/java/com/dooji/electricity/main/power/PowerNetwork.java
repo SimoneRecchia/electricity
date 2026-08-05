@@ -130,8 +130,6 @@ public class PowerNetwork {
 			if (generatedPower <= 0) continue;
 
 			// only a turbine can put a disturbance on the network: an inverter has no rotor for a gust to
-			// hit and holds a clean waveform whatever the sun is doing, so a solar plant contributes
-			// generation without contributing surges
 			PowerDeliveryEvent generatorEvent = node.blockEntity instanceof WindTurbineBlockEntity turbine
 					? createGeneratorEvent(turbine)
 					: PowerDeliveryEvent.none();
@@ -225,16 +223,12 @@ public class PowerNetwork {
 			return new PowerDeliveryEvent(state.severity, nextRemaining, state.disconnect, state.brownout);
 		}
 
-		// asked of the machine rather than of the weather. The turbine has already sampled the
-		// wind at its own hub over its own ground, and re-sampling here at the nacelle's block
-		// would have described a met mast standing thirteen blocks up in mid-air instead
+		// asked of the machine rather than of the weather.
 		double turbulence = turbine.getTurbulenceIntensity();
 		double windSpeed = turbine.getMeanWindSpeed();
 		var random = level.getRandom();
 
 		// both thresholds moved onto real turbulence intensity. 0.14 is where a site stops being
-		// smooth and 0.24 is genuinely rough air; the old 0.25 and 0.75 belonged to a scale that
-		// ran to 1.0, and on this one the second of them could never have been reached at all
 		double gustFactor = Mth.clamp((windSpeed - 8.0) / 12.0, 0.0, 1.0);
 		double baseSeverity = Math.max(0.0, (turbulence - 0.14) * 1.7 + gustFactor * 0.4);
 		double severity = Math.max(0.0, baseSeverity + random.nextDouble() * 0.05);
@@ -403,7 +397,7 @@ public class PowerNetwork {
 		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
 			turbine.setCurrentPower(power);
 		} else if (blockEntity instanceof PvInverterBlockEntity) {
-			// nothing to tell it: an inverter's output is what it makes rather than what reaches it, and
+			// nothing to tell it: an inverter's output is what it makes rather than what reaches it
 			// the figure a panel shows comes off its own conversion instead of off the network
 		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
 			cabin.setCurrentPower(power);

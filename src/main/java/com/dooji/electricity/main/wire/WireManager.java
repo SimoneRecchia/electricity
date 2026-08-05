@@ -41,15 +41,7 @@ import net.minecraft.world.phys.Vec3;
 
 public class WireManager {
 	private static final Map<ServerLevel, WireSavedData> SAVED_DATA_CACHE = new ConcurrentHashMap<>();
-	/**
-	 * The longest span for a connection whose conductor this build does not know.
-	 *
-	 * Which is every connection in a world saved before the conductors existed: those are typed
-	 * {@code "default"} and there is nothing to ask, so the old global figure still governs them. A span
-	 * strung with a real conductor is limited by that conductor instead - forty blocks for a street
-	 * bundle, a hundred and sixty for a transmission one - because how far a line can go between
-	 * structures is a property of what is strung, not of the game.
-	 */
+	/** The longest span for a connection whose conductor this build does not know. */
 	private static final double MAX_WIRE_DISTANCE = 64.0;
 
 	public InteractionResult handleWireUse(UseOnContext context) {
@@ -104,11 +96,6 @@ public class WireManager {
 		String endPowerType = sanitizePowerType(endEntity, endInsulator.get().partName(), payload.endPowerType());
 
 		// A span that is already there is not strung again.
-		//
-		// Without this a client that sends the payload twice - by lag, by a macro, or on purpose - pays
-		// twice and gets one span, because the saved data keys a connection by its two insulators and the
-		// second save overwrites the first. Both orders are checked, since the two ends are stored in the
-		// order they were clicked.
 		if (alreadyStrung(level, startInsulator.get().insulatorId(), endInsulator.get().insulatorId())) {
 			notifyPlayer(player, Component.translatable("message.electricity.wire.already_connected"));
 			return;
@@ -126,8 +113,6 @@ public class WireManager {
 		}
 
 		// The charge, and it is the last thing before the connection is saved on purpose: everything that
-		// can refuse the span has refused it by now, so there is no path that takes the conductor and then
-		// fails to string it.
 		int charged = 0;
 		if (spec != null && !player.isCreative()) {
 			charged = spec.cost(span);
@@ -169,13 +154,7 @@ public class WireManager {
 		return null;
 	}
 
-	/**
-	 * Takes the conductor out of the player's inventory, all of it or none of it.
-	 *
-	 * Counted first and taken second, which matters: taking as it goes and giving up half way through
-	 * leaves the player short of conductor and without a span, and there is no transaction to roll back
-	 * inside a Minecraft inventory.
-	 */
+	/** Takes the conductor out of the player's inventory */
 	private static boolean takeConductor(ServerPlayer player, ConductorSpec spec, int wanted) {
 		int held = 0;
 		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
@@ -290,14 +269,7 @@ public class WireManager {
 		}
 	}
 
-	/**
-	 * Gives back exactly what a span was charged, as an item on the ground where it was strung.
-	 *
-	 * Exactly what was charged, off the connection, and not what the same span would cost now - see
-	 * {@link WireConnection#getChargedItems()}. Dropped rather than handed to a player because nothing
-	 * here knows which player took the structure down, and often nobody did: a line comes down when the
-	 * pole under it is blown up, decays, or is removed by another mod.
-	 */
+	/** Gives back exactly what a span was charged, as an item on the ground where it was strung. */
 	private void refund(ServerLevel level, WireConnection connection) {
 		int count = connection.getChargedItems();
 		if (count <= 0) return;

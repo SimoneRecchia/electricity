@@ -1,29 +1,14 @@
 #!/usr/bin/env python3
-"""Generates every block texture the mod's own models wear.
+"""Every block texture in the mod.
 
-    python3 tools/gen_block_textures.py                 # all of them
-    python3 tools/gen_block_textures.py pv_module pole_concrete
+    python3 tools/gen_block_textures.py
 
-Writes into src/main/resources/assets/electricity/textures/block/.
+A surface is a material, not a picture of one: value noise, then the material, then the weathering.
+Resolution follows how close a player gets to the face - see CLAUDE.md section 2.
 
-What changed, and why it is a separate file now
------------------------------------------------
-These used to live at the top of ``gen_pv_textures.py`` and be drawn at 128 pixels a tile out of
-hard rectangles over per-pixel white noise.  A player looking at the game said the turbine and the
-cabin read well and the rest did not, and the difference is not the resolution: it is that those
-two are *materials* - a metal with a grain in it, a concrete with aggregate and a rust stain - and
-these were pictures of materials.  So the drawing primitives moved into ``texlib.py``, which has
-value noise over octaves, soft edges and a light direction, and every surface here is built from
-those.  ``gen_pv_textures.py`` keeps the item sprites and the panel layouts, where sixteen hard
-pixels is the right answer.
-
-The sizes below are chosen by how close a player gets to the face, not by uniformity: a module's
-glass is looked at from a metre and gets 1024, a cabinet's side sheet gets 512, and a switch boss
-three centimetres across gets 128 because more texels than that are texels nobody can resolve.
-
-Where a texture is shared, it is shared on purpose: the crossarm on a pole, a tracker's pier and a
-mast are all hot-dip galvanised steel, and drawing three of those would be three surfaces that
-should be one.
+SQUASH is the table check_model_textures reads: a texture drawn pre-squashed for a face that is not
+square, and the ratio it was drawn for.  Anything round on a tile that goes on several shapes is a
+fault - put the fixings in the geometry instead.
 """
 
 import math
@@ -39,7 +24,7 @@ from texlib import (Canvas, Field, LIGHT, bevel, brushed, concrete, cross_hatch,
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures', 'block')
 
-# The palette the whole plant is painted from.  One list, so a cabinet, a kiosk door and an
+# The palette the whole plant is painted from.
 # inverter lid cannot drift into three different greys.
 SHEET = (196, 200, 204, 255)          # RAL 7035 light grey: switchgear everywhere is this colour
 MOSS = (46, 68, 52, 255)              # RAL 6005 moss green: the door colour on the cabin, matched
@@ -55,46 +40,15 @@ COPPER = (168, 96, 48, 255)
 # ------------------------------------------------------------------ the laminate
 
 def pv_module():
-    """The sun side of a laminate: 144 half-cut cells on nine round wires apiece, under glass.
-
-    Six columns of twenty-four half-cells with a bus gap across the middle, which is a 2278 by
-    1134 module - the size nearly every utility-scale product has settled on.  The texture is
-    square and the module is not, and that is deliberate: the face it is mapped onto is 0.42 by
-    0.94 of a block, so a cell drawn a sixth of the width by a twenty-fourth of the height comes
-    out very nearly the 189 by 95 millimetres a half-cut cell really is.
-
-    What makes it read as glass rather than as a grid: the cells are not all the same colour,
-    because a real laminate's cells are sorted by current and not by shade; the fingers are
-    hairlines rather than pixels; and there is a broad soft reflection across it, which is the
-    one thing every photograph of a panel has and no drawing of one did.
-
-    Why it is darker than it was
-    ---------------------------
-    A field of these read as a pale grey-blue grid rather than as glass, and measuring the tile said
-    why: it averaged (108, 113, 134), where a module in a photograph is nearer (34, 40, 66).  Three
-    things were bright, and every one of them was bright because it was drawn to a *2016* module -
-    three flat 1.6 mm ribbons a cell, a 2 mm backsheet lane, and fingers lifted thirty levels.
-
-    Every product in this catalogue is a 2020s module, and those carry nine to sixteen *round* wires
-    0.3 mm across instead of three flat ribbons.  So the wires are now nine hairlines, which is both
-    what the datasheets say and a third of the silver: a module is dark because almost all of its
-    front is cell.  The lane between cells came down to what a real stringer leaves, and the glass
-    reflection at the top - the part a player reads as "white" first, because it is what the sky
-    lands on - lost a third of its strength.
-    """
+    """The sun side of a laminate: 144 half-cut cells on nine round wires apiece, under glass."""
     size = 1024
     c = Canvas(size, size, CELL)
     frame_w = size * 0.030
     # The lane between two cells: what a stringer actually leaves, which is about 2 mm on a 190 mm
-    # cell - a fiftieth, not a twenty-fifth.  It reads as much wider than it is because it is the
-    # brightest thing on the module.
     gap = size * 0.0034
     cols, rows = 6, 24
 
-    # The backsheet the cells sit on, seen in the lanes between them.  Not the paper white it is on
-    # the roll: this is the white seen *through* three millimetres of low-iron glass and a sheet of
-    # encapsulant, which takes it down and blues it - and it is a sixth of the module's area, so a
-    # backsheet drawn at its own brightness is most of why a field of these looked whitewashed.
+    # The backsheet the cells sit on, seen in the lanes between them.
     back = Canvas(size, size)
     powder(back, (204, 210, 220, 255), salt=7, peel=4)
     c.each(lambda x, y: back.get(x, y))
@@ -116,7 +70,7 @@ def pv_module():
             tint = (hash01(col, row, 7) - 0.5) * 16
             base = shade(CELL, tint)
             c.aa_rect(x0, y0, x1, y1, base)
-            # the chamfer: a pseudo-square wafer is a round ingot with four flats cut off it, and
+            # the chamfer: a pseudo-square wafer is a round ingot with four flats cut off it
             # the corners it does not fill are the clearest sign of a monocrystalline cell
             chamfer = span_y * 0.42
             for cx, cy, sx, sy in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
@@ -129,38 +83,25 @@ def pv_module():
                 t = i / max(1.0, span_y)
                 c.aa_rect(x0, y0 + i, x1, y0 + i + 1, shade(base, -3 + t * 6), alpha=0.5)
             # The fingers and the wires, both drawn to the area they really cover.
-            #
-            # This is the whole of why the module used to read white, and it is an arithmetic mistake
-            # rather than a drawing one.  A cell here is 158 pixels wide standing for 190 millimetres,
-            # so one pixel is 1.2 mm - and a busbar wire is 0.3 mm and a finger 40 microns.  Both are
-            # *sub-pixel*.  Drawn a whole pixel wide at full strength, nine wires covered 15% of the
-            # cell instead of 1.4% and twenty-two fingers covered 65% of it instead of 1%, so most of
-            # the front of the module was silver paint.
-            #
-            # A camera resolves a quarter-pixel wire as a quarter-strength pixel, so that is what is
-            # drawn: a thin line at the alpha its real width earns.  It still reads as a fine grating
-            # up close, and at any distance it reads as what it is - a dark cell with a sheen on it.
             fingers = 22
             for f in range(1, fingers):
                 fy = y0 + (y1 - y0) * f / fingers
                 c.aa_rect(x0 + span_x * 0.02, fy, x1 - span_x * 0.02, fy + size * 0.0009,
                           shade(base, 22), alpha=0.16)
-            # nine round wires: a round wire throws most of what hits it sideways rather than back, so
+            # nine round wires: a round wire throws most of what hits it sideways rather than back
             # even at full width it would not be as bright as the flat ribbon it replaced
             for k in range(9):
                 rx = x0 + (x1 - x0) * (k + 0.5) / 9.0
                 w = size * 0.0006
                 c.aa_rect(rx - w, y0 - gap, rx + w, y1 + gap, (168, 174, 186, 255), alpha=0.5)
 
-    # The bus bars the strings are joined by, across the middle and along each end.  These stay wide
-    # because they really are - 6 mm of flat tinned ribbon - but they are three lines on the module
-    # rather than eighteen a cell, so their brightness costs nothing.
+    # The bus bars the strings are joined by, across the middle and along each end.
     for y in (size * 0.5, inner0 - gap * 0.5, inner1 + gap * 0.5):
         c.aa_rect(inner0 - gap, y - size * 0.0042, inner1 + gap, y + size * 0.0042, (188, 194, 202, 255))
         c.aa_rect(inner0 - gap, y - size * 0.0015, inner1 + gap, y + size * 0.0015, (222, 227, 234, 255),
                   alpha=0.7)
 
-    # The glass: a broad soft reflection of the sky, brighter at the top, plus the faint bloom of
+    # The glass: a broad soft reflection of the sky, brighter at the top
     # an anti-reflective coat.  This is the pass that turns a grid of cells into a panel.
     sheen = Field(size, cell=size * 0.9, octaves=2, salt=29)
 
@@ -168,18 +109,15 @@ def pv_module():
         if base[3] == 0:
             return base
         down = y / size
-        # The sky landing on the glass, strongest at the top of the module - which is the part a
-        # player reads as "white" before anything else, because it is the part angled at the sky.
-        # A third weaker than it was: at full strength the top band of every panel in a field went
-        # to the reflection's own colour and the cells under it stopped showing through at all.
+        # The sky landing on the glass
         sky = (1.0 - down) ** 2 * 0.085 + sheen.at(x, y) * 0.035
-        # a long diagonal highlight, the one a pane of glass outdoors always has
+        # a long diagonal highlight
         band = math.exp(-(((x - y * 0.55) / size - 0.24) ** 2) / 0.010) * 0.115
         return mix(base, (176, 202, 230, 255), sky + band)
 
     c.over(glaze)
 
-    # the anodised frame round the outside, with the glass line just inside it
+    # the anodised frame round the outside
     _frame_border(c, frame_w)
     grime(c, salt=31, amount=0.07, colour=(120, 118, 112, 255))
     return c
@@ -206,12 +144,7 @@ def _frame_border(c, width):
 
 
 def pv_module_back():
-    """The back of a monofacial module: white backsheet, junction box, two leads, a barcode.
-
-    Not the front again, and not a bifacial back either - the products in this catalogue are
-    framed monofacial laminates, so the back is a polymer sheet with the cell grid faintly
-    showing through it and one junction box a third of the way down.
-    """
+    """The back of a monofacial module: white backsheet, junction box, two leads, a barcode."""
     size = 512
     c = Canvas(size, size)
     powder(c, (232, 233, 235, 255), salt=41, peel=5)
@@ -230,11 +163,6 @@ def pv_module_back():
             c.aa_rect(x0, y0, x0 + span_x * 0.92, y0 + span_y * 0.88, (216, 217, 220, 255), alpha=0.75)
 
     # Everything below is laid out in *fractions of the real module*, x across its 1134 mm and y along
-    # its 2278 mm, because that is what this tile is: it goes on a face 0.42 by 0.94 of a block, so the
-    # two axes are at 2.24 to one and anything drawn square on the tile comes out two and a quarter times
-    # taller than it is wide.  The version this replaces drew a junction box at a fifth of the width by
-    # an eighth of the height - 227 by 296 mm, half a metre of polymer - and it arrived on the face
-    # stretched on top of that.
     def across(mm):
         return size * mm / 1134.0
 
@@ -251,7 +179,7 @@ def pv_module_back():
         screw(c, bx + bw * (0.22 + 0.56 * i), by + bh * 0.5, across(9.0), (86, 88, 92, 255),
               squash=SQUASH['pv_module_back'])
 
-    # the two leads out of it - 4 mm cable, so a hairline - and an MC4 on the end of each
+    # the two leads out of it - 4 mm cable
     for side, y in ((-1, by + bh * 0.30), (1, by + bh * 0.70)):
         c.aa_line(bx + bw, y, bx + bw + across(90.0), y + side * along(120.0), (28, 28, 32, 255),
                   width=across(7.0))
@@ -271,7 +199,7 @@ def pv_module_back():
         x = lx + lw * (0.06 + 0.86 * i / 26.0)
         c.aa_rect(x, ly + lh * 0.62, x + w, ly + lh * 0.92, (28, 28, 30, 255))
 
-    # the earth mark and the two mounting-hole reinforcements, which are the only other things on it
+    # the earth mark and the two mounting-hole reinforcements
     for y in (along(520.0), along(1760.0)):
         for x in (across(120.0), across(1014.0)):
             c.aa_rect(x - across(26.0), y - along(26.0), x + across(26.0), y + along(26.0),
@@ -283,13 +211,7 @@ def pv_module_back():
 
 
 def pv_module_edge():
-    """The frame in profile: the extrusion, not the cells.
-
-    An aluminium module frame is a channel - a lip over the glass, a web with a groove pressed
-    into it for stiffness, and a return at the bottom the mid-clamp grips.  Symmetric about the
-    middle, so it reads the same whichever way up a face maps it, and with the drainage notch a
-    real frame has.
-    """
+    """The frame in profile: the extrusion, not the cells."""
     size = 256
     c = Canvas(size, size)
     brushed(c, ALU, grain=12, blotch=8, salt=17)
@@ -304,7 +226,7 @@ def pv_module_edge():
         groove(c, 0, y, size, y, size * 0.022, dark=58, light=34)
     # the bright rib down the middle
     c.aa_rect(0, size * 0.48, size, size * 0.52, shade(ALU, 18))
-    # the drainage notch: one hole per frame, and a stain under it
+    # the drainage notch: one hole per frame
     c.aa_disc(size * 0.72, size * 0.50, size * 0.030, shade(ALU, -80))
     c.aa_disc(size * 0.72, size * 0.50, size * 0.020, (18, 18, 20, 255))
     streak(c, size * 0.72, size * 0.53, size * 0.90, size * 0.05, alpha=0.22, salt=61)
@@ -315,11 +237,7 @@ def pv_module_edge():
 # ------------------------------------------------------------------ the metals
 
 def pv_frame():
-    """Anodised aluminium rail: the racking every module is clamped to.
-
-    A T-slot rail seen from outside is a flat face with the slot's shadow line down it and the
-    bolt heads of the clamps along that line.
-    """
+    """Anodised aluminium rail: the racking every module is clamped to."""
     size = 512
     c = Canvas(size, size)
     brushed(c, ALU, grain=13, blotch=9, salt=3)
@@ -331,12 +249,7 @@ def pv_frame():
 
 
 def pv_steel():
-    """Hot-dip galvanised steel: piers, torque tubes, crossarms, masts.
-
-    The one surface shared by every structural part in the mod, which is what it should be - they
-    are all the same steel out of the same bath.  Spangle, a faint rolling direction, and a
-    freckle of rust here and there, because a driven pier has been outdoors since the day it went in.
-    """
+    """Hot-dip galvanised steel: piers, torque tubes, crossarms, masts."""
     size = 512
     c = Canvas(size, size)
     galvanised(c, ZINC, salt=5)
@@ -352,11 +265,7 @@ def pv_steel():
 
 
 def pv_plate():
-    """A flat galvanised plate: a base plate, a gland plate, a bolted flange face.
-
-    Its own texture rather than the sheet, because a plate is *seen as a plate*: it has a bolt
-    near each corner and a wear ring where whatever stands on it has been standing.
-    """
+    """A flat galvanised plate: a base plate, a gland plate, a bolted flange face."""
     size = 256
     c = Canvas(size, size)
     galvanised(c, shade(ZINC, -6), salt=103)
@@ -366,13 +275,7 @@ def pv_plate():
 
 
 def pv_steel_end():
-    """A tube end: the flange face a cylinder's cap shows.
-
-    The pipeline maps a cap by the ring's own coordinates, so the circle inscribed in this
-    texture is what is seen and the corners are never drawn.  Which means this wants to be a
-    *round* picture - a flange plate with a bolt circle and the tube's wall thickness showing as
-    a ring - and drawing a square plate here, as it was, put the plate's corners nowhere.
-    """
+    """A tube end: the flange face a cylinder's cap shows."""
     size = 256
     c = Canvas(size, size)
     galvanised(c, shade(ZINC, -4), salt=113, spangle=False)
@@ -397,7 +300,6 @@ def pv_cabinet():
     """Powder-coated sheet steel: the side of every cabinet in the plant.
 
     RAL 7035, the light grey all switchgear is, with the orange peel a cured coat has, one swage
-    line to stop a large panel drumming, and the fixings down each edge.
     """
     size = 512
     c = Canvas(size, size)
@@ -412,27 +314,12 @@ def pv_cabinet():
 
 
 def pv_cabinet_top():
-    """A cabinet's rain hood, seen from above: a sheet with a fall on it, a drip edge, rain marks.
-
-    The one face of a cabinet a player looks straight down on, and the only one where dirt collects
-    rather than running off - so it is the dirtiest surface in the mod.
-
-    What is *not* on it any more is five rings of dried standing water.  Two things were wrong with
-    them.  A hard ring reads as a bubble drawn on the lid rather than as a stain, which the version this
-    replaces said in a comment and then drew anyway.  And a circle on this tile cannot stay a circle: it
-    goes on the top of six different cabinets, none of them square - a combiner's is 2.26 to 1 - so
-    every one of those rings came out an oval, which is what a player noticed first about the whole
-    cabinet.
-
-    So the marks here run in *straight lines* instead, which is both what rain does on a sloped sheet
-    and the one kind of feature an uneven mapping cannot spoil: a fall across the lid, the fold that
-    stiffens it, streaks down the fall, and the dirt that gathers along the low edge and in the corners.
-    """
+    """A cabinet's rain hood, seen from above: a sheet with a fall on it, a drip edge, rain marks."""
     size = 512
     c = Canvas(size, size)
     powder(c, shade(SHEET, 6), salt=157)
 
-    # The fall: a cabinet lid is not flat, it is pitched a couple of degrees so water leaves it. Bright
+    # The fall: a cabinet lid is not flat
     # along the high edge, shading to the low one, which is what a sloped sheet under the sky looks like.
     for y in range(size):
         t = y / float(size)
@@ -444,7 +331,7 @@ def pv_cabinet_top():
     c.aa_rect(0, fold, size, fold + size * 0.006, shade(SHEET, 34))
     c.aa_rect(0, fold + size * 0.006, size, fold + size * 0.016, shade(SHEET, -34))
 
-    # rain streaks down the fall, thin and long: the grain of a surface water runs off
+    # rain streaks down the fall
     streaks = stretched(size, along=size * 3.0, across=size / 40.0, octaves=2, salt=167)
     c.over(lambda x, y, base: shade(base, streaks.signed(y, x) * 13))
 
@@ -468,15 +355,7 @@ def pv_cabinet_top():
 def pv_cabinet_door(plain=False):
     """An inverter's door leaf: the rating plate, the status lights and the louvre bank.
 
-    Three bands down the leaf, and the middle one is empty on purpose - the model's display bezel sits
     there, at DISPLAY_LOW..DISPLAY_HIGH in gen_pv_models.  Move either and move both.
-
-    No handle, no lock and no hinges: the model draws all three as geometry, so painting them here gave
-    every leaf two of each.
-
-    ``plain`` is the right-hand leaf, which has the ventilation and none of the interface.
-
-    Everything round is drawn flat by DOOR_SQUASH; a leaf is 0.395 by 0.500 of a block.
     """
     size = 512
     c = Canvas(size, size)
@@ -486,7 +365,7 @@ def pv_cabinet_door(plain=False):
 
     if not plain:
         plate_label(c, size * 0.08, size * 0.06, size * 0.56, size * 0.26, SHEET, lines=5)
-        # run, grid, fault - the set every inverter has
+        # run, grid, fault
         for i, colour in enumerate(((62, 196, 92, 255), (78, 168, 236, 255), (226, 92, 62, 255))):
             cx = size * (0.66 + i * 0.11)
             c.aa_disc(cx, size * 0.11, size * 0.032, (40, 42, 46, 255), squash=squash)
@@ -510,12 +389,7 @@ def pv_cabinet_door(plain=False):
 
 
 def pv_blank():
-    """The plate that covers the DC aperture on a machine with no combiner in it.
-
-    A bolted sheet and nothing else, which is what a blanking plate is - and the whole visible
-    difference between a cabinet that can take a string and one that cannot.  0.810 by 0.327 of a block,
-    so it is wider than it is tall and the squash goes the other way.
-    """
+    """The plate that covers the DC aperture on a machine with no combiner in it."""
     size = 256
     c = Canvas(size, size)
     squash = SQUASH['pv_blank']
@@ -531,12 +405,7 @@ def pv_blank():
 
 
 def pv_combiner_door():
-    """A string combiner's door: the fuse window, the switch escutcheon, the ways label.
-
-    A field combiner is a polyester enclosure with a window over the fuse ways so a technician
-    can see which one has gone without opening it, and a rotary switch through the door to take
-    the group off.  Both are on this face and nothing else is.
-    """
+    """A string combiner's door: the fuse window, the switch escutcheon, the ways label."""
     size = 512
     c = Canvas(size, size)
     powder(c, shade(SHEET, -6), salt=199)
@@ -587,7 +456,7 @@ def pv_vent():
     inset = size * 0.07
     mesh_screen(c, inset, inset, size - inset, size - inset, size * 0.014, SHEET, alpha=0.95)
     louvre(c, inset, inset, size - inset, size - inset, 9, shade(SHEET, -6))
-    # the frame round it, with the fixings that hold it on
+    # the frame round it
     for i in range(int(inset * 0.5)):
         t = i / (inset * 0.5)
         for x0, y0, x1, y1 in ((0, i, size, i + 1), (0, size - i - 1, size, size - i),
@@ -599,11 +468,7 @@ def pv_vent():
 
 
 def pv_dc_section():
-    """An inverter's direct-current compartment: fuse ways behind a window, glands under them.
-
-    Wider than it is tall, because that is the shape of the compartment across the bottom of a
-    central inverter's front, and drawn at its own aspect so nothing is stretched onto it.
-    """
+    """An inverter's direct-current compartment: fuse ways behind a window, glands under them."""
     w, h = 512, 256
     c = Canvas(w, h)
     powder(c, shade(SHEET, -4), salt=229)
@@ -669,11 +534,7 @@ def pv_display():
 
 
 def pv_instrument():
-    """A radiometer or a screen housing: white anodised aluminium, machined, with a black band.
-
-    Instrument white rather than cabinet grey, because that is what every radiation instrument
-    in the world is painted - it has to reflect rather than absorb, or it measures its own warmth.
-    """
+    """A radiometer or a screen housing: white anodised aluminium, machined, with a black band."""
     size = 256
     c = Canvas(size, size)
     brushed(c, (238, 240, 243, 255), grain=7, blotch=5, salt=251)
@@ -690,11 +551,7 @@ def pv_instrument():
 
 
 def pv_dome():
-    """A radiometer's glass dome: the sky in it, a hard specular pip, and the horizon.
-
-    Seen from directly above nearly always, so it is drawn as a sphere lit from the same
-    direction as everything else, on transparent ground so the corners of the face vanish.
-    """
+    """A radiometer's glass dome: the sky in it, a hard specular pip, and the horizon."""
     size = 256
     c = Canvas(size, size)
     mid = size / 2.0
@@ -711,7 +568,7 @@ def pv_dome():
             sky = mix((96, 128, 158, 255), (196, 222, 240, 255), 0.5 - dy * 0.6)
             lambert = max(0.0, dx * lx + dy * ly + nz * 0.6)
             colour = mix(sky, (255, 255, 255, 255), lambert ** 3 * 0.9)
-            # the rim goes dark, which is a sphere seen edge on
+            # the rim goes dark
             colour = mix(colour, (44, 58, 72, 255), max(0.0, d2 - 0.55) * 1.6)
             alpha = 1.0 if d2 < 0.92 else max(0.0, (1.0 - d2) / 0.08)
             c.blend(x, y, colour, alpha)
@@ -734,75 +591,23 @@ def pv_switch():
 
 
 # ------------------------------------------------------------------ cable
-#
-# What a string cable is, and why the ones here are black
-# -------------------------------------------------------
-# A photovoltaic string is wired with two *single-core* cables, one per pole - H1Z2Z2-K to EN 50618,
-# which is a flexible tinned-copper conductor under two layers of cross-linked polyolefin, rated
-# 1500 V d.c. and -40 to +90 degrees.  A 6 mm2 one is 6.9 mm across: a 3.0 mm conductor, 0.7 mm of
-# insulation and 0.8 mm of sheath.  They are clipped in pairs along the racking, bent on a radius of
 # four diameters at worst, and terminated in MC4 connectors.
-#
-# And the cable is black.  Not a convention worth arguing with - the sheath is carbon-black loaded
-# because that is what survives twenty-five years of ultraviolet, and EN 50618 cable is sold black.
-# Red and black singles exist for small systems; a plant uses black and marks the poles at the
-# connectors.
-#
-# Which is lucky, because a red core and a black one *cannot* be drawn on this block.  A run is built
-# from an arm per side and a piece in the middle, and the arms are one model turned by quarters - so
-# the core on the west of a north arm is the core on the north of an east arm.  Go round a bend and
-# the outer core of the turn is the other arm's inner one; put four bends together and every core is
-# identified with every other.  There is no assignment of two colours that survives it, and the
-# version this replaces showed the proof: a corner drew red meeting black.
-#
-# So both cores are black, the polarity is on the connectors where the real one carries it, and the
-# detail that used to go into a paint scheme goes into the shape instead.
 
-# Carbon-black cross-linked polyolefin.  Lifted from (26, 27, 31), which was the pigment's own value and
-# came out as a silhouette: with the cylinder gradient's own -30 on the unlit side it clamped to nothing,
-# so half of every cable in the world was pure black and the run read as flat rather than round.  This is
-# what a black cable measures in daylight.
+# Carbon-black cross-linked polyolefin.
 JACKET = (48, 50, 56, 255)
 CLEAT_STEEL = (154, 158, 164, 255)     # a stainless cable clip
-# Glass-filled polyamide, the MC4 shell.  Lifted from 38: the real shell is matt black, and matt black
-# under this mod's own lighting is a silhouette - the knurl on the gland nut and the latch window were
-# both inside two shades of the same near-black.  This is what a black connector reads as in daylight.
+# Glass-filled polyamide, the MC4 shell.
 CONNECTOR_BODY = (54, 56, 61, 255)
 CONNECTOR_RED = (150, 42, 36, 255)     # the collar that marks the positive pole
 ENCLOSURE = (188, 192, 196, 255)       # a small polycarbonate junction box
 
 
 def dc_core():
-    """One core, as a tube's texture: the shading that makes a cylinder read as lit from one side.
-
-    The u axis of a swept tube runs *around* it, so this drawing wraps - and that is the whole
-    constraint.  Anything on it has to be periodic in x or there is a hard seam down the length of every
-    cable in the world, which is exactly what the first version had: a cosine of the half-turn, bright
-    at a third across and dark at both edges, so the two edges met at different values.
-
-    So the brightness here is the real thing instead: a diffuse cylinder returns the cosine of the angle
-    between its surface and the light, clamped at nothing, and that is periodic by construction.  The
-    specular line sits just off the bright side, where a glossy sheath's is, and wraps with it.
-
-    The v axis runs along the cable, and this tile is **constant along it** - every row is the same row.
-    That is a requirement rather than a simplification.  A tube here wraps its texture once round and
-    once along, and a run is eighty times longer than it is round, so a tile with any feature down its
-    v axis arrives compressed eighty to one: the jacket's noise came out as a band every few pixels and
-    the die marks as rings, and a bend at eight segments read as knurled.  It was the ribbing a player
-    saw on every corner.
-
-    Constant in v is also the right drawing, which is the part worth having.  What an extruded sheath
-    actually carries is *longitudinal* die marks - lines along the cable, not across it - and a line
-    along the cable is a stripe in u held constant in v.  So the marks here are in the same axis as the
-    shading and they run the way the real ones run.
-    """
+    """One core, as a tube's texture: the shading that makes a cylinder read as lit from one side."""
     size = 128
     c = Canvas(size, size)
 
     # The bright side is u = 0, which is the tube's own 'up': modellib carries one reference vector
-    # along a path, and for any horizontal run that vector is +y.  So a highlight at zero sits on top of
-    # the cable and stays there round a bend, where at 0.34 it swung from the west face to the south face
-    # as the tube turned and read as the light moving.
     lit_at = 0.0
     # one profile round the tube, then written down every row: the die marks are picked from a noise
     # field sampled along u only, so they are lines along the cable rather than rings round it
@@ -812,9 +617,6 @@ def dc_core():
         t = i / float(size)                # a whole turn, so t and t + 1 are the same place
         angle = 2.0 * math.pi * (t - lit_at)
         # the unlit side stays above nothing, so the tube keeps its form in shadow rather than becoming
-        # a black outline - which it did when this started at -30 on a near-black jacket
-        # A black sheath returns almost no diffuse light, so what a real one shows is a narrow specular
-        # line and very little else.  A broad cosine lobe here turned the cable into a grey pipe.
         lit = max(0.0, math.cos(angle))
         tone = -8 + lit * lit * 44
         gloss = lit ** 20 * 0.50
@@ -829,13 +631,7 @@ def dc_core():
 
 
 def dc_cleat():
-    """The stainless clip that holds a run down, once a block, the way a real one is cleated.
-
-    A cable cleat is a strap over the cable into a foot with one screw through it, and it is the only
-    thing on a run that is not cable - so it is what gives a hundred metres of pair a rhythm.  Brushed
-    rather than galvanised: these are 304 stainless with a nylon liner, because a clip on a plant is
-    replaced never and rusting one would mark the cable it holds.
-    """
+    """The stainless clip that holds a run down, once a block, the way a real one is cleated."""
     size = 128
     c = Canvas(size, size)
     brushed(c, CLEAT_STEEL, grain=9, blotch=8, salt=283, horizontal=False)
@@ -844,30 +640,14 @@ def dc_cleat():
     c.aa_rect(0, size * 0.90, size, size, shade(CLEAT_STEEL, -30))
     # the black nylon liner showing at the strap's lip, which is what keeps it off the sheath
     c.aa_rect(0, size * 0.80, size, size * 0.90, (34, 34, 38, 255), alpha=0.8)
-    # No screw drawn: the model has a real one now, turned out of geometry, and a painted one under it
+    # No screw drawn: the model has a real one now, turned out of geometry
     # was a second screw head wherever the strap's tile landed twice.
     grime(c, salt=289, amount=0.14, colour=(74, 72, 68, 255))
     return c
 
 
 def _connector(positive):
-    """An MC4 plug, drawn as a strip along its own length: the plug every string cable ends in.
-
-    Glass-filled polyamide, about eighteen millimetres across and sixty-five long, in two pieces that
-    latch.  The tile's **v axis is the plug from the cable end to the nose** and each part of the model
-    takes its own band of it, which is the only way three segments of one fitting can carry three
-    different things: a nut cannot show the latch window and a barrel cannot show the knurl.
-
-      * v 0.00 to 0.12 - the collar, red for the positive pole and black for the negative, which is how
-        a plant marks a cable that is black for its whole length
-      * v 0.12 to 0.44 - the knurled gland nut that seals onto the sheath, ribbed because it is meant to
-        be turned by hand
-      * v 0.44 to 0.90 - the barrel, with the latch window and the tongue of the locking clip in it
-      * v 0.90 to 1.00 - the nose
-
-    The u axis wraps round the plug, so the knurl's ribs are drawn to tile in x.  The latch window is
-    not, and should not be: there is one of them, on one side.
-    """
+    """An MC4 plug, drawn as a strip along its own length: the plug every string cable ends in."""
     size = 128
     c = Canvas(size, size)
     rubber(c, CONNECTOR_BODY, salt=293, sheen=22)
@@ -892,7 +672,7 @@ def _connector(positive):
     # the shoulder off the nut
     c.aa_rect(0, y1 - size * 0.018, size, y1, shade(CONNECTOR_BODY, -38))
 
-    # the barrel, and the latch window in it
+    # the barrel
     y0, y1 = band(0.44, 0.90)
     c.aa_rect(0, y0, size, y1, shade(CONNECTOR_BODY, 2))
     c.aa_rect(0, y0, size, y0 + size * 0.016, shade(CONNECTOR_BODY, 22))
@@ -923,10 +703,7 @@ def dc_connector_minus():
 def dc_jbox():
     """A small junction box: where more than two runs meet, because a bare cross cannot exist.
 
-    Two cables can pass each other and two can turn a corner, but a third leg has to be *joined* to
     something - and what joins direct-current strings is a box with glands in it, IP68 polycarbonate
-    with a screwed lid.  So the model puts one where four runs meet and this is its lid: the sheet,
-    the four lid screws, and the moulded rib round the gasket.
     """
     size = 128
     c = Canvas(size, size)
@@ -941,11 +718,7 @@ def dc_jbox():
 
 
 def dc_jbox_side():
-    """The junction box's walls: the same moulding, without the lid's screws on it.
-
-    A box has four screws and they are all in the lid, so a wall wearing the lid's tile is a wall with
-    four screws that are not there.
-    """
+    """The junction box's walls: the same moulding"""
     size = 128
     c = Canvas(size, size)
     powder(c, shade(ENCLOSURE, -10), salt=317, peel=5)
@@ -957,12 +730,7 @@ def dc_jbox_side():
 
 
 def _pair(c, y0, y1, armoured=False, salt=271):
-    """Two cores side by side down a face, for the stubs the machines' own models carry.
-
-    The OBJ machines draw a short length of cable where a run leaves them, and one face there takes a
-    whole texture - so this is the pair laid out to fill whatever band it is given, rather than the
-    across-the-cable gradient the block models sample.
-    """
+    """Two cores side by side down a face, for the stubs the machines' own models carry."""
     size = c.w
     span = y1 - y0
     for i in range(2):
@@ -993,13 +761,7 @@ def dc_harness():
 
 
 def dc_jacket():
-    """The flanks and underside of a run: sheathing, and nothing drawn on it.
-
-    Deliberately featureless.  It goes on five faces of every length of cable in the mod, so it has to
-    be a *pattern* - and the printed legend a real cable carries put a light band across the middle of
-    the tile, which is enough for check_model_textures.py to read it as a picture in a frame and, more
-    to the point, is a stripe that lands somewhere different on every face it is mapped onto.
-    """
+    """The flanks and underside of a run: sheathing"""
     size = 256
     c = Canvas(size, size)
     rubber(c, (28, 29, 33, 255), salt=277, sheen=14)
@@ -1009,22 +771,14 @@ def dc_jacket():
 def _line_tile(armoured=False):
     """A cable texture for the vanilla JSON models, whose faces sample it in sixteenths.
 
-    This is the *trunk*'s tile, and the string cable no longer uses it: the string is drawn from round
-    cores that sample ``dc_core`` across their own width, and the trunk is still one painted bar.
-
     Which sixteenths is not a matter of taste - ``gen_cable_models.py`` writes the uv rectangles
-    and there are nine distinct ones.  The band it draws the run's top from is **x 7 to 9 over the
-    whole height**, so the pair has to run *down* this tile and not across it; the flanks come off
-    the bottom row, ``y 15 to 16``; and the climb takes strips out of the left column and the top
-    row.  Everything else is filled with jacket rather than left clear, because a uv landing on a
-    transparent pixel is a cable you can see through.
     """
     size = 256
     unit = size / 16.0
     c = Canvas(size, size)
     rubber(c, (26, 27, 31, 255), salt=287, sheen=12)
 
-    # the pair, running down the tile: one core a sixteenth wide, the pair two
+    # the pair, running down the tile: one core a sixteenth wide
     for i in range(2):
         x0 = (7 + i) * unit
         x1 = x0 + unit
@@ -1070,7 +824,7 @@ def dc_trunk_line():
 
 
 def dc_trench():
-    """The backfill over a buried run: disturbed soil, darker and looser than the ground round it."""
+    """The backfill over a buried run: disturbed soil"""
     size = 256
     c = Canvas(size, size)
     concrete(c, (114, 96, 74, 255), salt=293, aggregate=True)
@@ -1087,13 +841,7 @@ def dc_trench():
 # ------------------------------------------------------------------ the pole
 
 def pole_concrete():
-    """A spun concrete distribution pole: pale grey, seamed, weathered, faintly rust-stained.
-
-    Reinforced concrete rather than wood because that is what the model has always been and what
-    most of Europe's medium-voltage distribution stands on.  A centrifugally cast pole has a
-    seam down each side where the mould halves met, a very smooth skin with the aggregate just
-    showing through it, and a rust bloom wherever a reinforcing bar sits too close to the surface.
-    """
+    """A spun concrete distribution pole: pale grey, seamed, weathered, faintly rust-stained."""
     size = 512
     c = Canvas(size, size)
     concrete(c, (166, 164, 158, 255), salt=337)
@@ -1135,25 +883,7 @@ def pole_plate():
 
 
 def porcelain_brown():
-    """A pin insulator's glaze, drawn for a surface of revolution: brown, glassy, lit from one side.
-
-    Brown rather than the cabin's green, because that is what a line insulator is: the green glaze
-    belongs to the bushings on a transformer housing and the two are different objects.
-
-    The u axis of a lathe runs *around* the turning and the v axis along its profile, and that decides
-    everything on this tile.  The insulator used to wear a flat, even glaze with a little crazing on it
-    and it read as a brown blob - the sheds were there in the geometry and nothing in the shading said
-    so.  Two reasons: the tile was sampled over half its width, so the wrap did not close, and a matt
-    even colour gives a round object no edge at all.
-
-    So what is drawn now is a **lit cylinder**, periodic in u by construction: the cosine of the angle
-    round the turning, clamped at nothing, with the narrow specular a glaze really has just off the
-    bright side and a soft bounce on the dark side, which is what stops porcelain going black where it
-    turns away.  Every shed then has a highlight running round it and reads as a separate skirt.
-
-    Along v there is only the fired colour's own unevenness and the hairline crazing a glaze cools into -
-    nothing with a shape, so a profile may stretch it as far as it likes.
-    """
+    """A pin insulator's glaze, drawn for a surface of revolution: brown, glassy, lit from one side."""
     size = 256
     c = Canvas(size, size)
     porcelain(c, (116, 74, 44, 255), salt=389)
@@ -1182,10 +912,8 @@ def porcelain_brown():
     return c
 
 
-# A square tile on a face that is not square stretches, so every circle on it has to be drawn flat by
-# the face's own width over its height.  SQUASH holds that ratio for each such texture, and
-# check_model_textures.py measures the faces the models actually give them and fails if they disagree -
-# which is the only thing that keeps these numbers true after a model moves.
+# A square tile on a face that is not square stretches
+# the face's own width over its height.
 SQUASH = {
     'box_door': 0.277 / 0.585,              # the kiosk's leaf
     'box_leaf': 0.277 / 0.585,              # its plain second leaf, the same shape
@@ -1202,20 +930,13 @@ DOOR_SQUASH = SQUASH['box_door']
 # ------------------------------------------------------------------ the kiosk
 
 def box_door(plain=False):
-    """The kiosk's door leaf: moss green, louvred low down, with a lock and an HV label.
-
-    The same green as the cabin's doors, because they are the same utility's equipment - a
-    substation kiosk and a transformer housing in one field should read as one maker's kit.
-
-    ``plain`` is the second leaf: the louvres and the hinges but no label and no lock, because a
-    kiosk has one danger sign and one keyhole, not two of each.
-    """
+    """The kiosk's door leaf: moss green, louvred low down, with a lock and an HV label."""
     size = 512
     c = Canvas(size, size)
     powder(c, MOSS, salt=401, peel=7)
     bevel(c, size * 0.03, size * 0.02, size * 0.97, size * 0.98, size * 0.020, lift=26, drop=34)
 
-    # the louvre bank low on the leaf, where cool air is drawn in
+    # the louvre bank low on the leaf
     lx0, ly0, lx1, ly1 = size * 0.12, size * 0.62, size * 0.88, size * 0.90
     mesh_screen(c, lx0, ly0, lx1, ly1, size * 0.013, MOSS, alpha=0.95)
     louvre(c, lx0, ly0, lx1, ly1, 6, shade(MOSS, 8))
@@ -1228,12 +949,12 @@ def box_door(plain=False):
         plate_label(c, size * 0.48, size * 0.18, size * 0.86, size * 0.40, shade(MOSS, 20), lines=3,
                     ink=(30, 32, 34, 255))
 
-        # the lock: a triangular substation key, which is what these are all opened with
+        # the lock: a triangular substation key
         lock_x, lock_y = size * 0.92, size * 0.50
         c.aa_disc(lock_x, lock_y, size * 0.040, shade(MOSS, -30), squash=DOOR_SQUASH)
         dome(c, lock_x, lock_y, size * 0.032, (150, 154, 160, 255), lift=40, drop=28,
              squash=DOOR_SQUASH)
-        # the triangular substation key's socket, which is what these are all opened with
+        # the triangular substation key's socket
         polygon(c, ((lock_x, lock_y - size * 0.016 * DOOR_SQUASH),
                     (lock_x + size * 0.014, lock_y + size * 0.010 * DOOR_SQUASH),
                     (lock_x - size * 0.014, lock_y + size * 0.010 * DOOR_SQUASH)),
@@ -1253,11 +974,7 @@ def box_door(plain=False):
 
 
 def box_sheet():
-    """The kiosk's own painted sheet: the flanks, the back and the edges of its doors.
-
-    A green door with aluminium edges is what happens when a door borrows the rack's material, and
-    it is visible on every leaf from the side.  A door is painted all over.
-    """
+    """The kiosk's own painted sheet: the flanks, the back and the edges of its doors."""
     size = 512
     c = Canvas(size, size)
     powder(c, MOSS, salt=439, peel=7)
@@ -1267,7 +984,7 @@ def box_sheet():
 
 
 def box_plinth():
-    """The concrete plinth a kiosk stands on: cast in place, dirty, with the ground against it."""
+    """The concrete plinth a kiosk stands on: cast in place, dirty"""
     size = 256
     c = Canvas(size, size)
     concrete(c, (146, 144, 138, 255), salt=421)
@@ -1295,14 +1012,7 @@ TOWER_ZINC = (154, 158, 162, 255)
 
 
 def tower_steel():
-    """Galvanised rolled steel angle: what every member of a lattice tower is.
-
-    A tower is one material from the ground to the peak, and it is the same hot-dip galvanising the
-    crossarms on the pole wear - so this is that surface at the size a tower is seen from, which is
-    further away.  The one thing added is the *bolt lines*: an angle section on a tower is drilled at a
-    fixed pitch whether or not there is anything bolted through it, and those rows of holes down every
-    member are what says rolled steel rather than a painted bar.
-    """
+    """Galvanised rolled steel angle: what every member of a lattice tower is."""
     size = 256
     c = Canvas(size, size)
     galvanised(c, TOWER_ZINC, salt=347)
@@ -1323,7 +1033,7 @@ def tower_steel():
 
 
 def tower_plate():
-    """A gusset plate: the thicker steel a joint is bolted through, with a ring of holes in it."""
+    """A gusset plate: the thicker steel a joint is bolted through"""
     size = 256
     c = Canvas(size, size)
     galvanised(c, shade(TOWER_ZINC, -8), salt=359)

@@ -33,35 +33,13 @@ import net.minecraftforge.fml.DistExecutor;
 public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/**
-	 * The facing utility_pole.obj is modelled at.
-	 *
-	 * North, like every other model the mod generates for itself, and the arms run east-west - so the
-	 * conductors run the way the pole faces, which is along the line.
-	 *
-	 * This used to be east *and* the model was mirrored rather than turned, so the pole needed a rotation
-	 * table of its own that nothing else in the mod used and that three separate pieces of code had to
-	 * know about. The model is now authored the ordinary way, so {@link ModelFacing} answers for it like
-	 * everything else and the table is gone.
-	 */
+	/** The facing utility_pole.obj is modelled at. */
 	public static final Direction AUTHORED = Direction.NORTH;
 
 	/**
 	 * The whole pole as collision, cell by cell, cut from utility_pole.obj.
-	 *
-	 * A cube was both too big and in mostly the wrong place: the shaft is half a block across and six
-	 * blocks tall, so the one block a player could not walk through was the place the pole barely fills,
-	 * and the five above it - the whole of the pole - were air.
-	 *
-	 * Here instead are the shaft as the eight and a half pixels it tapers through, the two crossarms as
-	 * the three-pixel channels they are, the eight insulators standing on them, the braces under them, the
-	 * earth strap down the back and every climbing step. The arms were left out when a cell of collision
-	 * meant a whole cell, because an invisible floor in the sky four blocks wide is worse than no floor at
-	 * all; a three-pixel plate where the plate is drawn is not that - it is the arm, and a player can
-	 * still walk under it.
-	 *
-	 * Written by {@code tools/check_hitboxes.py --java}, in the model's own frame, facing
-	 * {@link #AUTHORED}.
+	  *
+	 * Written by {@code tools/check_hitboxes.py --java}, in the model's own frame, facing {@link #AUTHORED}.
 	 */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Block.box(3.73, 0.00, 3.73, 12.27, 16.00, 12.27)),
@@ -142,13 +120,7 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 		return new UtilityPoleBlockEntity(pos, state);
 	}
 
-	/**
-	 * A pole has nothing of its own to tick, and this is not for it.
-	 *
-	 * It is here so that a pole planted before the mast had any collision gets it: six blocks of steel
-	 * with one block of collision at the bottom does not fix itself, because it was placed long ago and
-	 * placement is the only other thing that fills the cells.
-	 */
+	/** A pole has nothing of its own to tick */
 	@Nullable @Override
 	public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
 		return (lvl, pos, blockState, blockEntity) -> MachineShell.heal(lvl, pos, blockState);

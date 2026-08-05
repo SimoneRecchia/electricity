@@ -1,40 +1,16 @@
 #!/usr/bin/env python3
-"""Collision cut from the model, and the two ways it goes wrong.
+"""Collision cut from the model, against what the block declares.
 
-    python3 tools/check_hitboxes.py           # what the Java declares against what the models draw
-    python3 tools/check_hitboxes.py --java    # the same tables, ready to paste into the blocks
+    python3 tools/check_hitboxes.py           # compare
+    python3 tools/check_hitboxes.py --java    # print the tables, ready to paste
 
-Why a script rather than a look
--------------------------------
-Because one of these faults is invisible until you walk into it and the other is invisible until you
-walk into nothing. An electric cabin is drawn a block wide, two and a bit deep and two and a half
-tall; a utility pole is six tall with four-block arms. Collide with either as though it were a stack of
-whole cubes and you get both faults at once: a player stands a third of a block out past the eave, on
-air, and bumps into thin air beside the door.
+The model is the authority: every group a machine draws, clipped to each cell it reaches into.
 
-So the model is the authority. A machine's collision is cut from its own geometry - every group it
-draws, clipped to each block cell it reaches into - and this is what says the Java and the OBJ still
-agree, to a hundredth of a pixel.
-
-What is left out of a body, and why
------------------------------------
-``pivot_`` and ``rotate_`` groups. A pivot is one point, a marker for the renderer to turn something
-about. A rotate group is a part that moves - a tracker's panel, an inverter's fan, an anemometer's cups
-- and a block's collision cannot move with it, so a moving part gets none of its own and its machine
-keeps a shape big enough for wherever the part can swing to. Those machines are listed in ``SWEPT``.
-
-How small is too small
-----------------------
-Two thresholds, and what separates them is what a box costs. A box inside the machine's own block is
-free, so a pixel of thickness is enough to keep it. Claiming the cell next door costs the player that
-whole cell - it becomes a block they can no longer build in - so a cell is only claimed when the
-machine puts at least ``MIN_CLAIM`` pixels of itself into it. Once a cell is claimed the cheap
-threshold applies inside it, which is deliberate: an insulator standing on a claimed crossarm should
-not have its bottom pixel and a half cut off and float.
-
-Under the claim threshold a machine keeps its edge to itself. A cabin's roof overhangs the cell beside
-it by nine tenths of a pixel and a power box's plinth hangs one and seven tenths below its own block;
-taking a cubic metre of the world away for either would cost more than the ledge it saves.
+Tables to know about.  MOVING is what gets no collision (markers, moving parts, cable stubs).  MIN_OWN
+and MIN_CLAIM are the thresholds - a box in the machine's own cell is free, claiming the cell next door
+costs the player that cell.  SWEPT and ELSEWHERE are what is not compared, and why.  MODEL_TABLE scopes
+the search when a block derives other shapes from one table.  STATEFUL is a machine whose geometry
+changes with its state.
 """
 
 import collections
@@ -49,25 +25,12 @@ BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'blo
 RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
 
 # Groups that are a marker, a moving part, or something that is only sometimes there.
-#
-# ``harness`` and ``entry`` are the cable a machine grows when a reel is worked into it or a run is
-# laid up against it.  They are left out for the same reason a laid run itself has no collision:
-# DcCableBlock gives a surface run none, so a stub of the same cable standing proud of a machine
-# should not be the one piece of copper in the mod a player can bump into - and it would be collision
-# where, most of the time, nothing is drawn at all.
 MOVING = ('pivot_', 'rotate_', 'harness', 'entry')
 
-# Everything below is in pixels, the sixteenths the game itself is authored in.
-# How thick a box has to be in every axis to be collision at all, in the machine's own cell and in one
-# it would have to claim.
-#
-# A quarter of a pixel in the machine's own cell, which is thinner than it sounds and is deliberate: a
-# ballasted table is two pixels tall in total, so a threshold of a whole pixel threw away its ballast,
-# its frame and its glass and left the machine with no collision whatever.  The same threshold had a
-# kiosk's plinth and its rain hood - both plainly visible, both under a pixel - collide with nothing.
+# Everything below is in pixels
 MIN_OWN = 0.25
 MIN_CLAIM = 2.0
-# A gap this small is a seam in the model rather than a step, and the two boxes are merged. The cabin's
+# A gap this small is a seam in the model rather than a step, and the two boxes are merged.
 # roof sits two thousandths of a block above its body, which is a thirtieth of a pixel.
 SEAM = 0.1
 # What counts as the same number, once the tables have been rounded for printing.
@@ -86,14 +49,8 @@ BLOCK_CLASS = {
 }
 
 # One block class, several models: which constant in its file holds the table cut from this one.
-#
-# Four mountings share PvArrayBlock, and a table per mounting in one file cannot be told apart by
-# looking for ``new Cell(`` - the first pass at this compared the flat table's model against all four
-# tables at once and reported everything as wrong.
 MODEL_TABLE = {
     # the inverter declares one table and derives its two smaller sizes by scaling it, so the derived
-    # ones are built with a Cell of their own that carries no literal box - and read unscoped, that empty
-    # cell overwrites the real table and every box in it reads as missing
     'pv_inverter': 'CELLS',
     # and the kiosk, for the same reason: its wall-mounted shape is derived from CELLS in code
     'power_box': 'CELLS',
@@ -117,12 +74,7 @@ MODEL_BLOCK = {
     'pv_dual': 'pv_array',
 }
 
-# Models whose collision is a volume rather than a shape, and why. Their tables are printed for
-# reference and not compared: a shape cut from where the geometry happens to be authored would be
-# wrong a second later.
-#
-# Keyed by model rather than by block, because two of the four mountings that share PvArrayBlock do
-# not move at all and are compared to the pixel.
+# Models whose collision is a volume rather than a shape, and why.
 SWEPT = {
     'pv_track':
         'the panel tracks the sun about its torque tube, so its collision has to cover the volume it '
@@ -138,11 +90,6 @@ SWEPT = {
 
 
 # Models whose tables are printed somewhere else, so this file would only disagree with itself.
-#
-# The string cable is sixteen pieces chosen by which sides connect, and its outline is a different
-# shape in each - so its tables are keyed by that pattern and printed by the generator that draws the
-# pieces, off the very parts it draws them from. Reading them back here would compare one derivation
-# against another rather than the model against the game.
 ELSEWHERE = {
     'dc_string_cable': 'printed by tools/gen_cable_models.py --java, per connection pattern',
 }
@@ -179,13 +126,7 @@ def bounds(faces):
 
 
 def clipped(face, axis, low, high):
-    """One polygon cut to a slab, as the part of it between two planes.
-
-    Sutherland-Hodgman against two parallel planes.  What it is for: a tilted plane's bounding box is
-    not the plane - a rack at 25 degrees has a box seven pixels tall over its whole footprint, and
-    collision cut from that is a wall of air in front of the low edge.  Cut into slabs and clipped, the
-    same plane comes out as a staircase that follows it, which is how the game itself draws a slope.
-    """
+    """One polygon cut to a slab, as the part of it between two planes."""
     for sign, limit in ((1, low), (-1, high)):
         out = []
         for index, point in enumerate(face):
@@ -208,24 +149,12 @@ def clipped(face, axis, low, high):
 
 
 # How thick a slice is, in blocks, and how much of a step in a group's own height it takes before the
-# group is worth slicing at all.
-#
-# Two pixels.  One pixel is the grain the game's own models are authored on and would be exact, but a
-# tilted rack came out as forty-four boxes at that width and a field of them is a great many boxes for
-# the collision code to walk - and the difference between a one-pixel staircase and a two-pixel one is
-# twelve centimetres of a step nobody can feel.  A step under a fiftieth of a block is a seam rather
-# than a slope, and is not sliced at all.
 SLICE = 2.0 / 16.0
 SLOPE = 0.02
 
 
 def sliced(faces):
-    """A group as boxes: one if it fills its own bounding box, a staircase of them if it slopes.
-
-    Sliced along whichever horizontal axis it slopes in, and only if it slopes: everything in these
-    models that is axis-aligned - which is nearly all of it - comes out as the single box it always
-    was, so the tables stay short.
-    """
+    """A group as boxes: one if it fills its own bounding box, a staircase of them if it slopes."""
     lo, hi = bounds(faces)
     for axis in (0, 2):
         span = hi[axis] - lo[axis]
@@ -249,16 +178,7 @@ def sliced(faces):
         if len(slabs) < 3:
             continue
 
-        # A slope is a group whose top climbs, or falls, all the way across it.  Monotone is the whole
-        # of the test, and it is what tells the two cases apart:
-        #
-        #   * a rack's plane, a brace, a pier cut to a tilt - the top moves the same way throughout,
-        #     and a single box round it is a wall of air in front of the low end
-        #   * a round shaft with a dome on it, a cylinder, a cabinet - the top goes up and comes back
-        #     down, or does not move at all, and one box is within half a pixel of the truth
-        #
-        # Without it every eighty-sided cone in the mod came out as eight boxes of staircase across its
-        # own diameter, which is a hundred and twenty boxes on a pole and no more accurate for any of it.
+        # A slope is a group whose top climbs, or falls
         tops = [slab[1][1] for slab in slabs]
         climbs = all(b >= a - SLOPE for a, b in zip(tops, tops[1:]))
         falls = all(b <= a + SLOPE for a, b in zip(tops, tops[1:]))
@@ -459,12 +379,12 @@ def show(box):
 FACING_ORDER = {'SOUTH': 0, 'WEST': 1, 'NORTH': 2, 'EAST': 3}
 
 def turn(authored, facing):
-    """The angle the geometry is turned by to face this way, the way every renderer here works it out."""
+    """The angle the geometry is turned by to face this way"""
     return ((FACING_ORDER[authored] - FACING_ORDER[facing]) % 4) * 90
 
 
 def implied(mapping):
-    """The facing a table of angles says the geometry was modelled at, or None if it is not a turn of one."""
+    """The facing a table of angles says the geometry was modelled at"""
     for authored in FACING_ORDER:
         if all(turn(authored, facing) == angle for facing, angle in mapping.items()):
             return authored
@@ -489,13 +409,7 @@ def authored(java):
 
 
 def facing_faults(name, block, java):
-    """Everything that has to agree about which way a machine's geometry was modelled, and whether it does.
-
-    The fault this catches happened: the renderer knew the cabin's model faces east, the collision assumed
-    north, and so a cabin's cells stood at a right angle to the cabin for as long as they existed. Three
-    places hold this one fact - the renderer that turns the model, the block entity that turns the wire
-    anchors, and the cells - so the block declares it and the others have to be reading the same thing.
-    """
+    """Everything that has to agree about which way a machine's geometry was modelled, and whether it does."""
     faults = []
     if name in NO_FACING:
         return []
@@ -538,27 +452,14 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
-# A machine whose geometry changes with its state, as
-#     model: (block, [(group only drawn in this state, constant that adds or removes it), ...],
-#             group drawn instead)
-#
-# A block that draws a different shape in two states has to *collide* differently in the two, and
-# nothing else here would notice: the checker cuts one shape out of every group the model has and
-# compares it to one table, so a machine with an optional part passes whichever way its block is wrong.
+# A machine whose geometry changes with its state
 STATEFUL = {
     'pv_inverter': ('PvInverterBlock', 'section', 'DC_SECTION', 'blank'),
 }
 
 
 def optional_faults(directory, cells, groups):
-    """Whether a stateful machine's two shapes are still the two the model draws.
-
-    Two things, and the second is the one that matters. The constant the block adds for the fitted state
-    has to be a box the model actually draws in it - that is the table and the model agreeing. And the
-    part drawn *instead* in the other state has to be wholly inside what is left, because that is what
-    makes "the plain shape is the full shape minus this one box" true: a blanking plate standing proud of
-    the cabinet would need collision of its own and would silently get none.
-    """
+    """Whether a stateful machine's two shapes are still the two the model draws."""
     if directory not in STATEFUL:
         return []
 

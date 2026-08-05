@@ -1,69 +1,16 @@
 #!/usr/bin/env python3
-"""Generates the string cable's geometry, its blockstate, and the tables its block declares.
+"""The string cable: 16 OBJ pieces, their block models, the multipart blockstate, the Java shapes.
 
-    python3 tools/gen_cable_models.py            # writes the assets
-    python3 tools/gen_cable_models.py --java     # and prints the tables DcCableBlock declares
+    python3 tools/gen_cable_models.py            # writes the assets and runs its own checks
+    python3 tools/gen_cable_models.py --java     # prints the tables DcCableBlock declares
 
-Writes OBJ pieces into src/main/resources/assets/electricity/models/dc_string_cable/, one block model
-per piece next to the vanilla ones, and the multipart blockstate.
+Two traps live here.  Forge's block-model OBJ loader reads the *block's own frame* - corner at the
+origin, 0..1 - not the centred frame the machines use; check_inside_block enforces it.  And a block
+model's texture is a sprite in an atlas, so a uv past 1 samples the sprite next door; check_inside_sprite
+enforces that.  Both faults are invisible outside the game.
 
-Why this is OBJ geometry inside a vanilla block model
------------------------------------------------------
-A cable is a cylinder, and this mod's standard says a round body gets the turbine's own subdivisions.
-The vanilla JSON format cannot express a cylinder at all - an element with a rotation is a *union*, so
-three boxes at 22.5 degrees make a twelve-pointed star rather than a twelve-sided prism.  Two attempts
-out of axis-aligned boxes proved it: a flat painted bar read as a ribbon, and a stack of three stepped
-boxes read as a square duct with a highlight down it.
-
-So the pieces are real swept tubes at thirty-two sides, loaded through **Forge's own OBJ block-model
-loader**.  That is the part that makes it affordable: a model with ``"loader": "forge:obj"`` is baked
-into the chunk mesh like any other block model, so two hundred cables cost what two hundred blocks
-cost - not what two hundred block entities cost, which is what the machines' pipeline would have made
-them.
-
-A purpose-made piece for every case
------------------------------------
-Nothing here is one shape stretched to cover several jobs.  The middle of the block is chosen by the
-*set* of sides that connect, all sixteen of them, and each one is drawn for what it actually is:
-
-  * two opposite sides - the pair runs straight through, under a stainless cleat
-  * two adjacent - the pair **turns on a radius**, swept round a quarter circle rather than broken at a
-    corner, and the two arcs are *concentric*: the inside core takes the tighter line and the outside
-    one the wider, exactly a metre apart the whole way round, which is what a cleated pair does
-  * one side - the pair ends in two MC4 plugs, red collar on the positive pole
-  * none - a length of pair lying where it was dropped, with its plugs on
-  * three sides - a junction box with three walls glanded
-  * four - the same box with the fourth wall glanded too
-
-A third leg cannot be a bare crossing: two runs can pass each other and two can turn, but something has
-to *join* a third, and what joins direct-current strings is a small IP68 box with glands in it.
-
-Each ``when`` names all four side properties - ``none`` for the ones it has not got and ``side|up`` for
-the ones it has - so the sixteen conditions partition the states and exactly one middle is ever drawn.
-
-Why the pattern and not the side
---------------------------------
-Because a pair has a handedness.  The arms are one model turned by quarters, so the core on the west of
-a north arm is the core on the north of an east arm; joining the cores through every straight and every
-bend identifies all four of them, so no assignment of two colours survives a corner.  The real cable
-settles it: H1Z2Z2-K to EN 50618 is black - carbon-black loaded, because that is what survives
-twenty-five years of ultraviolet - and a plant marks the poles at the connectors.  Both cores are
-black; the collars on the plugs carry the polarity.
-
-Nothing coincides, which is the other half of it
-------------------------------------------------
-The version this replaces had every joint made of two boxes meeting on a plane and *both* drew a face
-there - two surfaces at the same depth, which is the flicker a player saw at every corner.  A swept tube
-has no internal joint: a bend is one continuous tube per core, and a climb is one tube from the middle
-of the block, round the elbow, and up the wall.  Where two pieces really do meet - an arm against the
-middle - both stop on the same plane and both close their end, which is a disc inside the neighbouring
-cable and cannot be seen.  Left open, it is a hole wherever the cover is not exact.
-
-The trunk cable
----------------
-Still the old painted bar, on purpose: a different product doing a different job - one armoured home run
-from a combiner to the cabinet, rather than the hundreds of string pairs a plant is stitched together
-with - and it is next in line rather than done here.
+The middle of a block is chosen by which sides connect, all sixteen of them, and each has its own piece.
+HUB_LO is the figure everything else follows from - see piece_bend.
 """
 
 import itertools
@@ -86,7 +33,7 @@ OBJ_DIR = os.path.join(ASSETS, 'models', 'dc_string_cable')
 NAME = 'dc_string_cable'
 SIDES = ('north', 'east', 'south', 'west')
 
-# The materials, and the textures they resolve to.  A ``#name`` in the MTL is looked up in the block
+# The materials, and the textures they resolve to.
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
 MATERIALS = {name: '#' + name for name in
              ('core', 'cleat', 'plug_plus', 'plug_minus', 'jbox', 'jbox_side', 'trench')}
@@ -101,64 +48,33 @@ TEXTURES = {
 }
 
 # ---------------------------------------------------------------- the pair, in sixteenths
-#
-# Authored in sixteenths, like every other figure in this mod's models, and divided down on the way
-# out.  The frame the division lands in is the block's *own*, corner at the origin, 0 to 1 on all three
 # axes - which is not the frame the rest of this mod's OBJ files use and is not a choice either.
-#
-# The machines are drawn by the mod's own renderer, which places a model about the centre of the block,
-# so those are authored -0.5 to 0.5.  These are drawn by Forge's block-model OBJ loader, and that one
-# takes the coordinates a vanilla block model uses: ``automatic_culling`` decides a quad lies on a block
-# face by testing its vertices against 0 and 1, and a blockstate's ``y`` is applied through
-# ``Transformation.blockCenterToCorner``, which turns about (0.5, 0.5, 0.5).  Authored about the origin
-# instead, every piece came out half a block to the north-west, and the rotated states were thrown to a
-# different corner each - which is what a player saw as cable lying nowhere near its own outline.
-#
-# ``check_inside_block`` fails the build if a piece leaves the frame, because the fault is invisible in
-# any previewer: it draws correctly and it is the *game* that puts it in the wrong place.
 
-# A 6 mm2 H1Z2Z2-K is 6.9 mm across.  Thin: a core is 1.3 px, so the pair is a pair of cables rather
-# than a pair of ducts - which is what the first two attempts at this looked like.
+# A 6 mm2 H1Z2Z2-K is 6.9 mm across.
 CORE_RADIUS = 0.65
 CORE_OFFSET = 1.05
 CORES = (8.0 - CORE_OFFSET, 8.0 + CORE_OFFSET)
-# The cable rests on the ground, so its axis is its own radius above it.
+# The cable rests on the ground
 CORE_Y = CORE_RADIUS
 
-# Where an arm stops and the middle begins.  This one figure decides the bend: a quarter circle tangent
-# to both legs has its tangent points at ``8 - CORE_OFFSET - radius``, so setting the hub edge here
-# makes both arcs of a bend run *exactly* from one edge of the middle to the other with no straight
-# section inside it, and makes the two radii come out concentric.  See ``piece_bend``.
+# Where an arm stops and the middle begins.
 HUB_LO = 5.4
 HUB_HI = 16.0 - HUB_LO
 
 # The MC4 plug, from the sheath outwards, as (length, radius).
-#
-# The real one is 18 mm on a 6.9 mm cable - 2.6 diameters - and two of those cannot sit at the pair's
-# own spacing, which is why an installer's two plugs splay apart.  Drawn at 1.5 diameters instead: it
-# still reads as a plug, it stays in proportion to the thin cable, and the two clear each other.
-#
-# Each segment names the band of ``dc_connector_*`` it takes, because that tile is a strip along the
-# plug's own length: a nut cannot show the latch window and a barrel cannot show the knurl.
-# The collar is longer than scale: a real plug's coloured seal is a couple of millimetres and at this
-# size that is a quarter of a pixel, which is the polarity marking invisible.  It is what the fitting is
-# *for* to a player, so it gets a ring they can see - and the barrel gives up the length.
 PLUG = ((0.80, 0.80, 0.00, 0.12),      # the collar, which carries the polarity
         (1.05, 0.85, 0.12, 0.44),      # the knurled gland nut
         (2.25, 0.95, 0.44, 0.90),      # the barrel, with the latch window
         (0.70, 0.62, 0.90, 1.00))      # the nose
 PLUG_START = 8.4
 # A plug is fatter than the cable it is moulded onto, so a plug resting on the ground holds its own axis
-# higher than the cable's - and the cable rises into it over the last two pixels, which is what a stiff
-# 6 mm2 core lying on the ground actually does.  Coaxial at the cable's own height instead, the barrel's
-# underside was a third of a pixel below the ground.
 PLUG_Y = max(radius for _, radius, _, _ in PLUG)
 PLUG_RISE = 2.4
 
-# How many segments a quarter turn is swept in.  Eight is smooth at the tighter of the two radii and
+# How many segments a quarter turn is swept in.
 # costs eight rings of thirty-two.
 BEND_STEPS = 8
-# The elbow where a run turns up a wall, and how far the riser stands off it.
+# The elbow where a run turns up a wall
 CLIMB_RADIUS = 2.4
 WALL_STANDOFF = CORE_RADIUS + 0.5
 
@@ -178,18 +94,9 @@ def at(x, y, z):
 
 
 # ---------------------------------------------------------------- the parts
-#
-# Every part is drawn *and* measured: ``boxes`` is what the block's outline claims, so the geometry and
-# the collision tables cannot drift apart.
 
 class Run:
-    """A length of cable swept along a path given in sixteenths.
-
-    Both ends are closed, always.  A cap at a joint is a disc inside the neighbouring cable and costs
-    thirty quads; an *uncapped* end is a hole the moment the neighbour does not cover it exactly, and
-    open ends at the joints were what made a laid run read as hollow rather than solid.  Cheaper to close
-    every one than to reason about which ones are covered.
-    """
+    """A length of cable swept along a path given in sixteenths."""
 
     def __init__(self, path, radius=CORE_RADIUS, material='core'):
         self.path = _dedupe([tuple(float(c) for c in p) for p in path])
@@ -197,10 +104,7 @@ class Run:
 
     def draw(self, mesh):
         faces = mesh.faces('cable', self.material)
-        # The texture wraps exactly once round the tube and exactly once along it.  Not a choice: a
-        # block model's texture is a sprite in the block atlas, so a uv past one samples the sprite next
-        # door rather than repeating - which is what put white bands across every cable.  Nothing on the
-        # core's tile has a shape along its length, so stretching it there costs nothing.
+        # The texture wraps exactly once round the tube and exactly once along it.
         tube(mesh, faces, [at(*p) for p in self.path], out(self.radius), sides=FITTING,
              uv_scale=1.0, uv_along=1.0, caps=faces)
 
@@ -208,14 +112,7 @@ class Run:
         return sum(math.dist(self.path[i], self.path[i + 1]) for i in range(len(self.path) - 1))
 
     def boxes(self):
-        """One box a segment, so a curve's outline follows the curve instead of boxing the whole arc.
-
-        The padding is *perpendicular* to each segment and not around it: a tube running along one axis
-        ends flat where its path ends, so padding that axis too would claim half a diameter of air past
-        the end - which is what made an arm read as standing inside the junction box it feeds.  A segment
-        that runs diagonally, which is every chord of an arc, is padded on all three, since its cap is
-        not square to any of them.
-        """
+        """One box a segment, so a curve's outline follows the curve instead of boxing the whole arc."""
         result = []
         for i in range(len(self.path) - 1):
             a, b = self.path[i], self.path[i + 1]
@@ -239,12 +136,10 @@ class Barrel:
                  band=None):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
         self.radius, self.low, self.high, self.cap = radius, low, high, cap
-        # Which window of its texture this segment takes, for a fitting whose tile is a strip along its
+        # Which window of its texture this segment takes
         # own length rather than something that tiles.
         self.band = band
-        # A sleeve is a fitting a cable runs *through* - a gland in a junction box's wall - so it is the
-        # one thing in this model allowed to contain cable.  The check below proves it contains it rather
-        # than clipping it.
+        # A sleeve is a fitting a cable runs *through* - a gland in a junction box's wall
         self.sleeve = sleeve
 
     def draw(self, mesh):
@@ -270,11 +165,7 @@ class Barrel:
 
 
 class Slab:
-    """A box of something that is not cable: a cleat's strap and feet, a junction box's shell.
-
-    ``material`` may be a mapping from face name to material, with '*' for the rest - which is how the
-    junction box gets its lid's four screws on the lid and not on its four walls as well.
-    """
+    """A box of something that is not cable: a cleat's strap and feet, a junction box's shell."""
 
     def __init__(self, group, material, lo, hi, uv_scale=1.0):
         self.group, self.material = group, material
@@ -308,7 +199,7 @@ class _Boxes:
 
 
 def _spin(point, quarter):
-    """A point turned about the block's centre, the way a blockstate's y turns it."""
+    """A point turned about the block's centre"""
     a, b = point[0] - 8.0, point[2] - 8.0
     for _ in range(quarter // 90):
         a, b = -b, a
@@ -334,12 +225,7 @@ def _dedupe(path):
 # ---------------------------------------------------------------- the fittings
 
 def plug(centre, base, positive):
-    """An MC4 plug on the end of a core: the gland nut, the barrel, the nose.
-
-    Two pieces that latch, in glass-filled polyamide, sealed onto the sheath by a knurled nut.  The
-    collar says which pole it is - red for positive, black for negative - because the cable itself is
-    black for its whole length and this is where a plant marks it.
-    """
+    """An MC4 plug on the end of a core: the gland nut, the barrel, the nose."""
     material = 'plug_plus' if positive else 'plug_minus'
     parts, cursor = [], PLUG_START
     for index, (length, radius, v0, v1) in enumerate(PLUG):
@@ -351,12 +237,7 @@ def plug(centre, base, positive):
 
 
 def tail(centre, base, start):
-    """The length of core between a piece's own boundary and a plug, rising into it.
-
-    Three points rather than two: the run keeps the pair's own height until it is clear of the boundary,
-    then lifts to the plug's axis.  Which has to happen inside the middle and not at its edge, because
-    the edge is where the arm from the next block along meets it and that one is at the pair's height.
-    """
+    """The length of core between a piece's own boundary and a plug"""
     y = base + CORE_Y
     return Run([(centre, y, start), (centre, y, PLUG_START - PLUG_RISE),
                 (centre, base + PLUG_Y, PLUG_START - PLUG_RISE + 0.9),
@@ -364,13 +245,7 @@ def tail(centre, base, start):
 
 
 def cleat(base, low, high):
-    """A stainless clip: a strap over the pair into a foot each side, one screw through it.
-
-    A run is cleated about once a metre, and the clip is the only thing on a hundred metres of pair that
-    is not pair - so it is what gives a straight run a rhythm.  The feet fill the gap between the pair
-    and the edge of the middle exactly: any wider and they stand inside the next arm along, which is a
-    fault ``check_disjoint`` catches.
-    """
+    """A stainless clip: a strap over the pair into a foot each side"""
     inner = CORE_OFFSET + CORE_RADIUS
     top = base + CORE_Y + CORE_RADIUS
     return [
@@ -378,20 +253,16 @@ def cleat(base, low, high):
         # and they stand inside the next arm along, any narrower and they cut into the cable
         Slab('cleat', 'cleat', (HUB_LO, base, low), (8.0 - inner, top, high), uv_scale=0.4),
         Slab('cleat', 'cleat', (8.0 + inner, base, low), (HUB_HI, top, high), uv_scale=0.4),
-        # the strap, resting *on* the crown rather than sunk into it - it used to start a third of a
+        # the strap, resting *on* the crown rather than sunk into it
         # pixel lower, which is a band cutting through the cable it is meant to hold
         Slab('cleat', 'cleat', (HUB_LO, top, low), (HUB_HI, top + 0.42, high), uv_scale=0.6),
-        # and the screw through it, which is what a cleat is closed with
+        # and the screw through it
         Barrel('cleat', 'cleat', (8.0, 0.0, (low + high) / 2.0), 'y', 0.34, top + 0.42, top + 0.72),
     ]
 
 
 def junction_box(base, glanded):
-    """A small IP68 polycarbonate box, glanded on the walls that have a cable in them.
-
-    A purpose-made piece per pattern rather than one box with four glands and some of them unused: a
-    wall with no cable behind it has no gland in the real thing either.
-    """
+    """A small IP68 polycarbonate box, glanded on the walls that have a cable in them."""
     top = base + CORE_Y + CORE_RADIUS + 1.6
     parts = [Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
                   (HUB_LO, base, HUB_LO), (HUB_HI, top, HUB_HI))]
@@ -416,26 +287,9 @@ def piece_line(base):
 
 
 def piece_bend(base):
-    """Two adjacent sides: the pair turns on a radius, swept rather than broken at a corner.
-
-    The turn is north to east.  A quarter circle tangent to both legs of one core has its centre one
-    radius outside each of them, so the inside core's arc has radius ``8 + CORE_OFFSET - HUB_LO`` and
-    the outside core's ``8 - CORE_OFFSET - ... ``- and those two work out to the **same centre**, which
-    means the pair goes round the bend concentric, a fixed distance apart the whole way, exactly as a
-    cleated pair does.  Both arcs also begin and end precisely on the middle's own boundary, so there is
-    no straight section inside it and nothing to line up by hand.
-
-    The radius is symbolic and says so: a real cable bends no tighter than four diameters, which at a
-    block to ten metres is four hundredths of a pixel and invisible.  What matters is that it reads as
-    bent and not as broken.
-
-    No cleat: both axes of the middle are full of turning cable and there is nowhere for a foot to
-    stand - which is true of the real thing too, where a bend is supported before it and after it.
-    """
+    """Two adjacent sides: the pair turns on a radius, swept rather than broken at a corner."""
     y = base + CORE_Y
-    # A core comes in on one lane and leaves on the other, and its arc is tangent to both - so its
-    # radius is set by the lane it *leaves* on: tangent to z = other means the centre sits one radius
-    # north of it, and the inbound tangent point lands on the middle's edge when radius = other - HUB_LO.
+    # A core comes in on one lane and leaves on the other
     # Which puts both centres at the same place, (HUB_HI, HUB_LO), so the pair is concentric.
     centre = (HUB_HI, y, HUB_LO)
     parts = []
@@ -457,7 +311,7 @@ def piece_end(base):
 
 
 def piece_loose(base):
-    """Nothing connected: a length of pair lying where it was dropped, with its plugs on."""
+    """Nothing connected: a length of pair lying where it was dropped"""
     parts = []
     for index, c in enumerate(CORES):
         parts.append(tail(c, base, 3.2))
@@ -476,23 +330,13 @@ def piece_cross(base):
 
 
 def piece_arm(base, near):
-    """The pair from a block edge in to the middle piece.
-
-    It stops exactly on the boundary rather than overrunning it: two tubes that overlap would put two
-    cylinder surfaces at the same depth, and two that stop on the same plane with no caps carry the run
-    across the seam with nothing drawn there at all.
-    """
+    """The pair from a block edge in to the middle piece."""
     y = base + CORE_Y
     return [Run([(c, y, near), (c, y, HUB_LO)]) for c in CORES]
 
 
 def piece_climb(base):
-    """The pair going up the wall alongside, to reach a run on top of it.
-
-    One swept tube a core, from the middle of the block, round the elbow, and up the wall - the elbow
-    included in the same sweep, which is what removes the last place two pieces of this model used to
-    meet on a plane.  It replaces the arm rather than adding to it, so nothing is drawn twice.
-    """
+    """The pair going up the wall alongside"""
     y = base + CORE_Y
     turn = arc((0.0, y + CLIMB_RADIUS, WALL_STANDOFF + CLIMB_RADIUS), CLIMB_RADIUS, (1, 2),
                180.0, 270.0, BEND_STEPS)
@@ -504,13 +348,7 @@ def piece_climb(base):
 
 
 def bedding():
-    """The sand a buried cable is laid in, and the rim that keeps the block boundary solid.
-
-    A buried run has taken a block of ground out of the world, so the model has to be a *complete*
-    solid: the game culls the soil's faces around it, and any part of the boundary this did not cover
-    would be a hole to see through the world with.  Four rim boxes rather than a ring, because two boxes
-    overlapping at a corner would put two faces on one plane.
-    """
+    """The sand a buried cable is laid in, and the rim that keeps the block boundary solid."""
     parts = [Slab('bedding', 'trench', (0.0, 0.0, 0.0), (16.0, GROUND, 16.0))]
     for x0, z0, x1, z1 in ((0.0, 0.0, 16.0, RIM), (0.0, 16.0 - RIM, 16.0, 16.0),
                            (0.0, RIM, RIM, 16.0 - RIM), (16.0 - RIM, RIM, 16.0, 16.0 - RIM)):
@@ -518,9 +356,7 @@ def bedding():
     return parts
 
 
-# Which middle a set of connected sides gets, and how far round it is turned.  Authored with the one
-# side at north, the pair running north and south, the bend from north to east, and the tee glanded
-# north, east and south.
+# Which middle a set of connected sides gets, and how far round it is turned.
 HUBS = {
     (): ('loose', 0),
     ('north',): ('end', 0), ('east',): ('end', 90),
@@ -548,7 +384,7 @@ def write(path, data):
 
 
 def write_piece(name, parts):
-    """One piece as an OBJ, its material library, and the block model that loads it."""
+    """One piece as an OBJ, its material library"""
     mesh = Mesh()
     for part in parts:
         part.draw(mesh)
@@ -566,22 +402,11 @@ def write_piece(name, parts):
     write(os.path.join(BLOCK_MODELS, name + '.json'), {
         'loader': 'forge:obj',
         'model': 'electricity:models/%s/%s.obj' % (NAME, name),
-        # Not flipped, and the reason is exact rather than a preference.  Forge's loader computes the
-        # sprite coordinate as ``getV((flipV ? 1 - v : v) * 16)``, and a sprite's v runs from its *top*,
-        # which is also where row zero of a PNG is and where texlib's Canvas puts y = 0.  So v = 0 has to
-        # mean the top of the drawing, which is flipV off.  With it on, every band of the plug's strip
-        # landed one segment out: the red collar came out on the nose and the knurl on the barrel.
+        # Not flipped, and the reason is exact rather than a preference.
         'flip_v': False,
         # Culling off: the loader would drop the quads that lie on a block boundary, and on a cable
-        # those are the ones that carry a run across a seam.  A few extra quads on a piece this small
-        # costs nothing.
         'automatic_culling': False,
-        # Shading off, and this is what makes a cable read as one solid object.  With it on, Minecraft
-        # multiplies each quad by the face direction its normal is nearest to - 1.0 up, 0.8 north and
-        # south, 0.6 east and west - and a tube's normals sweep all of them, so a bend came out in bands
-        # of three brightnesses across the curve and the unlit half of a black cable went to nothing.
-        # dc_core already carries a lit cylinder's own gradient, drawn from this mod's one light
-        # direction, so the shading is in the texture where it belongs.
+        # Shading off, and this is what makes a cable read as one solid object.
         'shade_quads': False,
         'textures': dict(TEXTURES, particle=TEXTURES['core']),
     })
@@ -589,14 +414,7 @@ def write_piece(name, parts):
 
 
 def check_inside_sprite(name, mesh):
-    """Fails if any uv leaves the tile, which in a block model means leaving the *sprite*.
-
-    Worth failing loudly over, because of how it looks: a block model's texture lives in the block
-    atlas, so a uv past one does not tile - it samples whatever sprite the atlas happened to put next
-    door.  The first version of this cable ran its v to 1.9 along every tube and came out with white
-    bands across the cable and a white collar on the plug, and none of it showed in a previewer, which
-    binds one texture at a time and wraps.
-    """
+    """Fails if any uv leaves the tile, which in a block model means leaving the *sprite*."""
     for u, v in mesh.vt:
         if not (-1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6):
             raise SystemExit('%s: uv (%.3f, %.3f) is outside its sprite, so it would sample the '
@@ -604,19 +422,7 @@ def check_inside_sprite(name, mesh):
 
 
 def check_inside_block(name, mesh):
-    """Fails if a piece leaves its block, which is the frame Forge's loader reads these in.
-
-    The reason it is worth a check of its own rather than a careful read of ``at``: this fault does not
-    show anywhere except in the game.  The OBJ is self-consistent, a previewer draws it correctly, the
-    hitbox tables printed from the same figures are correct - and the block appears with its cable half a
-    block away from its own outline, because the loader's frame has the block's corner at the origin and
-    not its centre.  A whole cable set was drawn twice before that was found by looking rather than by
-    measuring.
-
-    A pixel of slack, and it is spent on one thing: a fitting wider than the cable it is on - a plug's
-    barrel, a gland's nut - beds a fraction of a pixel into the ground, the way the real one sits in the
-    dirt.  The fault this is looking for is eight pixels, so a pixel of tolerance does not hide it.
-    """
+    """Fails if a piece leaves its block"""
     margin = 1.0 / 16.0
     for index, (x, y, z) in enumerate(mesh.v):
         if not all(-margin <= v <= 1.0 + margin for v in (x, y, z)):
@@ -642,7 +448,7 @@ def blockstate():
                 apply['y'] = turn
             parts.append({'when': when, 'apply': apply})
 
-        # A trench has nothing to climb: the pair is already at the surface, so it meets a run on top of
+        # A trench has nothing to climb: the pair is already at the surface
         # the next block along without going anywhere.
         wanted = (('arm', 'side|up'),) if buried else (('arm', 'side'), ('climb', 'up'))
         for side, turn in QUARTERS.items():
@@ -675,13 +481,7 @@ def parts_of(state):
 
 
 def check_disjoint():
-    """Proves nothing a run draws touches anything else it draws, in any of the 162 states.
-
-    Two cables are compared **along their paths** rather than by their bounding boxes, and that is not a
-    convenience: the two cores of a bend are concentric arcs, so their boxes overlap almost completely
-    while the tubes stay a fixed distance apart the whole way round.  Boxing them reported nineteen
-    clashes that do not exist.  Everything that is not a cable is a box and is compared as one.
-    """
+    """Proves nothing a run draws touches anything else it draws, in any of the 162 states."""
     problems = []
     for connected in HUBS:
         for values in itertools.product(*[('side', 'up') if s in connected else ('none',)
@@ -713,7 +513,7 @@ def check_disjoint():
 
                     if sleeve is not None:
                         bore = sleeve.boxes()[0]
-                        # every axis but the one it overlaps along has to be inside the bore, which is
+                        # every axis but the one it overlaps along has to be inside the bore
                         # what 'the cable goes through the gland' means as an inequality
                         axial = max(range(3), key=lambda i: share[i])
                         if all(bore[0][i] - 1e-6 <= other[0][i] and other[1][i] <= bore[1][i] + 1e-6
@@ -732,7 +532,7 @@ def check_disjoint():
 
 
 def clearances():
-    """How much room the two cores of a bend and of a climb keep, for the log to say so."""
+    """How much room the two cores of a bend and of a climb keep"""
     out = {}
     for name, builder in (('bend', piece_bend), ('climb', piece_climb)):
         runs = [p for p in builder(0.0) if isinstance(p, Run)]
@@ -795,7 +595,7 @@ def shape(boxes):
 
 
 def tables():
-    """Every shape the block declares, as text, keyed by the table it belongs to."""
+    """Every shape the block declares, as text"""
     hubs = {}
     for connected, (kind, turn) in sorted(HUBS.items(), key=lambda kv: mask(kv[0])):
         boxes = [b for p in MIDDLES[kind](0.0) for b in p.turned(turn).boxes()]
@@ -822,13 +622,7 @@ def java():
 
 
 def check_java():
-    """Proves DcCableBlock still declares the shape this draws, in all twenty-four states.
-
-    Not the same thing as check_hitboxes.py, which cuts one shape out of a model and compares it to one
-    table: a cable is a different shape in every one of its sixteen patterns, and a table that has fallen
-    behind by one of them is a run a player walks through in exactly one configuration.  Comparing the
-    printed text is enough because both sides of it come from ``shape()``.
-    """
+    """Proves DcCableBlock still declares the shape this draws, in all twenty-four states."""
     path = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
                         'DcCableBlock.java')
     source = ' '.join(open(path).read().split())

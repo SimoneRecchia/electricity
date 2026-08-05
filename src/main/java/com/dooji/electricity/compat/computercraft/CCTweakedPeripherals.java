@@ -32,20 +32,7 @@ import net.minecraft.world.level.Level;
 import net.minecraftforge.common.util.LazyOptional;
 
 /**
- * Every reference to a CC:Tweaked class in this mod lives here, reached only from
- * {@link ComputerCraftBridge} after it has confirmed the mod is loaded.
- *
- * Four peripherals, one per kind of node: a wind turbine, a photovoltaic array, an inverter, and a met
- * mast. Each publishes its own tag set through {@link IDynamicPeripheral}, so a getter appears for
- * every signal without anyone writing one - and adding a tag to a telemetry class costs nothing here.
- *
- * <h2>Threading</h2>
- *
- * Reads come off the computer thread and never block, because every value is served from the immutable
- * snapshot the machine publishes once a tick. A call can therefore never observe a half-updated
- * machine and never has to wait for a tick boundary. Anything that *changes* a machine runs with
- * {@code mainThread = true}, because a write marks the block entity dirty and pushes state to clients,
- * which is only legal on the server thread.
+ * Every reference to a CC:Tweaked class in this mod lives here, reached only from {@link ComputerCraftBridge} after it has confirmed the mod is loaded.
  */
 public final class CCTweakedPeripherals {
 	private CCTweakedPeripherals() {
@@ -74,17 +61,7 @@ public final class CCTweakedPeripherals {
 		});
 	}
 
-	/**
-	 * The turbine a modem at this position should see, or null.
-	 *
-	 * A tower answers on behalf of the machine it carries. The nacelle sits at the top of its tower now,
-	 * up to thirteen blocks off the ground, and requiring the modem up there would put every computer on
-	 * a ladder for no reason - the cables of a real turbine are gathered at the foot of the tower, which
-	 * is exactly where a player will build.
-	 *
-	 * Two modems on the same structure resolve to the same block entity, and the peripheral compares by
-	 * that identity, so ComputerCraft already treats them as one peripheral.
-	 */
+	/** The turbine a modem at this position should see, or null. */
 	@Nullable
 	private static WindTurbineBlockEntity turbineAt(Level level, BlockPos pos) {
 		if (level.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) return turbine;
@@ -104,19 +81,7 @@ public final class CCTweakedPeripherals {
 		return named;
 	}
 
-	/**
-	 * One generated getter per telemetry tag.
-	 *
-	 * The whole reason this is a base class rather than four copies: the index bookkeeping is subtle in a
-	 * way that is easy to get wrong once and impossible to get wrong the same way twice. CC hands back an
-	 * index into {@link #getMethodNames()}, so the tag array and the name array have to stay exactly
-	 * aligned - and a name colliding with an annotated method has to be dropped from *both*.
-	 *
-	 * That collision is not theoretical. CC registers annotated methods first and dynamic ones second,
-	 * into a plain map, so a dynamic name that collides silently overwrites the annotated method. It
-	 * happened once already, with the generated getter for {@code activePowerLimit} shadowing the real
-	 * accessor that could also set it.
-	 */
+	/** One generated getter per telemetry tag. */
 	private abstract static class TagPeripheral implements IDynamicPeripheral {
 		private final String[] tags;
 		private final String[] methodNames;
@@ -137,7 +102,7 @@ public final class CCTweakedPeripherals {
 			this.methodNames = keptNames.toArray(String[]::new);
 		}
 
-		/** The machine's latest published readings. Never null. */
+		/** The machine's latest published readings. */
 		protected abstract Telemetry.Snapshot snapshot();
 
 		/** What the machine is, for the error message when a tag has not been published yet. */
@@ -151,15 +116,13 @@ public final class CCTweakedPeripherals {
 		@Override
 		public final MethodResult callMethod(IComputerAccess computer, ILuaContext context, int method, IArguments arguments) throws LuaException {
 			if (method < 0 || method >= tags.length) {
-				// unreachable through CC, which only ever passes back an index it took from
-				// getMethodNames(). Raised rather than answered with an empty result, which Lua would show
-				// as an indistinguishable nil.
+				// unreachable through CC
 				throw new LuaException("telemetry method index " + method + " out of range");
 			}
 
 			Object value = snapshot().get(tags[method]);
 			if (value == null) {
-				// the machine's chunk is loaded but it has not ticked yet. Saying so beats a bare nil that
+				// the machine's chunk is loaded but it has not ticked yet.
 				// looks like a missing method
 				throw new LuaException("no telemetry for '" + tags[method] + "' yet, the " + describe() + " has not ticked");
 			}
@@ -168,13 +131,7 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/**
-	 * The turbine as seen from Lua.
-	 *
-	 * Two families of method side by side. The handful of annotated ones carry the names Mekanism uses on
-	 * its own generators, so a program written against a Mekanism generator reads this turbine unchanged.
-	 * Everything else is generated from the tag list.
-	 */
+	/** The turbine as seen from Lua. */
 	public static final class WindTurbinePeripheral extends TagPeripheral {
 		private static final Set<String> RESERVED_NAMES = Set.of(
 				"getProductionRate", "getMaxOutput", "getEnergy", "getMaxEnergy", "getEnergyNeeded", "getEnergyFilledPercentage",
@@ -216,7 +173,7 @@ public final class CCTweakedPeripherals {
 
 		// ---- names shared with Mekanism's generators ----
 
-		/** Joules produced in the last tick. Mekanism's own generators answer the same question under the same name. */
+		/** Joules produced in the last tick. */
 		@LuaFunction
 		public final double getProductionRate() {
 			return turbine.getGrossJoulesPerTick();
@@ -252,8 +209,7 @@ public final class CCTweakedPeripherals {
 		}
 
 		/**
-		 * Present for parity with Mekanism's Wind Generator, which can be barred from generating in
-		 * configured dimensions. This mod has no such list, so the answer is always false.
+		 * Present for parity with Mekanism's Wind Generator, which can be barred from generating in configured dimensions.
 		 */
 		@LuaFunction
 		public final boolean isBlacklistedDimension() {
@@ -262,13 +218,13 @@ public final class CCTweakedPeripherals {
 
 		// ---- control ----
 
-		/** Applies the brake. The rotor stops, the blades feather and output goes to zero. */
+		/** Applies the brake. */
 		@LuaFunction(mainThread = true)
 		public final void stop() {
 			turbine.setStoppedByComputer(true);
 		}
 
-		/** Releases a stop issued by {@link #stop()}. Does not override a redstone stop or a wind cut-out. */
+		/** Releases a stop issued by {@link #stop()}. */
 		@LuaFunction(mainThread = true)
 		public final void start() {
 			turbine.setStoppedByComputer(false);
@@ -298,16 +254,13 @@ public final class CCTweakedPeripherals {
 			return turbine.isStoppedByRedstone();
 		}
 
-		/** "DISABLED", "HIGH" or "LOW". Same names Mekanism uses. */
+		/** "DISABLED", "HIGH" or "LOW". */
 		@LuaFunction
 		public final String getRedstoneMode() {
 			return turbine.getRedstoneMode().name();
 		}
 
-		/**
-		 * Sets how the turbine reacts to redstone. Mekanism's fourth mode, PULSE, is not accepted: a
-		 * generator runs continuously and has nothing to pulse, so taking it silently would be a lie.
-		 */
+		/** Sets how the turbine reacts to redstone. */
 		@LuaFunction(mainThread = true)
 		public final void setRedstoneMode(String mode) throws LuaException {
 			turbine.setRedstoneMode(parseRedstoneMode(mode));
@@ -319,11 +272,7 @@ public final class CCTweakedPeripherals {
 			return turbine.getActivePowerLimit();
 		}
 
-		/**
-		 * Caps output at {@code limitKw}. Clamped to the machine's rated power, so it cannot be used to make
-		 * the turbine produce more than the wind allows. Setting zero curtails it fully, which stops the
-		 * output without applying the brake.
-		 */
+		/** Caps output at {@code limitKw}. */
 		@LuaFunction(mainThread = true)
 		public final void setActivePowerLimit(double limitKw) throws LuaException {
 			turbine.setActivePowerLimit(requireFinite(limitKw, "active power limit"));
@@ -331,15 +280,14 @@ public final class CCTweakedPeripherals {
 
 		// ---- telemetry ----
 
-		/** Every signal at once, as a table keyed by tag. One tick-consistent snapshot. */
+		/** Every signal at once, as a table keyed by tag. */
 		@LuaFunction
 		public final Map<String, Object> getTelemetry() {
 			return turbine.getTelemetry().values();
 		}
 
 		/**
-		 * Which tags are instrument readings and which are invented, as a table of tag to "MEASURED",
-		 * "DERIVED" or "SIMULATED". Worth checking before treating a number as ground truth.
+		 * Which tags are instrument readings and which are invented, as a table of tag to "MEASURED", "DERIVED" or "SIMULATED".
 		 */
 		@LuaFunction
 		public final Map<String, Object> getTelemetryKinds() {
@@ -347,13 +295,7 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/**
-	 * The inverter as seen from Lua: the node a plant's control program actually talks to.
-	 *
-	 * It is the inverter rather than the arrays because that is where a real plant's SCADA lives, and
-	 * because it is the only part of a plant a program can usefully *change*: an array has no controls
-	 * beyond its tracker, while the inverter holds the curtailment setpoint, the power factor and the stop.
-	 */
+	/** The inverter as seen from Lua: the node a plant's control program actually talks to. */
 	public static final class PvInverterPeripheral extends TagPeripheral {
 		private static final Set<String> RESERVED_NAMES = Set.of(
 				"getProductionRate", "getMaxOutput", "getEnergy", "getMaxEnergy", "getEnergyNeeded", "getEnergyFilledPercentage",
@@ -440,18 +382,13 @@ public final class CCTweakedPeripherals {
 
 		// ---- control ----
 
-		/**
-		 * Disconnects from the grid and stops converting.
-		 *
-		 * The arrays go open-circuit and stop producing, which is what happens on a real plant: there is no
-		 * load, so there is no current. It is not a brake and there is nothing to spin down.
-		 */
+		/** Disconnects from the grid and stops converting. */
 		@LuaFunction(mainThread = true)
 		public final void stop() {
 			inverter.setStoppedByComputer(true);
 		}
 
-		/** Releases a stop issued by {@link #stop()}. Does not override a redstone stop. */
+		/** Releases a stop issued by {@link #stop()}. */
 		@LuaFunction(mainThread = true)
 		public final void start() {
 			inverter.setStoppedByComputer(false);
@@ -467,13 +404,13 @@ public final class CCTweakedPeripherals {
 			return inverter.isRunning();
 		}
 
-		/** Whether the arrays are offering more than the nameplate can pass. Deliberate, not a fault. */
+		/** Whether the arrays are offering more than the nameplate can pass. */
 		@LuaFunction
 		public final boolean isClipping() {
 			return inverter.clipping();
 		}
 
-		/** Whether the air is hot enough that the machine is holding itself back. Cured by shade, not by size. */
+		/** Whether the air is hot enough that the machine is holding itself back. */
 		@LuaFunction
 		public final boolean isDerating() {
 			return inverter.derating();
@@ -499,7 +436,7 @@ public final class CCTweakedPeripherals {
 			return inverter.getActivePowerLimit();
 		}
 
-		/** Caps output at {@code limitKw}, clamped to the machine's nameplate. Zero curtails it fully. */
+		/** Caps output at {@code limitKw}, clamped to the machine's nameplate. */
 		@LuaFunction(mainThread = true)
 		public final void setActivePowerLimit(double limitKw) throws LuaException {
 			inverter.setActivePowerLimit(requireFinite(limitKw, "active power limit"));
@@ -510,13 +447,7 @@ public final class CCTweakedPeripherals {
 			return inverter.powerFactor();
 		}
 
-		/**
-		 * Asks the machine to hold a power factor, clamped to what it can do.
-		 *
-		 * Worth understanding before using: a deep power factor at full output asks for more apparent power
-		 * than the machine has, and active power is what gives way. That is not a bug, it is what a grid
-		 * operator requesting reactive support is buying.
-		 */
+		/** Asks the machine to hold a power factor, clamped to what it can do. */
 		@LuaFunction(mainThread = true)
 		public final void setPowerFactor(double factor) throws LuaException {
 			inverter.setPowerFactor(requireFinite(factor, "power factor"));
@@ -550,15 +481,7 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/**
-	 * One array as seen from Lua.
-	 *
-	 * Answers to {@code electricity_solar_panel} as well as its own name, and keeps the nine methods the
-	 * placeholder had, because programs written against those exist and there is no reason to break them.
-	 * Two of the nine changed meaning and both changed for the better: irradiance is now the
-	 * plane-of-array figure the modules actually respond to, and the rated power is this product's own DC
-	 * nameplate rather than a constant.
-	 */
+	/** One array as seen from Lua. */
 	public static final class PvArrayPeripheral extends TagPeripheral {
 		private static final Set<String> RESERVED_NAMES = Set.of(
 				"getProductionRate", "canSeeSun", "getActivePower", "getRatedPower", "getIrradiance", "getCellTemperature",
@@ -578,12 +501,7 @@ public final class CCTweakedPeripherals {
 			return "electricity_pv_array";
 		}
 
-		/**
-		 * The name the placeholder answered to, kept so existing programs still find this block.
-		 *
-		 * An additional type rather than a rename in either direction: new programs get a name that says
-		 * what it is, and {@code peripheral.find("electricity_solar_panel")} goes on working.
-		 */
+		/** The name the placeholder answered to, kept so existing programs still find this block. */
 		@Override
 		public Set<String> getAdditionalTypes() {
 			return Set.of("electricity_solar_panel");
@@ -617,18 +535,13 @@ public final class CCTweakedPeripherals {
 			return array.deliveredDcKw() * EnergyBridge.JOULES_PER_KW;
 		}
 
-		/**
-		 * Whether the array has a clear enough view of the sun to be worth anything.
-		 *
-		 * A threshold rather than a yes or no about the sky, because the answer stopped being binary: an
-		 * array under glass can see the sun perfectly well and an array under a passing player only partly.
-		 */
+		/** Whether the array has a clear enough view of the sun to be worth anything. */
 		@LuaFunction
 		public final boolean canSeeSun() {
 			return array.obstructionFraction() > 0.5;
 		}
 
-		/** What the modules are delivering, in kW. Zero with no inverter in range, as an open circuit is. */
+		/** What the modules are delivering, in kW. */
 		@LuaFunction
 		public final double getActivePower() {
 			return array.deliveredDcKw();
@@ -640,7 +553,7 @@ public final class CCTweakedPeripherals {
 			return array.spec().dcPowerKw();
 		}
 
-		/** Irradiance in the plane of the modules, W/m2. A clear zenith sun on the flat is just over 1000. */
+		/** Irradiance in the plane of the modules, W/m2. */
 		@LuaFunction
 		public final double getIrradiance() {
 			return array.poaFront();
@@ -656,19 +569,14 @@ public final class CCTweakedPeripherals {
 			return array.ambientTempC();
 		}
 
-		/** The diffuse share of the light reaching the plane, which is what cloud over an array amounts to. */
+		/** The diffuse share of the light reaching the plane */
 		@LuaFunction
 		public final double getCloudCover() {
 			double front = array.poaFront();
 			return front <= 0.0 ? 1.0 : 1.0 - array.poaBeam() / front;
 		}
 
-		/**
-		 * Output over what the nameplate would make in this light, 0 to 1.
-		 *
-		 * The one figure worth logging if only one is: it folds the temperature, the soiling, the snow, the
-		 * shading, the spectrum and this array's own module binning into the number a plant is judged on.
-		 */
+		/** Output over what the nameplate would make in this light */
 		@LuaFunction
 		public final double getPerformanceRatio() {
 			return array.performanceRatio();
@@ -682,10 +590,7 @@ public final class CCTweakedPeripherals {
 			return array.trackerMode().name();
 		}
 
-		/**
-		 * Sets the tracker's mode. Throws on a fixed mounting rather than accepting it quietly, because a
-		 * program that thinks it is commanding a tracker and is not would be worse than an error.
-		 */
+		/** Sets the tracker's mode. */
 		@LuaFunction(mainThread = true)
 		public final void setTrackerMode(String mode) throws LuaException {
 			requireTracker();
@@ -697,19 +602,13 @@ public final class CCTweakedPeripherals {
 			array.setTrackerMode(parsed);
 		}
 
-		/** Where the row actually is, in degrees from horizontal. Positive faces west. */
+		/** Where the row actually is, in degrees from horizontal. */
 		@LuaFunction
 		public final double getTrackerAngle() {
 			return array.rotationDeg();
 		}
 
-		/**
-		 * Points the row at an angle by hand, clamped to what the drive can reach.
-		 *
-		 * Switches the mode to MANUAL, because holding an angle and tracking the sun are the same drive and
-		 * it cannot do both - leaving the mode alone would have the next tick's tracking quietly undo the
-		 * command, which is the sort of thing that takes an afternoon to work out.
-		 */
+		/** Points the row at an angle by hand, clamped to what the drive can reach. */
 		@LuaFunction(mainThread = true)
 		public final void setTrackerAngle(double degrees) throws LuaException {
 			requireTracker();
@@ -744,12 +643,7 @@ public final class CCTweakedPeripherals {
 			return out;
 		}
 
-		/**
-		 * Where this array's strings actually land, or nil if they land nowhere.
-		 *
-		 * A collector rather than an inverter, because on a large plant the thing at the other end of the
-		 * home run is a combiner box - and the array cannot tell the difference, which is the point.
-		 */
+		/** Where this array's strings actually land, or nil if they land nowhere. */
 		@LuaFunction
 		public final Object getCollector() {
 			BlockPos pos = array.collectorPos();
@@ -773,13 +667,7 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/**
-	 * The met mast as seen from Lua: the sky, and nothing about any particular array.
-	 *
-	 * Every reading here has been through its instrument's own time constant, which is the point of reading
-	 * a mast rather than asking the weather. A program that logs the pyranometer beside an inverter's output
-	 * will see the power move first on a cloud edge, exactly as a real plant's trends do.
-	 */
+	/** The met mast as seen from Lua: the sky, and nothing about any particular array. */
 	public static final class MetStationPeripheral extends TagPeripheral {
 		private static final Set<String> RESERVED_NAMES = Set.of("getTelemetry", "getTelemetryKinds", "getInstruments");
 
@@ -815,13 +703,7 @@ public final class CCTweakedPeripherals {
 			return "mast";
 		}
 
-		/**
-		 * What the mast is carrying, instrument by instrument.
-		 *
-		 * Published because the specification is the reading's context: a pyranometer's five-second response
-		 * time is why its trend is smooth, and its class is what decides whether a performance test written
-		 * against it means anything.
-		 */
+		/** What the mast is carrying, instrument by instrument. */
 		@LuaFunction
 		public final List<Map<String, Object>> getInstruments() {
 			List<Map<String, Object>> out = new ArrayList<>();
@@ -857,7 +739,7 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/** Parses a redstone mode name, or says what the three are. */
+	/** Parses a redstone mode name */
 	private static RedstoneMode parseRedstoneMode(String mode) throws LuaException {
 		RedstoneMode parsed = RedstoneMode.byName(mode);
 		if (parsed == null) {
@@ -867,12 +749,7 @@ public final class CCTweakedPeripherals {
 		return parsed;
 	}
 
-	/**
-	 * Refuses a setpoint that is not a number.
-	 *
-	 * Lua will hand over a NaN or an infinity without complaint, and a setpoint clamped from one of those
-	 * comes out as a plausible-looking number that then poisons everything downstream. Better to say so.
-	 */
+	/** Refuses a setpoint that is not a number. */
 	private static double requireFinite(double value, String what) throws LuaException {
 		if (Double.isNaN(value) || Double.isInfinite(value)) {
 			throw new LuaException(what + " must be a finite number");

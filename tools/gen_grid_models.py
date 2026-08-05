@@ -1,31 +1,11 @@
 #!/usr/bin/env python3
-"""Generates the OBJ geometry for the two grid machines the mod used to inherit as art.
+"""The utility pole and the pad-mount kiosk.
 
     python3 tools/gen_grid_models.py
 
-Writes into src/main/resources/assets/electricity/models/{utility_pole,power_box}/.
-
-Why these two are generated now
--------------------------------
-They came from a modelling package, and it showed in different ways.  The pole was a square post
-with two flat bars on it and eight insulators, 2364 faces of which nearly all were the insulators;
-the power box was 43 faces - a cuboid with a door drawn on one side, no plinth, no roof, no vent, no
-hinge.  Neither could be measured, neither could be changed, and both were the two objects a player
-looks at most closely, because they are the two at head height beside a path.
-
-Both are now built from the same figures as everything else, at the turbine's own subdivision, and
-both are authored facing **north** like the rest of the mod's models.  That is worth stating for the
-pole in particular: its old geometry was *mirrored* rather than turned, so it needed a rotation table
-of its own that no other machine used, and three separate pieces of code had to know about it.  A
-model authored the ordinary way needs none of that.
-
-The pole is concrete rather than wood
-------------------------------------
-Because that is what the inherited model was, and because spun reinforced concrete is what most of
-Europe's medium-voltage distribution stands on.  A centrifugally cast pole is round, tapered, has a
-mould seam down each side, and weathers by staining rather than by splitting - all of which is in
-``pole_concrete.png``.  The hardware on it is hot-dip galvanised and the insulators are brown glazed
-porcelain, which is the ordinary combination.
+Both authored about the block's centre facing north.  The kiosk's mounting channels are part of its
+body so they are there whether it stands on its plinth or hangs on a wall - PowerBoxBlock.BACKSET and
+WALL_CELLS are the other half of that.
 """
 
 import math
@@ -56,17 +36,13 @@ MATERIALS = {
 }
 
 
-# The one insulator, at one size.  A distribution insulator is a catalogue part: whoever built the
-# line bought the same ANSI 55-4 for every structure on it, so the pole's eight and the kiosk's one are
-# the same object at the same diameter rather than two drawings that happen to look similar.
+# The one insulator, at one size.
 INSULATOR_DIAMETER = 0.166
 
 
 # ------------------------------------------------------------------ the utility pole
 
-# The pole's own figures, kept where they can be read together.  The heights are the inherited
-# model's, because the collision cells, the wire anchors and every existing pole in every world are
-# hung off them: a pole whose arms moved half a block would take the wires with it.
+# The pole's own figures, kept where they can be read together.
 SHAFT_TOP = 6.18
 BASE_RADIUS = 0.245
 TOP_RADIUS = 0.155
@@ -75,10 +51,7 @@ UPPER_ARM_Y = 5.67
 ARM_DEPTH = 0.187          # how deep the channel is, top to bottom
 LOWER_ARM_HALF = 2.086     # how far the lower arm reaches from the shaft
 UPPER_ARM_HALF = 1.677
-# Where the eight insulators stand, in the order ObjDefinitions names them.  Four on the lower arm
-# and four on the upper, inner pair then outer pair, negative side first - the same order the
-# inherited model happened to have, so an existing pole's wires stay on the insulators they were
-# hung from.
+# Where the eight insulators stand, in the order ObjDefinitions names them.
 LOWER_PINS = (-0.79, -1.56, 0.79, 1.56)
 UPPER_PINS = (-0.615, -1.19, 0.615, 1.19)
 
@@ -89,13 +62,7 @@ def shaft_radius(y):
 
 
 def crossarm(mesh, y, half, name):
-    """One crossarm: a channel across the pole, strapped to it, with a brace under each end.
-
-    A channel with the open side down, which is what a real steel crossarm is and why it does not
-    fill with water.  The straps are the two U-bolts that actually hold it on, and the braces are
-    what stop it turning about them - an arm without braces droops, and a drooping arm is the first
-    thing anybody notices about a badly drawn pole.
-    """
+    """One crossarm: a channel across the pole, strapped to it, with a brace under each end."""
     steel = mesh.faces(name, 'steel')
     plate = mesh.faces(name, 'plate')
     radius = shaft_radius(y)
@@ -103,7 +70,7 @@ def crossarm(mesh, y, half, name):
     # the texture tiled along the arm rather than stretched once over four blocks of it
     channel(mesh, steel, (-half, y, -0.075), (half, y + ARM_DEPTH, 0.075), along='x',
             opening='down', web=0.22, uv_scale=2.5)
-    # the back plate the arm is clamped against, curved to the shaft only as much as a flat plate is
+    # the back plate the arm is clamped against
     box(mesh, plate, (-0.145, y - 0.030, -0.090), (0.145, y + ARM_DEPTH + 0.030, 0.090),
         uv_scale=0.4)
     for z in (-0.088, 0.076):
@@ -117,32 +84,21 @@ def crossarm(mesh, y, half, name):
 
 
 def crossarm_insulator(mesh, index, x, y):
-    """One of the pole's eight insulators: the mod's own ``pin_insulator``, on its spindle.
-
-    Its own object per insulator, and one material inside it, because ``ObjDefinitions`` names one
-    group per insulator and the wire hangs from that group's centre.  The spindle goes in a group of
-    its own for the same reason - steel inside the insulator's bounding box would drag the anchor down
-    towards the arm - and per insulator rather than into one 'hardware' group, because a group holding
-    both the spindles out on the arms and the climbing steps up the shaft has a bounding box four
-    blocks wide and five tall straight through the middle of the pole.
-    """
+    """One of the pole's eight insulators: the mod's own ``pin_insulator``, on its spindle."""
     pin_insulator(mesh, mesh.faces('insulator_%d' % index, 'porcelain'),
                   mesh.faces('pin_%d' % index, 'steel'), (x, y + 0.050, 0.0), INSULATOR_DIAMETER)
 
 
 def utility_pole():
-    """A concrete distribution pole: two crossarms, eight pin insulators, and the hardware.
-
-    Authored facing north, so the arms run east-west and the conductors run the way the pole faces.
-    """
+    """A concrete distribution pole: two crossarms, eight pin insulators, and the hardware."""
     mesh = Mesh()
 
     concrete = mesh.faces('shaft', 'concrete')
-    # the shaft: one tapered eighty-sided cone the whole height, with the texture repeated up it
+    # the shaft: one tapered eighty-sided cone the whole height
     # rather than stretched over six blocks
     cylinder(mesh, concrete, (0.0, SHAFT_TOP / 2, 0.0), 'y', BASE_RADIUS, SHAFT_TOP / 2,
              sides=ROUND, uv_scale=1.0, uv_along=6.0, taper=TOP_RADIUS / BASE_RADIUS)
-    # the cast collar at the foot, which is what a pole set in a socket foundation stands in
+    # the cast collar at the foot
     cylinder(mesh, concrete, (0.0, 0.055, 0.0), 'y', BASE_RADIUS + 0.022, 0.055, sides=ROUND,
              uv_scale=0.5, caps=concrete)
     # and the cap: a shallow dome, because a flat-topped concrete pole fills with water and splits
@@ -157,8 +113,8 @@ def utility_pole():
     for i, x in enumerate(UPPER_PINS):
         crossarm_insulator(mesh, i + 5, x, UPPER_ARM_Y + ARM_DEPTH)
 
-    # the climbing steps: a peg through the shaft every two thirds of a block, alternating sides, which
-    # is how a concrete pole is climbed.  One object each, for the reason the spindles are
+    # the climbing steps: a peg through the shaft every two thirds of a block, alternating sides
+    # is how a concrete pole is climbed.
     for i in range(7):
         y = 1.10 + i * 0.62
         side = 1 if i % 2 == 0 else -1
@@ -177,7 +133,7 @@ def utility_pole():
         box(mesh, earth, (-0.026, y0 + 0.90, radius - 0.010), (0.026, y0 + 0.94, radius + 0.016),
             uv_scale=0.1)
 
-    # the plate: the pole's number and the danger sign, at the height they are read from
+    # the plate: the pole's number and the danger sign
     sign = mesh.faces('plate', 'sign')
     radius = shaft_radius(1.55)
     box(mesh, sign, (-0.105, 1.42, -radius - 0.012), (0.105, 1.68, -radius + 0.004), uv_scale=1.0)
@@ -188,23 +144,14 @@ def utility_pole():
 # ------------------------------------------------------------------ the power box
 
 def power_box():
-    """A pad-mounted distribution kiosk: a plinth, a body, two doors, a hood and a bushing.
-
-    What the block does is distribute in a radius and bridge to Forge Energy, and what that is in
-    the world is a street cabinet: a sheet steel body on a cast plinth, two green door leaves with
-    louvres low down where cool air is drawn in, a crowned hood overhanging them so rain runs clear
-    of the seals, and one bushing on the roof where the line comes in.
-
-    Centred in its block, which the inherited model was not: that one hugged the west edge and hung
-    a sixteenth of a block outside it, so a kiosk placed against a wall was half inside the wall.
-    """
+    """A pad-mounted distribution kiosk: a plinth, a body, two doors, a hood and a bushing."""
     mesh = Mesh()
     body_x, body_z = 0.31, 0.17
     plinth_y = 0.055
     body_y = 0.70
     face = -body_z
 
-    # the plinth: cast in place, wider than the body, with the ground against it
+    # the plinth: cast in place, wider than the body
     clad_box(mesh, 'plinth', (-body_x - 0.030, 0.0, -body_z - 0.030),
              (body_x + 0.030, plinth_y, body_z + 0.030), {'up': 'plate', '*': 'plinth'},
              uv_scale=0.8)
@@ -217,7 +164,7 @@ def power_box():
             box(mesh, mesh.faces('body', 'frame'), (x, plinth_y, z), (x + 0.008, body_y, z + 0.008),
                 uv_scale=0.1)
 
-    # the hood: crowned, overhanging on all four sides, with the drip edge turned down
+    # the hood: crowned, overhanging on all four sides
     clad_box(mesh, 'hood', (-body_x - 0.032, body_y, face - 0.032),
              (body_x + 0.032, body_y + 0.038, body_z + 0.032),
              {'up': 'cabinet_top', '*': 'cabinet'}, uv_scale=0.7)
@@ -225,9 +172,6 @@ def power_box():
         (body_x + 0.032, body_y + 0.006, face - 0.020), uv_scale=0.3)
 
     # The two door leaves, the stile between them, a handle on each and hinges on the outer edges.
-    # The danger sign and the keyhole are on the left leaf only - a kiosk has one of each - and the
-    # leaves are painted on their edges too, which they were not when they borrowed the rack's
-    # aluminium for everything but their front.
     for side, x0, x1 in ((-1, -0.285, -0.008), (1, 0.008, 0.285)):
         clad_box(mesh, 'door', (x0, plinth_y + 0.030, face - 0.022), (x1, body_y - 0.030, face),
                  {'north': 'door' if side < 0 else 'leaf', '*': 'sheet'})
@@ -241,17 +185,12 @@ def power_box():
     box(mesh, mesh.faces('body', 'frame'), (-0.010, plinth_y + 0.030, face - 0.024),
         (0.010, body_y - 0.030, face - 0.018), uv_scale=0.1)
 
-    # the ventilation on both flanks, on the outside of the sheet rather than inside it
+    # the ventilation on both flanks
     for x, side in ((body_x, 'east'), (-body_x - 0.003, 'west')):
         clad_box(mesh, 'vent', (x, 0.20, -0.115), (x + 0.003, 0.58, 0.115),
                  {side: 'vent', '*': 'cabinet'})
 
-    # The mounting channels on the back, which is what this hangs on a wall by.
-    #
-    # Part of the body rather than a group of its own, so it is there whichever way the box is fitted:
-    # a real enclosure is drilled and railed at the factory and stands on its plinth with the rails on
-    # it.  Which also keeps one collision shape true for both states - the wall shape is this one less
-    # the plinth, moved back, and nothing has to appear or disappear.
+    # The mounting channels on the back
     for x in (-body_x + 0.055, body_x - 0.075):
         clad_box(mesh, 'body', (x, plinth_y + 0.055, body_z), (x + 0.020, body_y - 0.055, body_z + 0.018),
                  {'*': 'frame'}, uv_scale=0.15)
@@ -259,7 +198,7 @@ def power_box():
             bolt(mesh, mesh.faces('body', 'steel'), (x + 0.010, y, body_z + 0.018), 'z', 0.007, 0.012,
                  uv_scale=0.08)
 
-    # The insulator on the roof: this is where the line arrives, so it is where the wire hangs from -
+    # The insulator on the roof: this is where the line arrives
     # and it is the same insulator the pole carries, at the same diameter, because it is the same part.
     steel = mesh.faces('hardware', 'steel')
     # two thousandths above the roof rather than exactly on it: two faces on one plane flicker

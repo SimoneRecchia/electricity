@@ -115,6 +115,8 @@ python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
 python3 tools/gen_grid_models.py        # the pole and the kiosk
 python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
+python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it
+python3 tools/gen_tower_models.py       # the three lattice towers
 ```
 
 ## 7. What must pass before anything is done
@@ -124,15 +126,27 @@ python3 tools/check_hitboxes.py         # "the models and the tables agree, to a
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle"
 python3 tools/check_gui_fits.py         # "0 problems"
-python3 tools/gen_cable_models.py       # "no two pieces of a run share a pixel"
+python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
+python3 tools/render_blocks.py          # and then *look* at build/render/
 ./gradlew build -x test
 ```
 
 A checker that finds nothing is not evidence the work is right; a checker that has never found
 anything is usually not looking. Every one of these was written because something shipped broken.
 
-## 8. Writing style
+## 8. Comments are pointers, not essays
 
-Comments explain **why**, and name the alternative that was tried and rejected. Match the surrounding
-density. Prose in commit messages and docstrings, not bullet lists. Nothing is "improved" or
-"enhanced" — say what changed and what it fixes.
+A comment is there so the next person knows **where to go and what not to break**. One or two lines.
+Name the constraint, the other file that has to agree, or the trap — and stop.
+
+```python
+# Forge's loader reads the block's own frame, corner at the origin. Authored centred, every piece comes
+# out half a block out. check_inside_block fails the build on it.
+```
+
+Not the history of what was tried, not the reasoning that led there, not a paragraph of prose. If it
+takes more than two lines to say, it belongs in the module docstring — and a module docstring is the
+command to run it, the files it writes, and the two or three figures everything else follows from.
+
+Commit messages are the opposite: that is where the reasoning goes, in full, in prose. Nothing is
+"improved" or "enhanced" — say what changed and what it fixes.

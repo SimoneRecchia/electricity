@@ -5,44 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * The machinery every machine's SCADA signals share: a snapshot, a builder, and what kind of
- * number each signal is.
- *
- * Pulled out of {@link TurbineTelemetry} when the photovoltaic plant needed the same thing. The
- * bookkeeping is easy to get subtly wrong twice - the rounding, the boolean coercion, the
- * unmodifiable wrapper, the empty instance that must never be null - and a second copy of it would
- * have been a second place for those to drift.
- *
- * What is left in the per-machine classes is what genuinely differs: the tag names and which kind
- * each one is.
- *
- * <h2>Why a snapshot at all</h2>
- *
- * Because readers arrive off the server thread. A ComputerCraft program calls into a peripheral from
- * the computer thread, so reading a block entity's live fields would be a data race and could hand
- * out a mix of values from two different ticks. A machine instead publishes one finished snapshot per
- * tick to a volatile field; a reader gets a single self-consistent view with no locking and without
- * having to wait for a tick boundary.
- *
- * <h2>Why the kinds</h2>
- *
- * Three kinds of value live in these maps, and the difference matters a great deal to anyone
- * building control logic on top:
- *
- * <ul>
- * <li>{@link Kind#MEASURED} - read straight from mod state or the world. Wind, irradiance, power,
- *     temperature, whether the machine is running.</li>
- * <li>{@link Kind#DERIVED} - computed from measured values by a relation that would hold on the real
- *     machine. Phase currents from apparent power, generator speed through a gearbox ratio, string
- *     voltage from a module's temperature coefficient.</li>
- * <li>{@link Kind#SIMULATED} - plausible instrumentation the mod does not model. Bearing
- *     temperatures, hydraulic pressures, insulation resistance. These react correctly to load and
- *     ambient conditions through a first-order lag, and they are not a physical simulation. A
- *     program may treat them as realistic and must not treat them as ground truth.</li>
- * </ul>
- *
- * Publishing which is which, rather than leaving a program to guess, is the whole reason the
- * distinction is in the API instead of only in a comment.
+ * The machinery every machine's SCADA signals share: a snapshot, a builder, and what kind of number each signal is.
+  *
+ * Pulled out of {@link TurbineTelemetry} when the photovoltaic plant needed the same thing.
  */
 public final class Telemetry {
 	public enum Kind {
@@ -93,12 +58,7 @@ public final class Telemetry {
 		private Builder() {
 		}
 
-		/**
-		 * Stores a reading, rounded to two decimals.
-		 *
-		 * Instruments do not report fifteen significant digits, and an unrounded double turns into
-		 * noise the moment a Lua program prints it.
-		 */
+		/** Stores a reading, rounded to two decimals. */
 		public Builder put(String tag, double value) {
 			values.put(tag, Math.round(value * 100.0) / 100.0);
 			return this;
@@ -120,7 +80,7 @@ public final class Telemetry {
 		}
 	}
 
-	/** Starts a tag-to-kind map. Reads as a list of tags under each heading, which is what it is. */
+	/** Starts a tag-to-kind map. */
 	public static Kinds tags() {
 		return new Kinds();
 	}
@@ -151,7 +111,7 @@ public final class Telemetry {
 			return this;
 		}
 
-		/** Everything declared so far, in declaration order, which is the order a peripheral lists it. */
+		/** Everything declared so far, in declaration order */
 		public Map<String, Kind> build() {
 			return Collections.unmodifiableMap(map);
 		}

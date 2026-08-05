@@ -30,29 +30,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * A run of direct-current cable, laid the way a player lays redstone.
- *
- * <h2>Why it behaves like dust</h2>
- *
- * Because the job is the same job: get a line from one machine to another across ground the player
- * chose, round corners, up a step, without a placement dialogue. Redstone's rules are the ones every
- * Minecraft player already knows, so the connection logic here is deliberately dust's - connect
- * sideways, connect diagonally down off a step, and climb the wall of a solid block to reach a run on
- * top of it. Vanilla's own {@link RedstoneSide} property is reused rather than a private copy, which
- * also means the blockstate reads the way a redstone one does.
- *
- * What is *not* borrowed is any notion of a signal. This carries nothing by itself; it is a shape that
- * {@link DcNetwork} walks. The two agree about connection because they ask the same method.
- *
- * <h2>The trench</h2>
- *
- * A real plant's home runs are clipped along the racking in free air, and its trunk between combiner
- * and cabinet is in a trench - which is why {@link #BURIED} exists rather than everything being a
- * surface run. A buried cable takes the ground block's place: the soil comes back as an item, the
- * cable is drawn flush with the surface on its bedding, and the block is a full cube so it is walked
- * over rather than tripped in.
- *
- * It also costs a fifth of the cable's rating, because the ground is a worse place to shed heat into
- * than moving air. That is the trade, and it is a real one.
+  *
+ * This carries nothing by itself; it is a shape that {@link DcNetwork} walks.
  */
 public class DcCableBlock extends Block implements DcTerminal {
 	public static final EnumProperty<RedstoneSide> NORTH = BlockStateProperties.NORTH_REDSTONE;
@@ -64,24 +43,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 
 	private static final Map<Direction, EnumProperty<RedstoneSide>> SIDES = sides();
 
-	/**
-	 * A run's outline, cut to what is drawn rather than to the block.
-	 *
-	 * It was a slab the whole width of the block and two pixels tall: so pointing anywhere in the block
-	 * picked out the cable, and the highlight box a player saw was eight times the width of the thing they
-	 * were pointing at.
-	 *
-	 * The string cable's tables are printed by {@code tools/gen_cable_models.py --java} from the very parts
-	 * the model is built from, one box per part - a core's three round steps are one cable as far as
-	 * pointing at it goes. The middle of the block depends on the *set* of sides that connect, which is why
-	 * {@link #STRING_HUBS} is keyed by a bitmask: a bend is a different shape from a crossing, and drawing
-	 * one while claiming the other is exactly the mismatch this mod checks for everywhere else.
-	 *
-	 * The trunk cable is still the old painted bar, so it keeps the old figures until it is redrawn too.
-	 *
-	 * A few pixels of outline is the right answer for a cable and not a compromise: the collision is still
-	 * nothing at all, so a player does not catch a boot on every metre of their own plant.
-	 */
+	/** A run's outline, cut to what is drawn rather than to the block. */
 	private static final VoxelShape TRUNK_HUB = Block.box(7.0, 0.0, 7.0, 9.0, 1.0, 9.0);
 	private static final Map<Direction, VoxelShape> TRUNK_ARMS = Map.of(
 			Direction.NORTH, Block.box(7.0, 0.0, 0.0, 9.0, 1.0, 7.0),
@@ -367,13 +329,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 	private static final Direction[] MASK_ORDER = {Direction.NORTH, Direction.EAST, Direction.SOUTH,
 			Direction.WEST};
 
-	/**
-	 * One shape per state, worked out once when the block is made.
-	 *
-	 * A hundred and sixty-two states, which is four sides at three values each and buried or not - few
-	 * enough to hold and far cheaper than unioning five boxes on every collision test a player makes
-	 * against a run. This is what {@code RedStoneWireBlock} does with dust, for the same reason.
-	 */
+	/** One shape per state, worked out once when the block is made. */
 	private final Map<BlockState, VoxelShape> shapes = new HashMap<>();
 
 	private final DcCableSpec spec;
@@ -395,14 +351,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		}
 	}
 
-	/**
-	 * The string cable as it is drawn in this state: the middle its pattern gets, the arms, any climb.
-	 *
-	 * The middle comes out of {@link #STRING_HUBS} by the same bitmask the model's blockstate chooses it
-	 * by, so a bend claims the bend and a crossing claims the junction box. A buried run is the whole
-	 * block, because it has taken a block of ground out of the world and the trench model really does
-	 * fill the cell.
-	 */
+	/** The string cable as it is drawn in this state: the middle its pattern gets, the arms, any climb. */
 	private static VoxelShape stringShapeOf(BlockState state) {
 		if (state.getValue(BURIED)) return Shapes.block();
 
@@ -418,8 +367,8 @@ public class DcCableBlock extends Block implements DcTerminal {
 			RedstoneSide connection = state.getValue(side.getValue());
 			if (connection == RedstoneSide.NONE) continue;
 
-			// A climb is the *whole* run for that side - along the ground, round the elbow and up the
-			// wall, swept as one tube - so it replaces the arm rather than adding to it.
+			// A climb is the *whole* run for that side - along the ground
+			// wall, swept as one tube
 			shape = Shapes.or(shape, connection == RedstoneSide.UP
 					? STRING_CLIMBS.get(side.getKey())
 					: STRING_ARMS.get(side.getKey()));
@@ -471,26 +420,13 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return shapes.getOrDefault(state, TRUNK_HUB);
 	}
 
-	/**
-	 * A trench is walked over; a surface run is not walked into at all.
-	 *
-	 * Nothing for a surface run, so it is as unobtrusive as dust and a player does not catch a boot on
-	 * every metre of their own plant. A full cube for a trench, because it has taken a block of ground
-	 * out of the world and something has to stand in for it, or the player crossing their own trench
-	 * falls into it.
-	 */
+	/** A trench is walked over; a surface run is not walked into at all. */
 	@Override
 	public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
 		return state.getValue(BURIED) ? Shapes.block() : Shapes.empty();
 	}
 
-	/**
-	 * What the light and the face culling see.
-	 *
-	 * Full for a trench, because the bedding really does fill the cell and the neighbouring soil should
-	 * stop drawing the faces it turns towards it - two coplanar faces at a block boundary flicker
-	 * against each other, and that would be visible along every metre of every buried run.
-	 */
+	/** What the light and the face culling see. */
 	@Override
 	public VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
 		return state.getValue(BURIED) ? Shapes.block() : Shapes.empty();
@@ -501,12 +437,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return !state.getValue(BURIED);
 	}
 
-	/**
-	 * Light is worked out from the shape, because here the shape is what differs.
-	 *
-	 * Without this the engine takes one answer for the whole block and caches it, and a surface run
-	 * would put a block of ground's worth of shadow under itself.
-	 */
+	/** Light is worked out from the shape, because here the shape is what differs. */
 	@Override
 	public boolean useShapeForLightOcclusion(BlockState state) {
 		return true;
@@ -529,12 +460,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return connected(defaultBlockState(), context.getLevel(), context.getClickedPos());
 	}
 
-	/**
-	 * The state with all four sides worked out from what is actually around it.
-	 *
-	 * One method, called from placement, from a neighbour changing, and from {@link DcNetwork} - so a
-	 * run cannot be drawn connected and walked as separate, or the other way about.
-	 */
+	/** The state with all four sides worked out from what is actually around it. */
 	public BlockState connected(BlockState state, BlockGetter level, BlockPos pos) {
 		BlockState result = state;
 		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> side : SIDES.entrySet()) {
@@ -544,15 +470,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return result;
 	}
 
-	/**
-	 * The ways a run can reach in one direction, which is more than one of them at a time.
-	 *
-	 * Dust's three cases. {@code climbs} is a run on top of the block alongside, reached by going up its
-	 * wall - which needs headroom over this block to leave through and a top on that one to land on.
-	 * {@code flat} is the plain case. {@code steps} is a run a level below, reached over the top of a
-	 * neighbour too low to be in the way. {@code wall} is whether the block alongside is a full cube,
-	 * which is the only thing that separates going *up* it from lying against it.
-	 */
+	/** The ways a run can reach in one direction, which is more than one of them at a time. */
 	private record Ways(boolean climbs, boolean flat, boolean steps, boolean wall) {
 		boolean any() {
 			return climbs || flat || steps;
@@ -580,12 +498,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return ways.any() ? RedstoneSide.SIDE : RedstoneSide.NONE;
 	}
 
-	/**
-	 * Every position a run reaches, machines included: what {@link DcNetwork} follows.
-	 *
-	 * The same three tests the model is drawn from, so what a player sees connected and what the plant
-	 * counts are the same thing by construction.
-	 */
+	/** Every position a run reaches, machines included: what {@link DcNetwork} follows. */
 	public void collectReached(BlockState state, BlockGetter level, BlockPos pos, Consumer<BlockPos> out) {
 		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> entry : SIDES.entrySet()) {
 			if (state.getValue(entry.getValue()) == RedstoneSide.NONE) continue;
@@ -599,14 +512,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		}
 	}
 
-	/**
-	 * Whether this run reaches one particular position.
-	 *
-	 * What a machine's renderer asks of its neighbours to decide which of its four cable entries to
-	 * draw, so a plant shows copper going *into* a cabinet rather than stopping a pixel short of it over
-	 * open ground. Asked of the cable rather than worked out by the machine, so the picture agrees with
-	 * {@link DcNetwork} by construction.
-	 */
+	/** Whether this run reaches one particular position. */
 	public boolean reaches(BlockState state, BlockGetter level, BlockPos pos, BlockPos target) {
 		for (Map.Entry<Direction, EnumProperty<RedstoneSide>> entry : SIDES.entrySet()) {
 			if (state.getValue(entry.getValue()) == RedstoneSide.NONE) continue;
@@ -626,13 +532,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return false;
 	}
 
-	/**
-	 * Whether a run of this gauge joins onto that block at all.
-	 *
-	 * Its own kind, or a machine whose terminals take this gauge. The two gauges do not join to each
-	 * other: a 240 mm² lug does not go into an MC4 plug, and one rule stated once beats a page of
-	 * exceptions about which end of a plant a cable is at.
-	 */
+	/** Whether a run of this gauge joins onto that block at all. */
 	public boolean connectsTo(BlockState other, Direction towards) {
 		if (other.getBlock() instanceof DcCableBlock cable) return cable.spec == spec;
 
@@ -678,15 +578,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		}
 	}
 
-	/**
-	 * Re-reads the sides of every run this one could have changed the picture for.
-	 *
-	 * {@link #updateShape} only fires for the six positions sharing a face, and this cable connects
-	 * diagonally as well - so a run laid a block higher than its neighbour would draw its own climb and
-	 * the neighbour would go on showing a dead end. The twelve positions checked here are exactly the
-	 * ones {@link #connection} can reach, and the cost of reading twelve block states when a cable is
-	 * laid or cut is nothing.
-	 */
+	/** Re-reads the sides of every run this one could have changed the picture for. */
 	private void refreshRuns(Level level, BlockPos pos) {
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			BlockPos beside = pos.relative(direction);
@@ -713,7 +605,7 @@ public class DcCableBlock extends Block implements DcTerminal {
 		return true;
 	}
 
-	/** How a run reaches in one direction, for anything walking it. */
+	/** How a run reaches in one direction */
 	public static RedstoneSide side(BlockState state, Direction direction) {
 		EnumProperty<RedstoneSide> property = SIDES.get(direction);
 		return property == null ? RedstoneSide.NONE : state.getValue(property);

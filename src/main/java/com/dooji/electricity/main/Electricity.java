@@ -98,29 +98,17 @@ public class Electricity {
 	public static final RegistryObject<Block> ELECTRIC_CABIN_BLOCK = BLOCKS.register("electric_cabin", () -> new ElectricCabinBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Block> POWER_BOX_BLOCK = BLOCKS.register("power_box", () -> new PowerBoxBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
 	// The original block keeps its "wind_turbine" registry name so existing worlds load,
-	// and is bound to the C130: the authored model's rotor measures 13.044 blocks, so
-	// that is which machine it has always been geometrically.
 	public static final RegistryObject<Block> WIND_TURBINE_BLOCK = BLOCKS.register("wind_turbine", () -> new WindTurbineBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion(), TurbineCatalog.C130_40));
 
-	/**
-	 * The rest of a machine that is bigger than its own block: invisible, solid, and never an item.
-	 *
-	 * Same strength as the machines it stands for, so mining a cabin's roof takes as long as mining its
-	 * base - and mining any of it mines the machine. No loot table, because it never drops: the machine
-	 * it belongs to drops instead. Pistons are refused, since a shell pushed away from its machine would
-	 * be a hole in the middle of one.
-	 */
+	/** The rest of a machine that is bigger than its own block: invisible, solid, and never an item. */
 	public static final RegistryObject<Block> MACHINE_SHELL_BLOCK = BLOCKS.register("machine_shell",
 			() -> new MachineShellBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops()
 					.noOcclusion().noLootTable().pushReaction(PushReaction.BLOCK)));
 
 	/**
 	 * The three overhead line conductors, one item a class.
-	 *
-	 * They replace the mod's single "wire": a real line uses aerial bundled cable at low voltage, bare
-	 * alloy conductor at medium and a bundle of steel-reinforced aluminium at high, and which of the three
-	 * a span is made of decides how far it may go, how much of it a reel buys and how it is drawn. See
-	 * {@link ConductorCatalog}.
+	  *
+	 * See {@link ConductorCatalog}.
 	 */
 	public static final Map<ResourceLocation, RegistryObject<Item>> CONDUCTOR_ITEMS = conductorItems();
 
@@ -145,14 +133,7 @@ public class Electricity {
 	public static final RegistryObject<Item> METAL_CASING_ITEM = ITEMS.register("metal_casing", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.metal_casing"));
 	public static final RegistryObject<Item> MOTOR_CORE_ITEM = ITEMS.register("motor_core", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.motor_core"));
 
-	/**
-	 * Every part in {@link PartCatalog}, registered from the catalogue rather than one line each.
-	 *
-	 * They are all the same kind of thing - an item that does nothing in a hand and exists to be an
-	 * ingredient - so a loop is honest here in a way it would not be for the machines, which each have
-	 * their own block, block entity and panel. The tooltip key is derived from the id, so a part cannot be
-	 * registered without one.
-	 */
+	/** Every part in {@link PartCatalog} */
 	public static final Map<String, RegistryObject<Item>> PART_ITEMS = registerParts();
 
 	private static Map<String, RegistryObject<Item>> registerParts() {
@@ -165,59 +146,29 @@ public class Electricity {
 		return items;
 	}
 
-	/**
-	 * One block of turbine tower.
-	 *
-	 * Stacked by hand, which is what makes hub height something a player builds rather than
-	 * a number they set. The machine then goes on top and refuses to mount outside the range
-	 * of tower heights it is certified for.
-	 */
+	/** One block of turbine tower. */
 	public static final RegistryObject<Block> TURBINE_TOWER_BLOCK = BLOCKS.register("turbine_tower",
 			() -> new TurbineTowerBlock(Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Item> TURBINE_TOWER_ITEM = ITEMS.register("turbine_tower",
 			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
-	/**
-	 * A block for every array product, keyed by spec id.
-	 *
-	 * Registered from the catalogue in a loop, the same way the turbines are, so a product cannot come
-	 * to exist without a block that places it. The flat PERC table keeps the {@code solar_panel}
-	 * registry name because worlds already contain blocks under it - and that is the right one to keep
-	 * it, because a flat table of cheap modules is exactly what the placeholder always was.
-	 */
+	/** A block for every array product, keyed by spec id. */
 	public static final Map<ResourceLocation, RegistryObject<Block>> PV_ARRAY_BLOCKS = registerPvArrayBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> PV_ARRAY_ITEMS = registerPvArrayItems();
 
-	/** One block per inverter in the catalogue. The generator, as far as the rest of the mod is concerned. */
+	/** One block per inverter in the catalogue. */
 	public static final Map<ResourceLocation, RegistryObject<Block>> PV_INVERTER_BLOCKS = registerInverterBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> PV_INVERTER_ITEMS = registerInverterItems();
 
-	/**
-	 * A block of cable per gauge, and the reel that lays it.
-	 *
-	 * Two products because a real plant uses two, and they are two blocks rather than one with a gauge
-	 * property so that the item a player is holding says which one it is. Registered from the catalogue
-	 * the same way everything else here is.
-	 */
+	/** A block of cable per gauge */
 	public static final Map<ResourceLocation, RegistryObject<Block>> DC_CABLE_BLOCKS = registerCableBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> DC_CABLE_ITEMS = registerCableItems();
 
-	/**
-	 * A combiner box per product: the switchgear between a field of strings and one cabinet.
-	 *
-	 * The block a plant needs before it can be large, and the one a central inverter needs before it can
-	 * take a string at all.
-	 */
+	/** A combiner box per product: the switchgear between a field of strings and one cabinet. */
 	public static final Map<ResourceLocation, RegistryObject<Block>> PV_COMBINER_BLOCKS = registerCombinerBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> PV_COMBINER_ITEMS = registerCombinerItems();
 
-	/**
-	 * A meteorological mast: the seven instruments a plant measures the sky with.
-	 *
-	 * One block rather than one per instrument, because a real plant has one or two masts for the whole
-	 * site - the sky is the same across it. The two instruments that belong on the modules rather than
-	 * on the mast are read through the nearest array, which is how they are cabled in reality.
-	 */
+	/** A meteorological mast: the seven instruments a plant measures the sky with. */
 	public static final RegistryObject<Block> MET_STATION_BLOCK = BLOCKS.register("met_station",
 			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
@@ -327,14 +278,7 @@ public class Electricity {
 		return PV_INVERTER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
 
-	/**
-	 * A block for every machine in the catalogue, keyed by spec id.
-	 *
-	 * Registered from the catalogue in a loop rather than declared one by one, so a spec
-	 * cannot come to exist without a block that places it. Each is named after its spec's
-	 * own path except the C130, which keeps the original {@code wind_turbine} registry name
-	 * because worlds already contain blocks under it.
-	 */
+	/** A block for every machine in the catalogue, keyed by spec id. */
 	public static final Map<ResourceLocation, RegistryObject<Block>> TURBINE_BLOCKS = registerTurbineBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> TURBINE_ITEMS = registerTurbineItems();
 
@@ -392,7 +336,7 @@ public class Electricity {
 				}
 
 				output.accept(TURBINE_TOWER_ITEM.get());
-				// the arrays, then the inverters they need, then the mast that watches them: the
+				// the arrays, then the inverters they need
 				// order a plant is actually built in
 				for (PvArraySpec spec : PvCatalog.all()) {
 					output.accept(PV_ARRAY_ITEMS.get(spec.id()).get());
@@ -454,7 +398,7 @@ public class Electricity {
 
 		POWER_BOX_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("power_box", () -> BlockEntityType.Builder.of(PowerBoxBlockEntity::new, POWER_BOX_BLOCK.get()).build(null));
 
-		// one type for the whole catalogue: the machines differ by their spec, which the
+		// one type for the whole catalogue: the machines differ by their spec
 		// block entity reads back off whichever block it is sitting in
 		WIND_TURBINE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("wind_turbine", () -> BlockEntityType.Builder.of(WindTurbineBlockEntity::new, turbineBlocks()).build(null));
 
@@ -462,8 +406,8 @@ public class Electricity {
 		// no machine on it yet, which is every tower while it is being stacked
 		TURBINE_TOWER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("turbine_tower", () -> BlockEntityType.Builder.of(TurbineTowerBlockEntity::new, TURBINE_TOWER_BLOCK.get()).build(null));
 
-		// one type for the whole array catalogue, and one for the whole inverter catalogue: the
-		// products differ by their spec, which each block entity reads back off the block it sits in
+		// one type for the whole array catalogue
+		// products differ by their spec
 		PV_ARRAY_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_array", () -> BlockEntityType.Builder.of(PvArrayBlockEntity::new, pvArrayBlocks()).build(null));
 
 		PV_INVERTER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_inverter", () -> BlockEntityType.Builder.of(PvInverterBlockEntity::new, pvInverterBlocks()).build(null));

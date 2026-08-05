@@ -24,62 +24,15 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * One block of turbine tower.
- *
- * A tower is stacked by hand, which is what makes hub height something a player
- * builds rather than a number they set. The machine goes on top and refuses to mount
- * outside the range of tower heights it is certified for.
- *
- * <h2>What you see and what you walk into</h2>
- *
- * The tower is drawn from the authored model's own tube, so it looks exactly as it
- * always did. Collision cannot follow that geometry exactly - a VoxelShape is a union
- * of axis-aligned boxes confined to the block's own cube, so a circle is not on offer
- * - but it can come within half a pixel, and here it does.
- *
- * The reason it can is a measurement. The authored tube is barely tapered: it runs
- * from a radius of 0.381 at the foot to 0.312 at the top, over twelve and a half
- * blocks, and the 0.622 that looks like the tower's width is only the base plinth,
- * eight centimetres tall. One shape at the middle of that range is therefore never
- * more than 0.03 blocks out anywhere on any tower - half a pixel at block resolution
- * - which is why a shape per height would buy nothing.
- *
- * Two crossed boxes at cos(45 degrees) give the octagon, the same way vanilla builds
- * lanterns and iron bars.
- */
+/** One block of turbine tower. */
 public class TurbineTowerBlock extends Block implements EntityBlock {
-	/**
-	 * Blocks a tower carries without complaint.
-	 *
-	 * Sixteen is 160 m at this mod's ten-metres-a-block scale, which is about the tallest
-	 * unguyed tube tower ever raised onshore, and comfortably above the 130 m the tallest
-	 * machine in the catalogue is certified for. Anything past it is a pillar rather than a
-	 * turbine tower.
-	 */
+	/** Blocks a tower carries without complaint. */
 	public static final int SAFE_HEIGHT = 16;
-	/**
-	 * Blocks a tower cannot hold up at all, even undisturbed.
-	 *
-	 * 200 m, past anything ever built. Between here and {@link #SAFE_HEIGHT} a tower stands
-	 * but carries nothing: step on it and the excess comes down.
-	 */
+	/** Blocks a tower cannot hold up at all, even undisturbed. */
 	public static final int MAX_HEIGHT = 20;
-	/**
-	 * Where a walk up or down a tower gives up.
-	 *
-	 * Clear of {@link #MAX_HEIGHT} rather than level with it, because this is a guard against
-	 * an unbounded scan and not a limit anything should reach. When it was set at the height a
-	 * player could actually build to, the renderer stopped drawing tube past it and towers went
-	 * invisible from there up.
-	 */
+	/** Where a walk up or down a tower gives up. */
 	private static final int SCAN_LIMIT = MAX_HEIGHT + 4;
-	/**
-	 * Radius the collision octagon is built at, in blocks.
-	 *
-	 * The middle of the authored tube's 0.381-to-0.312 taper, so the error is shared
-	 * evenly between the foot and the top rather than piling up at one end.
-	 */
+	/** Radius the collision octagon is built at, in blocks. */
 	private static final double COLLISION_RADIUS = 0.3465;
 	/** cos(45 degrees): how far the crossing box reaches, to turn a plus into an octagon. */
 	private static final double OCTAGON = 0.70710678;
@@ -98,34 +51,21 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	}
 
 	/**
-	 * Drawn by the mod's own OBJ pipeline, like every other machine here, so the tube is
-	 * the authored one rather than an approximation in cuboids.
+	 * Drawn by the mod's own OBJ pipeline, like every other machine here, so the tube is the authored one rather than an approximation in cuboids.
 	 */
 	@Override
 	public RenderShape getRenderShape(BlockState state) {
 		return RenderShape.INVISIBLE;
 	}
 
-	/**
-	 * Empty, and only present so the renderer can find the tower.
-	 *
-	 * This mod draws through {@code RenderLevelStageEvent} over tracked block entities
-	 * rather than through the chunk mesh, and a tower with nothing to be found by would
-	 * be invisible until a machine was mounted on it - which is no way to stack thirteen
-	 * of them. It never ticks and holds no state.
-	 */
+	/** Empty, and only present so the renderer can find the tower. */
 	@Nullable
 	@Override
 	public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
 		return new TurbineTowerBlockEntity(pos, state);
 	}
 
-	/**
-	 * How many tower blocks stand under this position.
-	 *
-	 * Counted from the world rather than stored anywhere, so the height a turbine sees and
-	 * the tower a player can walk up are one fact with one source and cannot come apart.
-	 */
+	/** How many tower blocks stand under this position. */
 	public static int countBelow(BlockGetter level, BlockPos pos) {
 		return count(level, pos, Direction.DOWN);
 	}
@@ -146,21 +86,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		return found;
 	}
 
-	/**
-	 * A tower needs a tower under it, or something with substance to it.
-	 *
-	 * Anything with a collision shape counts, rather than a sturdy face. A sturdy face means
-	 * a full square block underneath - the rule vanilla uses for doors and rails - and it
-	 * refused the machines and pipes of other mods, whose shapes have cutouts in them.
-	 * Those are precisely what a turbine gets built next to, so a tower would not seat on an
-	 * energy cube or a length of transmitter. A foot rests on what is under it; it does not
-	 * ask for a flat square.
-	 *
-	 * Still a support rule, though, and the collapse comes out of it for free: take away
-	 * what a tower stands on and every block above fails this same check in turn. That is
-	 * how ladders and torches already behave, so nobody has to be told, and it is how a real
-	 * tower fails too.
-	 */
+	/** A tower needs a tower under it */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
 		BlockPos below = pos.below();
@@ -177,13 +103,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		return state;
 	}
 
-	/**
-	 * Weight on top of an over-tall tower brings the excess down.
-	 *
-	 * Only the top block of a stack carries anything, and one lookup rules everything else
-	 * out, so this stays cheap despite being called on every movement tick of whatever is
-	 * standing there. Any entity will do it - a wandering mob is weight too.
-	 */
+	/** Weight on top of an over-tall tower brings the excess down. */
 	@Override
 	public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
 		super.stepOn(level, pos, state, entity);
@@ -192,12 +112,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		collapse(level, pos, entity);
 	}
 
-	/**
-	 * A tower stacked past what it can hold up comes down as it is built.
-	 *
-	 * Placement rather than support, so it catches every way of reaching up there - flying,
-	 * a scaffold beside it, a pillar - without needing to know which was used.
-	 */
+	/** A tower stacked past what it can hold up comes down as it is built. */
 	@Override
 	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, placer, stack);
@@ -206,14 +121,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		collapse(level, pos, placer);
 	}
 
-	/**
-	 * Starts the whole tower failing, if it has been built past what it can hold.
-	 *
-	 * All of it, not only the part above the safe height: a tower that buckles does not shed
-	 * its top few blocks and stand there, it comes down. {@link TowerCollapse} draws the
-	 * fracture running from the top to the foot over about a second and a half, and the
-	 * machine up there loses its support along with everything else.
-	 */
+	/** Starts the whole tower failing, if it has been built past what it can hold. */
 	private static void collapse(Level level, BlockPos anywhere, @Nullable Entity cause) {
 		if (!(level instanceof ServerLevel serverLevel)) return;
 
@@ -239,14 +147,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		return true;
 	}
 
-	/**
-	 * The turbine this tower carries, if it has one yet.
-	 *
-	 * Walks up, because the machine is always on top and the answer is wanted from
-	 * anywhere on the tower: a wrench used at the foot should open the panel of the
-	 * machine it belongs to, and the renderer needs to know whether the machine is
-	 * already drawing the tower.
-	 */
+	/** The turbine this tower carries, if it has one yet. */
 	@Nullable
 	public static BlockPos findTurbineAbove(BlockGetter level, BlockPos pos) {
 		BlockPos.MutableBlockPos cursor = pos.mutable().move(Direction.UP);

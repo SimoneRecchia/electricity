@@ -1,36 +1,10 @@
 #!/usr/bin/env python3
-"""Proves the tracker models cannot self-intersect at any angle.
+"""Proves a tracker cannot hit itself at any angle.
 
     python3 tools/check_pv_clearance.py
 
-Reads the generated OBJ files and exits non-zero if any fixed part lies where a moving
-part will sweep.  Worth having as a script rather than as a careful read of the geometry,
-because the failure mode is invisible until somebody stands in front of a tracker at four
-in the afternoon: the first version of these models had the slew drive at the tube's
-height, where the modules passed through it twice a day, and the yoke arms ending exactly
-where the modules began.
-
-How it can prove anything
--------------------------
-Both drives turn about an axis, so every moving part sweeps a *body of revolution* about
-that axis - an annulus in the plane normal to it, at an unchanged coordinate along it.  A
-fixed part is therefore safe if either
-
-  * its coordinate along the axis never meets the moving part's, or
-  * its distance from the axis is wholly inside the annulus's hole, or wholly outside
-    its rim.
-
-Each test assumes a full turn, which is stricter than the sixty or eighty degrees the
-drives actually reach, so a pass is proof rather than evidence.
-
-The dual-axis frame has two axes and its elevation group is nested inside its azimuth
-group, so it gets three comparisons: elevation against azimuth in the azimuth's own
-frame, azimuth against the fixed pedestal about the vertical, and elevation against the
-pedestal - where the only thing that saves it is that the pedestal is a body of
-revolution, so all that matters is how close to the vertical axis the frame can reach.
-
-The one intersection allowed is a bearing: a cylinder turning about its own axis inside a
-housing sweeps nothing, however much geometry the two share.
+Everything that moves sweeps a body of revolution about its axis, so a fixed part is safe if it never
+meets that annulus.  Assumes a full turn, which is stricter than the drives reach.
 """
 
 import math
@@ -41,12 +15,8 @@ MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'mode
 EPS = 1.0e-4
 
 # Where each tracker's drives pivot, matching what the renderer measures off the model's
-# own groups.  Restated here rather than measured so that a model whose pivot moved would
-# fail this check rather than quietly pass a different one.
 PIVOTS = {'pv_track': 0.62, 'pv_dual': 0.7475}
-# Radius of the widest part of the dual axis's pedestal, which is a body of revolution about the
-# vertical: the slew ring under the collar, not the column, since the ring is the wider of the two.
-# Restated here rather than measured so that a pedestal that grew would fail this check.
+# Radius of the widest part of the dual axis's pedestal
 PEDESTAL_RADIUS = 0.062
 
 
@@ -58,8 +28,6 @@ def read_faces(path):
             verts.append(tuple(float(v) for v in line.split()[1:4]))
         elif line.startswith('o '):
             # accumulated rather than assigned: a part whose faces are not all the same
-            # material is written as one section per material under the same name, so the
-            # same 'o' line appears more than once and assigning would test only the last
             current = line.split(None, 1)[1].strip()
             objects.setdefault(current, [])
         elif line.startswith('f ') and current is not None:
@@ -115,13 +83,7 @@ def worst_overlap(fixed_faces, moving_faces, along, plane, centre):
 
 
 def reaches_vertical_axis(faces, pivot_y):
-    """Closest a group turning about z, then about y, can bring itself to the vertical axis.
-
-    Turning about z can put a point's x on the axis but cannot change its z, and turning
-    about y afterwards cannot change its distance from the vertical axis - so the answer
-    is the smallest |z| in the group. The y band it can reach is the pivot plus and minus
-    its own radius.
-    """
+    """Closest a group turning about z, then about y, can bring itself to the vertical axis."""
     closest = min(min(abs(point[2]) for point in face) for face in faces)
     radius = max(annulus(face, (0, 1), (0.0, pivot_y))[1] for face in faces)
     return closest, (pivot_y - radius, pivot_y + radius)
@@ -151,7 +113,7 @@ def check(name):
 
             problems.append('%s sweeps through %s by %.4f' % (moving_name, fixed_name, depth))
 
-    # the azimuth collar turns about the vertical, so its invariant is y and its annulus is
+    # the azimuth collar turns about the vertical
     # in the horizontal plane
     for moving_name, moving_faces in sorted(moving.items()):
         if not moving_name.startswith('rotate_azimuth'):

@@ -18,9 +18,6 @@ public final class ObjDefinitions {
 		if (!ALL.isEmpty()) return;
 
 		// The eight pin insulators, in the order tools/gen_grid_models.py writes them: the lower arm's
-		// four and then the upper arm's, inner pair before outer, negative side first. The order is the
-		// index a wire is stored against, so it is the one thing about the pole that cannot be
-		// rearranged without moving every wire in every world that has one.
 		ALL.add(new ObjBlockDefinition(Electricity.UTILITY_POLE_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/utility_pole/utility_pole.obj"), List.of(
 				"insulator_1_porcelain",
 				"insulator_2_porcelain",
@@ -42,26 +39,19 @@ public final class ObjDefinitions {
 		)));
 
 		// Every machine in the catalogue draws the same model: the renderer scales it per
-		// spec and stretches its tower to the built height, so the difference between a
-		// C52 and a C130 on screen is a transform rather than a second asset.
 		ResourceLocation turbineModel = new ResourceLocation(Electricity.MOD_ID, "models/wind_turbine/wind_turbine.obj");
 		for (var spec : TurbineCatalog.all()) {
 			Block block = Electricity.TURBINE_BLOCKS.get(spec.id()).get();
 			ALL.add(new ObjBlockDefinition(block, turbineModel, List.of("insulator_Plastic")));
 		}
 
-		// One model per mounting rather than per product, because what a player sees is the
-		// mounting: two products on the same racking differ by which modules are bolted to
-		// it, and at a block's scale that is a texture rather than a shape. Arrays carry no
-		// wire fitting - their direct current goes to an inverter by cable, not by insulator.
+		// One model per mounting rather than per product
 		for (var spec : PvCatalog.all()) {
 			Block block = Electricity.PV_ARRAY_BLOCKS.get(spec.id()).get();
 			ALL.add(new ObjBlockDefinition(block, arrayModel(spec.mounting()), List.of()));
 		}
 
-		// The inverters share one cabinet, scaled per nameplate the way the turbines share one
-		// nacelle, and it is the only block here with a wire fitting on it: the inverter is
-		// where a photovoltaic plant joins the grid.
+		// The inverters share one cabinet
 		ResourceLocation inverterModel = new ResourceLocation(Electricity.MOD_ID, "models/pv_inverter/pv_inverter.obj");
 		for (var spec : InverterCatalog.all()) {
 			Block block = Electricity.PV_INVERTER_BLOCKS.get(spec.id()).get();
@@ -69,8 +59,6 @@ public final class ObjDefinitions {
 		}
 
 		// The combiner boxes share one model: the difference between a six-way box and a thirty-two way
-		// one is the label on the door and the count on the panel, which is all it is in a catalogue
-		// either. No wire fitting, because a combiner's output leaves on cable and not on a line.
 		ResourceLocation combinerModel = new ResourceLocation(Electricity.MOD_ID, "models/pv_combiner/pv_combiner.obj");
 		for (var spec : CombinerCatalog.all()) {
 			Block block = Electricity.PV_COMBINER_BLOCKS.get(spec.id()).get();

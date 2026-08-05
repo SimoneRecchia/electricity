@@ -89,10 +89,8 @@ public class PowerBoxRenderer extends ObjRendererBase {
 
 	/**
 	 * Hung on a wall the kiosk loses its plinth and sits back against it.
-	 *
-	 * Both halves of that are here rather than in two models: the plinth is a group that is simply not
-	 * drawn, and the setback is a translation in the model's own frame, applied inside the pose so the
-	 * facing turn carries it round. PowerBoxBlock.WALL_CELLS moves the collision by the same figure.
+	  *
+	 * PowerBoxBlock.WALL_CELLS moves the collision by the same figure.
 	 */
 	private static void renderBaked(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos,
 			BlockState state) {

@@ -119,9 +119,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 		Vector3f result = new Vector3f(point);
 		var facing = getBlockState().getValue(UtilityPoleBlock.FACING);
 
-		// the same quarter turn the renderer poses the model by and the cells are turned by, from the one
-		// place that arithmetic lives - this was a copy of a table the pole kept for its mirrored model,
-		// and a copy is how the anchors came to disagree with the geometry in the first place
+		// the same quarter turn the renderer poses the model by and the cells are turned by
 		float facingRotation = ModelFacing.degrees(UtilityPoleBlock.AUTHORED, facing);
 
 		if (facingRotation != 0) {

@@ -1,30 +1,10 @@
 #!/usr/bin/env python3
-"""Writes every recipe, part item model and language entry for the crafting tree.
+"""Recipes, part item models and the language file.
 
     python3 tools/gen_crafting.py
 
-Writes into src/main/resources/data/electricity/recipes/, assets/electricity/models/item/ and merges
-assets/electricity/lang/en_us.json.
-
-Why a generator: there are seventy-odd recipes and thirty-two parts, each of which needs a recipe, an
-item model, a name and a tooltip. Written by hand that is four files per part to keep in step; written
-here the whole tree is one table that can be read top to bottom, and the parts come out of
-PartCatalog.java rather than being restated - so a part cannot exist in the game without a recipe, a name
-and a tooltip, and cannot have them without existing.
-
-The shape of the tree
----------------------
-Everything is made at a vanilla bench or in a furnace. What gates a power station is the depth of the
-tree rather than a table: a tracker is three laminates over a torque tube and a slew drive, the slew
-drive is a gear set and a motor core round a bearing, and the bearing is plate and nuggets - so a
-player who wants one works down to iron and back up whether or not there is a special bench in the way.
-
-And the products of one kind share a spine. Every array is three laminates over a mounting with
-connectors under it; every inverter is bridges over an enclosure with a control board; every turbine is
-three blades over a drivetrain. What differs between two models is what differs between the real
-machines and nothing else - which is why a C112 and a C90 take the same generator pair and different
-blades, why the 350 kW inverter has DC sections where the 2500 has busbars, and why the small-wind
-machine has neither gearbox nor yaw drive.
+Everything is a shaped crafting-table recipe.  check() reads every recipe on disk, mirrors included, and
+fails on an ambiguous pair - two recipes the game cannot tell apart resolve arbitrarily.
 """
 
 import json
@@ -39,7 +19,7 @@ CATALOGUE = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', '
 
 SHAPED = 'minecraft:crafting_shaped'
 
-# Every ingredient letter used below, resolved once. A letter means the same thing in every recipe in this
+# Every ingredient letter used below, resolved once.
 # file, which is what makes the tree readable: X is always a gearbox, G always a generator set.
 ITEMS = {
     # vanilla
@@ -102,9 +82,6 @@ ITEMS = {
 # (result, count, type, pattern) - the tree, top to bottom.
 RECIPES = [
     # ------------------------------------------------------------------------- raw stock
-    #
-    # Steel is iron with carbon in it, which is the one bit of metallurgy worth putting in a recipe: a
-    # plate is rolled from a slab and a section is folded from plate.
     ('steel_plate', 3, SHAPED, ['iii', 'ooo']),
     ('steel_section', 2, SHAPED, ['P', 'P']),
     ('busbar', 2, SHAPED, ['ccc']),
@@ -116,33 +93,27 @@ RECIPES = [
     ('silicon_wafer', 4, SHAPED, ['N']),
 
     # ------------------------------------------------------------------------ components
-    #
-    # A cell is a wafer with a junction diffused into it and its fingers printed on: silicon, a dopant,
-    # and the drawn metal that becomes the fingers - which is the mod's busbar, since the wire item it
-    # used to be has become three overhead line conductors and none of them belongs in a cell.
     ('solar_cell', 3, SHAPED, ['ZZZ', ' r ', 'BBB']),
     ('bypass_diode', 2, SHAPED, ['q', 'r', 'g']),
     ('mc4_connector', 4, SHAPED, ['II', 'BB']),
     # three diodes, because a sixty-cell module has three substrings and each one gets its own
     ('junction_box', 1, SHAPED, [' d ', 'dMd', ' j ']),
-    # switching dies on a substrate over a baseplate, which is what a power module is
+    # switching dies on a substrate over a baseplate
     ('power_module', 1, SHAPED, [' Z ', 'BCB', ' P ']),
-    # a film capacitor bank in a steel can: polymer film, charge, and something to hold it
+    # a film capacitor bank in a steel can: polymer film, charge
     ('capacitor_bank', 1, SHAPED, ['FrF', 'FrF', 'PPP']),
     # laminated iron with a winding through it
     ('magnetic_core', 1, SHAPED, ['PPP', 'OOO', 'PPP']),
     ('control_board', 1, SHAPED, [' U ', 'CBC']),
     ('bearing', 2, SHAPED, [' P ', 'nPn', ' P ']),
     ('gear_set', 2, SHAPED, [' S ', 'SPS', ' S ']),
-    # a glass barrel, silver element and sand filler, which is exactly what a photovoltaic fuse is
+    # a glass barrel, silver element and sand filler
     ('gpv_fuse', 4, SHAPED, ['yay', ' B ']),
     # contacts, an arc chamber and the snap mechanism that makes it break rather than draw
     ('load_break_switch', 1, SHAPED, [' I ', 'BSB', ' H ']),
     ('sensor_head', 2, SHAPED, [' A ', 'CBC']),
 
     # ------------------------------------------------------------------------ assemblies
-    #
-    # The module: front glass, encapsulant, the cells, the frame rails and the junction box on the back.
     ('pv_laminate', 1, SHAPED, ['AFA', 'VVV', 'SJS']),
     # eight plates and a gasket: an enclosure is mostly steel, which is why a cabinet costs what it does
     ('enclosure', 1, SHAPED, ['PPP', 'PIP', 'PPP']),
@@ -160,29 +131,15 @@ RECIPES = [
     ('long_blade', 1, SHAPED, ['AAA', 'FsF', 'AAA']),
 
     # ------------------------------------------------------------------- the line conductors
-    #
-    # Three products, and the recipes say which is which.  Aerial bundled cable is insulated cores over a
-    # steel messenger that carries the weight.  Medium-voltage conductor is bare metal drawn over plate
-    # and nothing else, because at 20 kV the insulation is the air.  And the high-voltage bundle is twice
-    # the aluminium round a steel core, which is what "steel-reinforced" means and why one span of it
-    # weighs two and a half tonnes.
     ('abc_conductor', 8, SHAPED, ['BBB', 'FFF', 'SSS']),
     ('mv_conductor', 6, SHAPED, ['BBB', 'PPP']),
     ('hv_conductor', 4, SHAPED, ['BBB', 'SSS', 'BBB']),
 
     # --------------------------------------------------------------------------- the cables
-    #
-    # Tinned copper in a polymer jacket. The trunk is bar rather than wire and carries armour, which is
-    # the difference between a string cable and a home run.
     ('dc_string_cable', 6, SHAPED, ['BBB', 'FFF']),
     ('dc_trunk_cable', 4, SHAPED, ['BBB', 'FFF', 'PPP']),
 
     # --------------------------------------------------------------------------- the arrays
-    #
-    # Three laminates over a mounting with connectors under it, every time. What changes between them is
-    # the mounting and nothing else - which is exactly what changes between the real ones.
-    # the FT-415 keeps the solar_panel registry name from before the catalogue existed, and it is the
-    # entry-level table: the same three laminates on a rack, without the ballast trays the 430 carries
     ('solar_panel', 1, SHAPED, ['LLL', ' T ', 'jSj']),
     ('pv_flat_430', 1, SHAPED, ['LLL', 'PTP', 'jSj']),
     ('pv_tilt_530', 1, SHAPED, ['LLL', 'STS', 'jSj']),
@@ -193,43 +150,31 @@ RECIPES = [
     ('pv_dual_440', 1, SHAPED, ['LLL', 'uSu', 'jbj']),
 
     # ------------------------------------------------------------------------- the inverters
-    #
-    # Bridges over an enclosure with a control board under it. One bridge per MPPT channel's worth of
-    # nameplate, fans where the machine has them, and the middle row is its DC terminals: nothing on the
-    # small string machine, a DC section where it takes trunks as well as strings, and busbars on the
-    # central machine, which takes nothing but.
+    # Bridges over an enclosure with a control board under it.
     ('inverter_10', 1, SHAPED, [' G ', ' E ', ' b ']),
     ('inverter_110', 1, SHAPED, ['GGG', ' E ', 'KbK']),
     ('inverter_350', 1, SHAPED, ['GGG', 'DED', 'KbK']),
     ('inverter_2500', 1, SHAPED, ['GGG', 'BEB', 'KbK']),
 
     # ------------------------------------------------------------------------- the combiners
-    #
-    # Fuse ways over an enclosure with the load-break switch under it. More ways means more bar to carry
     # the output, and the thirty-two way box is the one built to IP66.
     ('pv_combiner_6', 1, SHAPED, ['fff', ' E ', ' Q ']),
     ('pv_combiner_16', 1, SHAPED, ['fff', 'BEB', ' Q ']),
     ('pv_combiner_32', 1, SHAPED, ['fff', 'BEB', 'PQP']),
 
     # ------------------------------------------------------------------- the met station
-    #
-    # Three sensor heads on a mast with a logger in the middle, which is what one is.
     ('met_station', 1, SHAPED, [' p ', 'pbp', 'SSS']),
 
     # ------------------------------------------------------------------- towers and turbines
-    #
-    # A tower section is rolled plate with a flange bolted at each end.
     ('turbine_tower', 2, SHAPED, ['PPP', 'n n', 'PPP']),
-    # Three blades over a drivetrain, and the drivetrain is where the machines differ. The small-wind
-    # machine has neither gearbox nor yaw drive - it turns on a tail vane and drives its generator
-    # directly, which is what small wind is.
+    # Three blades over a drivetrain, and the drivetrain is where the machines differ.
     ('sw_10', 1, SHAPED, ['sss', ' x ', 'SbS']),
     ('c52_085', 1, SHAPED, ['sss', 'XxY', 'ubE']),
     # long blades: an eighty metre rotor on the same drivetrain
     ('c80_20', 1, SHAPED, ['zzz', 'XxY', 'ubE']),
     # three megawatts: the generator doubles
     ('c90_30', 1, SHAPED, ['zzz', 'Xxx', 'ubE']),
-    # the same generator pair as the C90 and no gearbox - a second main bearing instead, which is what
+    # the same generator pair as the C90 and no gearbox - a second main bearing instead
     # direct drive is, and the reason these two share a nameplate on different rotors
     ('c112_30', 1, SHAPED, ['zzz', 'Yxx', 'ubE']),
     # four megawatts, direct drive, and all generator
@@ -265,16 +210,7 @@ def write(path, data):
 
 
 def grid_of(pattern, key):
-    """A recipe's grid as the game matches it: the items, laid out, with the letters resolved away.
-
-    Read back off the written file rather than off the table above, because the mod has a dozen older
-    recipes that were written by hand and are not in it - and now that everything is a plain shaped
-    recipe, one of those can collide with a generated one.
-
-    Mirrored as well as read straight, and the smaller of the two returned: a shaped recipe matches its
-    own left-to-right reflection, so two recipes that are each other's mirror are as ambiguous as two
-    that are identical.
-    """
+    """A recipe's grid as the game matches it: the items, laid out, with the letters resolved away."""
     rows = tuple(tuple('.' if c == ' ' else key[c].get('item', str(key[c])) for c in row)
                  for row in pattern)
     return min(rows, tuple(row[::-1] for row in rows))
@@ -297,13 +233,7 @@ def written_recipes():
 
 
 def check(catalogue):
-    """Three things that have to hold, and would be invisible in the game if they did not.
-
-    Two recipes with the same grid are ambiguous - the game picks whichever it indexed first, so one of
-    the two products becomes uncraftable with no error anywhere. A part with no recipe is an item that
-    exists and cannot be got. And a part nothing consumes is a dead end: it would be craftable, useless,
-    and a player would waste an evening working out why.
-    """
+    """Three things that have to hold"""
     problems = []
 
     grids = {}

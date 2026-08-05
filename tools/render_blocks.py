@@ -1,36 +1,16 @@
 #!/usr/bin/env python3
-"""Draws the generated models *with their textures on*, into a PNG, the way the game would.
+"""Draws the models with their textures on, into build/render/, the way the game would.
 
-    python3 tools/render_blocks.py                  # every scene, into build/render/
-    python3 tools/render_blocks.py cable_run        # one of them
+    python3 tools/render_blocks.py                  # every scene
+    python3 tools/render_blocks.py cable_run        # one
     python3 tools/render_blocks.py --list
 
-Why this exists, when there are already four checkers
------------------------------------------------------
-Because every fault a player has reported was a fault no checker could have found, and the reason is the
-same each time: the checkers measure the geometry against the tables and the textures against the
-models, and what was wrong was how the whole thing *looked*.
+The checkers measure geometry against tables and textures against models.  This is for the faults that
+are only visible: something in the wrong place, the wrong size, or an oval where a circle was drawn.
 
-Three of them, to say what class of thing this catches:
-
-  * the string cable was authored about the origin and Forge's block-model loader reads a block's own
-    frame, corner at zero - so every piece was drawn half a block to the north-west and the rotated
-    states went to a different corner each.  The OBJ was self-consistent, the tables were right, and
-    ``check_hitboxes`` compared the tables to the OBJ and agreed with itself.
-  * the status lights on the inverter's door were drawn round on a tile that lands on a leaf 0.47 as
-    wide as it is tall, so they arrived as ovals.  Every uv resolved; the texture was correct; the door
-    was correct.
-  * a lifting eye was a solid disc on a stalk, which is a grey cylinder standing on the roof for no
-    reason a player can see.  Nothing measurable is wrong with it at all.
-
-So this is the missing instrument rather than another checker: a z-buffered rasteriser with real texture
-sampling, one light, and a scene made of the same OBJ pieces the blockstate applies, placed and turned
-the way the blockstate places and turns them.  ``preview_models.py`` draws shape in flat colour and
-sorts by centroid; this draws the surface.
-
-What it is not: the game.  There is no ambient occlusion, no block light, no fog, and the texture is
-sampled at its own resolution rather than through a mipmap, so a face seen edge-on is noisier here than
-in the game.  It answers "is it in the right place, the right size, and is that circle round".
+Two conventions it has to match or it lies.  A machine's v is flipped (the mod's loader does
+1 - texCoord.y) and a cable block model's is not.  A cable block model has shade_quads off, so no
+directional shading is applied to it.  SCENES is a layout per fault found this way.
 """
 
 import json
@@ -49,11 +29,9 @@ MODELS = os.path.join(ASSETS, 'models')
 TEXTURES = os.path.join(ASSETS, 'textures')
 OUT = os.path.join('build', 'render')
 
-# The one light direction the whole mod is drawn from, as a unit vector in world space: over the
-# player's left shoulder and well above.  Same as texlib's LIGHT, lifted into three dimensions, so a
-# surface's painted highlight and its shading agree.
+# The one light direction the whole mod is drawn from
 LIGHT = (-0.46, 0.78, 0.42)
-# How dark a face pointing away from the light goes.  Minecraft's own face shading is 1.0 up, 0.8
+# How dark a face pointing away from the light goes.
 # north/south, 0.6 east/west, 0.5 down; this is smooth rather than per-face, and lands in that range.
 AMBIENT = 0.46
 
@@ -61,11 +39,7 @@ AMBIENT = 0.46
 # ---------------------------------------------------------------- reading a PNG
 
 def read_png(path):
-    """A PNG as (width, height, rows of RGBA bytes).  Enough of the format for this mod's own files.
-
-    Colour types 0, 2, 3 and 6 at eight bits, every filter, no interlace - which covers what texlib
-    writes and the handful of hand-made sprites that predate it.
-    """
+    """A PNG as (width, height, rows of RGBA bytes).  Enough of the format for this mod's own files."""
     data = open(path, 'rb').read()
     if data[:8] != b'\x89PNG\r\n\x1a\n':
         raise SystemExit('%s is not a PNG' % path)
@@ -139,7 +113,7 @@ def _to_rgba(line, width, channels, palette, alpha):
 
 
 class Texture:
-    """A loaded PNG, sampled by uv with v measured from the top, which is where row zero is."""
+    """A loaded PNG, sampled by uv with v measured from the top"""
 
     _cache = {}
 
@@ -170,13 +144,7 @@ def texture_path(reference):
 
 
 def read_mtl(path, resolve):
-    """material name to Texture.
-
-    Two spellings of ``map_Kd``, because there are two pipelines.  A cable's MTL names ``#core``, which
-    the block model's own textures map resolves - the same indirection a vanilla model uses, so the paths
-    live in one place.  A machine's MTL names ``pv_steel.png`` outright, and the mod's loader takes those
-    from ``textures/block``.
-    """
+    """material name to Texture."""
     out, current = {}, None
     for line in open(path):
         parts = line.split()
@@ -197,17 +165,7 @@ def read_mtl(path, resolve):
 def read_obj(path, resolve, flip_v=False, shade=True):
     """Triangles as (group, Texture, three (position, uv) pairs, normal, shade).
 
-    ``shade`` is the block model's own ``shade_quads``: with it off Minecraft does not multiply a quad by
-    the face direction its normal is nearest to, so what lights the surface is the texture alone.  The
-    cable is drawn that way, and a renderer that shaded it anyway would not be showing what the game
-    shows.
-
-    ``flip_v`` because the mod's two OBJ pipelines disagree about which end of the texture v zero is,
-    and both are drawn from the same ``modellib``.  Forge's block-model loader is configured here with
     ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does
-    ``1.0f - texCoord.y`` before handing the coordinate to the sprite, so for a machine v zero is the
-    bottom.  Rendering a machine without the flip put the door's louvre bank above its rating plate,
-    which is a plausible enough looking door to be believed.
     """
     directory = os.path.dirname(path)
     verts, uvs, normals, materials = [], [], [], {}
@@ -273,12 +231,7 @@ def machine_model(name, obj=None):
 # ---------------------------------------------------------------- placing and turning
 
 def placed(triangles, offset=(0.0, 0.0, 0.0), yaw=0, drop=()):
-    """A model's triangles moved into the world, turned the way a blockstate's ``y`` turns them.
-
-    About the centre of the block's own footprint, because that is what Forge does with a rotation on a
-    block model: ``Transformation.blockCenterToCorner`` wraps the turn in a translation to (0.5, 0.5,
-    0.5) and back.  Getting this wrong is invisible at ``y = 0`` and throws every other state.
-    """
+    """A model's triangles moved into the world, turned the way a blockstate's ``y`` turns them."""
     quarters = (yaw // 90) % 4
     out = []
     for group, texture, corners, normal, shade in triangles:
@@ -403,10 +356,6 @@ def _unit(v):
 
 
 # ---------------------------------------------------------------- the scenes
-#
-# Each one is a layout a fault showed up in, so a scene is a regression test that happens to be a
-# picture.  The cable ones place the pieces the blockstate would place for that pattern, at the turn the
-# blockstate would apply, which is the whole point: the fault was in the placing.
 
 SAND = 'electricity:block/dc_trench'
 CABLE = 'dc_string_cable_'
@@ -417,11 +366,7 @@ def cable_piece(kind, offset, yaw=0):
 
 
 def scene_cable_run():
-    """A run that goes straight, turns, tees and ends, so every join is in one picture.
-
-    Laid out on the same axes the blockstate uses: the middle of each block carries the piece its
-    pattern names, and each arm is a piece of its own turned to its own side.
-    """
+    """A run that goes straight, turns, tees and ends, so every join is in one picture."""
     triangles = ground(-1, -1, 8, 8, SAND)
     # a straight run west to east along z = 1, turning north at x = 4
     for x in range(0, 4):
@@ -494,7 +439,7 @@ def scene_inverter_roof():
 
 
 def scene_combiner_front():
-    """The combiner's door and its switch, which is the other thing a player stands in front of."""
+    """The combiner's door and its switch"""
     triangles = ground(-2, -2, 4, 4, SAND)
     triangles += placed(machine_model('pv_combiner'), (1, 0, 1))
     return triangles, (1.15, 0.66, -0.5), (1.45, 0.52, 0.85)
@@ -525,12 +470,7 @@ def scene_tower():
 
 
 def scene_machine_cable():
-    """A laid run arriving at a machine, which is the join that has to be one product.
-
-    The whole point of the scene: the machine's own stub and the cable a player lays next to it are
-    drawn by two different generators, so if the radius, the lane spacing or the height off the ground
-    disagree by a pixel the run steps where it meets the cabinet.
-    """
+    """A laid run arriving at a machine, which is the join that has to be one product."""
     triangles = ground(-2, -2, 6, 6, SAND)
     triangles += placed(machine_model('pv_inverter'), (2, 0, 2), drop=('entry_east', 'entry_west',
                                                                       'entry_south', 'blank'))
