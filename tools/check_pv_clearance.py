@@ -99,16 +99,24 @@ def pivot_height(objects, group):
     return sum(point[1] for face in faces for point in face) / sum(len(face) for face in faces)
 
 
-# Which shape in PvArrayBlock stands for each tracker's swept plane.  Its floor is the one figure in the
-# Java that no other check watches, and if it sits too low a player walks through the row.
-SWEPT = {'pv_track': 'SWEPT_ROW', 'pv_dual': 'SWEPT_FRAME'}
+# Which table in PvArrayBlock holds each tracker's collision.  Its floor is the one figure in the Java that
+# no other check watches: too high and a player walks in under the row it is meant to stop them at.
+SWEPT = {'pv_track': 'TRACK_CELLS', 'pv_dual': 'DUAL_CELLS'}
 
 
 def declared_floor(name):
-    """The y a swept shape starts at in PvArrayBlock, in blocks."""
+    """The lowest y the tracker's collision starts at in PvArrayBlock, in blocks.
+
+    The whole table, not one named shape: the two are a single box from the floor now, and a box that
+    *contains* the sweep is the proposition - it used to have to start exactly where the sweep reached,
+    which only held while the pier had a box of its own underneath.
+    """
     source = open(ARRAY_BLOCK).read()
-    found = re.search(r'%s = Block\.box\(([^)]*)\)' % SWEPT[name], source)
-    return float(found.group(1).split(',')[1]) / 16.0 if found else None
+    table = re.search(r'%s = List\.of\((.*?)\n\n' % SWEPT[name], source, re.S)
+    if table is None:
+        return None
+    floors = [float(box.split(',')[1]) for box in re.findall(r'Block\.box\(([^)]*)\)', table.group(1))]
+    return min(floors) / 16.0 if floors else None
 
 
 def swept_floor(moving, pivot_y):
@@ -169,10 +177,11 @@ def check(name):
             problems.append('the elevation frame sweeps into the pedestal')
 
     floor, declared = swept_floor(moving, pivot_y), declared_floor(name)
-    print('  swept    the turning parts reach down to %.2f px, and %s declares %s'
+    print('  swept    the turning parts reach down to %.2f px, and %s starts at %s'
           % (floor * 16.0, SWEPT[name], '%.2f' % (declared * 16.0) if declared is not None else 'none'))
-    if declared is None or abs(declared - floor) > 0.01 / 16.0:
-        problems.append('%s does not start where the sweep reaches' % SWEPT[name])
+    if declared is None or declared > floor + 0.01 / 16.0:
+        problems.append('%s starts above where the sweep reaches, so a player gets in under the row'
+                        % SWEPT[name])
 
     for problem in problems:
         print('  CLASH    %s' % problem)

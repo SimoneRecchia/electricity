@@ -47,23 +47,18 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	private static final List<Cell> TILT_CELLS = List.of(
 			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.83, 15.52, 8.50, 15.10)));
 
-	/** What a tracked row's plane can be anywhere in, over a day. */
-	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 3.22, 0.32, 15.66, 16.00, 15.68);
-
-	/** The same for a pedestal frame, which turns about two axes. */
-	private static final VoxelShape SWEPT_FRAME = Block.box(0.00, 4.37, 0.00, 16.00, 16.00, 16.00);
-
-	// The pier and the drive above it are one column, so they are one box: two of them differed by a pixel
-	// of overhang nobody can walk into.
+	/**
+	 * A turning row is one box, floor to the top of what its plane can sweep.
+	  *
+	 * The swept volume starts above the pier, so a second box for the pier only ever filled the gap under
+	 * it - and a player cannot be in that gap either, because the volume above closes over their head.
+	 */
 	private static final List<Cell> TRACK_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(
-					Block.box(5.92, 0.00, 7.12, 11.31, 12.56, 8.88),
-					SWEPT_ROW)));
+			new Cell(0, 0, 0, Block.box(0.34, 0.00, 0.32, 15.66, 16.00, 15.68)));
 
+	/** The same for a pedestal frame, which turns about two axes and so sweeps the whole block. */
 	private static final List<Cell> DUAL_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(
-					Block.box(4.96, 0.00, 4.96, 11.04, 8.80, 11.04),
-					SWEPT_FRAME)));
+			new Cell(0, 0, 0, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 16.00)));
 
 	private static final Map<PvMounting, List<Cell>> CELLS = Map.of(
 			PvMounting.FLAT, FLAT_CELLS,

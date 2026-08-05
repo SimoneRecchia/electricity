@@ -138,7 +138,10 @@ public class PvArrayRenderer extends ObjRendererBase {
 		if (!isHarness(groupName)) return true;
 		if (groupName.startsWith("harness_plug_north")) return !harnessed && ends.fedNorth();
 		if (groupName.startsWith("harness_plug_south")) return !harnessed && ends.fedSouth();
-		if (groupName.startsWith("harness_input")) return ends.fedNorth();
+		// A socket is what a row plugs into at the corner; an entry is what carries a laid run in from the
+		// middle. Drawn together they fought over the same north-east corner, because the socket's plugs and
+		// the rise behind them fill it - so whatever meets this edge in the middle gets the entry instead.
+		if (groupName.startsWith("harness_input")) return ends.fedNorth() && !ends.midNorth();
 		if (groupName.startsWith("harness_entry_north")) return ends.midNorth();
 		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.midSouth();
 

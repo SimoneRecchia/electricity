@@ -110,7 +110,10 @@ RECTANGLES = {
                      'fan_guard')),
         ('roof', ('hardware', 'insulator')),
     ),
+    # The three the object has: what it stands on, what holds it up, and the box itself.  Merging the post
+    # into the enclosure would put a wall of air beside a column a player walks past.
     'pv_combiner': (
+        ('base', ('base',)),
         ('post', ('post',)),
         ('enclosure', ('enclosure', 'door', 'glands')),
     ),

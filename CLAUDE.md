@@ -143,10 +143,11 @@ The rules that came out of doing it:
   rectangle. Every group a model draws has to appear there exactly once, so a new part is a decision about
   its collision rather than a silent extra box. Cut from every group and sliced wherever it sloped, a
   fixed-tilt array came out as **23 boxes of staircase**; it is **1**. So is a flat one, and the inverter.
-  The combiner keeps 2 and should: merging a thin post into the wider enclosure above it puts a wall of air
-  beside the post for its whole height, which is the one case where a second box earns its keep.
 * **A box is only worth adding where a player could have been in the gap.** A ballasted table is 2.5 px
-  tall in all and a fixed rack 8.5 — there is nothing under either to stand in, so one box each.
+  tall in all and a fixed rack 8.5 — there is nothing under either to stand in, so one box each. A turning
+  row is one box from the floor for the same reason: the swept volume closes over the gap under its pier.
+  The combiner is the counter-example and gets **three** — base, post, enclosure — because a player walks
+  past a 1-px post, and merging it into the enclosure above would be a wall of air beside it.
 * **A quarter of a pixel is a real part.** The threshold is `MIN_OWN = 0.25` px: a ballasted table is
   2 px tall in total, and a 1-px threshold discarded it entirely.
 * **A cable's hitbox is a few pixels, and that is right.** Not the block.
@@ -172,7 +173,7 @@ The renderers read them. Renaming one silently breaks something:
 |---|---|
 | `rotate_*` | the renderer turns it |
 | `pivot_*` | a zero-size marker the renderer measures a hinge from |
-| `harness*`, `entry*` | drawn only when a cable is connected |
+| `harness*`, `entry*` | drawn only when a cable is connected — and `harness_input` is a socket for a *row* while `harness_entry_*` is for a *laid run*, so the two are never drawn together: they both wanted the row's north-east corner |
 | `insulator*` | a wire fitting, **named in `ObjDefinitions`** — and a wire is stored against its *index* in that list, so the order cannot change without moving every wire in every existing world |
 
 ## 6. Generate, never hand-edit

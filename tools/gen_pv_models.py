@@ -165,8 +165,18 @@ def stubs(mesh, name='stub', reach=UNDER):
         box(mesh, faces, (-0.115, top, -0.425), (0.115, top + 0.026, -0.395), uv_scale=0.3, rot=spin)
 
 
-def row_lead(mesh, x0, height, start=-0.44):
-    """The lead out of one end of a row"""
+# How far the socket's rise reaches back inside the lead it continues.  Butted end to end the two caps are
+# coplanar and fight; this buries the rise's, and the two are the same cable so the overlap is invisible.
+SOCKET_LAP = 0.02
+
+
+def row_lead(mesh, x0, height, start=-0.44 + SOCKET_RISE):
+    """The lead out of one end of a row.
+
+    ``start`` is where the socket's rise takes over, so the pair is continuous from the plugs to the block's
+    far edge.  Starting it at the block edge instead ran the lead the whole length of the rise, inside it -
+    5365 voxels of one tube inside another on the fixed-tilt rack.
+    """
     y = height + CORE_Y
     cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)],
                ends=(True, False))
@@ -179,24 +189,44 @@ def row_socket(mesh, x0, height, name='harness_input', end=-1):
     faces = mesh.faces(name, 'core')
     # The rise starts *inside* the block and runs out to the edge: the other way round it climbs backwards
     # through the plug it is meant to feed.
-    for path in tail_rise(edge + (SOCKET_RISE if end < 0 else -SOCKET_RISE), edge, base=height):
+    reach = SOCKET_RISE + SOCKET_LAP
+    for path in tail_rise(edge + (reach if end < 0 else -reach), edge, base=height):
         tube(mesh, faces, [(x0 - CORE_OFFSET + x, y, z) for x, y, z in path], CORE_RADIUS,
              sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
     mc4_pair(mesh, name, edge, y=height + MC4_Y, into=-1.0 if end < 0 else 1.0,
              at_x=x0 - CORE_OFFSET)
 
 
+# Where a laid run's pair leaves the middle of the block and where it lands on the row's own two lanes, per
+# end: (corner z, join z) for the inner core then the outer one.  The two corners are a step apart so the
+# pair never has to cross itself, and the corner that reaches the outer lane is the one nearer the edge, so
+# the other passes behind it.  Axis-aligned rather than diagonal on purpose: a diagonal cuts across the
+# frame and the ballast under the table, and cable is pulled along a rack, not across it.
+#
+# North lands where the lead starts, with nothing there to cross - the socket is not drawn when an entry is,
+# since a socket is what a row plugs into and an entry is what a cable arrives by (PvArrayRenderer.drawn).
+# South lands hard against the block edge, where the run's own arm covers the join.
+ENTRY_PATH = {-1: ((-0.10, -0.10), (-0.20, -0.10)), 1: ((0.38, 0.38), (0.46, 0.46))}
+
+
 def row_entry(mesh, x0, height, end=-1):
-    """The corner between a laid run and the edge a row is wired on, and the riser up onto the rack."""
+    """Where a laid run's pair comes off the middle of a block onto the row's own pair.
+
+    One crossing is left, and it is forced: the outer core has to get past the inner lane to reach its own,
+    and the row's east edge is occupied for the whole length of the block.  It is put at the south edge,
+    square on, which is the shortest a crossing can be - and under the laid run's own arm.
+    """
     name = 'harness_entry_north' if end < 0 else 'harness_entry_south'
     edge = -0.5 if end < 0 else 0.5
-    corner = -EDGE if end < 0 else EDGE
     faces = mesh.faces(name, 'core')
-    for lane in (-CORE_OFFSET, CORE_OFFSET):
-        turn_z = corner + (lane if end < 0 else -lane)
-        path = [(lane, CORE_Y, edge), (lane, CORE_Y, turn_z), (x0 - CORE_OFFSET + lane, CORE_Y, turn_z)]
+
+    for lane, target, (corner, join) in ((-CORE_OFFSET, x0 - 2.0 * CORE_OFFSET, ENTRY_PATH[end][0]),
+                                         (CORE_OFFSET, x0, ENTRY_PATH[end][1])):
+        path = [(lane, CORE_Y, edge), (lane, CORE_Y, corner), (target, CORE_Y, corner)]
+        if abs(join - corner) > 1e-6:
+            path.append((target, CORE_Y, join))
         if height > 0.0:
-            path.append((x0 - CORE_OFFSET + lane, height + CORE_Y, turn_z))
+            path.append((target, height + CORE_Y, join))
         # the block edge is carried on by the laid run's own arm, so that end takes no cap
         tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces,
              cap_ends=(1,))
@@ -209,7 +239,9 @@ def row_harness(mesh):
         name = 'harness_plug_%s' % side
         edge = -0.44 if end < 0 else 0.44
         faces = mesh.faces(name, 'core')
-        for path in tail_rise(0.0, edge):
+        # Each rise starts its own side of the middle, not on it: both starting at zero put the two ends in
+        # the same place, and a player fed from both ends saw the two sets of plugs share a tube.
+        for path in tail_rise(end * SOCKET_LAP, edge):
             tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0,
                  caps=faces)
         mc4_pair(mesh, name, edge, into=-1.0 if end < 0 else 1.0)
@@ -256,7 +288,7 @@ def flat_table():
 
     # The harness: the lead reaches back as far as the socket's rise, so the pair is continuous from the
     # plugs to the block's south edge, and no further - the ballast holds the corners.
-    row_lead(mesh, EDGE, 0.0, start=-0.44 + SOCKET_RISE)
+    row_lead(mesh, EDGE, 0.0)
     row_socket(mesh, EDGE, 0.0)
     for end in (-1, 1):
         row_entry(mesh, EDGE, 0.0, end=end)
@@ -653,15 +685,16 @@ def combiner():
     box_y0, box_y1 = 0.38, 0.78
 
     post = mesh.faces('post', 'steel')
-    plate = mesh.faces('post', 'plate')
-    # the footing and the post, because a field combiner stands on one rather than lying on the ground
+    # The footing and the cable entry box are one part - the base - and the column is another.  A group per
+    # part, so the collision is the three rectangles the object has: base, post, enclosure.
+    plate = mesh.faces('base', 'plate')
     box(mesh, plate, (-0.136, 0.0, -0.136), (0.136, 0.026, 0.136), uv_scale=0.5)
     for x in (-0.129, 0.129):
         for z in (-0.129, 0.129):
             bolt(mesh, plate, (x, 0.026, z), 'y', 0.007, 0.015, uv_scale=0.12)
     # the cable entry box every string arrives in, sunk into the footing so the two share no plane.  Not in
     # an entry group: one box takes all four sides, and four would meet at the post's corners.
-    clad_box(mesh, 'post', (-CONDUIT_FACE, 0.020, -CONDUIT_FACE), (CONDUIT_FACE, 0.100, CONDUIT_FACE),
+    clad_box(mesh, 'base', (-CONDUIT_FACE, 0.020, -CONDUIT_FACE), (CONDUIT_FACE, 0.100, CONDUIT_FACE),
              {'up': 'plate', '*': 'steel'}, uv_scale=0.3)
     cylinder(mesh, post, (0.0, 0.215, 0.0), 'y', 0.034, 0.185, sides=ROUND, uv_scale=0.4,
              uv_along=3.0, caps=mesh.faces('post', 'steel_end'), cap_ends=(1,))

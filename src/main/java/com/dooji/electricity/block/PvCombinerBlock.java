@@ -44,7 +44,8 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 	/** The box as collision, cut from pv_combiner.obj and turned with the block. */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(4.24, 4.86, 6.00, 12.14, 12.80, 9.60),
-					Block.box(5.72, 0.00, 5.72, 10.28, 11.36, 10.28))));
+					Block.box(5.72, 0.00, 5.72, 10.28, 1.60, 10.28),
+					Block.box(7.46, 0.48, 7.46, 8.54, 11.36, 9.68))));
 
 
 	private final CombinerSpec spec;
