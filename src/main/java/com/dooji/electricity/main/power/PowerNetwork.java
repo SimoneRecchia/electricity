@@ -3,6 +3,7 @@ package com.dooji.electricity.main.power;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.api.power.PowerDeliveryEvent;
@@ -85,18 +86,8 @@ public class PowerNetwork {
 			return null;
 		}
 
-		boolean typeMatches = false;
-		if ("wind_turbine".equals(blockType) && blockEntity instanceof WindTurbineBlockEntity) {
-			typeMatches = true;
-		} else if ("electric_cabin".equals(blockType) && blockEntity instanceof ElectricCabinBlockEntity) {
-			typeMatches = true;
-		} else if ("utility_pole".equals(blockType) && blockEntity instanceof UtilityPoleBlockEntity) {
-			typeMatches = true;
-		} else if ("power_box".equals(blockType) && blockEntity instanceof PowerBoxBlockEntity) {
-			typeMatches = true;
-		} else if ("pv_inverter".equals(blockType) && blockEntity instanceof PvInverterBlockEntity) {
-			typeMatches = true;
-		}
+		// what the connection was saved against has to still be what is standing there
+		boolean typeMatches = blockEntity instanceof InsulatorHost host && host.fittingType().equals(blockType);
 
 		if (!typeMatches) {
 			LOGGER.warn("Block type mismatch at {} - client reported {} but server found {}", blockPos, blockType, blockEntity.getClass().getSimpleName());
@@ -393,17 +384,11 @@ public class PowerNetwork {
 	}
 
 	private static void applyPower(BlockEntity blockEntity, double power, PowerDeliveryEvent event) {
-		if (blockEntity == null) return;
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			turbine.setCurrentPower(power);
-		} else if (blockEntity instanceof PvInverterBlockEntity) {
-			// nothing to tell it: an inverter's output is what it makes rather than what reaches it
-			// the figure a panel shows comes off its own conversion instead of off the network
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			cabin.setCurrentPower(power);
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			pole.setCurrentPower(power);
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
+		if (!(blockEntity instanceof InsulatorHost host)) return;
+
+		host.deliverPower(power);
+		// the kiosk is the one that needs the event as well as the figure: it bridges to Forge Energy
+		if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
 			powerBox.setCurrentPower(power);
 			powerBox.setIncomingEvent(event);
 		}
@@ -481,29 +466,10 @@ public class PowerNetwork {
 		}
 	}
 
+	/** Whether power may flow along a wire, which each machine says for itself. */
 	private boolean canTransfer(PowerNode from, PowerNode to) {
-		BlockEntity a = from.blockEntity;
-		BlockEntity b = to.blockEntity;
-
-		// both generators feed a cabin, and either may be daisy-chained through another of its own kind -
-		// which is how a row of turbines or a bank of inverters shares one run of wire back to the cabin
-		if (a instanceof WindTurbineBlockEntity) {
-			return b instanceof ElectricCabinBlockEntity || b instanceof WindTurbineBlockEntity;
-		}
-
-		if (a instanceof PvInverterBlockEntity) {
-			return b instanceof ElectricCabinBlockEntity || b instanceof PvInverterBlockEntity;
-		}
-
-		if (a instanceof ElectricCabinBlockEntity) {
-			return b instanceof UtilityPoleBlockEntity;
-		}
-
-		if (a instanceof UtilityPoleBlockEntity) {
-			return b instanceof UtilityPoleBlockEntity || b instanceof PowerBoxBlockEntity;
-		}
-
-		return false;
+		return from.blockEntity instanceof InsulatorHost a && to.blockEntity instanceof InsulatorHost b
+				&& a.feeds(b);
 	}
 
 	private static class TargetGroup {

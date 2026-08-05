@@ -20,6 +20,8 @@ import com.dooji.electricity.main.weather.WeatherSnapshot;
 import com.dooji.electricity.power.TurbineTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
+import com.dooji.electricity.wire.InsulatorHost;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -46,7 +48,7 @@ import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget {
+public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost, IEnergyBudget {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
@@ -856,5 +858,26 @@ public class WindTurbineBlockEntity extends BlockEntity implements IEnergyBudget
 		Direction facing = getBlockState().getValue(WindTurbineBlock.FACING);
 		yaw = baseFacingYaw(facing);
 		yawInitialized = true;
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_WIND_TURBINE;
+	}
+
+	/** A generator: into the collection substation, or on to the next machine in the string. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof ElectricCabinBlockEntity || other instanceof WindTurbineBlockEntity;
+	}
+
+	@Override
+	public String powerType(String partName) {
+		return "output";
+	}
+
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
 	}
 }

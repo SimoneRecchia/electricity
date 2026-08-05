@@ -7,6 +7,7 @@ import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
@@ -55,10 +56,7 @@ public class WireManager {
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
 		BlockEntity blockEntity = level.getBlockEntity(clickedPos);
-		if (!(blockEntity instanceof UtilityPoleBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof PowerBoxBlockEntity
-				|| blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof PvInverterBlockEntity)) {
-			return InteractionResult.FAIL;
-		}
+		if (!(blockEntity instanceof InsulatorHost)) return InteractionResult.FAIL;
 
 		return InteractionResult.SUCCESS;
 	}

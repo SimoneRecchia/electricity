@@ -302,5 +302,11 @@
   "tooltip.electricity.hv_conductor": "Curlew ACSR in a quad bundle, 420 kV. Four sub-conductors on spacers, for lattice towers.",
   "tooltip.electricity.conductor.reach": "%s blocks a reel, %s blocks a span at most",
   "message.electricity.wire.not_enough": "Not enough conductor: this span needs %s of %s",
-  "message.electricity.wire.already_connected": "Those two fittings are already joined"
+  "message.electricity.wire.already_connected": "Those two fittings are already joined",
+  "block.electricity.lattice_suspension": "Suspension Tower",
+  "tooltip.electricity.lattice_suspension": "Holds a 400 kV line up. Nine towers in ten are one.",
+  "block.electricity.lattice_tension": "Tension Tower",
+  "tooltip.electricity.lattice_tension": "Takes the difference between the pulls either side of it.",
+  "block.electricity.lattice_terminal": "Terminal Tower",
+  "tooltip.electricity.lattice_terminal": "Takes the whole pull of a line, and is stayed back for it."
 }

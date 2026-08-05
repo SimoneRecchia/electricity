@@ -156,9 +156,16 @@ public interface MachineShell {
 		return false;
 	}
 
-	/** How far from its machine a cell can be. */
-	int REACH_UP = 6;
-	int REACH_SIDE = 2;
+	/**
+	 * How far from its machine a cell can be.
+	 *
+	 * Sized by the biggest machine in the mod, which is a lattice tower: eleven cells up and three out.
+	 * MachineShellBlock stores the offset as {@code value + REACH_SIDE}, so raising either renumbers every
+	 * shell already in a world - they fail canSurvive, delete themselves, and the machine's ticker puts
+	 * them back within two seconds.
+	 */
+	int REACH_UP = 11;
+	int REACH_SIDE = 3;
 
 	/** A model-space offset turned by quarter turns. */
 	static BlockPos turned(BlockPos offset, int quarters) {

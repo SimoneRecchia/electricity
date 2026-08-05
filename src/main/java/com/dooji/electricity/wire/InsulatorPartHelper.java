@@ -22,6 +22,8 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_POWER_BOX = "power_box";
 	/** The photovoltaic plant's one connection to the grid. */
 	public static final String TYPE_PV_INVERTER = "pv_inverter";
+	/** A lattice transmission tower, in any of its three duties. */
+	public static final String TYPE_LATTICE_TOWER = "lattice_tower";
 
 	/** The part names a device's insulators are drawn as, read off the model's own definition. */
 	private static List<String> parts(BlockEntity entity) {
@@ -41,35 +43,15 @@ public final class InsulatorPartHelper {
 	}
 
 	public static Optional<Insulator> resolve(BlockEntity entity, String partName) {
-		if (entity instanceof UtilityPoleBlockEntity pole) {
-			return mapFromArray(TYPE_UTILITY_POLE, partName, parts(pole), pole.getInsulatorIds(), pole::getWirePosition);
-		} else if (entity instanceof ElectricCabinBlockEntity cabin) {
-			return mapFromArray(TYPE_ELECTRIC_CABIN, partName, parts(cabin), cabin.getInsulatorIds(), cabin::getWirePosition);
-		} else if (entity instanceof PowerBoxBlockEntity powerBox) {
-			return mapFromArray(TYPE_POWER_BOX, partName, parts(powerBox), powerBox.getInsulatorIds(), powerBox::getWirePosition);
-		} else if (entity instanceof WindTurbineBlockEntity turbine) {
-			return mapFromArray(TYPE_WIND_TURBINE, partName, parts(turbine), turbine.getInsulatorIds(), turbine::getWirePosition);
-		} else if (entity instanceof PvInverterBlockEntity inverter) {
-			return mapFromArray(TYPE_PV_INVERTER, partName, parts(inverter), inverter.getInsulatorIds(), inverter::getWirePosition);
-		}
+		if (!(entity instanceof InsulatorHost host)) return Optional.empty();
 
-		return Optional.empty();
+		return mapFromArray(host.fittingType(), partName, parts(entity), host.getInsulatorIds(), host::getWirePosition);
 	}
 
 	public static Optional<Insulator> resolve(BlockEntity entity, int insulatorId) {
-		if (entity instanceof UtilityPoleBlockEntity pole) {
-			return mapFromId(TYPE_UTILITY_POLE, insulatorId, parts(pole), pole.getInsulatorIds(), pole::getWirePosition);
-		} else if (entity instanceof ElectricCabinBlockEntity cabin) {
-			return mapFromId(TYPE_ELECTRIC_CABIN, insulatorId, parts(cabin), cabin.getInsulatorIds(), cabin::getWirePosition);
-		} else if (entity instanceof PowerBoxBlockEntity powerBox) {
-			return mapFromId(TYPE_POWER_BOX, insulatorId, parts(powerBox), powerBox.getInsulatorIds(), powerBox::getWirePosition);
-		} else if (entity instanceof WindTurbineBlockEntity turbine) {
-			return mapFromId(TYPE_WIND_TURBINE, insulatorId, parts(turbine), turbine.getInsulatorIds(), turbine::getWirePosition);
-		} else if (entity instanceof PvInverterBlockEntity inverter) {
-			return mapFromId(TYPE_PV_INVERTER, insulatorId, parts(inverter), inverter.getInsulatorIds(), inverter::getWirePosition);
-		}
+		if (!(entity instanceof InsulatorHost host)) return Optional.empty();
 
-		return Optional.empty();
+		return mapFromId(host.fittingType(), insulatorId, parts(entity), host.getInsulatorIds(), host::getWirePosition);
 	}
 
 	private static Optional<Insulator> mapFromArray(String blockType, String partName, List<String> parts, int[] insulatorIds, PositionResolver resolver) {
@@ -95,30 +77,11 @@ public final class InsulatorPartHelper {
 	}
 
 	public static String determinePowerType(BlockEntity entity, String partName) {
-		// a generator's one fitting is an output
-		if (entity instanceof WindTurbineBlockEntity || entity instanceof PvInverterBlockEntity) return "output";
-		if (entity instanceof ElectricCabinBlockEntity) {
-			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("output")) return "output";
-			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("input")) return "input";
-		}
-
-		return "bidirectional";
+		return entity instanceof InsulatorHost host ? host.powerType(partName) : "bidirectional";
 	}
 
 	public static String getBlockType(BlockEntity entity) {
-		if (entity instanceof WindTurbineBlockEntity) {
-			return TYPE_WIND_TURBINE;
-		} else if (entity instanceof ElectricCabinBlockEntity) {
-			return TYPE_ELECTRIC_CABIN;
-		} else if (entity instanceof UtilityPoleBlockEntity) {
-			return TYPE_UTILITY_POLE;
-		} else if (entity instanceof PowerBoxBlockEntity) {
-			return TYPE_POWER_BOX;
-		} else if (entity instanceof PvInverterBlockEntity) {
-			return TYPE_PV_INVERTER;
-		}
-
-		return "unknown";
+		return entity instanceof InsulatorHost host ? host.fittingType() : "unknown";
 	}
 
 	public static boolean matchesReportedType(BlockEntity entity, String reportedType) {

@@ -263,26 +263,145 @@ def tower(duty):
     return mesh
 
 
+# ---------------------------------------------------------------- collision
+#
+# Authored rather than cut from the model, and this is the one place in the mod where that is right.
+# check_hitboxes cuts a shape from every group a machine draws; on a lattice the diagonals sweep almost
+# every cell of the bounding volume, which came to 308 cells a tower - a tower you cannot walk into and
+# three hundred shell blocks a placement.  What a player should collide with is the structure: the four
+# legs, the two crossarms, the peak, the footings.  Between the braces is air, which is what a lattice is.
+COLLISION_LEG = 0.16          # how wide a leg collides, wider than the angle so a player cannot slip past
+COLLISION_ARM = 0.20          # the crossarm's thickness, top and bottom of its members
+
+
+def collision_boxes(duty):
+    """Every box the tower collides as, in model space and in blocks.
+
+    One box a leg a *block level* rather than a box a panel: a leg batters gently enough that a level's
+    worth of it is one box, and per panel it straddled cells and came to a hundred and ten of them.
+    """
+    boxes = []
+    top = PEAK - 1.6
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            for level in range(int(math.ceil(top))):
+                y0, y1 = float(level), min(top, level + 1.0)
+                if y1 - y0 < 0.05:
+                    continue
+
+                half = leg_half((y0 + y1) * 0.5)
+                boxes.append(((sx * half - COLLISION_LEG, y0, sz * half - COLLISION_LEG),
+                              (sx * half + COLLISION_LEG, y1, sz * half + COLLISION_LEG)))
+            boxes.append(((sx * BASE_HALF - 0.19, 0.0, sz * BASE_HALF - 0.19),
+                          (sx * BASE_HALF + 0.19, 0.10, sz * BASE_HALF + 0.19)))
+
+    for y, reach, depth in ((LOWER_ARM, LOWER_REACH, 0.42), (UPPER_ARM, UPPER_REACH, 0.34)):
+        boxes.append(((-reach - 0.08, y - COLLISION_ARM * 0.5, -depth),
+                      (reach + 0.08, y + COLLISION_ARM * 0.5, depth)))
+
+    # the peak, as one box a level, tapering to the point
+    for level in range(int(math.floor(top)), int(math.ceil(PEAK))):
+        y0, y1 = max(top, float(level)), min(PEAK, level + 1.0)
+        if y1 - y0 < 0.05:
+            continue
+
+        half = WAIST_HALF * (1.0 - (y0 - top) / (PEAK - top)) + COLLISION_LEG
+        boxes.append(((-half, y0, -half), (half, y1, half)))
+
+    # No back-stay for the terminal tower. Two sloped runs across seven levels claim sixty-six cells on
+    # their own, and what they would buy is collision with a guy that a player walks past rather than
+    # into. The anchor pads at their feet are there, because those are on the ground.
+    if duty == 'terminal':
+        for sx in (-1, 1):
+            boxes.append(((sx * BASE_HALF * 1.25 - 0.16, 0.0, BASE_HALF * 1.55 - 0.16),
+                          (sx * BASE_HALF * 1.25 + 0.16, 0.10, BASE_HALF * 1.55 + 0.16)))
+
+    return [(tuple(min(a[i], b[i]) for i in range(3)), tuple(max(a[i], b[i]) for i in range(3)))
+            for a, b in boxes]
+
+
+def collision_cells(duty):
+    """The boxes clipped into block cells, keyed by cell, in the sixteenths Block.box wants."""
+    cells = {}
+    for lo, hi in collision_boxes(duty):
+        for cx in range(int(math.floor(lo[0] + 0.5)), int(math.ceil(hi[0] + 0.5))):
+            for cy in range(int(math.floor(lo[1])), int(math.ceil(hi[1]))):
+                for cz in range(int(math.floor(lo[2] + 0.5)), int(math.ceil(hi[2] + 0.5))):
+                    low = (max(lo[0], cx - 0.5), max(lo[1], cy), max(lo[2], cz - 0.5))
+                    high = (min(hi[0], cx + 0.5), min(hi[1], cy + 1.0), min(hi[2], cz + 0.5))
+                    if any(high[i] - low[i] < 0.03 for i in range(3)):
+                        continue
+
+                    box_px = (round((low[0] - cx + 0.5) * 16.0, 2), round((low[1] - cy) * 16.0, 2),
+                              round((low[2] - cz + 0.5) * 16.0, 2),
+                              round((high[0] - cx + 0.5) * 16.0, 2), round((high[1] - cy) * 16.0, 2),
+                              round((high[2] - cz + 0.5) * 16.0, 2))
+                    cells.setdefault((cx, cy, cz), set()).add(box_px)
+
+    return {cell: sorted(boxes) for cell, boxes in sorted(cells.items(),
+                                                          key=lambda kv: (kv[0][1], kv[0][0], kv[0][2]))}
+
+
+def check_java():
+    """Proves LatticeTowerBlock still declares the cells this authors, for all three duties.
+
+    Same reason gen_cable_models checks its own: check_hitboxes cannot compare these, because they are
+    authored rather than cut from the model, so nothing else would notice them going stale.
+    """
+    path = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
+                        'LatticeTowerBlock.java')
+    source = ' '.join(open(path).read().split())
+    problems = []
+    for _, duty in MODELS:
+        wanted = ' '.join(java(duty).split())
+        if wanted not in source:
+            problems.append('%s_CELLS is not what LatticeTowerBlock declares' % duty.upper())
+    return problems
+
+
+def java(duty):
+    """The cell table for one duty, ready to paste into LatticeTowerBlock."""
+    rows = []
+    for (x, y, z), boxes in collision_cells(duty).items():
+        drawn = ['Block.box(%s)' % ', '.join('%.2f' % v for v in box) for box in boxes]
+        shape = drawn[0] if len(drawn) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(drawn))
+        rows.append('\t\t\tnew Cell(%d, %d, %d, %s)' % (x, y, z, shape))
+    return ',\n'.join(rows) + ');'
+
+
 MODELS = [
-    ('lattice_suspension', lambda: tower('suspension')),
-    ('lattice_tension', lambda: tower('tension')),
-    ('lattice_terminal', lambda: tower('terminal')),
+    ('lattice_suspension', 'suspension'),
+    ('lattice_tension', 'tension'),
+    ('lattice_terminal', 'terminal'),
 ]
 
 USED = ('steel', 'plate', 'porcelain', 'concrete', 'sign')
 
 
 def main():
-    for name, builder in MODELS:
-        mesh = builder()
+    for name, duty in MODELS:
+        mesh = tower(duty)
         directory = os.path.join(OUT, name)
         mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', 'gen_tower_models.py')
         write_mtl(os.path.join(directory, name + '.mtl'), USED, MATERIALS, 'gen_tower_models.py')
         vertices, faces = mesh.stats()
         groups = ['%s_%s' % (obj, material) for obj, material, face_list in mesh.objects if face_list]
-        print('%-20s %5d vertices, %5d faces, %2d groups' % (name, vertices, faces, len(groups)))
-    print('\nthe six insulator strings are named insulator_1 .. insulator_6, in the order')
-    print('ObjDefinitions declares them: the lower arm outward-in, then the upper arm.')
+        cells = collision_cells(duty)
+        print('%-20s %5d vertices, %5d faces, %2d groups, %3d collision cells, %3d boxes'
+              % (name, vertices, faces, len(groups), len(cells),
+                 sum(len(b) for b in cells.values())))
+
+    problems = check_java()
+    for line in problems:
+        print('    TABLE %s' % line)
+    if not problems:
+        print('LatticeTowerBlock declares the cells this authors, for all three duties')
+
+    if '--java' in sys.argv:
+        for name, duty in MODELS:
+            print('\n\t// ---- %s, printed by tools/gen_tower_models.py --java ----' % name)
+            print('\tprivate static final List<Cell> %s_CELLS = List.of(' % duty.upper())
+            print(java(duty))
 
 
 if __name__ == '__main__':

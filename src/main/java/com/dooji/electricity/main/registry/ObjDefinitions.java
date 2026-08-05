@@ -65,6 +65,16 @@ public final class ObjDefinitions {
 			ALL.add(new ObjBlockDefinition(block, combinerModel, List.of()));
 		}
 
+		// The six phase fittings of a tower, in the order gen_tower_models writes PHASES: the lower arm
+		// outward-in, then the upper arm. A wire is stored against the index, so this order is fixed.
+		for (var spec : TowerCatalog.all()) {
+			Block block = Electricity.LATTICE_TOWER_BLOCKS.get(spec.id()).get();
+			ALL.add(new ObjBlockDefinition(block,
+					new ResourceLocation(Electricity.MOD_ID, "models/" + spec.modelName() + "/" + spec.modelName() + ".obj"),
+					List.of("insulator_1_porcelain", "insulator_2_porcelain", "insulator_3_porcelain",
+							"insulator_4_porcelain", "insulator_5_porcelain", "insulator_6_porcelain")));
+		}
+
 		ALL.add(new ObjBlockDefinition(Electricity.MET_STATION_BLOCK.get(),
 				new ResourceLocation(Electricity.MOD_ID, "models/met_mast/met_mast.obj"), List.of()));
 	}

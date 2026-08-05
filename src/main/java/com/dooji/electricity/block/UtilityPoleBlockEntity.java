@@ -6,6 +6,8 @@ import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.wire.InsulatorHost;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -26,7 +28,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class UtilityPoleBlockEntity extends BlockEntity {
+public class UtilityPoleBlockEntity extends BlockEntity implements InsulatorHost {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 	private float offsetX = 0.0f;
@@ -158,6 +160,23 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 		return result;
 	}
 
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_UTILITY_POLE;
+	}
+
+	/** A pole carries a line on to the next pole and delivers it to a kiosk. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof UtilityPoleBlockEntity || other instanceof PowerBoxBlockEntity;
+	}
+
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
+	}
+
+	@Override
 	public Vec3 getWirePosition(int index) {
 		if (index >= 0 && index < wirePositions.length) return wirePositions[index];
 		return Vec3.atCenterOf(getBlockPos());

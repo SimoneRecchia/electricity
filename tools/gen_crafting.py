@@ -13,6 +13,7 @@ import re
 
 DATA = os.path.join('src', 'main', 'resources', 'data', 'electricity', 'recipes')
 ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models', 'item')
+BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'blockstates')
 LANG = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'lang', 'en_us.json')
 CATALOGUE = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'main', 'registry',
                          'PartCatalog.java')
@@ -165,6 +166,14 @@ RECIPES = [
     # ------------------------------------------------------------------- the met station
     ('met_station', 1, SHAPED, [' p ', 'pbp', 'SSS']),
 
+    # ---------------------------------------------------------------- the transmission towers
+    # Steel sections, plate gussets and the insulator strings the phases hang from.  The duty is what
+    # costs: a suspension tower is only holding weight, a tension tower is braced for the difference
+    # between two pulls, and a terminal tower takes all of it and is stayed back.
+    ('lattice_suspension', 1, SHAPED, ['SIS', 'SPS', 'S S']),
+    ('lattice_tension', 1, SHAPED, ['SIS', 'SPS', 'SPS']),
+    ('lattice_terminal', 1, SHAPED, ['SIS', 'PPP', 'SPS']),
+
     # ------------------------------------------------------------------- towers and turbines
     ('turbine_tower', 2, SHAPED, ['PPP', 'n n', 'PPP']),
     # Three blades over a drivetrain, and the drivetrain is where the machines differ.
@@ -258,8 +267,37 @@ def check(catalogue):
     return len(problems)
 
 
+# A machine drawn by the mod's own OBJ renderer has an INVISIBLE render shape, so its blockstate only
+# needs to name a particle texture - one variant a facing, all four the same.  Its item is a flat sprite.
+INVISIBLE_MACHINES = {
+    'lattice_suspension': 'stone_particle',
+    'lattice_tension': 'stone_particle',
+    'lattice_terminal': 'stone_particle',
+}
+
+# The names and tooltips for what is not a part: a block is named here rather than by hand.
+BLOCK_NAMES = {
+    'lattice_suspension': ('Suspension Tower', 'Holds a 400 kV line up. Nine towers in ten are one.'),
+    'lattice_tension': ('Tension Tower', 'Takes the difference between the pulls either side of it.'),
+    'lattice_terminal': ('Terminal Tower', 'Takes the whole pull of a line, and is stayed back for it.'),
+}
+
+
+def machine_assets():
+    """The blockstate and item model for every machine this file owns, and their names."""
+    for name, particle in INVISIBLE_MACHINES.items():
+        write(os.path.join(BLOCKSTATES, name + '.json'), {'variants': {
+            'facing=' + side: {'model': 'electricity:block/' + particle}
+            for side in ('north', 'south', 'west', 'east')}})
+        write(os.path.join(ITEM_MODELS, name + '.json'),
+              {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'electricity:item/' + name}})
+
+    return len(INVISIBLE_MACHINES)
+
+
 def main():
     catalogue = parts()
+    machines = machine_assets()
 
     # one item model per part: a flat sprite, like every other ingredient in the game
     for part_id, _, _, _ in catalogue:
@@ -271,6 +309,9 @@ def main():
     for part_id, _, name, tooltip in catalogue:
         lang['item.electricity.' + part_id] = name
         lang['tooltip.electricity.' + part_id] = tooltip
+    for block_id, (name, tooltip) in BLOCK_NAMES.items():
+        lang['block.electricity.' + block_id] = name
+        lang['tooltip.electricity.' + block_id] = tooltip
     write(LANG, lang)
 
     # and the recipes
@@ -291,7 +332,8 @@ def main():
               {'type': 'minecraft:smelting', 'ingredient': {'item': source},
                'result': 'electricity:' + result, 'experience': 0.1, 'cookingtime': 200})
 
-    print('%d parts, %d bench recipes, 2 furnace recipes' % (len(catalogue), ingots))
+    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates'
+          % (len(catalogue), ingots, machines))
     print('%d recipe files on disk, hand-written ones included' % len(written_recipes()))
     print('lang now has %d keys' % len(lang))
     problems = check(catalogue)

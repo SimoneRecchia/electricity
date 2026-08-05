@@ -4,6 +4,7 @@ import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjTransforms.Transform;
@@ -284,6 +285,7 @@ public class ObjRaycaster {
 
 	private static Direction getFacing(BlockState blockState) {
 		if (blockState.hasProperty(UtilityPoleBlock.FACING)) return blockState.getValue(UtilityPoleBlock.FACING);
+		if (blockState.hasProperty(LatticeTowerBlock.FACING)) return blockState.getValue(LatticeTowerBlock.FACING);
 		if (blockState.hasProperty(ElectricCabinBlock.FACING)) return blockState.getValue(ElectricCabinBlock.FACING);
 		if (blockState.hasProperty(PowerBoxBlock.FACING)) return blockState.getValue(PowerBoxBlock.FACING);
 		return null;

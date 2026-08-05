@@ -748,6 +748,78 @@ def item_hv_conductor():
     return c
 
 
+# The three towers as pixel art, because at sixteen pixels a lattice drawn with strokes fills solid and
+# reads as a tent.  Legend: L a leg, B a brace, A a crossarm, P the peak, I an insulator string, F a
+# footing, S a stay.  What tells the three apart is the bracing and the way the strings hang.
+TOWER_ROWS = {
+    'suspension': (
+        '.......PP.......',
+        '......P..P......',
+        '.....P....P.....',
+        '...AAAALLAAAA...',
+        '.....LI..IL.....',
+        '.....L....L.....',
+        '.AAAAAALLAAAAAA.',
+        '....LI.BB.IL....',
+        '....LB....BL....',
+        '...LB.B..B.BL...',
+        '...L.B....B.L...',
+        '..LB.B....B.BL..',
+        '..L.B......B.L..',
+        '.LB..........BL.',
+        '.L............L.',
+        'FF............FF',
+    ),
+    'tension': (
+        '.......PP.......',
+        '......P..P......',
+        '.....P....P.....',
+        '...AAAALLAAAA...',
+        '....II.LL.II....',
+        '.....L....L.....',
+        '.AAAAAALLAAAAAA.',
+        '..III.LBBL.III..',
+        '....LBB..BBL....',
+        '...LBB.BB.BBL...',
+        '...LB.BBBB.BL...',
+        '..LBB.BBBB.BBL..',
+        '..LBB.BBBB.BBL..',
+        '.LBB..BBBB..BBL.',
+        '.LB....BB....BL.',
+        'FF....BBBB....FF',
+    ),
+    'terminal': (
+        '.......PP.......',
+        '......P..P......',
+        '.....P....P.....',
+        '...AAAALLAAAA...',
+        '....II.LL.......',
+        '.....L....LS....',
+        '.AAAAAALLAAAAS..',
+        '..III.LBBL...S..',
+        '....LBB..BBL.S..',
+        '...LBB.BB.BB.S..',
+        '...LB.BBBB.BLS..',
+        '..LBB.BBBB.BBS..',
+        '..LBB.BBBB.BBS..',
+        '.LBB..BBBB..BBS.',
+        '.LB....BB....BS.',
+        'FF....BBBB....FF',
+    ),
+}
+
+def tower_sprite(duty):
+    """A lattice tower as an item: face-on, so the silhouette and the bracing do the work.
+
+    Face-on rather than isometric for the reason the turbines are: a lattice in three-quarter view is a
+    grey smudge, and face-on it is a battered body with two crossarms.  The palette is built here rather
+    than at module level because STEEL and GLASS are declared further down the file.
+    """
+    palette = {'L': STEEL[2], 'A': STEEL[2], 'P': STEEL[1], 'B': STEEL[0],
+               'S': (120, 124, 130, 255), 'I': GLASS[1], 'F': (150, 148, 142, 255)}
+    return sprite(TOWER_ROWS[duty], palette)
+
+
 def item_flat():
     c = Canvas(16, 16)
     c.rect(1, 9, 15, 12, (24, 32, 74, 255))
@@ -1620,6 +1692,9 @@ ITEM_TEXTURES = {
     'dc_string_cable': item_string_cable,
     'dc_trunk_cable': item_trunk_cable,
     'abc_conductor': item_abc_conductor,
+    'lattice_suspension': lambda: tower_sprite('suspension'),
+    'lattice_tension': lambda: tower_sprite('tension'),
+    'lattice_terminal': lambda: tower_sprite('terminal'),
     'mv_conductor': item_mv_conductor,
     'hv_conductor': item_hv_conductor,
     'power_wrench': item_wrench,

@@ -1,6 +1,7 @@
 package com.dooji.electricity.client.wire;
 
 import com.dooji.electricity.block.ElectricCabinBlock;
+import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.WindTurbineBlock;
@@ -49,6 +50,7 @@ public final class WireAnchorHelper {
 		if (state.hasProperty(ElectricCabinBlock.FACING)) return state.getValue(ElectricCabinBlock.FACING);
 		if (state.hasProperty(PowerBoxBlock.FACING)) return state.getValue(PowerBoxBlock.FACING);
 		if (state.hasProperty(WindTurbineBlock.FACING)) return state.getValue(WindTurbineBlock.FACING);
+		if (state.hasProperty(LatticeTowerBlock.FACING)) return state.getValue(LatticeTowerBlock.FACING);
 		return null;
 	}
 }

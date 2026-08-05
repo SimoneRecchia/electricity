@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SIS",
+    "PPP",
+    "SPS"
+  ],
+  "key": {
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:lattice_terminal"
+  }
+}

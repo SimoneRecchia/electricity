@@ -23,11 +23,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import com.dooji.electricity.wire.InsulatorHost;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class ElectricCabinBlockEntity extends BlockEntity {
+public class ElectricCabinBlockEntity extends BlockEntity implements InsulatorHost {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
@@ -258,5 +259,35 @@ public class ElectricCabinBlockEntity extends BlockEntity {
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
 		}
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_ELECTRIC_CABIN;
+	}
+
+	/**
+	 * A collection substation: it takes machines in and puts a line out.
+	 *
+	 * Out to a distribution pole, or to a lattice tower where the line is a transmission one.
+	 */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof UtilityPoleBlockEntity || other instanceof LatticeTowerBlockEntity;
+	}
+
+	/** Which of the two fittings this is, from the group's own name. */
+	@Override
+	public String powerType(String partName) {
+		if (partName == null) return "bidirectional";
+		if (partName.toLowerCase(java.util.Locale.ROOT).contains("output")) return "output";
+		if (partName.toLowerCase(java.util.Locale.ROOT).contains("input")) return "input";
+
+		return "bidirectional";
+	}
+
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
 	}
 }

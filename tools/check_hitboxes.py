@@ -92,6 +92,13 @@ SWEPT = {
 # Models whose tables are printed somewhere else, so this file would only disagree with itself.
 ELSEWHERE = {
     'dc_string_cable': 'printed by tools/gen_cable_models.py --java, per connection pattern',
+    # A lattice is mostly air. Cut from every group it draws, its diagonals sweep 308 of the 400 cells in
+    # its bounding volume - a tower you cannot walk into and three hundred shell blocks a placement. So
+    # gen_tower_models authors the collision from the legs, the crossarms, the peak and the footings, and
+    # prints it: 78 cells, and between the braces you can walk.
+    'lattice_suspension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    'lattice_tension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    'lattice_terminal': 'printed by tools/gen_tower_models.py --java, authored from the structure',
 }
 
 

@@ -4,6 +4,7 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.item.ConductorItem;
@@ -338,7 +339,6 @@ public class WireRenderer {
 	}
 
 	private static boolean isWireAttachable(BlockEntity blockEntity) {
-		return blockEntity instanceof UtilityPoleBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof PowerBoxBlockEntity
-				|| blockEntity instanceof WindTurbineBlockEntity;
+		return blockEntity instanceof InsulatorHost;
 	}
 }

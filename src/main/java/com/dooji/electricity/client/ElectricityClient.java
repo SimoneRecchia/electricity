@@ -6,6 +6,7 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
+import com.dooji.electricity.client.render.block.LatticeTowerRenderer;
 import com.dooji.electricity.client.render.block.PowerBoxRenderer;
 import com.dooji.electricity.client.render.block.PvArrayRenderer;
 import com.dooji.electricity.client.render.block.PvCombinerRenderer;
@@ -15,6 +16,7 @@ import com.dooji.electricity.client.render.block.WindTurbineRenderer;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
@@ -47,6 +49,7 @@ public class ElectricityClient {
 		UtilityPoleRenderer.init();
 		ElectricCabinRenderer.init();
 		PowerBoxRenderer.init();
+		LatticeTowerRenderer.init();
 		WindTurbineRenderer.init();
 		PvArrayRenderer.init();
 		PvInverterRenderer.init();
@@ -85,14 +88,8 @@ public class ElectricityClient {
 		if (level == null) return;
 
 		var blockEntity = level.getBlockEntity(payload.blockPos());
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			turbine.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			cabin.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			pole.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
-			powerBox.setCurrentPower(payload.power());
-		}
+		// the same figure the server delivered, so what a wrench reads on the client is what flowed
+		if (blockEntity instanceof InsulatorHost host) host.deliverPower(payload.power());
+		if (blockEntity instanceof PowerBoxBlockEntity powerBox) powerBox.setCurrentPower(payload.power());
 	}
 }

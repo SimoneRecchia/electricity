@@ -14,6 +14,8 @@ import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import com.dooji.electricity.power.PowerFieldManager;
+import com.dooji.electricity.wire.InsulatorHost;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -46,7 +48,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class PowerBoxBlockEntity extends BlockEntity {
+public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
@@ -602,5 +604,16 @@ public class PowerBoxBlockEntity extends BlockEntity {
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
 		}
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_POWER_BOX;
+	}
+
+	/** The end of the line: a kiosk distributes, it does not feed another machine. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return false;
 	}
 }

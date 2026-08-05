@@ -24,6 +24,8 @@ import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.power.SolarTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
+import com.dooji.electricity.wire.InsulatorHost;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -52,7 +54,7 @@ import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
 /** The inverter: the whole electrical side of a photovoltaic plant, in one block. */
-public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget {
+public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost, IEnergyBudget {
 	/** How often the plant is surveyed for arrays again, in ticks. */
 	private static final int RESCAN_TICKS = 40;
 	/** Ticks in a day, for the energy counters that reset with it. */
@@ -880,5 +882,26 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				box.releaseClaim(worldPosition);
 			}
 		}
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_PV_INVERTER;
+	}
+
+	/** A generator, like a turbine. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof ElectricCabinBlockEntity || other instanceof PvInverterBlockEntity;
+	}
+
+	@Override
+	public String powerType(String partName) {
+		return "output";
+	}
+
+	/** Nothing to tell it: an inverter's reading is what it makes, not what reaches it. */
+	@Override
+	public void deliverPower(double power) {
 	}
 }
