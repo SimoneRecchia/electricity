@@ -60,7 +60,7 @@ d 1.000000
 illum 2
 map_Kd pv_cabinet_top.png
 
-newmtl dc_cable
+newmtl core
 Ns 250.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
@@ -68,9 +68,9 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd dc_harness.png
+map_Kd dc_core.png
 
-newmtl dc_jacket
+newmtl plug_plus
 Ns 250.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
@@ -78,7 +78,17 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd dc_jacket.png
+map_Kd dc_connector_plus.png
+
+newmtl plug_minus
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd dc_connector_minus.png
 
 newmtl module
 Ns 250.000000

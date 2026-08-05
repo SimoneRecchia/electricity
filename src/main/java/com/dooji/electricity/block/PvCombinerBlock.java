@@ -68,7 +68,7 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(4.24, 6.08, 6.00, 11.76, 12.80, 9.60),
 					Block.box(4.88, 4.86, 6.88, 6.88, 6.08, 9.12),
-					Block.box(6.48, 0.00, 6.80, 9.52, 11.36, 9.68),
+					Block.box(6.30, 0.00, 6.80, 9.70, 11.36, 10.88),
 					Block.box(8.88, 4.86, 6.88, 10.88, 6.08, 9.12),
 					Block.box(10.88, 5.68, 6.88, 12.14, 7.76, 9.12))));
 

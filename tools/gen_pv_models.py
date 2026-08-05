@@ -56,8 +56,9 @@ MATERIALS = {
     'display': 'pv_display.png',
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
-    'dc_cable': 'dc_harness.png',
-    'dc_jacket': 'dc_jacket.png',
+    'core': 'dc_core.png',
+    'plug_plus': 'dc_connector_plus.png',
+    'plug_minus': 'dc_connector_minus.png',
     'combiner_door': 'pv_combiner_door.png',
     'dc_section': 'pv_dc_section.png',
     'blank': 'pv_blank.png',
@@ -110,79 +111,135 @@ LAID = 2 * LEAD
 EDGE = 0.50 - LEAD
 
 
-def lead(mesh, name, lo, hi, face='up', rot=None):
-    """A length of the pair, with the conductors on one face and jacket on the rest."""
-    clad_box(mesh, name, lo, hi, {face: 'dc_cable', '*': 'dc_jacket'}, rot=rot)
+# The string cable's own figures, from gen_cable_models.py, in blocks rather than sixteenths.  Every
+# length of cable a machine shows has to be *the same product* as the one a player lays next to it - same
+# radius, same lane spacing, same height off the ground - or the run steps in thickness where it meets the
+# machine.  Change one of these and change it there.
+CORE_RADIUS = 0.65 / 16.0
+CORE_OFFSET = 1.05 / 16.0
+CORE_Y = CORE_RADIUS
+# The four segments of an MC4, as (length, radius, v0, v1) - the same table, and the same texture bands.
+MC4 = ((0.80 / 16.0, 0.80 / 16.0, 0.00, 0.12),
+       (1.05 / 16.0, 0.85 / 16.0, 0.12, 0.44),
+       (2.25 / 16.0, 0.95 / 16.0, 0.44, 0.90),
+       (0.70 / 16.0, 0.62 / 16.0, 0.90, 1.00))
+MC4_Y = max(radius for _, radius, _, _ in MC4)
+# How far short of the middle a machine's stub stops, so four of them never cross under it.
+UNDER = 0.20
+
+
+def spin_y(point, degrees):
+    """A point turned about the block's own vertical axis, which the machines' frame centres on."""
+    angle = math.radians(degrees)
+    c, s = math.cos(angle), math.sin(angle)
+    return (point[0] * c + point[2] * s, point[1], -point[0] * s + point[2] * c)
+
+
+def cable_pair(mesh, name, points, turn=0.0, lanes=CORE_OFFSET, radius=CORE_RADIUS):
+    """The pair swept along a path, one tube a core - the string cable's own geometry.
+
+    ``points`` is the centreline for a run along z, and each core takes it offset in x by a lane; ``turn``
+    then puts the whole thing on whichever side of the block it belongs to.  Both ends of every tube are
+    closed, for the reason gen_cable_models closes them: an open end is a hole wherever whatever should
+    cover it does not, and these ends run under machines.
+    """
+    faces = mesh.faces(name, 'core')
+    for lane in (-lanes, lanes):
+        path = [spin_y((x + lane, y, z), turn) for x, y, z in points]
+        tube(mesh, faces, path, radius, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
+
+
+def tail_rise(z_from, z_to):
+    """A pair's last stretch before a plug, lifting from the cable's axis onto the plug's.
+
+    Same shape gen_cable_models gives it: a plug is fatter than the cable it is moulded onto, so one
+    lying on the ground holds its axis higher and the cable rises into it.
+    """
+    step = 0.9 / 16.0 * (1.0 if z_to > z_from else -1.0)
+    return [(0.0, CORE_Y, z_from), (0.0, MC4_Y, z_from + step), (0.0, MC4_Y, z_to)]
+
+
+def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, lanes=CORE_OFFSET, at_x=0.0):
+    """Two MC4 plugs on the end of a pair, red collar on the positive pole.
+
+    ``into`` is which way the plug points along z, ``y`` its axis - default is the plug's own radius,
+    which is a plug resting on the ground; a pair up on a rack passes the pair's own height instead.
+    """
+    y = MC4_Y if y is None else y
+    axis = 'z' if turn % 180 == 0 else 'x'
+    for index, lane in enumerate((at_x - lanes, at_x + lanes)):
+        faces = mesh.faces(name, 'plug_plus' if index == 0 else 'plug_minus')
+        cursor = at_z
+        for step, (length, radius, v0, v1) in enumerate(MC4):
+            low, high = sorted((cursor, cursor + into * length))
+            cylinder(mesh, faces, spin_y((lane, y, (low + high) / 2.0), turn), axis, radius,
+                     (high - low) / 2.0, sides=FITTING, uv_scale=1.0, uv=(0.0, v0, 1.0, v1),
+                     caps=faces, cap_ends=(1,) if step == len(MC4) - 1 else ())
+            cursor += into * length
 
 
 def stubs(mesh, name='stub'):
-    """A run of cable from the middle of the block out to each of the four edges, one group apiece.
+    """A run of cable from each of the four block edges in under the machine, one group apiece.
 
-    Four groups rather than one rotated four ways, because a renderer draws a group once: the pose
-    map is keyed by group name, so the way to draw a stub towards two different sides is to have
-    two.  The renderer includes only the sides a run has actually been laid against, which is what
-    makes the cable appear to run *into* the machine instead of stopping a pixel short of it.
+    Four groups rather than one rotated four ways, because a renderer draws a group once: the pose map is
+    keyed by group name, and the renderer includes only the sides a run has actually been laid against.
 
-    All four are the same box turned about the block's middle rather than four boxes written out,
-    and that is not brevity: this file maps a face's texture along its own x and z, so a stub
-    *written* along x would come out with its conductors running across it instead of along it.
+    Each stops short of the middle, at UNDER, and that is what lets four coexist: a north pair's lanes run
+    in x and an east pair's in z, so they would cross in the middle.  A laid run solves that with a
+    junction box; a machine has its plinth over the top.
     """
-    # the hub, drawn whatever is connected, so that two arms never have to meet in the middle: two
-    # solids sharing a volume put two faces on the same plane, which flickers
-    clad_box(mesh, '%s_hub' % name, (-LEAD, 0.0, -LEAD), (LEAD, LEAD, LEAD),
-             {'up': 'dc_cable', '*': 'dc_jacket'})
-
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
+        group = '%s_%s' % (name, side)
+        cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -UNDER)], turn=turn)
+        # the cleat that holds it down where it crosses open ground: the same fitting a laid run has
+        faces = mesh.faces(group, 'steel')
+        strap, top = CORE_OFFSET + CORE_RADIUS, CORE_Y + CORE_RADIUS
         spin = ((0.0, 0.0, 0.0), 'y', turn)
-        clad_box(mesh, '%s_%s' % (name, side), (-LEAD, 0.0, -0.5), (LEAD, LEAD, -LEAD),
-                 {'up': 'dc_cable', '*': 'dc_jacket'}, rot=spin)
-        # the saddle: a bar over the pair on two legs beside it, rather than a block round it.  A
-        # block round it shares the ground plane with the cable and the two flicker against each other
-        faces = mesh.faces('%s_%s' % (name, side), 'steel')
-        box(mesh, faces, (-0.09, LEAD, -0.425), (0.09, 0.095, -0.40), uv_scale=0.3, rot=spin)
-        for x in (-0.0825, 0.0825):
-            box(mesh, faces, (x - 0.0125, 0.0, -0.42), (x + 0.0125, LEAD, -0.405),
-                uv_scale=0.2, rot=spin)
+        for lo, hi in ((-0.115, -strap), (strap, 0.115)):
+            box(mesh, faces, (lo, 0.0, -0.425), (hi, top, -0.395), uv_scale=0.2, rot=spin)
+        box(mesh, faces, (-0.115, top, -0.425), (0.115, top + 0.026, -0.395), uv_scale=0.3, rot=spin)
 
 
 def row_lead(mesh, x0, height, start=-0.44):
-    """The lead out of one end of a row, and nothing on the other sides.
+    """The lead out of one end of a row, along the edge it is wired on.
 
-    A string has two ends.  They are where the next row's string arrives and where this one's
-    leaves, so everything a row shows is on one edge: the lead, and the socket at the far end that
-    takes the row behind it.  Nothing on the flanks - a run round all four edges reads as a plant
-    wrapped in wire, and it is not what a plant looks like either.
+    A string has two ends - where the next row's string arrives and where this one's leaves - so
+    everything a row shows is on one edge.  A run round all four reads as a plant wrapped in wire.
     """
-    lead(mesh, 'harness', (x0, height, start), (x0 + LEAD, height + LEAD, 0.50))
+    y = height + CORE_Y
+    cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)])
 
 
-def row_socket(mesh, x0, height, name='harness_input', end=-1, width=LEAD):
-    """Where the row behind plugs in, at the other end of that same edge.
+def row_socket(mesh, x0, height, name='harness_input', end=-1):
+    """Where the row behind plugs in: a pair of MC4s on the edge a row is wired on.
 
-    Its own group, because it is drawn only when there is something to plug into it: a socket
-    sitting on every panel whether or not anything feeds it is the difference between a plant that
-    reads as wired through and one that reads as a warehouse of parts.
+    Its own group, because it is drawn only when there is something to plug into it - a socket on every
+    panel whether or not anything feeds it is a warehouse of parts rather than a wired plant.
     """
-    z0, z1 = (-0.50, -0.44) if end < 0 else (0.44, 0.50)
-    steel = mesh.faces(name, 'steel')
-    box(mesh, steel, (x0, height, z0), (x0 + width, height + LEAD, z1), uv_scale=0.25)
-    nose = z0 - 0.015 if end < 0 else z1 + 0.015
-    cylinder(mesh, steel, (x0 + width / 2, height + LEAD / 2, nose), 'z', 0.022, 0.018,
-             sides=FITTING, uv_scale=0.3, caps=steel)
+    # The plugs and nothing else: the lead is already there, and a short length of cable inside it put a
+    # second tube end on the same plane as the lead's own.
+    mc4_pair(mesh, name, -0.44 if end < 0 else 0.44, y=height + CORE_Y,
+             into=-1.0 if end < 0 else 1.0, lanes=CORE_OFFSET, at_x=x0 - CORE_OFFSET)
 
 
 def row_entry(mesh, x0, height, end=-1):
-    """The turn a laid run makes to reach the edge a row is wired on.
+    """The corner between a laid run and the edge a row is wired on, and the riser up onto the rack.
 
-    A run arrives down the middle of the block, because that is where a laid run sits, and a fixed
-    row's leads are out at its edge.  Left to themselves the two stop a third of a block apart and
-    the plant reads as a cable pointing at a panel rather than plugged into one.
+    A run arrives down the middle of the block, where a laid run sits, and a row's leads are out at its
+    edge.  Each core turns at its own z - the outer one later than the inner one - so the pair keeps its
+    spacing round the corner instead of the two converging on it, which is the same swap a bend in
+    gen_cable_models makes with concentric arcs and is a mitre here because it is three pixels wide.
     """
     name = 'harness_entry_north' if end < 0 else 'harness_entry_south'
-    z0, z1 = (-0.50, -EDGE) if end < 0 else (EDGE, 0.50)
-    lead(mesh, name, (z0, 0.0, -x0), (z1, LEAD, LEAD), rot=((0.0, 0.0, 0.0), 'y', 270.0))
-    if height > 0.0:
-        lead(mesh, name, (x0, 0.0, z0), (x0 + LEAD, height, z1))
+    edge = -0.5 if end < 0 else 0.5
+    corner = -EDGE if end < 0 else EDGE
+    faces = mesh.faces(name, 'core')
+    for lane in (-CORE_OFFSET, CORE_OFFSET):
+        turn_z = corner + (lane if end < 0 else -lane)
+        path = [(lane, CORE_Y, edge), (lane, CORE_Y, turn_z), (x0 - CORE_OFFSET + lane, CORE_Y, turn_z)]
+        if height > 0.0:
+            path.append((x0 - CORE_OFFSET + lane, height + CORE_Y, turn_z))
+        tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
 
 
 def row_harness(mesh):
@@ -192,12 +249,12 @@ def row_harness(mesh):
     modules above it turn through sixty degrees and a cable on the flank would spend half the day
     underneath them.  Which puts it on the block's own axis, exactly where a laid run sits.
     """
-    lead(mesh, 'harness', (-LAID / 2, 0.0, -0.50), (LAID / 2, LEAD, 0.50))
+    cable_pair(mesh, 'harness', [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, 0.5)])
     for end, side in ((-1, 'north'), (1, 'south')):
         name = 'harness_plug_%s' % side
-        row_socket(mesh, -LAID / 2, 0.0, name=name, end=end, width=LAID)
-        tail = (-0.44, 0.0) if end < 0 else (0.0, 0.44)
-        lead(mesh, name, (-LAID / 2, 0.0, tail[0]), (LAID / 2, LEAD, tail[1]))
+        edge = -0.44 if end < 0 else 0.44
+        cable_pair(mesh, name, tail_rise(0.0, edge))
+        mc4_pair(mesh, name, edge, into=-1.0 if end < 0 else 1.0)
 
 
 # ------------------------------------------------------------------ the flat table
@@ -771,8 +828,11 @@ def combiner():
     # the riser up the post, at exactly the cross-section of the run it continues - a join that
     # changes thickness halfway is the one thing a player's eye lands on.  From the top of the hub
     # rather than from the ground, so it does not share a volume with it.
-    clad_box(mesh, 'post', (-LEAD, LEAD, 0.0), (LEAD, box_y0 + 0.015, LEAD),
-             {'south': 'dc_cable', '*': 'dc_jacket'})
+    riser = mesh.faces('post', 'core')
+    for lane in (-CORE_OFFSET, CORE_OFFSET):
+        tube(mesh, riser, [(lane, CORE_Y, UNDER - 0.02), (lane, CORE_Y, 0.04),
+                           (lane, box_y0 + 0.015, 0.04)], CORE_RADIUS, sides=FITTING,
+             uv_scale=1.0, uv_along=1.0, caps=riser)
     for y in (0.22, 0.34):
         box(mesh, post, (-0.075, y, 0.055), (0.075, y + 0.016, 0.068), uv_scale=0.12)
 
@@ -958,7 +1018,7 @@ def met_mast():
 
 
 LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
-HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'dc_cable', 'dc_jacket')
+HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'core', 'plug_plus', 'plug_minus')
 STRUCTURE = ('steel', 'steel_end', 'plate', 'frame')
 
 MODELS = [
@@ -967,10 +1027,10 @@ MODELS = [
     ('pv_track', single_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_dual', dual_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
     ('pv_inverter', inverter, STRUCTURE + ('cabinet', 'cabinet_door', 'cabinet_leaf', 'cabinet_top', 'vent',
-                                           'display', 'instrument', 'porcelain', 'dc_cable', 'dc_jacket',
-                                           'dc_section', 'blank', 'concrete')),
+                                           'display', 'instrument', 'porcelain', 'core', 'plug_plus',
+                                           'plug_minus', 'dc_section', 'blank', 'concrete')),
     ('pv_combiner', combiner, STRUCTURE + ('cabinet', 'cabinet_top', 'combiner_door', 'switch',
-                                           'dc_cable', 'dc_jacket')),
+                                           'core', 'plug_plus', 'plug_minus')),
     ('met_mast', met_mast, STRUCTURE + ('instrument', 'dome', 'cabinet', 'cabinet_top',
                                         'cabinet_door')),
 ]

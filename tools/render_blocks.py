@@ -260,9 +260,12 @@ def block_model(name):
     return read_obj(obj, dict(model['textures']), shade=model.get('shade_quads', True))
 
 
-def machine_model(name):
-    """One of the machines, drawn by the mod's own renderer, so authored about the block's centre."""
-    triangles = read_obj(os.path.join(MODELS, name, name + '.obj'), {}, flip_v=True)
+def machine_model(name, obj=None):
+    """One of the machines, drawn by the mod's own renderer, so authored about the block's centre.
+
+    ``obj`` where the file is not named after its directory, which electric_cab/cab.obj is.
+    """
+    triangles = read_obj(os.path.join(MODELS, name, (obj or name) + '.obj'), {}, flip_v=True)
     return [(g, t, tuple(((p[0] + 0.5, p[1], p[2] + 0.5), uv) for p, uv in c), n, s)
             for g, t, c, n, s in triangles]
 
@@ -505,7 +508,7 @@ def scene_power_box():
 
 def scene_cab():
     triangles = ground(-3, -3, 6, 6, SAND)
-    triangles += placed(machine_model('electric_cab'), (1, 0, 1))
+    triangles += placed(machine_model('electric_cab', 'cab'), (1, 0, 1))
     return triangles, (-0.4, 1.9, -2.2), (1.45, 0.85, 1.0)
 
 
@@ -517,11 +520,29 @@ def scene_pole():
 
 def scene_tower():
     triangles = ground(-6, -6, 12, 12, SAND)
-    triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))
+    triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))  # noqa: E501
     return triangles, (-4.0, 6.0, 12.0), (3.5, 5.0, 3.5)
 
 
+def scene_machine_cable():
+    """A laid run arriving at a machine, which is the join that has to be one product.
+
+    The whole point of the scene: the machine's own stub and the cable a player lays next to it are
+    drawn by two different generators, so if the radius, the lane spacing or the height off the ground
+    disagree by a pixel the run steps where it meets the cabinet.
+    """
+    triangles = ground(-2, -2, 6, 6, SAND)
+    triangles += placed(machine_model('pv_inverter'), (2, 0, 2), drop=('entry_east', 'entry_west',
+                                                                      'entry_south', 'blank'))
+    for z in (0, 1):
+        triangles += cable_piece('line', (2, 0, z), yaw=0)
+        for side in (0, 180):
+            triangles += cable_piece('arm', (2, 0, z), yaw=side)
+    return triangles, (0.55, 0.85, -1.0), (2.2, 0.25, 1.4)
+
+
 SCENES = {
+    'machine_cable': scene_machine_cable,
     'cable_run': scene_cable_run,
     'cable_corner': scene_cable_corner,
     'cable_plug': scene_cable_plug,
