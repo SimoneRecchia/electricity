@@ -1256,6 +1256,53 @@ def warning():
     return c
 
 
+# ------------------------------------------------------------------ the towers
+
+TOWER_ZINC = (154, 158, 162, 255)
+
+
+def tower_steel():
+    """Galvanised rolled steel angle: what every member of a lattice tower is.
+
+    A tower is one material from the ground to the peak, and it is the same hot-dip galvanising the
+    crossarms on the pole wear - so this is that surface at the size a tower is seen from, which is
+    further away.  The one thing added is the *bolt lines*: an angle section on a tower is drilled at a
+    fixed pitch whether or not there is anything bolted through it, and those rows of holes down every
+    member are what says rolled steel rather than a painted bar.
+    """
+    size = 256
+    c = Canvas(size, size)
+    galvanised(c, TOWER_ZINC, salt=347)
+    # the rolled edges, which every angle has: a bright arris and a dark one
+    c.aa_rect(0, 0, size, size * 0.045, shade(TOWER_ZINC, 26))
+    c.aa_rect(0, size * 0.955, size, size, shade(TOWER_ZINC, -32))
+    # the bolt line down the middle at the pitch a tower is drilled
+    for i in range(8):
+        y = size * (0.08 + i * 0.118)
+        c.aa_disc(size * 0.5, y, size * 0.028, shade(TOWER_ZINC, -40))
+        dome(c, size * 0.5, y, size * 0.022, shade(TOWER_ZINC, 12), lift=30, drop=24)
+    # the rust that starts at a bolt and runs down from it, which is where it always starts
+    for i in range(4):
+        streak(c, size * 0.5, size * (0.14 + i * 0.24), size * (0.30 + i * 0.24), size * 0.05,
+               colour=(126, 84, 48, 255), alpha=0.26, salt=349 + i)
+    grime(c, salt=353, amount=0.18, colour=(84, 82, 78, 255))
+    return c
+
+
+def tower_plate():
+    """A gusset plate: the thicker steel a joint is bolted through, with a ring of holes in it."""
+    size = 256
+    c = Canvas(size, size)
+    galvanised(c, shade(TOWER_ZINC, -8), salt=359)
+    bevel(c, 0, 0, size, size, size * 0.05, lift=22, drop=28)
+    for x, y in ((0.24, 0.24), (0.76, 0.24), (0.24, 0.76), (0.76, 0.76), (0.5, 0.5)):
+        c.aa_disc(size * x, size * y, size * 0.052, shade(TOWER_ZINC, -44))
+        dome(c, size * x, size * y, size * 0.042, shade(TOWER_ZINC, 10), lift=32, drop=26)
+    rust(c, size * 0.1, size * 0.6, size * 0.5, size * 1.0, salt=361, alpha=0.30)
+    grime(c, salt=367, amount=0.22, colour=(80, 78, 74, 255))
+    return c
+
+
 # ------------------------------------------------------------------ the register
 
 TEXTURES = {
@@ -1295,6 +1342,8 @@ TEXTURES = {
     'box_sheet': box_sheet,
     'box_plinth': box_plinth,
     'warning': warning,
+    'tower_steel': tower_steel,
+    'tower_plate': tower_plate,
 }
 
 
