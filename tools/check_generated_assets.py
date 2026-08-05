@@ -3,7 +3,7 @@
 
     python3 tools/check_generated_assets.py
 
-Two faults live here and neither was visible from the game or from any other check.
+Three faults live here and none was visible from the game or from any other check.
 
 Twenty block textures were claimed by *both* gen_block_textures.py and gen_pv_textures.py.  Whichever
 ran last won, and gen_pv_textures ran last, so every regeneration quietly put the old low-resolution
@@ -11,6 +11,12 @@ drawing back: pv_module went from a 1024-pixel laminate to a 256-pixel one and n
 the output which tool had written it.
 
 And a texture nothing references still gets written, still ships, and still looks like part of the mod.
+
+And a *blockstate* no generator writes drifts, because nothing regenerates it.  Twenty-two of them were
+hand-written, and one had gone wrong: the kiosk has a `mounted` as well as a facing, and its four `facing=`
+variant keys named half its states - Minecraft resolved the other half to no model at all.  A machine's
+blockstate is only the particle it breaks into, so every one of them is now one unconditional multipart from
+gen_crafting.MACHINES, and this file is what keeps a hand-written one from coming back.
 """
 
 import importlib
@@ -67,6 +73,33 @@ def outputs():
             for key in table:
                 claimed.setdefault('%s/%s.png' % (folder, key), []).append(name)
     return claimed
+
+
+def blockstates():
+    """Which generator claims which blockstate, and what is actually on disk.
+
+    Three tools write them: gen_crafting for the machines, and the two run generators for the cable gauges
+    and the ground conductors, which name their products in NAME and JACKETS.
+    """
+    claimed = {}
+    for module_name, names in (('gen_crafting', None), ('gen_cable_models', None),
+                               ('gen_trunk_models', None), ('gen_conductor_models', None)):
+        module = importlib.import_module(module_name)
+        if hasattr(module, 'MACHINES'):
+            names = list(module.MACHINES)
+        elif hasattr(module, 'JACKETS'):
+            names = ['%s_run' % name for name in module.JACKETS]
+        elif hasattr(module, 'NAME'):
+            names = [module.NAME]
+        else:
+            names = []
+
+        for name in names:
+            claimed.setdefault(name + '.json', []).append(module_name + '.py')
+
+    on_disk = sorted(name for name in os.listdir(os.path.join(ASSETS, 'blockstates'))
+                     if name.endswith('.json'))
+    return claimed, on_disk
 
 
 def referenced():
@@ -132,7 +165,21 @@ def main():
             problems.append('%s is %dx%d, under the %d-pixel floor a block face gets'
                             % (path, width, height, MIN_BLOCK))
 
-    print('%d generated assets, %d referenced' % (len(measured), len(used & set(measured))))
+    states, on_disk = blockstates()
+    for name, tools in sorted(states.items()):
+        if len(tools) > 1:
+            problems.append('blockstates/%s is written by %s - whichever runs last wins'
+                            % (name, ' and '.join(tools)))
+        if name not in on_disk:
+            problems.append('blockstates/%s is claimed by %s but is not on disk'
+                            % (name, ' and '.join(tools)))
+    for name in on_disk:
+        if name not in states:
+            problems.append('blockstates/%s is on disk but no generator writes it' % name)
+
+    print('%d generated assets, %d referenced, %d blockstates from %d generators'
+          % (len(measured), len(used & set(measured)), len(on_disk),
+             len({tool for tools in states.values() for tool in tools})))
     for problem in problems:
         print('  %s' % problem)
     if problems:

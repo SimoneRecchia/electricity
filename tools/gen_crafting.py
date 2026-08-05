@@ -285,14 +285,49 @@ def check(catalogue):
 
 # A machine drawn by the mod's own OBJ renderer has an INVISIBLE render shape, so its blockstate only
 # needs to name a particle texture - one variant a facing, all four the same.  Its item is a flat sprite.
-INVISIBLE_MACHINES = {
-    'mv_disconnector': 'metal_particle',
-    'mv_breaker': 'metal_particle',
-    'tx_machine': 'metal_particle',
-    'tx_substation': 'metal_particle',
-    'lattice_suspension': 'stone_particle',
-    'lattice_tension': 'stone_particle',
-    'lattice_terminal': 'stone_particle',
+# Every machine the mod draws itself, with the particle it breaks into and the sprite its item shows.
+#
+# RenderShape.INVISIBLE means the blockstate's model is *only* the break particle, so every one of these is
+# one unconditional multipart.  Not a variant per facing: a variants block has to name every state the block
+# has, and the kiosk has a `mounted` and a switch has an `open` that four `facing=` keys never named - so
+# half of each one's states resolved to no model at all.
+#
+# The sprite is not always the block's own name, because a family shares one drawing: four inverters are one
+# cabinet and six arrays are four mountings.  None means the block has no item - the shell cell is placed by
+# its machine and never held.
+MACHINES = {
+    'utility_pole': ('stone_particle', 'utility_pole'),
+    'electric_cabin': ('stone_particle', 'cab'),
+    'power_box': ('stone_particle', 'power_box'),
+    'turbine_tower': ('stone_particle', 'turbine_tower'),
+    'met_station': ('metal_particle', 'met_station'),
+    'machine_shell': ('metal_particle', None),
+    'sw_10': ('stone_particle', 'sw_10'),
+    'c52_085': ('stone_particle', 'c52_085'),
+    'c80_20': ('stone_particle', 'c80_20'),
+    'c90_30': ('stone_particle', 'c90_30'),
+    'c112_30': ('stone_particle', 'c112_30'),
+    'wind_turbine': ('stone_particle', 'wind_turbine'),
+    'solar_panel': ('glass_particle', 'pv_flat'),
+    'pv_flat_430': ('glass_particle', 'pv_flat'),
+    'pv_tilt_530': ('glass_particle', 'pv_tilt'),
+    'pv_tilt_580': ('glass_particle', 'pv_tilt'),
+    'pv_track_700': ('glass_particle', 'pv_track'),
+    'pv_dual_440': ('glass_particle', 'pv_dual'),
+    'inverter_10': ('metal_particle', 'pv_inverter'),
+    'inverter_110': ('metal_particle', 'pv_inverter'),
+    'inverter_350': ('metal_particle', 'pv_inverter'),
+    'inverter_2500': ('metal_particle', 'pv_inverter'),
+    'pv_combiner_6': ('metal_particle', 'pv_combiner'),
+    'pv_combiner_16': ('metal_particle', 'pv_combiner'),
+    'pv_combiner_32': ('metal_particle', 'pv_combiner'),
+    'tx_machine': ('metal_particle', 'tx_machine'),
+    'tx_substation': ('metal_particle', 'tx_substation'),
+    'lattice_suspension': ('stone_particle', 'lattice_suspension'),
+    'lattice_tension': ('stone_particle', 'lattice_tension'),
+    'lattice_terminal': ('stone_particle', 'lattice_terminal'),
+    'mv_disconnector': ('metal_particle', 'mv_disconnector'),
+    'mv_breaker': ('metal_particle', 'mv_breaker'),
 }
 
 # The names and tooltips for what is not a part: a block is named here rather than by hand.
@@ -361,15 +396,15 @@ def loot_tables():
 
 
 def machine_assets():
-    """The blockstate and item model for every machine this file owns, and their names."""
-    for name, particle in INVISIBLE_MACHINES.items():
-        write(os.path.join(BLOCKSTATES, name + '.json'), {'variants': {
-            'facing=' + side: {'model': 'electricity:block/' + particle}
-            for side in ('north', 'south', 'west', 'east')}})
-        write(os.path.join(ITEM_MODELS, name + '.json'),
-              {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'electricity:item/' + name}})
+    """The blockstate and item model for every machine the mod draws itself - see MACHINES."""
+    for name, (particle, sprite) in MACHINES.items():
+        write(os.path.join(BLOCKSTATES, name + '.json'),
+              {'multipart': [{'apply': {'model': 'electricity:block/' + particle}}]})
+        if sprite is not None:
+            write(os.path.join(ITEM_MODELS, name + '.json'),
+                  {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'electricity:item/' + sprite}})
 
-    return len(INVISIBLE_MACHINES)
+    return len(MACHINES)
 
 
 def main():

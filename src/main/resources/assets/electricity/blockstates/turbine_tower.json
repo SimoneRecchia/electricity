@@ -1,7 +1,9 @@
 {
-  "variants": {
-    "": {
-      "model": "electricity:block/stone_particle"
+  "multipart": [
+    {
+      "apply": {
+        "model": "electricity:block/stone_particle"
+      }
     }
-  }
+  ]
 }
