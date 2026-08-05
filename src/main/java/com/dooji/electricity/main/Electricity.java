@@ -65,8 +65,11 @@ import com.dooji.electricity.main.power.PowerNetwork;
 import com.dooji.electricity.main.wire.WireManager;
 import com.dooji.electricity.main.weather.GlobalWeatherManager;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -168,282 +171,142 @@ public class Electricity {
 			() -> new TooltipBlockItem(TURBINE_TOWER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.turbine_tower"));
 
 	/** A block for every array product, keyed by spec id. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> PV_ARRAY_BLOCKS = registerPvArrayBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> PV_ARRAY_ITEMS = registerPvArrayItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_ARRAY_BLOCKS =
+			blockFamily(PvCatalog.all(), PvArraySpec::id, spec -> new PvArrayBlock(machine(1.0f, 2.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_ARRAY_ITEMS =
+			itemFamily(PvCatalog.all(), PvArraySpec::id, PV_ARRAY_BLOCKS,
+					(spec, block) -> new PvArrayBlockItem(block, new Item.Properties(), spec));
 
 	/** One block per inverter in the catalogue. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> PV_INVERTER_BLOCKS = registerInverterBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> PV_INVERTER_ITEMS = registerInverterItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_INVERTER_BLOCKS =
+			blockFamily(InverterCatalog.all(), InverterSpec::id, spec -> new PvInverterBlock(machine(2.5f, 10.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_INVERTER_ITEMS =
+			itemFamily(InverterCatalog.all(), InverterSpec::id, PV_INVERTER_BLOCKS,
+					(spec, block) -> new PvInverterBlockItem(block, new Item.Properties(), spec));
 
 	/** A block of cable per gauge */
-	public static final Map<ResourceLocation, RegistryObject<Block>> DC_CABLE_BLOCKS = registerCableBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> DC_CABLE_ITEMS = registerCableItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> DC_CABLE_BLOCKS =
+			blockFamily(CableCatalog.all(), DcCableSpec::id, spec -> new DcCableBlock(DcCableBlock.properties(), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> DC_CABLE_ITEMS =
+			itemFamily(CableCatalog.all(), DcCableSpec::id, DC_CABLE_BLOCKS,
+					(spec, block) -> new DcCableItem((DcCableBlock) block, new Item.Properties()));
 
 	/** A combiner box per product: the switchgear between a field of strings and one cabinet. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> PV_COMBINER_BLOCKS = registerCombinerBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> PV_COMBINER_ITEMS = registerCombinerItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> PV_COMBINER_BLOCKS =
+			blockFamily(CombinerCatalog.all(), CombinerSpec::id, spec -> new PvCombinerBlock(machine(1.5f, 6.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> PV_COMBINER_ITEMS =
+			itemFamily(CombinerCatalog.all(), CombinerSpec::id, PV_COMBINER_BLOCKS,
+					(spec, block) -> new PvCombinerBlockItem((PvCombinerBlock) block, new Item.Properties()));
 
 	/** One block per lattice tower duty: a line is suspension towers with tension and terminal ones. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> LATTICE_TOWER_BLOCKS = registerTowerBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> LATTICE_TOWER_ITEMS = registerTowerItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> LATTICE_TOWER_BLOCKS =
+			blockFamily(TowerCatalog.all(), TowerSpec::id, spec -> new LatticeTowerBlock(machine(3.0f, 12.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> LATTICE_TOWER_ITEMS =
+			itemFamily(TowerCatalog.all(), TowerSpec::id, LATTICE_TOWER_BLOCKS, described(TowerSpec::id));
 
-	/** A block of conductor lying on the ground, per conductor: the reel lays it and the reel strings it. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> GROUND_CONDUCTOR_BLOCKS = registerGroundConductorBlocks();
+	/**
+	 * A block of conductor lying on the ground, per conductor: the reel lays it and the reel strings it.
+	 *
+	 * Registered as "<id>_run", because the conductor's own id belongs to the reel and a block cannot share
+	 * it - the one family whose registry name is not its spec's path.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Block>> GROUND_CONDUCTOR_BLOCKS =
+			blockFamily(ConductorCatalog.all(), ConductorSpec::id, spec -> spec.id().getPath() + "_run",
+					spec -> new GroundConductorBlock(Block.Properties.of(), spec), Map.of());
 
 	/** The two transformers: a machine unit at every generator's foot, a substation unit at the grid. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> TRANSFORMER_BLOCKS = registerTransformerBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMER_ITEMS = registerTransformerItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> TRANSFORMER_BLOCKS =
+			blockFamily(TransformerCatalog.all(), TransformerSpec::id, spec -> new TransformerBlock(machine(3.0f, 12.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMER_ITEMS =
+			itemFamily(TransformerCatalog.all(), TransformerSpec::id, TRANSFORMER_BLOCKS, described(TransformerSpec::id));
 
 	/** The two switches: a disconnector to make a gap you can see, a breaker to break load. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> SWITCHGEAR_BLOCKS = registerSwitchgearBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> SWITCHGEAR_ITEMS = registerSwitchgearItems();
+	public static final Map<ResourceLocation, RegistryObject<Block>> SWITCHGEAR_BLOCKS =
+			blockFamily(SwitchgearCatalog.all(), SwitchgearSpec::id, spec -> new SwitchgearBlock(machine(2.0f, 8.0f), spec));
+	public static final Map<ResourceLocation, RegistryObject<Item>> SWITCHGEAR_ITEMS =
+			itemFamily(SwitchgearCatalog.all(), SwitchgearSpec::id, SWITCHGEAR_BLOCKS, described(SwitchgearSpec::id));
 
 	/** A meteorological mast: the seven instruments a plant measures the sky with. */
 	public static final RegistryObject<Block> MET_STATION_BLOCK = BLOCKS.register("met_station",
-			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
+			() -> new MetStationBlock(machine(1.5f, 3.0f)));
 	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
 			() -> new TooltipBlockItem(MET_STATION_BLOCK.get(), new Item.Properties(), "tooltip.electricity.met_station"));
 
-	private static Map<ResourceLocation, RegistryObject<Block>> registerSwitchgearBlocks() {
+	/**
+	 * A block for every machine in the catalogue, keyed by spec id.
+	 *
+	 * The C130-4.0 is the machine "wind_turbine" already was, and its registry name is the one every existing
+	 * world holds - so it keeps the older registration rather than getting a second one of its own.
+	 */
+	public static final Map<ResourceLocation, RegistryObject<Block>> TURBINE_BLOCKS =
+			blockFamily(TurbineCatalog.all(), TurbineSpec::id, spec -> spec.id().getPath(),
+					spec -> new WindTurbineBlock(machine(2.0f, 10.0f), spec),
+					Map.of(TurbineCatalog.C130_40.id(), WIND_TURBINE_BLOCK));
+	public static final Map<ResourceLocation, RegistryObject<Item>> TURBINE_ITEMS =
+			itemFamily(TurbineCatalog.all(), TurbineSpec::id, TURBINE_BLOCKS,
+					(spec, block) -> new TurbineBlockItem(block, new Item.Properties(), spec),
+					Map.of(TurbineCatalog.C130_40.id(), WIND_TURBINE_ITEM));
+
+	/** What every machine in this mod is built of, differing only in how hard it is to break. */
+	private static BlockBehaviour.Properties machine(float hardness, float blastResistance) {
+		return Block.Properties.of().strength(hardness, blastResistance).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	/** The item a machine with nothing to say beyond its own tooltip gets. */
+	private static <S> BiFunction<S, Block, Item> described(Function<S, ResourceLocation> id) {
+		return (spec, block) -> new TooltipBlockItem(block, new Item.Properties(),
+				"tooltip.electricity." + id.apply(spec).getPath());
+	}
+
+	/**
+	 * One block per spec in a catalogue, keyed by its id.
+	 *
+	 * Nine copies of this loop was nine places to keep in step, and the differences between them were the
+	 * factory and, for two families, the registry name and an older registration to reuse. The factory is
+	 * deferred because a RegistryObject's supplier has to be.
+	 */
+	private static <S> Map<ResourceLocation, RegistryObject<Block>> blockFamily(Collection<S> catalogue,
+			Function<S, ResourceLocation> id, Function<S, String> name, Function<S, Block> factory,
+			Map<ResourceLocation, RegistryObject<Block>> already) {
 		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(),
-					() -> new SwitchgearBlock(switchgearProperties(), spec)));
+		for (S spec : catalogue) {
+			ResourceLocation key = id.apply(spec);
+			blocks.put(key, already.containsKey(key) ? already.get(key)
+					: BLOCKS.register(name.apply(spec), () -> factory.apply(spec)));
 		}
 
 		return blocks;
 	}
 
-	private static Map<ResourceLocation, RegistryObject<Item>> registerSwitchgearItems() {
+	private static <S> Map<ResourceLocation, RegistryObject<Block>> blockFamily(Collection<S> catalogue,
+			Function<S, ResourceLocation> id, Function<S, Block> factory) {
+		return blockFamily(catalogue, id, spec -> id.apply(spec).getPath(), factory, Map.of());
+	}
+
+	/** And one item per block of a family, which is how a machine gets into a hand. */
+	private static <S> Map<ResourceLocation, RegistryObject<Item>> itemFamily(Collection<S> catalogue,
+			Function<S, ResourceLocation> id, Map<ResourceLocation, RegistryObject<Block>> blocks,
+			BiFunction<S, Block, Item> factory, Map<ResourceLocation, RegistryObject<Item>> already) {
 		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
-			RegistryObject<Block> block = SWITCHGEAR_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
-					() -> new TooltipBlockItem(block.get(), new Item.Properties(),
-							"tooltip.electricity." + spec.id().getPath())));
+		for (S spec : catalogue) {
+			ResourceLocation key = id.apply(spec);
+			RegistryObject<Block> block = blocks.get(key);
+			items.put(key, already.containsKey(key) ? already.get(key)
+					: ITEMS.register(key.getPath(), () -> factory.apply(spec, block.get())));
 		}
 
 		return items;
 	}
 
-	private static BlockBehaviour.Properties switchgearProperties() {
-		return Block.Properties.of().strength(2.0f, 8.0f).requiresCorrectToolForDrops().noOcclusion();
+	private static <S> Map<ResourceLocation, RegistryObject<Item>> itemFamily(Collection<S> catalogue,
+			Function<S, ResourceLocation> id, Map<ResourceLocation, RegistryObject<Block>> blocks,
+			BiFunction<S, Block, Item> factory) {
+		return itemFamily(catalogue, id, blocks, factory, Map.of());
 	}
 
-	/** Every switch block, so one block entity type serves both. */
-	private static Block[] switchgearBlocks() {
-		return SWITCHGEAR_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerCableBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (DcCableSpec spec : CableCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new DcCableBlock(DcCableBlock.properties(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerCableItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (DcCableSpec spec : CableCatalog.all()) {
-			RegistryObject<Block> block = DC_CABLE_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
-					() -> new DcCableItem((DcCableBlock) block.get(), new Item.Properties())));
-		}
-
-		return items;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerCombinerBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (CombinerSpec spec : CombinerCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvCombinerBlock(combinerProperties(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerCombinerItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (CombinerSpec spec : CombinerCatalog.all()) {
-			RegistryObject<Block> block = PV_COMBINER_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
-					() -> new PvCombinerBlockItem((PvCombinerBlock) block.get(), new Item.Properties())));
-		}
-
-		return items;
-	}
-
-	private static BlockBehaviour.Properties combinerProperties() {
-		return Block.Properties.of().strength(1.5f, 6.0f).requiresCorrectToolForDrops().noOcclusion();
-	}
-
-	/** Every combiner block, so one block entity type serves the whole catalogue. */
-	private static Block[] pvCombinerBlocks() {
-		return PV_COMBINER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static BlockBehaviour.Properties arrayProperties() {
-		return Block.Properties.of().strength(1.0f, 2.0f).requiresCorrectToolForDrops().noOcclusion();
-	}
-
-	private static BlockBehaviour.Properties inverterProperties() {
-		return Block.Properties.of().strength(2.5f, 10.0f).requiresCorrectToolForDrops().noOcclusion();
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerPvArrayBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (PvArraySpec spec : PvCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvArrayBlock(arrayProperties(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerPvArrayItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (PvArraySpec spec : PvCatalog.all()) {
-			RegistryObject<Block> block = PV_ARRAY_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new PvArrayBlockItem(block.get(), new Item.Properties(), spec)));
-		}
-
-		return items;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerGroundConductorBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (ConductorSpec spec : ConductorCatalog.all()) {
-			// "_run", because the conductor's own id belongs to the reel and a block cannot share it
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath() + "_run",
-					() -> new GroundConductorBlock(Block.Properties.of(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerTransformerBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (TransformerSpec spec : TransformerCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(),
-					() -> new TransformerBlock(Block.Properties.of().strength(3.0f, 12.0f).requiresCorrectToolForDrops().noOcclusion(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerTransformerItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (TransformerSpec spec : TransformerCatalog.all()) {
-			RegistryObject<Block> block = TRANSFORMER_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
-					() -> new TooltipBlockItem(block.get(), new Item.Properties(), "tooltip.electricity." + spec.id().getPath())));
-		}
-
-		return items;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerTowerBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (TowerSpec spec : TowerCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(),
-					() -> new LatticeTowerBlock(Block.Properties.of().strength(3.0f, 12.0f).requiresCorrectToolForDrops().noOcclusion(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerTowerItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (TowerSpec spec : TowerCatalog.all()) {
-			RegistryObject<Block> block = LATTICE_TOWER_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
-					() -> new TooltipBlockItem(block.get(), new Item.Properties(), "tooltip.electricity." + spec.id().getPath())));
-		}
-
-		return items;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerInverterBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (InverterSpec spec : InverterCatalog.all()) {
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new PvInverterBlock(inverterProperties(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerInverterItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (InverterSpec spec : InverterCatalog.all()) {
-			RegistryObject<Block> block = PV_INVERTER_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new PvInverterBlockItem(block.get(), new Item.Properties(), spec)));
-		}
-
-		return items;
-	}
-
-	/** Every array block, so one block entity type serves the whole catalogue. */
-	private static Block[] pvArrayBlocks() {
-		return PV_ARRAY_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static Block[] pvInverterBlocks() {
-		return PV_INVERTER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	/** A block for every machine in the catalogue, keyed by spec id. */
-	public static final Map<ResourceLocation, RegistryObject<Block>> TURBINE_BLOCKS = registerTurbineBlocks();
-	public static final Map<ResourceLocation, RegistryObject<Item>> TURBINE_ITEMS = registerTurbineItems();
-
-	private static BlockBehaviour.Properties turbineProperties() {
-		return Block.Properties.of().strength(2.0f, 10.0f).requiresCorrectToolForDrops().noOcclusion();
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Block>> registerTurbineBlocks() {
-		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
-		for (TurbineSpec spec : TurbineCatalog.all()) {
-			if (spec.id().equals(TurbineCatalog.C130_40.id())) {
-				blocks.put(spec.id(), WIND_TURBINE_BLOCK);
-				continue;
-			}
-
-			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(), () -> new WindTurbineBlock(turbineProperties(), spec)));
-		}
-
-		return blocks;
-	}
-
-	private static Map<ResourceLocation, RegistryObject<Item>> registerTurbineItems() {
-		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
-		for (TurbineSpec spec : TurbineCatalog.all()) {
-			if (spec.id().equals(TurbineCatalog.C130_40.id())) {
-				items.put(spec.id(), WIND_TURBINE_ITEM);
-				continue;
-			}
-
-			RegistryObject<Block> block = TURBINE_BLOCKS.get(spec.id());
-			items.put(spec.id(), ITEMS.register(spec.id().getPath(), () -> new TurbineBlockItem(block.get(), new Item.Properties(), spec)));
-		}
-
-		return items;
-	}
-
-	/** Every turbine block, so one block entity type can serve the whole catalogue. */
-	private static Block[] turbineBlocks() {
-		return TURBINE_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static Block[] latticeTowerBlocks() {
-		return LATTICE_TOWER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static Block[] groundConductorBlocks() {
-		return GROUND_CONDUCTOR_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
-	}
-
-	private static Block[] transformerBlocks() {
-		return TRANSFORMER_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	/** Every block of a family, so one block entity type can serve the whole catalogue. */
+	private static Block[] blocksOf(Map<ResourceLocation, RegistryObject<Block>> family) {
+		return family.values().stream().map(RegistryObject::get).toArray(Block[]::new);
 	}
 
 
@@ -546,17 +409,17 @@ public class Electricity {
 		// one type for all three duties: they differ by their spec, and the entity reads it back off
 		// whichever block it is sitting in
 		LATTICE_TOWER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("lattice_tower",
-				() -> BlockEntityType.Builder.of(LatticeTowerBlockEntity::new, latticeTowerBlocks()).build(null));
+				() -> BlockEntityType.Builder.of(LatticeTowerBlockEntity::new, blocksOf(LATTICE_TOWER_BLOCKS)).build(null));
 
 		TRANSFORMER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("transformer",
-				() -> BlockEntityType.Builder.of(TransformerBlockEntity::new, transformerBlocks()).build(null));
+				() -> BlockEntityType.Builder.of(TransformerBlockEntity::new, blocksOf(TRANSFORMER_BLOCKS)).build(null));
 
 		GROUND_CONDUCTOR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("ground_conductor",
-				() -> BlockEntityType.Builder.of(GroundConductorBlockEntity::new, groundConductorBlocks()).build(null));
+				() -> BlockEntityType.Builder.of(GroundConductorBlockEntity::new, blocksOf(GROUND_CONDUCTOR_BLOCKS)).build(null));
 
 		// one type for the whole catalogue: the machines differ by their spec
 		// block entity reads back off whichever block it is sitting in
-		WIND_TURBINE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("wind_turbine", () -> BlockEntityType.Builder.of(WindTurbineBlockEntity::new, turbineBlocks()).build(null));
+		WIND_TURBINE_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("wind_turbine", () -> BlockEntityType.Builder.of(WindTurbineBlockEntity::new, blocksOf(TURBINE_BLOCKS)).build(null));
 
 		// stateless and never ticked: it only exists so the renderer can find a tower that has
 		// no machine on it yet, which is every tower while it is being stacked
@@ -564,15 +427,15 @@ public class Electricity {
 
 		// one type for the whole array catalogue
 		// products differ by their spec
-		PV_ARRAY_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_array", () -> BlockEntityType.Builder.of(PvArrayBlockEntity::new, pvArrayBlocks()).build(null));
+		PV_ARRAY_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_array", () -> BlockEntityType.Builder.of(PvArrayBlockEntity::new, blocksOf(PV_ARRAY_BLOCKS)).build(null));
 
-		PV_INVERTER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_inverter", () -> BlockEntityType.Builder.of(PvInverterBlockEntity::new, pvInverterBlocks()).build(null));
+		PV_INVERTER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_inverter", () -> BlockEntityType.Builder.of(PvInverterBlockEntity::new, blocksOf(PV_INVERTER_BLOCKS)).build(null));
 
-		PV_COMBINER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_combiner", () -> BlockEntityType.Builder.of(PvCombinerBlockEntity::new, pvCombinerBlocks()).build(null));
+		PV_COMBINER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_combiner", () -> BlockEntityType.Builder.of(PvCombinerBlockEntity::new, blocksOf(PV_COMBINER_BLOCKS)).build(null));
 
 		MET_STATION_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("met_station", () -> BlockEntityType.Builder.of(MetStationBlockEntity::new, MET_STATION_BLOCK.get()).build(null));
 
-		SWITCHGEAR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("switchgear", () -> BlockEntityType.Builder.of(SwitchgearBlockEntity::new, switchgearBlocks()).build(null));
+		SWITCHGEAR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("switchgear", () -> BlockEntityType.Builder.of(SwitchgearBlockEntity::new, blocksOf(SWITCHGEAR_BLOCKS)).build(null));
 
 		BLOCK_ENTITY_TYPES.register(modEventBus);
 		LOGGER.info("Registered {} items, {} blocks, and {} block entity types", ITEMS.getEntries().size(), BLOCKS.getEntries().size(), BLOCK_ENTITY_TYPES.getEntries().size());
