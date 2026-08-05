@@ -109,7 +109,7 @@ class Run:
     """A length of cable swept along a path given in sixteenths."""
 
     def __init__(self, path, radius=CORE_RADIUS, material='core', joint=None, ends=(True, True)):
-        self.path = _dedupe([tuple(float(c) for c in p) for p in path])
+        self.path = _lead(_dedupe([tuple(float(c) for c in p) for p in path]), ends)
         self.radius, self.material = radius, material
         # Parts that name the same joint are one fitting, and check_disjoint lets them touch: a tail and
         # the plug moulded onto it are not two objects.
@@ -152,9 +152,13 @@ class Barrel:
     """A round fitting: a cleat's screw, or a gland through a junction box's wall."""
 
     def __init__(self, group, material, centre, axis, radius, low, high, cap=True, sleeve=False,
-                 band=None, sides=FITTING, taper=1.0, outward=1, joint=None):
+                 band=None, sides=FITTING, taper=1.0, outward=1, joint=None, cap_ends=None):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
         self.radius, self.low, self.high, self.cap = radius, low, high, cap
+        # Which ends get a disc.  One by default, the far one, because a gland has a cable running out
+        # through the other.  A fitting with nothing running through it wants both, or the end with no
+        # disc is a tube you look down - CLAUDE.md section 1.
+        self.cap_ends = (outward,) if cap_ends is None else tuple(cap_ends)
         # Which window of its texture this segment takes
         # own length rather than something that tiles.
         self.band = band
@@ -168,14 +172,19 @@ class Barrel:
     def draw(self, mesh):
         faces = mesh.faces(self.group, self.material)
         base = list(self.centre)
-        base['xyz'.index(self.axis)] = self.low
+        # cylinder() takes a centre and a *half* length.  Placed at self.low with the whole length as the
+        # half, every fitting in both gauges came out twice as long, reaching back past low: the lug's
+        # barrel started 3.6 px behind itself and left its palm floating, and a gland's far end stood clear
+        # of the wall that was meant to bury it, so you looked straight down the tube.  boxes() below has
+        # always said low..high, and nothing compared the two - check_drawn does now.
+        base['xyz'.index(self.axis)] = (self.low + self.high) / 2.0
         radius, taper = ((self.radius, self.taper) if self.outward > 0
                          else (self.radius * self.taper, 1.0 / self.taper))
         # A hexagon wants a flat on top, which is a vertex at sixty degrees.
         phase = math.pi / 3 if self.sides == HEX else (math.pi / 2 if self.axis == 'z' else 0.0)
-        cylinder(mesh, faces, at(*base), self.axis, out(radius), out(self.high - self.low),
+        cylinder(mesh, faces, at(*base), self.axis, out(radius), out((self.high - self.low) / 2.0),
                  sides=self.sides, uv_scale=1.0, uv=self.band, taper=taper, phase=phase,
-                 caps=faces if self.cap else None, cap_ends=(self.outward,) if self.cap else ())
+                 caps=faces if self.cap else None, cap_ends=self.cap_ends if self.cap else ())
 
     def boxes(self):
         index = 'xyz'.index(self.axis)
@@ -201,8 +210,11 @@ class Plug:
     def __init__(self, centre, base, index, start, profile=MC4, group='plug', joint=None,
                  axis_y=None, pin=None, materials=None):
         self.centre, self.base, self.index, self.start = centre, base, index, start
-        self.profile, self.group = profile, group
+        self.profile = profile
         self.positive = index == 0
+        # A group per part - CLAUDE.md section 4.  The two poles carry one fitting each, so they are two
+        # parts and two bounding boxes, not one slab spanning the gap between them.
+        self.group = '%s_%s' % (group, 'plus' if self.positive else 'minus')
         # A joint is one plug pushed into another, so it has no free pin to show.
         self.pin = (self.positive and profile is MC4) if pin is None else pin
         # The two poles' materials, or one name twice where the fitting does not carry a polarity.
@@ -293,6 +305,54 @@ def _dedupe(path):
     return kept
 
 
+# How straight a cable runs before it starts to turn.  Short enough that the kink it leaves at the far end
+# of the stub is under a degree, long enough to be a whole ring.
+LEAD = 0.22
+
+
+def _lead(path, ends):
+    """A straight stub along its own axis at each uncapped end.
+
+    tube() sets an end ring perpendicular to the end segment, so a path that is already turning at its
+    first point presents a tilted ellipse where the neighbouring piece presents a flat circle - and between
+    the two you look into the cable.  Every bend-to-arm and line-to-arm joint in both gauges had a
+    one-pixel crescent of exactly that; check_holes.py measures it.
+    """
+    if len(path) < 2:
+        return path
+
+    def stub(near, far):
+        step = [far[i] - near[i] for i in range(3)]
+        axis = max(range(3), key=lambda i: abs(step[i]))
+        # already leaving along one axis: the ring is flat and there is nothing to add
+        if all(abs(step[i]) < 1e-6 for i in range(3) if i != axis):
+            return None
+        if abs(step[axis]) <= LEAD:
+            return None
+        out = list(near)
+        out[axis] += LEAD * (1.0 if step[axis] > 0 else -1.0)
+        return tuple(out)
+
+    path = list(path)
+    if not ends[0]:
+        first = stub(path[0], path[1])
+        if first:
+            path.insert(1, first)
+    if not ends[1]:
+        last = stub(path[-1], path[-2])
+        if last:
+            path.insert(len(path) - 1, last)
+    return path
+
+
+# dc_tie and dc_cleat each hold two bands: the top half is a face looking up, the bottom half the same
+# material at Minecraft's own factor for a vertical face.  shade_quads is off on every cable model, so a
+# part whose faces share one tone has no edges - see dc_jbox_side.  Inset off the seam so the atlas's
+# mipmap cannot bleed one band into the other.
+TIE_TOP, TIE_SIDE = (0.0, 0.02, 0.55, 0.48), (0.0, 0.52, 0.55, 0.98)
+CLEAT_TOP, CLEAT_SIDE = (0.0, 0.02, 1.0, 0.48), (0.0, 0.52, 1.0, 0.98)
+
+
 # ---------------------------------------------------------------- the fittings
 
 def plug_lane(centre):
@@ -320,7 +380,7 @@ def tail(centre, base, start, index, joint=None, free=False):
                joint=joint, ends=(free, True))
 
 
-def gland(base, side, centre):
+def gland(base, side, centre, index):
     """An M16 cable gland through a box wall: the hex body against it, the compression nut in front.
 
     Its band is dc_gland's own strip, wall to tip.  ``sleeve`` is how check_disjoint knows the cable is
@@ -331,6 +391,9 @@ def gland(base, side, centre):
     step = -1.0 if near else 1.0
     middle = [8.0, base + CORE_Y, 8.0]
     middle[0 if axis == 'z' else 2] = centre
+    # A group per part - CLAUDE.md section 4.  Up to eight glands in one group bound a slab across the
+    # whole box, which is the fault the eight insulators on the pole had.
+    group = 'gland_%s_%s' % (side, 'plus' if index == 0 else 'minus')
 
     parts, cursor = [], HUB_LO if near else HUB_HI
     # (length, radius, taper, sides, band): a hex body and a nut tapering the way a compression nut does
@@ -339,7 +402,7 @@ def gland(base, side, centre):
         low, high = sorted((cursor, cursor + step * length))
         # Each step is closed at its outer end.  Open, the game culls the far inside wall too and a gland
         # is a hole you see the ground through - the cable running out through the disc hides its middle.
-        parts.append(Barrel('gland', 'gland', tuple(middle), axis, radius, low, high, cap=True,
+        parts.append(Barrel(group, 'gland', tuple(middle), axis, radius, low, high, cap=True,
                             sleeve=True, band=band, sides=sides, taper=taper, outward=int(step)))
         cursor += step * length
     return parts
@@ -356,9 +419,7 @@ def tie(base, low, high):
     # clear of the cable, not into it: the strap passes outside the pair
     outer = CORE_OFFSET + CORE_RADIUS + 0.30
     band, strap = 0.22, 0.24
-    # dc_tie's top half is the crown of the strap and its bottom half the flanks, already darkened by
-    # Minecraft's own factor for a vertical face - shade_quads cannot do it, so the texture does.
-    top, side = (0.0, 0.02, 0.55, 0.48), (0.0, 0.52, 0.55, 0.98)
+    top, side = TIE_TOP, TIE_SIDE
     return [
         # over the crown and down both flanks: the strap of a tie is one band, not a plate on feet
         Slab('tie', 'tie', (8.0 - outer, crown, low), (8.0 + outer, crown + band, high), uv=top),
@@ -399,13 +460,15 @@ def junction_box(base, glanded):
     top = base + JBOX_TOP
     parts = [
         Slab('jbox', {'*': 'jbox_side'}, (HUB_LO, base, HUB_LO), (HUB_HI, top - JBOX_LID, HUB_HI)),
-        # the lid, overhanging the body: the lip is what tells a player there is a lid at all
+        # the lid, overhanging the body: the lip is what tells a player there is a lid at all.  Its rim
+        # takes dc_jbox_side's top band - the lit lid edge - not a copy of the whole wall squashed into it.
         Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
-             (HUB_LO - 0.30, top - JBOX_LID, HUB_LO - 0.30), (HUB_HI + 0.30, top, HUB_HI + 0.30)),
+             (HUB_LO - 0.30, top - JBOX_LID, HUB_LO - 0.30), (HUB_HI + 0.30, top, HUB_HI + 0.30),
+             uv={'up': None, '*': (0.0, 0.0, 1.0, 0.055)}),
     ]
     for side in glanded:
-        for centre in CORES:
-            parts += gland(base, side, centre)
+        for index, centre in enumerate(CORES):
+            parts += gland(base, side, centre, index)
     return parts
 
 
@@ -511,14 +574,17 @@ def wall_cleat(base):
     behind = WALL_STANDOFF - CORE_RADIUS
     front = WALL_STANDOFF + CORE_RADIUS
     return [
-        Slab('cleat', 'cleat', (8.0 - outer, 9.0, 0.0), (8.0 + outer, 10.4, behind), uv_scale=0.4),
+        # dc_cleat's top half is a face looking up and its bottom half the same metal at Minecraft's own
+        # factor for a vertical one - a plate here climbs a wall, so its broad faces take the flank band.
+        Slab('cleat', 'cleat', (8.0 - outer, 9.0, 0.0), (8.0 + outer, 10.4, behind), uv=CLEAT_SIDE),
         Slab('cleat', 'cleat', (8.0 - outer, 9.0, front), (8.0 + outer, 10.4, front + 0.40),
-             uv_scale=0.4),
+             uv=CLEAT_SIDE),
         Slab('cleat', 'cleat', (8.0 - outer, 9.0, behind), (8.0 - outer + 0.35, 10.4, front),
-             uv_scale=0.3),
+             uv=CLEAT_TOP),
         Slab('cleat', 'cleat', (8.0 + outer - 0.35, 9.0, behind), (8.0 + outer, 10.4, front),
-             uv_scale=0.3),
-        Barrel('cleat', 'cleat', (8.0, 9.7, 0.0), 'z', 0.34, front + 0.40, front + 0.70),
+             uv=CLEAT_TOP),
+        Barrel('cleat', 'cleat', (8.0, 9.7, 0.0), 'z', 0.34, front + 0.40, front + 0.70,
+               band=CLEAT_TOP),
     ]
 
 
@@ -580,8 +646,35 @@ def write(path, data):
         f.write('\n')
 
 
+def check_drawn(name, parts):
+    """Every part is drawn inside the boxes it declares, which is what the Java tables are cut from.
+
+    check_hitboxes.py skips the cables - their shape is per state, not per model file - so until this
+    existed nothing compared a cable fitting's mesh to its own box.  Barrel drew every fitting in both
+    gauges at twice its length, reaching backwards, and the tables went on saying low..high.
+    """
+    for part in parts:
+        one = Mesh()
+        part.draw(one)
+        if not one.v:
+            continue
+        drawn_lo = [min(v[i] for v in one.v) * 16.0 for i in range(3)]
+        drawn_hi = [max(v[i] for v in one.v) * 16.0 for i in range(3)]
+        boxes = part.boxes()
+        lo = [min(b[0][i] for b in boxes) for i in range(3)]
+        hi = [max(b[1][i] for b in boxes) for i in range(3)]
+        for i in range(3):
+            if drawn_lo[i] < lo[i] - 0.01 or drawn_hi[i] > hi[i] + 0.01:
+                raise SystemExit(
+                    'check_drawn: %s draws %s outside the box it declares on %s: '
+                    'drawn %.2f..%.2f, declared %.2f..%.2f'
+                    % (name, getattr(part, 'group', type(part).__name__), 'xyz'[i],
+                       drawn_lo[i], drawn_hi[i], lo[i], hi[i]))
+
+
 def write_piece(p, name, parts):
     """One piece as an OBJ, its material library"""
+    check_drawn(name, parts)
     mesh = Mesh()
     for part in parts:
         part.draw(mesh)

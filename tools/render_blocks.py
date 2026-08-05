@@ -162,16 +162,22 @@ def read_mtl(path, resolve):
     return out
 
 
-def read_obj(path, resolve, flip_v=False, shade=True, cull=True):
+def read_obj(path, resolve, flip_v=False, shade=True, cull=True, forge_groups=True):
     """Triangles as (group, Texture, three (position, uv) pairs, normal, shade, cull).
 
     ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does 1 - v.
     ``cull`` because the two pipelines differ: a block model is baked into the chunk with RenderType.solid,
     which culls by winding, while ObjRendererBase draws a machine with entityCutoutNoCull, which does not.
+    ``forge_groups`` applies the other difference between them, which is why this renderer said the
+    junction box had walls for four rounds while the game drew a bare plate: Forge's ObjModel does
+    ``parts.put(name, ...)`` into a map, so a repeated ``o`` name *replaces* the earlier group and every
+    face it held goes undrawn.  The mod's own parser splits by object and then by material instead, which
+    merges rather than replaces, so a machine loses nothing - hence the flag.
     """
     directory = os.path.dirname(path)
     verts, uvs, normals, materials = [], [], [], {}
     group, material, out = 'root', None, []
+    occurrence, last_of = 0, {}
     for line in open(path):
         parts = line.split()
         if not parts:
@@ -188,6 +194,8 @@ def read_obj(path, resolve, flip_v=False, shade=True, cull=True):
             normals.append(tuple(float(v) for v in parts[1:4]))
         elif head == 'o':
             group = parts[1]
+            occurrence += 1
+            last_of[group] = occurrence
         elif head == 'usemtl':
             material = parts[1]
         elif head == 'f':
@@ -200,8 +208,11 @@ def read_obj(path, resolve, flip_v=False, shade=True, cull=True):
                 normal = _face_normal([c[0] for c in corners])
             for i in range(1, len(corners) - 1):
                 out.append((group, materials.get(material), (corners[0], corners[i], corners[i + 1]),
-                            normal, shade, cull))
-    return out
+                            normal, shade, cull, occurrence))
+
+    if forge_groups:
+        out = [t for t in out if last_of.get(t[0]) == t[6]]
+    return [t[:6] for t in out]
 
 
 def _face_normal(points):
@@ -226,7 +237,7 @@ def machine_model(name, obj=None):
     ``obj`` where the file is not named after its directory, which electric_cab/cab.obj is.
     """
     triangles = read_obj(os.path.join(MODELS, name, (obj or name) + '.obj'), {}, flip_v=True,
-                         cull=False)
+                         cull=False, forge_groups=False)
     return [(g, t, tuple(((p[0] + 0.5, p[1], p[2] + 0.5), uv) for p, uv in c), n, s, k)
             for g, t, c, n, s, k in triangles]
 
@@ -346,6 +357,97 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
 
     canvas.write(path)
     return path
+
+
+def see_through(triangles, eye, target, size=520, up=(0.0, 1.0, 0.0), inside=None):
+    """Pixels where the nearest surface is back-facing: places a player sees the inside of the model.
+
+    Rasterised twice - the solid shape as the chunk renderer draws it, and the same shape with culling off
+    - so a pixel the second pass covers and the first does not has no front face on it at all, and what a
+    player sees there is the inside.  That is "in molti punti ci sono zone trasparenti", measured.
+    """
+    forward = _unit(_sub(target, eye))
+    right = _unit(_cross(forward, up))
+    above = _cross(right, forward)
+    focal = 0.5 * size / math.tan(math.radians(42.0) * 0.5)
+
+    def pass_over(cull):
+        depth = [1e30] * (size * size)
+        seen = bytearray(size * size)
+        # Whether the nearest surface at each pixel points at the ground.  The band between a tube's
+        # silhouette and where it touches the sand is back-facing and has no front face over it, but the
+        # ground is behind it and a player sees sand - so it is not a hole, and it is the whole of what a
+        # cable lying on the floor contributes here.
+        downward = bytearray(size * size)
+        for _, _, corners, _, _, _ in triangles:
+            points = [point for point, _ in corners]
+            normal = _face_normal(points)
+            if cull and _dot(normal, _sub(points[0], eye)) > 0.0:
+                continue
+            screen = []
+            for point in points:
+                offset = _sub(point, eye)
+                z = _dot(offset, forward)
+                if z <= 0.05:
+                    screen = None
+                    break
+                inverse = focal / z
+                screen.append((size * 0.5 + _dot(offset, right) * inverse,
+                               size * 0.5 - _dot(offset, above) * inverse, 1.0 / z))
+            if screen is None:
+                continue
+            _cover(seen, depth, size, screen, downward, normal[1] < -0.5)
+        return seen, downward
+
+    def to_screen(point):
+        offset = _sub(point, eye)
+        z = _dot(offset, forward)
+        if z <= 0.05:
+            return None
+        inverse = focal / z
+        return (size * 0.5 + _dot(offset, right) * inverse, size * 0.5 - _dot(offset, above) * inverse)
+
+    # ``inside`` bounds the region that is being judged.  A composed run's outermost tube ends are open by
+    # design - the block past them is where the run carries on - so counting them is counting the edge of
+    # the picture, not a fault in the piece.
+    window = None
+    if inside:
+        corners = [to_screen(p) for p in inside]
+        corners = [c for c in corners if c]
+        if corners:
+            window = (min(c[0] for c in corners), min(c[1] for c in corners),
+                      max(c[0] for c in corners), max(c[1] for c in corners))
+
+    (solid, _), (both, underside) = pass_over(True), pass_over(False)
+    holes = [i for i in range(size * size) if both[i] and not solid[i] and not underside[i]]
+    if window:
+        holes = [i for i in holes
+                 if window[0] <= i % size <= window[2] and window[1] <= i // size <= window[3]]
+    return holes, size
+
+
+def _cover(seen, depth, size, screen, downward=None, faces_down=False):
+    """Marks the pixels this triangle is nearest at, and whether that nearest face points at the ground."""
+    (x0, y0, w0), (x1, y1, w1), (x2, y2, w2) = screen
+    area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    if abs(area) < 1e-9:
+        return
+    for py in range(max(0, int(min(y0, y1, y2))), min(size - 1, int(max(y0, y1, y2)) + 1) + 1):
+        sy = py + 0.5
+        for px in range(max(0, int(min(x0, x1, x2))), min(size - 1, int(max(x0, x1, x2)) + 1) + 1):
+            sx = px + 0.5
+            a = ((x1 - sx) * (y2 - sy) - (x2 - sx) * (y1 - sy)) / area
+            b = ((x2 - sx) * (y0 - sy) - (x0 - sx) * (y2 - sy)) / area
+            c = 1.0 - a - b
+            if a < 0.0 or b < 0.0 or c < 0.0:
+                continue
+            w = a * w0 + b * w1 + c * w2
+            index = py * size + px
+            if w > 0.0 and 1.0 / w < depth[index]:
+                depth[index] = 1.0 / w
+                seen[index] = 1
+                if downward is not None:
+                    downward[index] = 1 if faces_down else 0
 
 
 def _line(canvas, depth, size, first, second, colour=(24, 24, 28)):
@@ -518,6 +620,27 @@ def scene_cable_junction():
     return triangles, (3.1, 1.70, 3.9), (1.5, 0.06, 1.45)
 
 
+def composed(connected, at=(1, 0, 1), prefix=CABLE):
+    """One connection pattern the way the blockstate draws it, neighbours included.
+
+    The middle its HUBS table names, an arm on each connected side, and the neighbour's own pieces - which
+    is what closes the arm's open end, so a run is only whole when its neighbours are in the picture.
+    """
+    import gen_cable_models as cable
+
+    kind, turn = cable.HUBS[connected]
+    triangles = placed(block_model(prefix + kind), at, turn)
+    for side in connected:
+        yaw = cable.QUARTERS[side]
+        triangles += placed(block_model(prefix + 'arm'), at, yaw)
+        dx, dz = NEIGHBOUR[yaw]
+        beyond = (at[0] + dx, at[1], at[2] + dz)
+        triangles += placed(block_model(prefix + 'line'), beyond, 90 if dx else 0)
+        triangles += placed(block_model(prefix + 'arm'), beyond, yaw)
+        triangles += placed(block_model(prefix + 'arm'), beyond, (yaw + 180) % 360)
+    return triangles
+
+
 def scene_cable_states():
     """All sixteen states of a run at once, composed the way the blockstate composes them.
 
@@ -528,17 +651,7 @@ def scene_cable_states():
 
     triangles = ground(-2, -2, 15, 15, SAND)
     for index, connected in enumerate(sorted(cable.HUBS, key=len)):
-        at = (1 + (index % 4) * 4, 0, 1 + (index // 4) * 4)
-        kind, turn = cable.HUBS[connected]
-        triangles += cable_piece(kind, at, yaw=turn)
-        for side in connected:
-            yaw = cable.QUARTERS[side]
-            triangles += cable_piece('arm', at, yaw=yaw)
-            dx, dz = NEIGHBOUR[yaw]
-            beyond = (at[0] + dx, at[1], at[2] + dz)
-            triangles += cable_piece('line', beyond, yaw=90 if dx else 0)
-            triangles += cable_piece('arm', beyond, yaw=yaw)
-            triangles += cable_piece('arm', beyond, yaw=(yaw + 180) % 360)
+        triangles += composed(connected, (1 + (index % 4) * 4, 0, 1 + (index // 4) * 4))
     return triangles, (7.5, 7.2, 20.0), (7.5, 0.1, 7.0)
 
 

@@ -44,7 +44,28 @@ four rounds of reports because `render_blocks.py` did not cull either, so every 
 `Mesh.quad` rewinds a quad to agree with its normal, `render_blocks.py` culls what the game culls (and
 only that: a machine model is read with `cull=False`), and `check_winding.py` fails the build on it.
 **An open tube end is the same fault by another route** — cap it, or the game shows you the ground through
-it.
+it. And an **uncapped end must leave along its own axis**: `tube` sets an end ring perpendicular to the end
+segment, so a path already turning at its first point offers a tilted ellipse where the neighbouring piece
+offers a flat circle, and between them you see in. `Run` adds a `LEAD` stub for that.
+
+### They also *group* differently, and Forge throws parts away
+
+Forge's `ObjModel` does `parts.put(name, new ModelGroup(name))` into a map, so **a second `o` of the same
+name replaces the first** and every face it held is never baked. A part drawn in two materials used to be
+written as two same-named blocks, so the game drew the junction box's lid and dropped its five walls, drew
+one connector of a mated pair, and left holes wherever the dropped part had been the thing covering
+something. Legal OBJ for a part in several materials is **one `o` block with a `usemtl` section per
+material** — Forge makes a `ModelMesh` per material inside the group and bakes them all. The mod's own
+parser splits by object and then by material, which merges rather than replaces, so a machine loses
+nothing; only the block models were losing parts.
+
+`Mesh.write` emits one `o` per name, `read_obj(..., forge_groups=True)` applies Forge's rule so the renders
+here stop lying, and `check_obj_loading.py` fails the build on a repeated name — and on a model whose OBJ
+is missing, which is the other way a part is on disk and not in the world.
+
+**A tool that reads a model differently from the game proves nothing.** Every checker here appended faces
+to a flat list, so all of them saw the twelve faces the game had reduced to one, for four rounds of
+reports. When a screenshot disagrees with `build/render/`, the renderer is the thing to doubt first.
 
 ## 2. Textures
 
@@ -138,6 +159,14 @@ height; the tube moved and the checker went on measuring the old axis, so it rep
 not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
 the renderer does.
 
+**A part's box and a part's mesh have to be compared, not just declared.** `check_hitboxes.py` skips the
+cables — their shape is per state, not per model file — so nothing checked a cable fitting's own geometry
+against its own box. `Barrel` passed `cylinder` a centre of `low` and the *whole* length as the *half*
+length, so every round fitting in both gauges came out twice as long reaching backwards: the lug's barrel
+began 3.6 px behind itself and left its palm floating in mid-air, and a gland stood clear of the wall
+meant to bury its open end. `boxes()` had said `low..high` throughout. `check_drawn` in
+`gen_cable_models.py` now fails the build when a part is drawn outside the box it declares.
+
 **One framework, one gauge each.** The string cable and the trunk share every bit of machinery — the
 sixteen middles, the blockstate, the disjointness proof, the Java tables — through `Product` in
 `gen_cable_models.py`. Only the figures and the fittings differ, and they differ because the objects do: a
@@ -172,6 +201,8 @@ python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--jav
 ```bash
 python3 tools/check_hitboxes.py         # "the models and the tables agree, to a hundredth of a pixel"
 python3 tools/check_winding.py          # "every face is wound the way its normal points"
+python3 tools/check_obj_loading.py      # "every part these models author is a part the game loads"
+python3 tools/check_holes.py            # "no connection pattern of either gauge shows its inside"
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_generated_assets.py # "one generator a file, every file read, nothing under resolution"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches

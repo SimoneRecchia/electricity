@@ -628,17 +628,27 @@ def dc_core():
 
 
 def dc_cleat():
-    """The stainless clip that holds a run down, once a block, the way a real one is cleated."""
+    """A cleat's strap, feet and cheeks, carrying their own face shading.
+
+    Two bands, like dc_tie: the top half is a face looking up, the bottom half the same metal at
+    Minecraft's own 0.8 for a vertical one.  shade_quads is off on every cable model, so a strap whose six
+    faces share one tone has no edges at all - the cleats read as frosted glass rather than metal.
+    gen_cable_models and gen_trunk_models pick the band per slab.
+    """
     size = 128
     c = Canvas(size, size)
     brushed(c, CLEAT_STEEL, grain=9, blotch=8, salt=283, horizontal=False)
-    # the rolled edges of the strap, top and bottom
-    c.aa_rect(0, 0, size, size * 0.10, shade(CLEAT_STEEL, 22))
-    c.aa_rect(0, size * 0.90, size, size, shade(CLEAT_STEEL, -30))
-    # the black nylon liner showing at the strap's lip, which is what keeps it off the sheath
-    c.aa_rect(0, size * 0.80, size, size * 0.90, (34, 34, 38, 255), alpha=0.8)
+    for half in (0, 1):
+        y0, span = size * 0.5 * half, size * 0.5
+        # the rolled edges of the strap, along it
+        c.aa_rect(0, y0, size, y0 + span * 0.13, shade(CLEAT_STEEL, 22))
+        c.aa_rect(0, y0 + span * 0.87, size, y0 + span, shade(CLEAT_STEEL, -30))
+        # the black nylon liner showing at the strap's lip, which is what keeps it off the sheath
+        c.aa_rect(0, y0 + span * 0.74, size, y0 + span * 0.87, (34, 34, 38, 255), alpha=0.8)
     # No screw drawn: the model has a real one now, turned out of geometry
-    # was a second screw head wherever the strap's tile landed twice.
+    for y in range(size // 2, size):
+        for x in range(size):
+            c.set(x, y, mul(c.get(x, y), 0.78))
     grime(c, salt=289, amount=0.14, colour=(74, 72, 68, 255))
     return c
 

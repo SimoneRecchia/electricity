@@ -100,17 +100,21 @@ def lug(centre, base, index):
     axis = base + LUG_RADIUS
     palm = LUG_START + LUG_BARREL
     name = 'lead_%d' % index
+    # A group per part - CLAUDE.md section 4: one lug per pole, so one bounding box per pole.
+    group = 'lug_%s' % ('plus' if index == 0 else 'minus')
     return [
-        Barrel('lug', 'lug', (centre, axis, 0.0), 'z', LUG_RADIUS, LUG_START, palm, cap=True,
-               band=(0.0, 0.0, 1.0, 0.72), outward=-1, joint=name),
-        Slab('lug', 'lug', (centre - LUG_HALF, axis - LUG_THICK / 2.0, palm),
+        # Both ends closed: the cable enters through a crimped rim and the far end runs into the palm,
+        # which is a fifth of the barrel's diameter and covers nothing.
+        Barrel(group, 'lug', (centre, axis, 0.0), 'z', LUG_RADIUS, LUG_START, palm, cap=True,
+               band=(0.0, 0.0, 1.0, 0.72), outward=-1, cap_ends=(-1, 1), joint=name),
+        Slab(group, 'lug', (centre - LUG_HALF, axis - LUG_THICK / 2.0, palm),
              (centre + LUG_HALF, axis + LUG_THICK / 2.0, palm + LUG_PALM), uv=(0.0, 0.74, 1.0, 1.0),
              joint=name),
         # the bolt hole, as the bolt that goes through it: a hole is not drawable and a bolt is the point.
         # For a y axis it is x and z that place it, so the z here is the palm's own middle.
-        Barrel('lug', 'lug', (centre, axis, palm + LUG_PALM * 0.62), 'y', 0.55,
+        Barrel(group, 'lug', (centre, axis, palm + LUG_PALM * 0.62), 'y', 0.55,
                axis - LUG_THICK / 2.0 - 0.30, axis + LUG_THICK / 2.0 + 0.30, cap=True, sides=HEX,
-               band=(0.0, 0.0, 1.0, 0.30), joint=name),
+               band=(0.0, 0.0, 1.0, 0.30), cap_ends=(-1, 1), joint=name),
     ]
 
 
@@ -124,26 +128,30 @@ def cleat(base, low, high):
     crown = base + CORE_Y + RADIUS
     # No base plate: the cable rests on the ground, so there is nothing to put under it.  A strap over the
     # crown into a foot each side and one between the poles, which is what a two-bolt cleat is.
+    # dc_cleat's top half is a face looking up and its bottom half the same metal at Minecraft's own
+    # factor for a vertical one: the strap over the crown takes the first, the three feet the second.
     return [
         Slab('cleat', 'cleat', (8.0 - outer, crown, low), (8.0 + outer, crown + 0.40, high),
-             uv_scale=0.5),
+             uv=cable.CLEAT_TOP),
         Slab('cleat', 'cleat', (8.0 - outer, base, low), (8.0 - outer + 0.40, crown, high),
-             uv_scale=0.3),
+             uv=cable.CLEAT_SIDE),
         Slab('cleat', 'cleat', (8.0 + outer - 0.40, base, low), (8.0 + outer, crown, high),
-             uv_scale=0.3),
-        Slab('cleat', 'cleat', (8.0 - 0.40, base, low), (8.0 + 0.40, crown, high), uv_scale=0.3),
+             uv=cable.CLEAT_SIDE),
+        Slab('cleat', 'cleat', (8.0 - 0.40, base, low), (8.0 + 0.40, crown, high),
+             uv=cable.CLEAT_SIDE),
     ] + [Barrel('cleat', 'cleat', (x, 0.0, (low + high) / 2.0), 'y', 0.42, crown + 0.40, crown + 0.78,
-                sides=HEX)
+                sides=HEX, band=cable.CLEAT_TOP)
          for x in (8.0 - outer + 0.20, 8.0 + outer - 0.20)]
 
 
-def gland(base, side, centre):
+def gland(base, side, centre, index):
     """A gland through the link box's wall, sized to the trunk rather than to a string core."""
     axis = 'z' if side in ('north', 'south') else 'x'
     near = side in ('north', 'west')
     step = -1.0 if near else 1.0
     middle = [8.0, base + CORE_Y, 8.0]
     middle[0 if axis == 'z' else 2] = centre
+    group = 'gland_%s_%s' % (side, 'plus' if index == 0 else 'minus')
 
     parts, cursor = [], HUB_LO if near else HUB_HI
     # 1.50 px of protrusion in all: any more and the gland reaches the arm's own cleat, which has to sit
@@ -152,7 +160,7 @@ def gland(base, side, centre):
                                               (1.05, GLAND_RADIUS - 0.10, 0.80, FITTING,
                                                (0.0, 0.25, 1.0, 1.0))):
         low, high = sorted((cursor, cursor + step * length))
-        parts.append(Barrel('gland', 'gland', tuple(middle), axis, radius, low, high, cap=True,
+        parts.append(Barrel(group, 'gland', tuple(middle), axis, radius, low, high, cap=True,
                             sleeve=True, band=band, sides=sides, taper=taper, outward=int(step)))
         cursor += step * length
     return parts
@@ -163,12 +171,14 @@ def link_box(base, glanded):
     top = base + BOX_TOP
     parts = [
         Slab('jbox', {'*': 'jbox_side'}, (HUB_LO, base, HUB_LO), (HUB_HI, top - BOX_LID, HUB_HI)),
+        # the rim takes dc_jbox_side's lit top band, the same as the string's - see junction_box.
         Slab('jbox', {'up': 'jbox', '*': 'jbox_side'},
-             (HUB_LO - 0.34, top - BOX_LID, HUB_LO - 0.34), (HUB_HI + 0.34, top, HUB_HI + 0.34)),
+             (HUB_LO - 0.34, top - BOX_LID, HUB_LO - 0.34), (HUB_HI + 0.34, top, HUB_HI + 0.34),
+             uv={'up': None, '*': (0.0, 0.0, 1.0, 0.055)}),
     ]
     for side in glanded:
-        for centre in CORES:
-            parts += gland(base, side, centre)
+        for index, centre in enumerate(CORES):
+            parts += gland(base, side, centre, index)
     return parts
 
 
