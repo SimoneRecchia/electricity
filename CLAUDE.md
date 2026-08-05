@@ -143,11 +143,17 @@ The rules that came out of doing it:
   rectangle. Every group a model draws has to appear there exactly once, so a new part is a decision about
   its collision rather than a silent extra box. Cut from every group and sliced wherever it sloped, a
   fixed-tilt array came out as **23 boxes of staircase**; it is **1**. So is a flat one, and the inverter.
-* **A box is only worth adding where a player could have been in the gap.** A ballasted table is 2.5 px
-  tall in all and a fixed rack 8.5 — there is nothing under either to stand in, so one box each. A turning
+* **A box is only worth adding where a player could have been in the gap.** A ballasted table is 4 px
+  tall in all and a fixed rack 10.7 — there is nothing under either to stand in, so one box each. A turning
   row is one box from the floor for the same reason: the swept volume closes over the gap under its pier.
   The combiner is the counter-example and gets **three** — base, post, enclosure — because a player walks
   past a 1-px post, and merging it into the enclosure above would be a wall of air beside it.
+* **A porcelain fitting is the exception to the merging, and gets a rectangle of its own.** An insulator, a
+  bushing, an arrester: it is the part of a machine a player *aims* at, because a span is hung on one by
+  pointing at it. Swept into the roof rectangle beside its neighbours it became a slab of air with the
+  fittings somewhere inside. The pole's eight, the cabin's two and three, the transformers' three and six,
+  a switch's six, and the towers' six — which the towers' authored table draws round the string and not
+  round the jumper, because a fitting collides and a conductor never does.
 * **A quarter of a pixel is a real part.** The threshold is `MIN_OWN = 0.25` px: a ballasted table is
   2 px tall in total, and a 1-px threshold discarded it entirely.
 * **A cable's hitbox is a few pixels, and that is right.** Not the block.
@@ -157,11 +163,20 @@ The rules that came out of doing it:
   cable gauges 621 → 44, the ground conductors 529 → 64. A lattice tower barely moves (337 → 316) and
   should not: its members are thin and its cells are climbed, so filling a cell would make the lattice
   solid. One figure, in `modellib`, decides how coarse every run in the mod is.
-* **1 670 boxes to 507 in all**, over the two passes: the runs by merging, the machines by declaring. What
-  a player points at and walks into is a handful of rectangles; the model is where the detail belongs.
+* **1 670 boxes to 578 in all**: the runs by merging, the machines by declaring, and then back up by 76 for
+  the porcelain, which is the one place the detail is worth a box. What a player points at and walks into is
+  a handful of rectangles; the model is where the rest of the detail belongs.
 * **Two hitboxes cannot be the drawn shape, and the checker prints why**: a tracked array sweeps a
   volume as it follows the sun, and the turbine model carries its own tower, which in the world is a
   stack of blocks with their own collision.
+* **A machine bigger than a block fills the cells round it, and giving them back is not the same question
+  as taking them.** `MachineShell.place` may ask `hostOf` whether a cell is its own, because the machine is
+  standing there while it asks. `clear` may not: it runs from `onRemove`, and by then the chunk already
+  holds the new state, so the machine doing the asking is air and `hostOf` disowns every cell it has. It
+  reads the cell's own back-pointer instead. This looked like it worked for as long as every machine's cells
+  touched its own block — `MachineShellBlock.updateShape` deletes 6-connected neighbours anyway — and a
+  lattice tower's nearest cell is two out and diagonal, so all seventy-eight of its cells stayed behind,
+  solid and invisible, every time one was broken.
 * Groups whose names begin `pivot_`, `rotate_`, `harness` or `entry` move or are conditional and are
   excluded from the comparison.
 
@@ -173,8 +188,19 @@ The renderers read them. Renaming one silently breaks something:
 |---|---|
 | `rotate_*` | the renderer turns it |
 | `pivot_*` | a zero-size marker the renderer measures a hinge from |
-| `harness*`, `entry*` | drawn only when a cable is connected — and `harness_input` is a socket for a *row* while `harness_entry_*` is for a *laid run*, so the two are never drawn together: they both wanted the row's north-east corner |
-| `insulator*` | a wire fitting, **named in `ObjDefinitions`** — and a wire is stored against its *index* in that list, so the order cannot change without moving every wire in every existing world |
+| `harness*`, `entry*` | drawn only when a cable is connected. **Exactly one piece is drawn at each end of a fixed row**: `harness_entry_*` where a laid run meets the middle of that edge, `harness_input` where a row plugs into the corner, `harness_lead_*` otherwise — each carrying its own cable out of the moulded joint, so two pieces of cable in one place is not a state the renderer can reach |
+| `flag_shut`, `flag_open` | two plates in one place, one drawn per state. A vacuum breaker has nothing that moves where you can see it, so a flag is all it has to tell you with |
+| `insulator*` | a wire fitting, **named in `ObjDefinitions`** — and a wire is stored against its *index* in that list, so the order cannot change without moving every wire in every existing world. On a switch the index is also the side: `insulator_1..3` line, `insulator_4..6` load, which is what `busOf` splits on |
+
+And four questions the wires ask of a machine, all on `InsulatorHost`, so adding one is four methods and
+not an `instanceof` chain in eight files:
+
+| | |
+|---|---|
+| `feeds(other)` | whether power may flow from a fitting here to one there — where a machine sits in the chain |
+| `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `PowerNetwork` keys a cluster on (position, bus) for it |
+| `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the five conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
+| `fittingType()` | the string a saved wire holds. **Never change one**: every wire in every existing world has it |
 
 ## 6. Generate, never hand-edit
 
@@ -227,6 +253,7 @@ python3 tools/gen_crafting.py           # recipes, part item models, language en
 python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
 python3 tools/gen_transformer_models.py # the two transformers
+python3 tools/gen_switch_models.py      # the disconnector and the breaker
 python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
 ```
 
@@ -237,6 +264,8 @@ python3 tools/check_hitboxes.py         # "the models and the tables agree, to a
 python3 tools/check_winding.py          # "every face is wound the way its normal points"
 python3 tools/check_obj_loading.py      # "every part these models author is a part the game loads"
 python3 tools/check_holes.py            # "no connection pattern of either gauge shows its inside"
+python3 tools/check_row_cabling.py      # "nothing a row draws passes through anything else it draws"
+python3 tools/check_switch_travel.py    # "the blade grips its contact and clears everything else"
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_generated_assets.py # "one generator a file, every file read, nothing under resolution"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches

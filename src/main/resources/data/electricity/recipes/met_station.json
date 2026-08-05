@@ -3,9 +3,12 @@
   "pattern": [
     " p ",
     "pbp",
-    "SSS"
+    "SRS"
   ],
   "key": {
+    "R": {
+      "item": "electricity:screen"
+    },
     "S": {
       "item": "electricity:steel_section"
     },

@@ -165,7 +165,9 @@ RECIPES = [
     ('pv_combiner_32', 1, SHAPED, ['fff', 'BEB', 'PQP']),
 
     # ------------------------------------------------------------------- the met station
-    ('met_station', 1, SHAPED, [' p ', 'pbp', 'SSS']),
+    # A logger with a display on it, which is what the model draws and what put the screen back in the tree:
+    # nothing else consumed one, so it was an item a player could craft and never use.
+    ('met_station', 1, SHAPED, [' p ', 'pbp', 'SRS']),
 
     # ------------------------------------------------------------------- the transformers
     # A tank, a core with windings on it, and the bushings the windings leave through.  The substation
