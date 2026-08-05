@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, HEX, MC4_RADIUS, MC4_SPREAD, ROUND, Mesh, angle, arc, bolt, box,
                       channel, clad_box, cylinder, eyebolt, hemisphere, ibeam, mc4, pin_insulator,
-                      pivot, rotate, square_uv, strut, tube, write_mtl)
+                      emit, pivot, rotate, square_uv, strut, tube)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -1074,36 +1074,20 @@ def met_mast():
     return mesh
 
 
-LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
-HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'core', 'plug_plus', 'plug_minus',
-                     'jbox', 'jbox_side', 'gland')
-STRUCTURE = ('steel', 'steel_end', 'plate', 'frame')
-
 MODELS = [
-    ('pv_flat', flat_table, STRUCTURE + ('concrete',) + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_tilt', tilted_rack, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_track', single_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_dual', dual_axis, STRUCTURE + HARNESS_MATERIALS + LAMINATE_MATERIALS),
-    ('pv_inverter', inverter, STRUCTURE + ('cabinet', 'cabinet_door', 'cabinet_leaf', 'cabinet_top', 'vent',
-                                           'display', 'instrument', 'porcelain', 'core', 'plug_plus',
-                                           'plug_minus', 'dc_section', 'blank', 'concrete')),
-    ('pv_combiner', combiner, STRUCTURE + ('cabinet', 'cabinet_top', 'combiner_door', 'switch',
-                                           'core', 'plug_plus', 'plug_minus')),
-    ('met_mast', met_mast, STRUCTURE + ('instrument', 'dome', 'cabinet', 'cabinet_top',
-                                        'cabinet_door')),
+    ('pv_flat', flat_table),
+    ('pv_tilt', tilted_rack),
+    ('pv_track', single_axis),
+    ('pv_dual', dual_axis),
+    ('pv_inverter', inverter),
+    ('pv_combiner', combiner),
+    ('met_mast', met_mast),
 ]
 
 
 def main():
-    for name, builder, materials in MODELS:
-        mesh = builder()
-        directory = os.path.join(OUT, name)
-        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', 'gen_pv_models.py')
-        write_mtl(os.path.join(directory, name + '.mtl'), materials, MATERIALS, 'gen_pv_models.py')
-        vertices, faces = mesh.stats()
-        groups = ['%s_%s' % (obj, material) for obj, material, faces_list in mesh.objects if faces_list]
-        print('%-12s %4d vertices, %4d faces, %2d groups' % (name, vertices, faces, len(groups)))
-        print('             %s' % ', '.join(groups))
+    for _ in emit(OUT, MODELS, MATERIALS, 'gen_pv_models.py'):
+        pass
 
 
 if __name__ == '__main__':

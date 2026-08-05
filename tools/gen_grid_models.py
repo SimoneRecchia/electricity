@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, ROUND, Mesh, angle, bolt, box, channel, clad_box, cylinder,
-                      hemisphere, ibeam, pin_insulator, strut, write_mtl)
+                      emit, hemisphere, ibeam, pin_insulator, strut)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -217,23 +217,14 @@ def power_box():
 
 
 MODELS = [
-    ('utility_pole', utility_pole, ('concrete', 'steel', 'plate', 'porcelain', 'sign')),
-    ('power_box', power_box, ('plinth', 'plate', 'cabinet', 'cabinet_top', 'door', 'leaf', 'sheet',
-                              'frame', 'steel', 'vent', 'porcelain')),
+    ('utility_pole', utility_pole),
+    ('power_box', power_box),
 ]
 
 
 def main():
-    for name, builder, materials in MODELS:
-        mesh = builder()
-        directory = os.path.join(OUT, name)
-        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', 'gen_grid_models.py')
-        write_mtl(os.path.join(directory, name + '.mtl'), materials, MATERIALS,
-                  'gen_grid_models.py')
-        vertices, faces = mesh.stats()
-        groups = ['%s_%s' % (obj, material) for obj, material, face_list in mesh.objects if face_list]
-        print('%-14s %4d vertices, %4d faces, %2d groups' % (name, vertices, faces, len(groups)))
-        print('               %s' % ', '.join(groups))
+    for _ in emit(OUT, MODELS, MATERIALS, 'gen_grid_models.py'):
+        pass
 
 
 if __name__ == '__main__':

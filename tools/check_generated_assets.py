@@ -12,6 +12,9 @@ the output which tool had written it.
 
 And a texture nothing references still gets written, still ships, and still looks like part of the mod.
 
+And a block *model* nothing names still ships: 487 lines of the trunk cable's pre-OBJ drawing sat on disk
+naming a texture that had been deleted under it.
+
 And a *blockstate* no generator writes drifts, because nothing regenerates it.  Twenty-two of them were
 hand-written, and one had gone wrong: the kiosk has a `mounted` as well as a facing, and its four `facing=`
 variant keys named half its states - Minecraft resolved the other half to no model at all.  A machine's
@@ -73,6 +76,25 @@ def outputs():
             for key in table:
                 claimed.setdefault('%s/%s.png' % (folder, key), []).append(name)
     return claimed
+
+
+def orphan_models():
+    """Block models nothing names - not a blockstate, not another model, not the Java.
+
+    The trunk cable was drawn by vanilla JSON before it became an OBJ, and 487 lines of it stayed on disk
+    naming a texture that is not there. A model nobody reads still ships and still looks like part of the mod.
+    """
+    folder = os.path.join(ASSETS, 'models', 'block')
+    text = ''
+    for root, _, names in os.walk('src'):
+        if os.path.abspath(root) == os.path.abspath(folder):
+            continue
+        for name in names:
+            if name.endswith(('.json', '.java', '.mtl')):
+                text += open(os.path.join(root, name)).read()
+
+    return sorted(name[:-5] for name in os.listdir(folder)
+                  if name.endswith('.json') and 'electricity:block/%s"' % name[:-5] not in text)
 
 
 def blockstates():
@@ -164,6 +186,9 @@ def main():
         if path.startswith('block/') and min(width, height) < MIN_BLOCK:
             problems.append('%s is %dx%d, under the %d-pixel floor a block face gets'
                             % (path, width, height, MIN_BLOCK))
+
+    for name in orphan_models():
+        problems.append('models/block/%s.json is named by no blockstate, model or class' % name)
 
     states, on_disk = blockstates()
     for name, tools in sorted(states.items()):

@@ -25,8 +25,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, HEX, Mesh, angle, bolt, box, channel, clad_box, cylinder,   # noqa: E402
-                      pivot, sheds, square_uv, write_mtl)
+from modellib import (FITTING, HEX, Mesh, angle, bolt, box, channel, clad_box, cylinder, emit,   # noqa: E402
+                      pivot, sheds, square_uv)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -307,23 +307,14 @@ def breaker():
 
 
 MODELS = [
-    ('mv_disconnector', disconnector,
-     ('steel', 'plate', 'porcelain', 'concrete', 'blade')),
-    ('mv_breaker', breaker,
-     ('steel', 'porcelain', 'concrete', 'blade', 'epoxy', 'cabinet', 'cabinet_top', 'flag')),
+    ('mv_disconnector', disconnector),
+    ('mv_breaker', breaker),
 ]
 
 
 def main():
-    for name, builder, used in MODELS:
-        mesh = builder()
-        directory = os.path.join(OUT, name)
-        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', 'gen_switch_models.py')
-        write_mtl(os.path.join(directory, name + '.mtl'), used, MATERIALS, 'gen_switch_models.py')
-        vertices, faces = mesh.stats()
-        groups = ['%s_%s' % (obj, material) for obj, material, face_list in mesh.objects if face_list]
-        print('%-16s %4d vertices, %4d faces, %2d groups' % (name, vertices, faces, len(groups)))
-        print('                 %s' % ', '.join(groups))
+    for _ in emit(OUT, MODELS, MATERIALS, 'gen_switch_models.py'):
+        pass
 
 
 if __name__ == '__main__':

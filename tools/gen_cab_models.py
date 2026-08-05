@@ -39,9 +39,6 @@ MATERIALS = {
     'arrester': 'cab_arrester.png',
 }
 
-USED = ('panel', 'roof', 'door', 'leaf', 'sheet', 'plinth', 'vent', 'steel', 'plate', 'porcelain',
-        'arrester')
-
 # The envelope, which is the inherited model's and cannot move without moving every cabin in every world.
 HALF_X = 0.55
 HALF_Z = 1.16
@@ -236,7 +233,7 @@ def main():
     mesh = cab()
     directory = os.path.join(OUT, 'electric_cab')
     mesh.write(os.path.join(directory, 'cab.obj'), 'cab.mtl', 'gen_cab_models.py')
-    write_mtl(os.path.join(directory, 'cab.mtl'), USED, MATERIALS, 'gen_cab_models.py')
+    write_mtl(os.path.join(directory, 'cab.mtl'), mesh.materials(), MATERIALS, 'gen_cab_models.py')
     vertices, faces = mesh.stats()
     groups = ['%s_%s' % (o, m) for o, m, f in mesh.objects if f]
     print('electric_cab  %5d vertices, %5d faces, %2d groups' % (vertices, faces, len(groups)))

@@ -166,8 +166,37 @@ class Mesh:
                     for face in faces:
                         f.write('f ' + ' '.join('%d/%d/%d' % idx for idx in face) + '\n')
 
+    def materials(self):
+        """Every material this mesh actually draws in, in the order it first used one.
+
+        What an MTL should declare.  Six generators kept a hand-written list beside the mesh instead, and
+        twenty-three of the materials in them had stopped being drawn - a newmtl block nothing uses, naming a
+        texture that may not even be on disk any more.
+        """
+        return list(dict.fromkeys(material for _, material, faces in self.objects if faces))
+
     def stats(self):
         return len(self.v), sum(len(faces) for _, _, faces in self.objects)
+
+
+def emit(out, models, textures, source):
+    """Builds each model, writes its OBJ and its MTL, prints what it came to, and yields it.
+
+    Six generators wrote this loop out, each with a hand-written list of the materials its MTL should declare
+    beside it - and twenty-three of those materials had stopped being drawn.  The MTL takes what the mesh
+    actually drew in, so a generator cannot fall out of step with its own model.  Yields (name, mesh) so a
+    generator that has more to say about a model can say it.
+    """
+    for name, builder in models:
+        mesh = builder()
+        directory = os.path.join(out, name)
+        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', source)
+        write_mtl(os.path.join(directory, name + '.mtl'), mesh.materials(), textures, source)
+        vertices, faces = mesh.stats()
+        groups = [obj + '_' + material for obj, material, drawn in mesh.objects if drawn]
+        print('%-18s %5d vertices, %5d faces, %2d groups' % (name, vertices, faces, len(groups)))
+        print('    %s' % ', '.join(groups))
+        yield name, mesh
 
 
 def write_mtl(path, materials, textures, source):

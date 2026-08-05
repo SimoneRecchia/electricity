@@ -11,14 +11,15 @@ whole pull on one side and is stayed back against it.
 PHASES is in wire-index order and cannot be reordered without moving every wire in every world.
 """
 
+import functools
 import math
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, Mesh, bolt, box, coarse, cylinder, strut, tube,   # noqa: E402
-                      write_mtl)
+from modellib import (FITTING, Mesh, bolt, box, coarse, cylinder, emit, strut,   # noqa: E402
+                      tube)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -480,21 +481,12 @@ MODELS = [
     ('lattice_terminal', 'terminal'),
 ]
 
-USED = ('steel', 'plate', 'porcelain', 'concrete', 'conductor', 'sign')
-
-
 def main():
-    for name, duty in MODELS:
-        mesh = tower(duty)
-        directory = os.path.join(OUT, name)
-        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl', 'gen_tower_models.py')
-        write_mtl(os.path.join(directory, name + '.mtl'), USED, MATERIALS, 'gen_tower_models.py')
-        vertices, faces = mesh.stats()
-        groups = ['%s_%s' % (obj, material) for obj, material, face_list in mesh.objects if face_list]
-        cells = collision_cells(duty)
-        print('%-20s %5d vertices, %5d faces, %2d groups, %3d collision cells, %3d boxes'
-              % (name, vertices, faces, len(groups), len(cells),
-                 sum(len(b) for b in cells.values())))
+    duties = dict(MODELS)
+    builders = [(name, functools.partial(tower, duty)) for name, duty in MODELS]
+    for name, _ in emit(OUT, builders, MATERIALS, 'gen_tower_models.py'):
+        cells = collision_cells(duties[name])
+        print('    %3d collision cells, %3d boxes' % (len(cells), sum(len(b) for b in cells.values())))
 
     print('%d cells are the same in all three duties, and are declared once' % len(tables()[0][1]))
 

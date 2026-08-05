@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, ROUND, Mesh, bolt, box, clad_box, cylinder, eyebolt,   # noqa: E402
-                      hemisphere, lathe, pin_insulator, tube, write_mtl)
+                      emit, hemisphere, lathe, pin_insulator, tube)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -40,9 +40,6 @@ MATERIALS = {
     'sign': 'pole_plate.png',
     'nameplate': 'tx_nameplate.png',
 }
-
-USED = ('tank', 'tank_top', 'fin', 'steel', 'plate', 'porcelain', 'concrete', 'gravel', 'sign',
-        'nameplate')
 
 # ---------------------------------------------------------------- the pad-mount machine transformer
 #
@@ -346,16 +343,8 @@ MODELS = [
 
 
 def main():
-    for name, builder in MODELS:
-        mesh = builder()
-        directory = os.path.join(OUT, name)
-        mesh.write(os.path.join(directory, name + '.obj'), name + '.mtl',
-                   'gen_transformer_models.py')
-        write_mtl(os.path.join(directory, name + '.mtl'), USED, MATERIALS,
-                  'gen_transformer_models.py')
-        vertices, faces = mesh.stats()
-        groups = [g for g, m, f in mesh.objects if f]
-        print('%-14s %5d vertices, %5d faces, %2d groups' % (name, vertices, faces, len(groups)))
+    for _ in emit(OUT, MODELS, MATERIALS, 'gen_transformer_models.py'):
+        pass
 
 
 if __name__ == '__main__':
