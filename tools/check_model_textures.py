@@ -458,7 +458,8 @@ def main():
         total += report(name)
 
     print('\n%s' % ('nothing mechanical left to find' if total == 0 else '%d problem(s)' % total))
+    return 1 if total else 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

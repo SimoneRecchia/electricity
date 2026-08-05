@@ -16,6 +16,7 @@ ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 
 BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'blockstates')
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'electricity', 'loot_tables', 'blocks')
 LANG = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'lang', 'en_us.json')
+TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
 CATALOGUE = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'main', 'registry',
                          'PartCatalog.java')
 
@@ -353,6 +354,15 @@ BLOCK_NAMES = {
 }
 
 
+# Which machines need iron and up rather than stone: the heavy steel. Panels, inverters, combiners and the
+# met mast come away with a stone pickaxe; a tower, a transformer, a switch and every machine that was already
+# here do not.
+NEEDS_IRON = ('utility_pole', 'electric_cabin', 'power_box', 'turbine_tower',
+              'sw_10', 'c52_085', 'c80_20', 'c90_30', 'c112_30', 'wind_turbine',
+              'lattice_suspension', 'lattice_tension', 'lattice_terminal',
+              'tx_machine', 'tx_substation', 'mv_disconnector', 'mv_breaker')
+
+
 # The lines a machine says to a player.  Here rather than by hand in the language file for the reason the
 # block names are: a key with no entry reads as its own id in the corner of the screen.
 MESSAGES = {
@@ -395,6 +405,20 @@ def loot_tables():
     return len(DROPS)
 
 
+def tool_tags():
+    """Which tool every machine needs, written from MACHINES so a new one cannot be left out.
+
+    A block with requiresCorrectToolForDrops() and no mineable tag breaks into nothing whatever you hit it
+    with, and its loot table never fires. Seven of them were in that state - three towers, two transformers
+    and both switches - because the tag was written by hand and the machines were added after it.
+    """
+    mineable = sorted('electricity:' + name for name in MACHINES if name != 'machine_shell')
+    write(os.path.join(TAGS, 'mineable', 'pickaxe.json'), {'replace': False, 'values': mineable})
+    write(os.path.join(TAGS, 'needs_iron_tool.json'),
+          {'replace': False, 'values': sorted('electricity:' + name for name in NEEDS_IRON)})
+    return len(mineable)
+
+
 def machine_assets():
     """The blockstate and item model for every machine the mod draws itself - see MACHINES."""
     for name, (particle, sprite) in MACHINES.items():
@@ -411,6 +435,7 @@ def main():
     catalogue = parts()
     machines = machine_assets()
     drops = loot_tables()
+    mineable = tool_tags()
 
     # one item model per part: a flat sprite, like every other ingredient in the game
     for part_id, _, _, _ in catalogue:
@@ -446,8 +471,8 @@ def main():
               {'type': 'minecraft:smelting', 'ingredient': {'item': source},
                'result': 'electricity:' + result, 'experience': 0.1, 'cookingtime': 200})
 
-    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates, %d loot tables'
-          % (len(catalogue), ingots, machines, drops))
+    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates, %d loot tables, '
+          '%d pickaxe-mineable' % (len(catalogue), ingots, machines, drops, mineable))
     print('%d recipe files on disk, hand-written ones included' % len(written_recipes()))
     print('lang now has %d keys' % len(lang))
     problems = check(catalogue)

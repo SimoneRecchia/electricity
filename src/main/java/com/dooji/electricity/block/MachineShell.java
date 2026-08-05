@@ -71,14 +71,21 @@ public interface MachineShell {
 		return ModelFacing.quarters(shellAuthored(), shellFacing(state));
 	}
 
-	/** The machine's own block's shape, which is the one cell of its table that stays a machine. */
+	/**
+	 * The machine's own block's shape: the one cell of its table that stays a machine.
+	 *
+	 * Empty where the table has no cell of its own, and a lattice tower has none - its origin is the middle of
+	 * a footprint 3.8 blocks across and there is nothing there. Shapes.block() was the fallback, so every
+	 * tower in the world had an invisible solid cube standing on the ground in the middle of it. A machine
+	 * with no cell of its own is still reached through its shells, which forward a click and a break to it.
+	 */
 	default VoxelShape shellShape(BlockState state) {
 		int quarters = shellTurns(state);
 		for (Cell cell : shellCells(state)) {
 			if (cell.own()) return cell.shape(quarters);
 		}
 
-		return Shapes.block();
+		return Shapes.empty();
 	}
 
 	/** Fills the cells, and mends any that are wrong. */

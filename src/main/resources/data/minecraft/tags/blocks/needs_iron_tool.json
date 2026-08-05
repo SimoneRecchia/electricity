@@ -1,15 +1,22 @@
 {
   "replace": false,
   "values": [
-    "electricity:utility_pole",
-    "electricity:electric_cabin",
-    "electricity:power_box",
-    "electricity:wind_turbine",
-    "electricity:sw_10",
+    "electricity:c112_30",
     "electricity:c52_085",
     "electricity:c80_20",
     "electricity:c90_30",
-    "electricity:c112_30",
-    "electricity:turbine_tower"
+    "electricity:electric_cabin",
+    "electricity:lattice_suspension",
+    "electricity:lattice_tension",
+    "electricity:lattice_terminal",
+    "electricity:mv_breaker",
+    "electricity:mv_disconnector",
+    "electricity:power_box",
+    "electricity:sw_10",
+    "electricity:turbine_tower",
+    "electricity:tx_machine",
+    "electricity:tx_substation",
+    "electricity:utility_pole",
+    "electricity:wind_turbine"
   ]
 }

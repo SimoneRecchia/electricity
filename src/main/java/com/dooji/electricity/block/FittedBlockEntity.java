@@ -7,6 +7,7 @@ import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
+import java.util.Arrays;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -45,7 +46,6 @@ public abstract class FittedBlockEntity extends BlockEntity implements Insulator
 	protected FittedBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
 		super(type, pos, state);
 		refresh();
-		InsulatorIdRegistry.claimMissing(insulatorIds);
 	}
 
 	/** The groups this machine's fittings are drawn as, in the order a wire's index means. */
@@ -190,10 +190,24 @@ public abstract class FittedBlockEntity extends BlockEntity implements Insulator
 		handleUpdateTag(packet.getTag());
 	}
 
+	/**
+	 * Where a machine gets its fitting ids, and it is not the constructor.
+	 *
+	 * A block entity read from disk is constructed *before* load() puts its saved ids back, so claiming in the
+	 * constructor handed out a set that load() then threw away - and nothing released them, so every chunk
+	 * load leaked one id per fitting out of the registry. By onLoad the saved ids are in, and what is left at
+	 * zero is a machine that has just been placed.
+	 */
 	@Override
 	public void onLoad() {
 		super.onLoad();
 		ClientTracking.track(this);
+		if (level != null && !level.isClientSide()) {
+			int[] before = insulatorIds.clone();
+			InsulatorIdRegistry.claimMissing(insulatorIds);
+			if (!Arrays.equals(before, insulatorIds)) setChanged();
+		}
+
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
 				InsulatorLookup.register(this);
