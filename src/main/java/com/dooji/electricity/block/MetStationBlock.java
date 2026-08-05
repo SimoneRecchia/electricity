@@ -32,12 +32,7 @@ public class MetStationBlock extends HorizontalDirectionalBlock implements Entit
 	/** The mast as collision, cut from met_mast.obj and turned with the block. */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(6.16, 0.00, 6.16, 9.84, 16.00, 9.84),
-					Block.box(7.07, 2.75, 11.87, 8.93, 4.74, 13.73),
-					Block.box(7.08, 5.41, 11.60, 8.92, 7.65, 13.84),
-					Block.box(7.08, 5.76, 9.56, 8.92, 6.81, 11.40),
-					Block.box(7.19, 5.43, 13.99, 8.81, 6.73, 15.61),
-					Block.box(7.23, 2.78, 7.23, 8.77, 6.08, 14.72),
-					Block.box(7.36, 3.20, 2.56, 8.64, 4.08, 8.16))));
+					Block.box(7.07, 2.75, 2.56, 8.93, 7.65, 15.61))));
 
 
 	public MetStationBlock(Properties properties) {

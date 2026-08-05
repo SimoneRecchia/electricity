@@ -137,9 +137,13 @@ The rules that came out of doing it:
 
 * **A group per part.** A bounding box is only tight if the group it bounds is one object. Eight
   insulators in one group is a slab through the middle of the pole; split them into `insulator_1 …
-  insulator_8`.
-* **Slice what slopes.** A rack at 25° is not a box. `check_hitboxes.py` cuts 2-px slabs where the
-  slab tops are monotone, so a tilt becomes a staircase and a cone stays one box.
+  insulator_8`. That is about the *model* — what the collision then does with those groups is the next rule.
+* **A machine's collision is a few rectangles, and they are declared.** `check_hitboxes.RECTANGLES` says
+  which model groups make up each part of the object: an inverter is a cabinet and a cabinet is one
+  rectangle. Every group a model draws has to appear there exactly once, so a new part is a decision about
+  its collision rather than a silent extra box. Cut from every group and sliced wherever it sloped, a
+  fixed-tilt array came out as **23 boxes of staircase**; it is 2. The inverter is **1**, the combiner 2
+  (post, enclosure), the kiosk 2.
 * **A quarter of a pixel is a real part.** The threshold is `MIN_OWN = 0.25` px: a ballasted table is
   2 px tall in total, and a 1-px threshold discarded it entirely.
 * **A cable's hitbox is a few pixels, and that is right.** Not the block.
@@ -149,6 +153,8 @@ The rules that came out of doing it:
   cable gauges 621 → 44, the ground conductors 529 → 64. A lattice tower barely moves (337 → 316) and
   should not: its members are thin and its cells are climbed, so filling a cell would make the lattice
   solid. One figure, in `modellib`, decides how coarse every run in the mod is.
+* **1 670 boxes to 507 in all**, over the two passes: the runs by merging, the machines by declaring. What
+  a player points at and walks into is a handful of rectangles; the model is where the detail belongs.
 * **Two hitboxes cannot be the drawn shape, and the checker prints why**: a tracked array sweeps a
   volume as it follows the sun, and the turbine model carries its own tower, which in the world is a
   stack of blocks with their own collision.

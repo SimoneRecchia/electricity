@@ -18,9 +18,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, MC4_RADIUS, MC4_SPREAD, ROUND, Mesh, angle, arc, bolt, box, channel,
-                      clad_box, cylinder, eyebolt, hemisphere, ibeam, mc4, pin_insulator, pivot,
-                      rotate, strut, tube, write_mtl)
+from modellib import (FITTING, HEX, MC4_RADIUS, MC4_SPREAD, ROUND, Mesh, angle, arc, bolt, box,
+                      channel, clad_box, cylinder, eyebolt, hemisphere, ibeam, mc4, pin_insulator,
+                      pivot, rotate, strut, tube, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -145,11 +145,16 @@ def mc4_pair(mesh, name, at_z, y=None, turn=0.0, into=1.0, at_x=0.0):
             into=1 if into > 0 else -1, flip_v=True, pin=index == 0)
 
 
-def stubs(mesh, name='stub'):
-    """A run of cable from each of the four block edges in under the machine, one group apiece."""
+def stubs(mesh, name='stub', reach=UNDER):
+    """A run of cable from each of the four block edges in under the machine, one group apiece.
+
+    ``reach`` is how far in the pair goes before it stops.  A cabinet sits over its own stubs, so the
+    default buries the capped ends under it; a combiner stands on a post and has to bury them in something,
+    which is what its own conduit body is for.
+    """
     for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
         group = '%s_%s' % (name, side)
-        cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -UNDER)], turn=turn,
+        cable_pair(mesh, group, [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, -reach)], turn=turn,
                    ends=(False, True))
         # the cleat that holds it down where it crosses open ground: the same fitting a laid run has
         faces = mesh.faces(group, 'steel')
@@ -609,6 +614,39 @@ def inverter():
 
 # ------------------------------------------------------------------ the combiner box
 
+# The cable entry box at the foot of a combiner's post, and how far into it the pair reaches.  A gland is
+# 1.4x the cable it seals, so two of them a lane apart set the box's width, not the other way round: the
+# box has to be wide enough for the outer gland to sit inside its face.
+CONDUIT_FACE = 0.122
+CONDUIT_END = 0.157
+
+
+def conduit(mesh, group, turn):
+    """The two glands one side's pair enters the post's entry box through.
+
+    In the entry group, so a gland is only there when a cable is; the box itself belongs to the post, or
+    four of them would meet at its corners and share planes.  The pair's capped ends stop inside the nuts,
+    so a player sees the cable go into a gland and no further - which is where it goes, up inside the post.
+    """
+    faces = mesh.faces(group, 'steel')
+    # spin_y turns the north outward direction (0, 0, -1) onto this side's, which is one axis and a sign
+    out = spin_y((0.0, 0.0, -1.0), turn)
+    axis = 'xyz'[max(range(3), key=lambda i: abs(out[i]))]
+    step = 1.0 if out['xyz'.index(axis)] > 0 else -1.0
+    # a hex body against the face and a compression nut in front of it - the string cable's own gland
+    cursor = CONDUIT_FACE
+    for length, radius, taper, sides in ((0.018, 0.052, 1.0, HEX), (0.024, 0.048, 0.80, FITTING)):
+        for lane in (-CORE_OFFSET, CORE_OFFSET):
+            middle = list(spin_y((lane, CORE_Y, 0.0), turn))
+            middle['xyz'.index(axis)] = step * (cursor + length / 2.0)
+            # cylinder tapers its +axis end, so a gland facing the other way wants the reciprocal
+            cylinder(mesh, faces, tuple(middle), axis, radius if step > 0 else radius * taper,
+                     length / 2.0, sides=sides, uv_scale=0.3,
+                     taper=taper if step > 0 else 1.0 / taper,
+                     caps=faces, cap_ends=(int(step),))
+        cursor += length
+
+
 def combiner():
     """A string combiner on a post: an enclosure, a hood, a window"""
     mesh = Mesh()
@@ -617,9 +655,14 @@ def combiner():
     post = mesh.faces('post', 'steel')
     plate = mesh.faces('post', 'plate')
     # the footing and the post, because a field combiner stands on one rather than lying on the ground
-    box(mesh, plate, (-0.095, 0.0, -0.075), (0.095, 0.030, 0.075), uv_scale=0.5)
-    for x in (-0.070, 0.048):
-        bolt(mesh, plate, (x + 0.011, 0.030, 0.0), 'y', 0.007, 0.015, uv_scale=0.12)
+    box(mesh, plate, (-0.136, 0.0, -0.136), (0.136, 0.026, 0.136), uv_scale=0.5)
+    for x in (-0.129, 0.129):
+        for z in (-0.129, 0.129):
+            bolt(mesh, plate, (x, 0.026, z), 'y', 0.007, 0.015, uv_scale=0.12)
+    # the cable entry box every string arrives in, sunk into the footing so the two share no plane.  Not in
+    # an entry group: one box takes all four sides, and four would meet at the post's corners.
+    clad_box(mesh, 'post', (-CONDUIT_FACE, 0.020, -CONDUIT_FACE), (CONDUIT_FACE, 0.100, CONDUIT_FACE),
+             {'up': 'plate', '*': 'steel'}, uv_scale=0.3)
     cylinder(mesh, post, (0.0, 0.215, 0.0), 'y', 0.034, 0.185, sides=ROUND, uv_scale=0.4,
              uv_along=3.0, caps=mesh.faces('post', 'steel_end'), cap_ends=(1,))
     # the two brackets between the post and the box, which is how an enclosure is actually hung
@@ -658,17 +701,12 @@ def combiner():
 
     pivot(mesh, 'handle', (0.145, box_y0 + 0.115, -0.112))
 
-    # where the strings come in and the trunk leaves, one run per side of the block, and the riser
-    # that carries them up the post into the glands
-    stubs(mesh, 'entry')
-    # the riser up the post, at exactly the cross-section of the run it continues
-    riser = mesh.faces('post', 'core')
-    for lane in (-CORE_OFFSET, CORE_OFFSET):
-        tube(mesh, riser, [(lane, CORE_Y, UNDER - 0.02), (lane, CORE_Y, 0.04),
-                           (lane, box_y0 + 0.015, 0.04)], CORE_RADIUS, sides=FITTING,
-             uv_scale=1.0, uv_along=1.0, caps=riser)
-    for y in (0.22, 0.34):
-        box(mesh, post, (-0.075, y, 0.055), (0.075, y + 0.016, 0.068), uv_scale=0.12)
+    # where the strings come in, one run per side of the block, each into its own conduit body at the foot
+    # of the post.  Two bare tubes used to climb the post into the glands, which is not how a field
+    # combiner is wired anyway: the strings enter a conduit body and go up *inside* the post.
+    stubs(mesh, 'entry', reach=CONDUIT_END)
+    for side, turn in (('north', 0.0), ('west', 90.0), ('south', 180.0), ('east', 270.0)):
+        conduit(mesh, 'entry_%s' % side, turn)
 
     # the handle: a boss off the door with a bar on it, drawn once and turned by the renderer
     handle = mesh.faces('rotate_handle', 'switch')

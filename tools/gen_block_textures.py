@@ -935,29 +935,6 @@ def dc_jbox_side():
     return c
 
 
-def _pair(c, y0, y1, armoured=False, salt=271):
-    """Two cores side by side down a face, for the stubs the machines' own models carry."""
-    size = c.w
-    span = y1 - y0
-    for i in range(2):
-        a = y0 + span * (0.04 + i * 0.49)
-        b = y0 + span * (0.47 + i * 0.49)
-        strand = Canvas(size, size)
-        rubber(strand, JACKET, salt=salt + i, sheen=18)
-        for y in range(int(a), int(b)):
-            t = min(1.0, max(0.0, (y - a) / max(1.0, b - a)))
-            # the same cylinder as a core's own tile, so a stub and the run it feeds are lit alike
-            lit = max(0.0, math.cos((t - 0.38) * math.pi * 1.05))
-            for x in range(size):
-                c.blend(x, y, shade(strand.get(x, y), -40 + lit * 70), 1.0)
-    if armoured:
-        # the armour bands a heavy cable carries, which is how the trunk is told from the string
-        for i in range(6):
-            x = size * (0.06 + i * 0.16)
-            c.aa_rect(x, y0, x + size * 0.055, y1, (142, 146, 152, 255), alpha=0.85)
-            c.aa_rect(x, y0, x + size * 0.018, y1, (188, 192, 198, 255), alpha=0.7)
-
-
 def _line_tile(armoured=False):
     """A cable texture for the vanilla JSON models, whose faces sample it in sixteenths.
 

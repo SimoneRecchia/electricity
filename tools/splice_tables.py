@@ -10,6 +10,7 @@ it runs each generator with --java, finds each `private static final ... NAME =`
 and replaces the same declaration in the class.  Nothing else in the file is touched.
 """
 
+import glob
 import os
 import re
 import subprocess
@@ -41,8 +42,62 @@ def blocks(lines):
     return out
 
 
+def machines():
+    """The per-machine cell tables check_hitboxes cuts from the models, spliced into their own blocks.
+
+    Its --java prints `new Cell(...)` rows under each model's heading rather than whole declarations, so the
+    target constant comes from its own MODEL_TABLE and the class from its BLOCK_CLASS - one table, read
+    rather than restated, or this would be the second copy of the mapping.
+    """
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    import check_hitboxes as check
+
+    run = subprocess.run([sys.executable, os.path.join(ROOT, 'tools', 'check_hitboxes.py'), '--java'],
+                         cwd=ROOT, capture_output=True, text=True)
+    # check_hitboxes prints the file's name, and electric_cab/cab.obj is not named after its directory -
+    # every table here is keyed by directory, so map back through the models tree rather than guess.
+    directory_of = {os.path.basename(p): os.path.basename(os.path.dirname(p))
+                    for p in glob.glob(os.path.join(ROOT, check.MODELS, '*', '*.obj'))}
+
+    rows, model = {}, None
+    for line in run.stdout.split('\n'):
+        found = re.match(r'(\S+\.obj)\s', line)
+        if found:
+            model = directory_of.get(found.group(1))
+            rows[model] = []
+        elif line.startswith('\t') and model:
+            rows[model].append(line)
+        elif model and not line.startswith('\t'):
+            model = None
+
+    done = 0
+    for model, cells in rows.items():
+        # A swept shape is deliberately not the drawn one, and check_hitboxes says so per model.
+        if not cells or model in check.SWEPT:
+            continue
+        # MODEL_TABLE only names the constant where a class holds several; the rest call it CELLS.
+        constant = check.MODEL_TABLE.get(model, 'CELLS')
+        block = check.BLOCK_CLASS.get(check.MODEL_BLOCK.get(model, model))
+        if not block:
+            continue
+
+        path = os.path.join(BLOCKS, block + '.java')
+        lines = open(path).read().split('\n')
+        found = blocks(lines)
+        if constant not in found:
+            raise SystemExit('%s declares no %s' % (block, constant))
+        start, end, text = found[constant]
+        head = lines[start]
+        body = '\n'.join(cells).rstrip().rstrip(',')
+        lines[start:end + 1] = (head + '\n' + body + ');').split('\n')
+        open(path, 'w').write('\n'.join(lines))
+        print('%-26s %-18s %d cella/e' % (block + '.java', constant, len(cells)))
+        done += 1
+    return done
+
+
 def main():
-    total = 0
+    total = machines()
     for scripts, java_name in SOURCES:
         fresh = {}
         for script in scripts:

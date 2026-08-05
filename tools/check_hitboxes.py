@@ -95,6 +95,70 @@ SWEPT = {
 }
 
 
+# What a machine's collision is *made of*: one rectangle per part of the object, each the union of the model
+# groups it covers.  A hitbox is what a player points at and walks into, not a drawing of the machine - an
+# inverter is a sheet-steel cabinet, and a cabinet is a rectangle.  Cut from every group instead, and sliced
+# wherever it sloped, a fixed-tilt array came out as twenty-three boxes of staircase.
+#
+# Every group a model draws has to appear here exactly once, or this file fails: a part added to a model is
+# then a decision about its collision rather than a silent extra box.
+RECTANGLES = {
+    'pv_inverter': (
+        # the cabinet, its plinth and everything let into its faces are one box; the roof fittings the
+        # only thing that stands clear of it
+        ('cabinet', ('plinth', 'cabinet', 'hood', 'door', 'display', 'grille', 'section', 'blank',
+                     'fan_guard')),
+        ('roof', ('hardware', 'insulator')),
+    ),
+    'pv_combiner': (
+        ('post', ('post',)),
+        ('enclosure', ('enclosure', 'door', 'glands')),
+    ),
+    'power_box': (
+        ('cabinet', ('plinth', 'body', 'hood', 'door', 'vent', 'conduit')),
+        ('top', ('hardware', 'insulator')),
+    ),
+    'pv_flat': (
+        ('ballast', ('ballast',)),
+        ('panel', ('frame', 'modules')),
+    ),
+    'pv_tilt': (
+        ('piers', ('piers',)),
+        ('panel', ('purlin_0', 'purlin_1', 'rails', 'modules')),
+    ),
+    'met_mast': (
+        ('mast', ('mast', 'logger', 'anemometer')),
+        ('boom', ('boom', 'pyranometer', 'diffuse', 'albedometer', 'shield', 'snow')),
+    ),
+    'tx_machine': (
+        ('tank', ('plinth', 'tank', 'cover', 'cablebox', 'nameplate', 'fittings', 'earth')),
+        ('bushings', ('bushing_1', 'flange_1', 'bushing_2', 'flange_2', 'bushing_3', 'flange_3')),
+    ),
+    'tx_substation': (
+        ('bund', ('bund', 'rails')),
+        ('tank', ('tank', 'cover', 'radiator', 'tapchanger', 'nameplate')),
+        ('top', ('conservator', 'relay',
+                 'bushing_1', 'flange_1', 'bushing_2', 'flange_2', 'bushing_3', 'flange_3',
+                 'bushing_4', 'flange_4', 'bushing_5', 'flange_5', 'bushing_6', 'flange_6')),
+    ),
+    'electric_cab': (
+        ('plinth', ('plinth',)),
+        ('body', ('body', 'door', 'vent', 'signage')),
+        ('roof', ('roof', 'hardware')),
+        ('fittings', ('insulator_input', 'insulator_output', 'arrester_1', 'arrester_2', 'arrester_3')),
+    ),
+    'utility_pole': (
+        # the steps are what a player climbs, and they are within a pixel of the shaft either side of it
+        ('shaft', ('shaft', 'earth', 'plate',
+                   'step_0', 'step_1', 'step_2', 'step_3', 'step_4', 'step_5', 'step_6')),
+        ('arm_lower', ('arm_lower', 'insulator_1', 'pin_1', 'insulator_2', 'pin_2',
+                       'insulator_3', 'pin_3', 'insulator_4', 'pin_4')),
+        ('arm_upper', ('arm_upper', 'insulator_5', 'pin_5', 'insulator_6', 'pin_6',
+                       'insulator_7', 'pin_7', 'insulator_8', 'pin_8')),
+    ),
+}
+
+
 # Models whose tables are printed somewhere else, so this file would only disagree with itself.
 ELSEWHERE = {
     'dc_string_cable': 'printed by tools/gen_cable_models.py --java, per connection pattern',
@@ -144,79 +208,32 @@ def bounds(faces):
     return lo, hi
 
 
-def clipped(face, axis, low, high):
-    """One polygon cut to a slab, as the part of it between two planes."""
-    for sign, limit in ((1, low), (-1, high)):
-        out = []
-        for index, point in enumerate(face):
-            nxt = face[(index + 1) % len(face)]
-            inside = sign * (point[axis] - limit) >= 0
-            inside_next = sign * (nxt[axis] - limit) >= 0
-            if inside:
-                out.append(point)
-            if inside != inside_next:
-                span = nxt[axis] - point[axis]
-                if abs(span) > 1e-9:
-                    t = (limit - point[axis]) / span
-                    out.append(tuple(point[k] + (nxt[k] - point[k]) * t for k in range(3)))
+def body(groups, model):
+    """The object's parts as one box each, in pixels from the block's own corner.
 
-        face = out
-        if not face:
-            return []
+    RECTANGLES says which model groups make up each part; a model not named there keeps a box per group,
+    which is what the swept ones and the towers want since nothing compares theirs anyway.
+    """
+    still = {name: faces for name, faces in groups.items() if not name.startswith(MOVING)}
+    plan = RECTANGLES.get(model) or tuple((name, (name,)) for name in still)
 
-    return face
+    named = [g for _, members in plan for g in members]
+    missing = [g for g in named if g not in still]
+    loose = [g for g in still if g not in named]
+    if missing or loose:
+        raise SystemExit(
+            'check_hitboxes: RECTANGLES for %s names %s, which the model does not draw%s'
+            % (model, ', '.join(missing) or 'nothing',
+               ', and leaves %s in no rectangle' % ', '.join(loose) if loose else '')
+            if missing else
+            'check_hitboxes: RECTANGLES for %s leaves %s in no rectangle - decide which box it belongs to'
+            % (model, ', '.join(loose)))
 
-
-# How thick a slice is, in blocks, and how much of a step in a group's own height it takes before the
-SLICE = 2.0 / 16.0
-SLOPE = 0.02
-
-
-def sliced(faces):
-    """A group as boxes: one if it fills its own bounding box, a staircase of them if it slopes."""
-    lo, hi = bounds(faces)
-    for axis in (0, 2):
-        span = hi[axis] - lo[axis]
-        if span < 3 * SLICE:
-            continue
-
-        steps = int(math.ceil(span / SLICE))
-        slabs = []
-        for step in range(steps):
-            low = lo[axis] + step * SLICE
-            high = min(hi[axis], low + SLICE)
-            pieces = [clipped(face, axis, low, high) for face in faces]
-            pieces = [piece for piece in pieces if piece]
-            if not pieces:
-                continue
-
-            slab_lo, slab_hi = bounds(pieces)
-            slab_lo[axis], slab_hi[axis] = low, high
-            slabs.append((slab_lo, slab_hi))
-
-        if len(slabs) < 3:
-            continue
-
-        # A slope is a group whose top climbs, or falls
-        tops = [slab[1][1] for slab in slabs]
-        climbs = all(b >= a - SLOPE for a, b in zip(tops, tops[1:]))
-        falls = all(b <= a + SLOPE for a, b in zip(tops, tops[1:]))
-        if (climbs or falls) and max(tops) - min(tops) > 4 * SLOPE:
-            return slabs
-
-    return [(lo, hi)]
-
-
-def body(groups):
-    """The groups that stand still, in pixels from the block's own corner, sloping parts sliced."""
     kept = []
-    for name, faces in groups.items():
-        if name.startswith(MOVING):
-            continue
-
-        for lo, hi in sliced(faces):
-            kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
-                         tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
+    for name, members in plan:
+        lo, hi = bounds([face for g in members for face in still[g]])
+        kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
+                     tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
 
     return kept
 
@@ -471,10 +488,12 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
-# A machine whose geometry changes with its state
-STATEFUL = {
-    'pv_inverter': ('PvInverterBlock', 'section', 'DC_SECTION', 'blank'),
-}
+# A machine whose *collision* changes with its state.  Empty as it stands, and the reason is a decision
+# rather than an oversight: the inverter was here, to prove its direct-current compartment could be taken
+# back out of the shape, and now that the cabinet is one rectangle the compartment is 0.6 px of its front
+# face - so PvInverterBlock declares one table and the geometry still changes with the state while the
+# collision does not.  A machine that grows a part a player can walk into belongs here again.
+STATEFUL = {}
 
 
 def optional_faults(directory, cells, groups):
@@ -548,7 +567,7 @@ def main():
             continue
 
         groups = obj_groups(path)
-        cells = claimed(pieces(body(groups)))
+        cells = claimed(pieces(body(groups, directory)))
         source = open(os.path.join(BLOCKS, block + '.java')).read()
         print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
             os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),

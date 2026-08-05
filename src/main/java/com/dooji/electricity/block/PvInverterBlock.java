@@ -25,7 +25,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -44,39 +43,15 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	/** The machine as collision, cut from pv_inverter.obj at the size it is drawn. */
 	private static final List<Cell> CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 15.39, 2.72, 15.52, 16.00, 12.96),
-					Block.box(0.56, 0.00, 2.80, 15.44, 0.88, 12.88),
-					Block.box(0.80, 0.88, 2.62, 15.20, 15.68, 12.64),
-					Block.box(1.52, 7.04, 2.21, 14.48, 15.04, 3.20),
-					Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64))));
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 2.05, 15.52, 16.00, 12.96)));
 
 	/** The same table at the other two sizes the renderer draws. */
 	private static final List<Cell> CABINET_CELLS = scaledCells(0.92);
 	private static final List<Cell> WALL_CELLS = scaledCells(0.62);
 
-	/** The direct-current compartment on its own, so it can be taken back out again. */
-	private static final VoxelShape DC_SECTION = Block.box(2.24, 0.83, 2.05, 13.76, 6.64, 2.64);
-
-	/** The three tables again with the compartment removed */
-	private static final List<Cell> PLAIN_CELLS = without(CELLS, 1.0);
-	private static final List<Cell> PLAIN_CABINET_CELLS = without(CABINET_CELLS, 0.92);
-	private static final List<Cell> PLAIN_WALL_CELLS = without(WALL_CELLS, 0.62);
-
-	private static List<Cell> without(List<Cell> cells, double factor) {
-		VoxelShape section = Shapes.empty();
-		for (AABB box : DC_SECTION.toAabbs()) {
-			section = Shapes.or(section, Shapes.box(
-					0.5 + (box.minX - 0.5) * factor, box.minY * factor, 0.5 + (box.minZ - 0.5) * factor,
-					0.5 + (box.maxX - 0.5) * factor, box.maxY * factor, 0.5 + (box.maxZ - 0.5) * factor));
-		}
-
-		List<Cell> out = new ArrayList<>();
-		for (Cell cell : cells) {
-			out.add(new Cell(0, 0, 0, Shapes.join(cell.shape(0), section, BooleanOp.ONLY_FIRST)));
-		}
-
-		return List.copyOf(out);
-	}
+	// The direct-current compartment used to be subtracted from each table, so an inverter without one had
+	// its collision notched. Against a cabinet drawn as one rectangle that notch is 0.6 px of the front
+	// face, which no player can feel - so the shape no longer depends on whether the compartment is fitted.
 
 	private static List<Cell> scaledCells(double factor) {
 		List<Cell> out = new ArrayList<>();
@@ -156,11 +131,10 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public List<Cell> shellCells(BlockState state) {
-		boolean fitted = !state.hasProperty(COMBINER) || state.getValue(COMBINER);
-		if (spec.acPowerKw() >= CONTAINER_KW) return fitted ? CELLS : PLAIN_CELLS;
-		if (spec.acPowerKw() <= WALL_KW) return fitted ? WALL_CELLS : PLAIN_WALL_CELLS;
+		if (spec.acPowerKw() >= CONTAINER_KW) return CELLS;
+		if (spec.acPowerKw() <= WALL_KW) return WALL_CELLS;
 
-		return fitted ? CABINET_CELLS : PLAIN_CABINET_CELLS;
+		return CABINET_CELLS;
 	}
 
 	@Override

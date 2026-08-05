@@ -42,34 +42,12 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	/** The four mountings as collision, each cut from its own model. */
 	private static final List<Cell> FLAT_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.72, 0.48, 15.52, 1.68, 15.52),
-					Block.box(0.72, 1.62, 0.48, 15.28, 2.45, 15.52),
+			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.72, 0.48, 15.52, 2.45, 15.52),
 					Block.box(0.96, 0.00, 0.96, 15.04, 0.72, 15.04))));
 
 	private static final List<Cell> TILT_CELLS = List.of(
-			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.89, 1.55, 15.52, 1.96, 2.73),
-					Block.box(0.48, 6.50, 13.58, 15.52, 7.57, 14.76),
-					Block.box(0.61, 1.71, 0.83, 15.39, 3.07, 2.83),
-					Block.box(0.61, 2.47, 2.83, 15.39, 4.01, 4.83),
-					Block.box(0.61, 4.41, 6.83, 15.39, 5.87, 8.83),
-					Block.box(0.61, 6.27, 10.83, 15.39, 7.81, 12.83),
-					Block.box(0.61, 7.14, 12.83, 15.39, 8.50, 14.67),
-					Block.box(0.72, 1.39, 1.04, 15.28, 2.64, 3.04),
-					Block.box(0.72, 2.25, 3.04, 15.28, 3.57, 5.04),
-					Block.box(0.72, 3.18, 5.04, 15.28, 4.50, 7.04),
-					Block.box(0.72, 4.12, 7.04, 15.28, 5.44, 9.04),
-					Block.box(0.72, 5.05, 9.04, 15.28, 6.37, 11.04),
-					Block.box(0.72, 5.98, 11.04, 15.28, 7.30, 13.04),
-					Block.box(0.72, 6.91, 13.04, 15.28, 8.06, 14.82),
-					Block.box(0.96, 3.48, 4.83, 15.04, 4.94, 6.83),
-					Block.box(0.96, 5.34, 8.83, 15.04, 6.80, 10.83),
-					Block.box(1.82, 0.00, 1.48, 14.18, 1.28, 3.48),
-					Block.box(1.82, 0.00, 13.48, 14.18, 6.77, 15.10),
-					Block.box(2.35, 0.92, 3.48, 13.65, 2.22, 5.48),
-					Block.box(2.35, 1.86, 5.48, 13.65, 3.16, 7.48),
-					Block.box(2.35, 2.80, 7.48, 13.65, 4.10, 9.48),
-					Block.box(2.35, 3.75, 9.48, 13.65, 5.04, 11.48),
-					Block.box(2.35, 4.69, 11.48, 13.65, 5.98, 13.48))));
+			new Cell(0, 0, 0, Shapes.or(Block.box(0.48, 0.89, 0.83, 15.52, 8.50, 14.82),
+					Block.box(1.82, 0.00, 1.48, 14.18, 6.77, 15.10))));
 
 	/** What a tracked row's plane can be anywhere in, over a day. */
 	private static final VoxelShape SWEPT_ROW = Block.box(0.34, 3.22, 0.32, 15.66, 16.00, 15.68);
