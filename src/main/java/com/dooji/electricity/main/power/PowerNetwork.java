@@ -23,7 +23,7 @@ public class PowerNetwork {
 	private final ServerLevel level;
 	private final Map<Integer, PowerNode> powerNodes = new HashMap<>();
 	private final Map<String, PowerConnection> powerConnections = new HashMap<>();
-	private final Map<BlockPos, List<PowerNode>> nodesByPosition = new HashMap<>();
+	private final Map<Bus, List<PowerNode>> nodesByBus = new HashMap<>();
 	private final WireManager wireManager;
 	private final Map<BlockPos, Double> lastSyncedPower = new HashMap<>();
 	private final Set<Integer> surgeImpactedNodes = new HashSet<>();
@@ -45,7 +45,7 @@ public class PowerNetwork {
 	private void clearNetwork() {
 		powerNodes.clear();
 		powerConnections.clear();
-		nodesByPosition.clear();
+		nodesByBus.clear();
 		surgeImpactedNodes.clear();
 		generatorEvents.clear();
 	}
@@ -95,9 +95,12 @@ public class PowerNetwork {
 			return null;
 		}
 
-		PowerNode node = new PowerNode(insulatorId, immutablePos, blockEntity);
+		// Which bus the fitting is on, not just which block it is on: a switch says its two sides are two
+		// buses when it is open, and a cluster is what power crosses for free.
+		int bus = blockEntity instanceof InsulatorHost host ? host.busOf(indexOf(host, insulatorId)) : 0;
+		PowerNode node = new PowerNode(insulatorId, immutablePos, new Bus(immutablePos, bus), blockEntity);
 		powerNodes.put(insulatorId, node);
-		nodesByPosition.computeIfAbsent(immutablePos, pos -> new ArrayList<>()).add(node);
+		nodesByBus.computeIfAbsent(node.bus, key -> new ArrayList<>()).add(node);
 		return node;
 	}
 
@@ -153,7 +156,7 @@ public class PowerNetwork {
 		boolean localSurge = surgeActive || startNode.hasLocalSurge();
 		PowerDeliveryEvent currentEvent = incomingEvent;
 
-		List<PowerNode> clusterNodes = nodesByPosition.getOrDefault(startNode.position, Collections.singletonList(startNode));
+		List<PowerNode> clusterNodes = nodesByBus.getOrDefault(startNode.bus, Collections.singletonList(startNode));
 		if (isClusterVisited(clusterNodes, visited)) return distribution;
 
 		Set<Integer> clusterIds = new HashSet<>();
@@ -171,11 +174,11 @@ public class PowerNetwork {
 		List<ClusterConnection> externalConnections = collectExternalConnections(clusterNodes, clusterIds);
 		if (externalConnections.isEmpty()) return distribution;
 
-		Map<BlockPos, TargetGroup> targetGroups = groupConnectionsByTarget(externalConnections);
+		Map<Bus, TargetGroup> targetGroups = groupConnectionsByTarget(externalConnections);
 		if (targetGroups.isEmpty()) return distribution;
 		List<TargetGroup> viableGroups = new ArrayList<>();
 		for (TargetGroup group : targetGroups.values()) {
-			if (!isClusterVisited(group.targetNode.position, visited)) {
+			if (!isClusterVisited(group.targetNode.bus, visited)) {
 				viableGroups.add(group);
 			}
 		}
@@ -286,14 +289,12 @@ public class PowerNetwork {
 		return connections;
 	}
 
-	private Map<BlockPos, TargetGroup> groupConnectionsByTarget(List<ClusterConnection> connections) {
-		Map<BlockPos, TargetGroup> groups = new HashMap<>();
+	private Map<Bus, TargetGroup> groupConnectionsByTarget(List<ClusterConnection> connections) {
+		Map<Bus, TargetGroup> groups = new HashMap<>();
 
 		for (ClusterConnection clusterConnection : connections) {
 			PowerNode targetNode = clusterConnection.connection.getOtherNode(clusterConnection.sourceNode);
-			BlockPos targetPos = targetNode.position;
-
-			TargetGroup group = groups.computeIfAbsent(targetPos, pos -> new TargetGroup(targetNode));
+			TargetGroup group = groups.computeIfAbsent(targetNode.bus, bus -> new TargetGroup(targetNode));
 			group.addConnection(clusterConnection.connection);
 		}
 
@@ -370,8 +371,22 @@ public class PowerNetwork {
 		lastSyncedPower.putAll(blockPower);
 	}
 
-	private boolean isClusterVisited(BlockPos position, Set<Integer> visitedIds) {
-		return isClusterVisited(nodesByPosition.get(position), visitedIds);
+	private boolean isClusterVisited(Bus bus, Set<Integer> visitedIds) {
+		return isClusterVisited(nodesByBus.get(bus), visitedIds);
+	}
+
+	/** Which fitting of its machine an id is, so the machine can be asked which bus that one is on. */
+	private static int indexOf(InsulatorHost host, int insulatorId) {
+		int[] ids = host.getInsulatorIds();
+		for (int index = 0; index < ids.length; index++) {
+			if (ids[index] == insulatorId) return index;
+		}
+
+		return 0;
+	}
+
+	/** One bus of one machine: what power crosses without a wire. */
+	private record Bus(BlockPos position, int index) {
 	}
 
 	private boolean isClusterVisited(List<PowerNode> clusterNodes, Set<Integer> visitedIds) {
@@ -397,13 +412,15 @@ public class PowerNetwork {
 	private static class PowerNode {
 		final int insulatorId;
 		final BlockPos position;
+		final Bus bus;
 		final BlockEntity blockEntity;
 		double power = 0.0;
 		private PowerDeliveryEvent event = PowerDeliveryEvent.none();
 
-		PowerNode(int insulatorId, BlockPos position, BlockEntity blockEntity) {
+		PowerNode(int insulatorId, BlockPos position, Bus bus, BlockEntity blockEntity) {
 			this.insulatorId = insulatorId;
 			this.position = position;
+			this.bus = bus;
 			this.blockEntity = blockEntity;
 		}
 

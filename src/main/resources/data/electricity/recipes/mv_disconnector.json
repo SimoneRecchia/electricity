@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "BSB",
+    "SSS"
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:mv_disconnector"
+  }
+}

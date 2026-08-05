@@ -1062,6 +1062,79 @@ def porcelain_brown():
 
 # A square tile on a face that is not square stretches
 # the face's own width over its height.
+# ---------------------------------------------------------------- the two switches
+#
+# A disconnector is bare metal and porcelain; a vacuum breaker is cast epoxy and a painted box.  The blade
+# is what a player looks at, because on an open disconnector it is the only thing standing up.
+
+BLADE_COPPER = (176, 158, 138, 255)    # tinned copper flat bar, warm under the tin
+EPOXY_GREY = (196, 194, 186, 255)      # cycloaliphatic epoxy, cast and matt
+
+
+def switch_blade():
+    """Tinned copper flat bar: a disconnector's blade, its palms and its earth studs.
+
+    Drawn along the bar, because that is the way it is rolled and the way every face it lands on runs.
+    """
+    size = 128
+    c = Canvas(size, size)
+    brushed(c, BLADE_COPPER, grain=15, blotch=7, salt=431, horizontal=True)
+    # the rolled arrises, one catching the light and one in shadow
+    c.aa_rect(0, 0, size, size * 0.07, shade(BLADE_COPPER, 24))
+    c.aa_rect(0, size * 0.93, size, size, shade(BLADE_COPPER, -30))
+    # the tin dulling where a contact rubs, along the middle of the bar
+    c.aa_rect(0, size * 0.40, size, size * 0.60, shade(BLADE_COPPER, -14), alpha=0.5)
+    grime(c, salt=433, amount=0.14, colour=(96, 74, 58, 255))
+    return c
+
+
+def switch_epoxy():
+    """Cast cycloaliphatic epoxy: what a vacuum breaker's poles are moulded in.
+
+    Matt rather than glazed - epoxy is not porcelain, and the difference between the two is most of what
+    tells a modern breaker from an old one.  Lit round the cylinder the way porcelain_brown is, because it
+    goes on one.
+    """
+    size = 128
+    c = Canvas(size, size)
+    powder(c, EPOXY_GREY, salt=437, peel=4)
+
+    lit_at = 0.30
+    for i in range(size):
+        face = math.cos(2.0 * math.pi * (i / float(size) - lit_at))
+        tone = -30 + max(0.0, face) * 52 + max(0.0, -face) * 8
+        for j in range(size):
+            c.set(i, j, shade(c.get(i, j), tone))
+
+    # the mould's parting line, which every cast pole carries down one side
+    c.aa_rect(size * 0.72, 0, size * 0.745, size, shade(EPOXY_GREY, -18), alpha=0.6)
+    grime(c, salt=439, amount=0.20, colour=(88, 86, 80, 255))
+    return c
+
+
+def switch_flag():
+    """The mechanical position indicator, in two bands: closed over open.
+
+    Red closed and green open, which is IEC 60073 for switchgear - red is the dangerous state, because the
+    contacts are together.  Two bands rather than two files so one plate in the model draws either, and
+    nothing round on it: the plate is 2:1, so a band of a square tile lands on it evenly.
+    """
+    size = 128
+    c = Canvas(size, size)
+    for band, colour in ((0, (168, 52, 44, 255)), (1, (60, 138, 66, 255))):
+        y0 = int(size * 0.5 * band)
+        for j in range(y0, y0 + size // 2):
+            for i in range(size):
+                across = math.cos(2.0 * math.pi * (j - y0) / (size * 0.5))
+                c.set(i, j, shade(colour, -8 + 12 * across))
+        # the raised rib the flag is pressed with, and the shadow under its window
+        c.aa_rect(size * 0.10, y0 + size * 0.10, size * 0.90, y0 + size * 0.16, shade(colour, 30))
+        c.aa_rect(size * 0.10, y0 + size * 0.38, size * 0.90, y0 + size * 0.44, shade(colour, -34))
+
+    grime(c, salt=447, amount=0.12, colour=(56, 54, 50, 255))
+    return c
+
+
 SQUASH = {
     'box_door': 0.277 / 0.585,              # the kiosk's leaf
     'box_leaf': 0.277 / 0.585,              # its plain second leaf, the same shape
@@ -1473,6 +1546,9 @@ TEXTURES = {
     'box_sheet': box_sheet,
     'box_plinth': box_plinth,
     'tower_steel': tower_steel,
+    'switch_blade': switch_blade,
+    'switch_epoxy': switch_epoxy,
+    'switch_flag': switch_flag,
     'tower_plate': tower_plate,
     'tx_tank': tx_tank,
     'tx_tank_top': tx_tank_top,

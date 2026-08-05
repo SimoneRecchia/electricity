@@ -12,6 +12,7 @@ import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.compat.energy.EnergyBridge;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.api.power.CombinerSpec;
@@ -894,6 +895,12 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 	public boolean feeds(InsulatorHost other) {
 		return other instanceof ElectricCabinBlockEntity || other instanceof PvInverterBlockEntity
 				|| other instanceof TransformerBlockEntity;
+	}
+
+	/** An inverter's output goes to the plant's collector network, which is 33 kV. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() == ConductorSpec.VoltageClass.MEDIUM;
 	}
 
 	@Override

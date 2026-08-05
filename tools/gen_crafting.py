@@ -173,6 +173,13 @@ RECIPES = [
     ('tx_machine', 1, SHAPED, ['III', 'OeO', 'PPP']),
     ('tx_substation', 1, SHAPED, ['III', 'ete', 'PQP']),
 
+    # ------------------------------------------------------------------------ the switches
+    # A disconnector is three post insulators a side, a copper blade and a frame: no arc-breaking parts at
+    # all, which is exactly why it cannot be opened under load.  A breaker is the same posts over three
+    # load-break interrupters and the mechanism that throws them.
+    ('mv_disconnector', 1, SHAPED, ['III', 'BSB', 'SSS']),
+    ('mv_breaker', 1, SHAPED, ['III', 'QQQ', 'PbP']),
+
     # ---------------------------------------------------------------- the transmission towers
     # Steel sections, plate gussets and the insulator strings the phases hang from.  The duty is what
     # costs: a suspension tower is only holding weight, a tension tower is braced for the difference
@@ -277,6 +284,8 @@ def check(catalogue):
 # A machine drawn by the mod's own OBJ renderer has an INVISIBLE render shape, so its blockstate only
 # needs to name a particle texture - one variant a facing, all four the same.  Its item is a flat sprite.
 INVISIBLE_MACHINES = {
+    'mv_disconnector': 'metal_particle',
+    'mv_breaker': 'metal_particle',
     'tx_machine': 'metal_particle',
     'tx_substation': 'metal_particle',
     'lattice_suspension': 'stone_particle',
@@ -298,6 +307,24 @@ BLOCK_NAMES = {
     'lattice_suspension': ('Suspension Tower', 'Holds a 400 kV line up. Nine towers in ten are one.'),
     'lattice_tension': ('Tension Tower', 'Takes the difference between the pulls either side of it.'),
     'lattice_terminal': ('Terminal Tower', 'Takes the whole pull of a line, and is stayed back for it.'),
+    'mv_disconnector': ('Disconnector',
+                        'Makes a gap in a 24 kV line that you can see. Will not open under load: open the '
+                        'breaker first.'),
+    'mv_breaker': ('Circuit Breaker',
+                   'Breaks a 24 kV line under load, and trips itself above 26 MW. Its contacts are in a '
+                   'vacuum, so all it shows is a flag.'),
+}
+
+
+# The lines a machine says to a player.  Here rather than by hand in the language file for the reason the
+# block names are: a key with no entry reads as its own id in the corner of the screen.
+MESSAGES = {
+    'message.electricity.switch.under_load':
+        'There is load on it. A disconnector cannot break current \u2014 open the breaker first.',
+    'message.electricity.switch.opened': 'Open. The gap is visible from the outside.',
+    'message.electricity.switch.closed': 'Closed.',
+    'message.electricity.wire.wrong_class':
+        'Neither of those fittings is built for %s. Match the conductor to the voltage.',
 }
 
 
@@ -308,6 +335,8 @@ DROPS = {
     'lattice_suspension': 'lattice_suspension',
     'lattice_tension': 'lattice_tension',
     'lattice_terminal': 'lattice_terminal',
+    'mv_disconnector': 'mv_disconnector',
+    'mv_breaker': 'mv_breaker',
     'abc_conductor_run': 'abc_conductor',
     'mv_conductor_run': 'mv_conductor',
     'hv_conductor_run': 'hv_conductor',
@@ -359,6 +388,7 @@ def main():
     for block_id, (name, tooltip) in BLOCK_NAMES.items():
         lang['block.electricity.' + block_id] = name
         lang['tooltip.electricity.' + block_id] = tooltip
+    lang.update(MESSAGES)
     write(LANG, lang)
 
     # and the recipes

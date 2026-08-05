@@ -3,6 +3,7 @@ package com.dooji.electricity.block;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -165,6 +166,17 @@ public class UtilityPoleBlockEntity extends BlockEntity implements InsulatorHost
 	@Override
 	public String fittingType() {
 		return InsulatorPartHelper.TYPE_UTILITY_POLE;
+	}
+
+	/**
+	 * A street bundle or a medium-voltage line, which is what a pole is built to carry.
+	 *
+	 * Not transmission: a 400 kV quad bundle is 1.7 m between sub-conductors and needs 3.5 m of clearance to
+	 * the ground. That goes on a tower, and this is the rule that says so.
+	 */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() != ConductorSpec.VoltageClass.HIGH;
 	}
 
 	/** A pole carries a line on to the next pole, to a kiosk, or into a run laid on the ground. */

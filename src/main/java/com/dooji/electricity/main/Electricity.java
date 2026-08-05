@@ -7,6 +7,7 @@ import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.api.power.TowerSpec;
+import com.dooji.electricity.api.power.SwitchgearSpec;
 import com.dooji.electricity.api.power.TransformerSpec;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.DcCableBlock;
@@ -27,6 +28,8 @@ import com.dooji.electricity.block.GroundConductorBlock;
 import com.dooji.electricity.block.GroundConductorBlockEntity;
 import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.TransformerBlock;
+import com.dooji.electricity.block.SwitchgearBlock;
+import com.dooji.electricity.block.SwitchgearBlockEntity;
 import com.dooji.electricity.block.TransformerBlockEntity;
 import com.dooji.electricity.block.LatticeTowerBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlock;
@@ -54,6 +57,7 @@ import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.main.registry.PartCatalog;
 import com.dooji.electricity.main.registry.PvCatalog;
 import com.dooji.electricity.main.registry.TowerCatalog;
+import com.dooji.electricity.main.registry.SwitchgearCatalog;
 import com.dooji.electricity.main.registry.TransformerCatalog;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import com.dooji.electricity.main.network.ElectricityNetworking;
@@ -190,11 +194,46 @@ public class Electricity {
 	public static final Map<ResourceLocation, RegistryObject<Block>> TRANSFORMER_BLOCKS = registerTransformerBlocks();
 	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMER_ITEMS = registerTransformerItems();
 
+	/** The two switches: a disconnector to make a gap you can see, a breaker to break load. */
+	public static final Map<ResourceLocation, RegistryObject<Block>> SWITCHGEAR_BLOCKS = registerSwitchgearBlocks();
+	public static final Map<ResourceLocation, RegistryObject<Item>> SWITCHGEAR_ITEMS = registerSwitchgearItems();
+
 	/** A meteorological mast: the seven instruments a plant measures the sky with. */
 	public static final RegistryObject<Block> MET_STATION_BLOCK = BLOCKS.register("met_station",
 			() -> new MetStationBlock(Block.Properties.of().strength(1.5f, 3.0f).requiresCorrectToolForDrops().noOcclusion()));
 	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
 			() -> new TooltipBlockItem(MET_STATION_BLOCK.get(), new Item.Properties(), "tooltip.electricity.met_station"));
+
+	private static Map<ResourceLocation, RegistryObject<Block>> registerSwitchgearBlocks() {
+		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
+		for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
+			blocks.put(spec.id(), BLOCKS.register(spec.id().getPath(),
+					() -> new SwitchgearBlock(switchgearProperties(), spec)));
+		}
+
+		return blocks;
+	}
+
+	private static Map<ResourceLocation, RegistryObject<Item>> registerSwitchgearItems() {
+		Map<ResourceLocation, RegistryObject<Item>> items = new LinkedHashMap<>();
+		for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
+			RegistryObject<Block> block = SWITCHGEAR_BLOCKS.get(spec.id());
+			items.put(spec.id(), ITEMS.register(spec.id().getPath(),
+					() -> new TooltipBlockItem(block.get(), new Item.Properties(),
+							"tooltip.electricity." + spec.id().getPath())));
+		}
+
+		return items;
+	}
+
+	private static BlockBehaviour.Properties switchgearProperties() {
+		return Block.Properties.of().strength(2.0f, 8.0f).requiresCorrectToolForDrops().noOcclusion();
+	}
+
+	/** Every switch block, so one block entity type serves both. */
+	private static Block[] switchgearBlocks() {
+		return SWITCHGEAR_BLOCKS.values().stream().map(RegistryObject::get).toArray(Block[]::new);
+	}
 
 	private static Map<ResourceLocation, RegistryObject<Block>> registerCableBlocks() {
 		Map<ResourceLocation, RegistryObject<Block>> blocks = new LinkedHashMap<>();
@@ -453,6 +492,11 @@ public class Electricity {
 					output.accept(PV_INVERTER_ITEMS.get(spec.id()).get());
 				}
 
+				// the switches, which is what a player puts between the cabin and the line
+				for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
+					output.accept(SWITCHGEAR_ITEMS.get(spec.id()).get());
+				}
+
 				output.accept(MET_STATION_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
 				output.accept(CPU_ITEM.get());
@@ -478,6 +522,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<LatticeTowerBlockEntity>> LATTICE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TransformerBlockEntity>> TRANSFORMER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<GroundConductorBlockEntity>> GROUND_CONDUCTOR_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<SwitchgearBlockEntity>> SWITCHGEAR_BLOCK_ENTITY;
 
 	public static final WireManager wireManager = new WireManager();
 	public static PowerNetwork powerNetwork;
@@ -526,6 +571,8 @@ public class Electricity {
 		PV_COMBINER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_combiner", () -> BlockEntityType.Builder.of(PvCombinerBlockEntity::new, pvCombinerBlocks()).build(null));
 
 		MET_STATION_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("met_station", () -> BlockEntityType.Builder.of(MetStationBlockEntity::new, MET_STATION_BLOCK.get()).build(null));
+
+		SWITCHGEAR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("switchgear", () -> BlockEntityType.Builder.of(SwitchgearBlockEntity::new, switchgearBlocks()).build(null));
 
 		BLOCK_ENTITY_TYPES.register(modEventBus);
 		LOGGER.info("Registered {} items, {} blocks, and {} block entity types", ITEMS.getEntries().size(), BLOCKS.getEntries().size(), BLOCK_ENTITY_TYPES.getEntries().size());

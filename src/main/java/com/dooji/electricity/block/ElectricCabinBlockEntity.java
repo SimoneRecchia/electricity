@@ -4,6 +4,7 @@ import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -275,6 +276,12 @@ public class ElectricCabinBlockEntity extends BlockEntity implements InsulatorHo
 	public boolean feeds(InsulatorHost other) {
 		return other instanceof UtilityPoleBlockEntity || other instanceof LatticeTowerBlockEntity
 				|| other instanceof TransformerBlockEntity || other instanceof GroundConductorBlockEntity;
+	}
+
+	/** A cabin is the medium-voltage end of a distribution network, and the low-voltage start of one. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() != ConductorSpec.VoltageClass.HIGH;
 	}
 
 	/** Which of the two fittings this is, from the group's own name. */

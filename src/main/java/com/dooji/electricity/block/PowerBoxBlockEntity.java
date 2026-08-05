@@ -7,6 +7,7 @@ import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
@@ -609,6 +610,12 @@ public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 	@Override
 	public String fittingType() {
 		return InsulatorPartHelper.TYPE_POWER_BOX;
+	}
+
+	/** Low voltage only: a kiosk is the end of the line, and what arrives at one is a street bundle. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() == ConductorSpec.VoltageClass.LOW;
 	}
 
 	/** The end of the line: a kiosk distributes, it does not feed another machine. */

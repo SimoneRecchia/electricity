@@ -386,6 +386,36 @@ TOWER_ROWS = {
     ),
 }
 
+def item_disconnector():
+    """A disconnector as an item: three posts and one blade standing up, which is the state that matters."""
+    c = Canvas(16, 16)
+    frame, post, copper = (128, 132, 138, 255), (116, 74, 44, 255), (176, 158, 138, 255)
+    c.rect(1, 12, 15, 14, frame)
+    c.rect(0, 14, 16, 15, (150, 148, 142, 255))
+    for x in (2, 7, 12):
+        c.rect(x, 8, x + 2, 12, post)
+        c.set(x, 8, (156, 112, 76, 255))
+        # the blade, up on its hinge
+        c.rect(x + 1, 3, x + 2, 8, copper)
+        c.rect(x, 2, x + 3, 3, copper)
+    return c
+
+
+def item_breaker():
+    """A breaker as an item: three moulded poles over the mechanism box, and the flag on its front."""
+    c = Canvas(16, 16)
+    box, epoxy, post = (176, 180, 186, 255), (196, 194, 186, 255), (116, 74, 44, 255)
+    c.rect(1, 9, 15, 14, box)
+    c.rect(0, 14, 16, 15, (150, 148, 142, 255))
+    c.outline(3, 10, 13, 14, (146, 150, 156, 255))
+    c.rect(2, 10, 4, 12, (168, 52, 44, 255))
+    for x in (3, 7, 11):
+        c.rect(x, 4, x + 2, 9, epoxy)
+        c.rect(x - 1, 5, x + 3, 6, epoxy)
+        c.rect(x, 2, x + 2, 4, post)
+    return c
+
+
 def tower_sprite(duty):
     """A lattice tower as an item: face-on, so the silhouette and the bracing do the work.
 
@@ -1236,6 +1266,8 @@ ITEM_TEXTURES = {
     'abc_conductor': item_abc_conductor,
     'tx_machine': lambda: transformer_sprite('machine'),
     'tx_substation': lambda: transformer_sprite('substation'),
+    'mv_disconnector': item_disconnector,
+    'mv_breaker': item_breaker,
     'lattice_suspension': lambda: tower_sprite('suspension'),
     'lattice_tension': lambda: tower_sprite('tension'),
     'lattice_terminal': lambda: tower_sprite('terminal'),

@@ -5,6 +5,7 @@ import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
@@ -134,6 +135,12 @@ public class LatticeTowerBlockEntity extends BlockEntity implements InsulatorHos
 		return other instanceof LatticeTowerBlockEntity || other instanceof ElectricCabinBlockEntity
 				|| other instanceof UtilityPoleBlockEntity || other instanceof GroundConductorBlockEntity
 				|| other instanceof TransformerBlockEntity;
+	}
+
+	/** Transmission and nothing else: a tower's insulator string is 0.7 m of glass for a reason. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() == ConductorSpec.VoltageClass.HIGH;
 	}
 
 	@Override

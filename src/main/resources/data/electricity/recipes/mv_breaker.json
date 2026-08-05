@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "QQQ",
+    "PbP"
+  ],
+  "key": {
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "Q": {
+      "item": "electricity:load_break_switch"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    }
+  },
+  "result": {
+    "item": "electricity:mv_breaker"
+  }
+}

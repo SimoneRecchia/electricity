@@ -319,5 +319,13 @@
   "block.electricity.mv_conductor_run": "Medium-Voltage Run",
   "tooltip.electricity.mv_conductor_run": "Bare all-aluminium-alloy conductor, laid along the ground.",
   "block.electricity.hv_conductor_run": "Transmission Run",
-  "tooltip.electricity.hv_conductor_run": "A quad ACSR bundle on spacers, laid along the ground."
+  "tooltip.electricity.hv_conductor_run": "A quad ACSR bundle on spacers, laid along the ground.",
+  "block.electricity.mv_disconnector": "Disconnector",
+  "tooltip.electricity.mv_disconnector": "Makes a gap in a 24 kV line that you can see. Will not open under load: open the breaker first.",
+  "block.electricity.mv_breaker": "Circuit Breaker",
+  "tooltip.electricity.mv_breaker": "Breaks a 24 kV line under load, and trips itself above 26 MW. Its contacts are in a vacuum, so all it shows is a flag.",
+  "message.electricity.switch.under_load": "There is load on it. A disconnector cannot break current \u2014 open the breaker first.",
+  "message.electricity.switch.opened": "Open. The gap is visible from the outside.",
+  "message.electricity.switch.closed": "Closed.",
+  "message.electricity.wire.wrong_class": "Neither of those fittings is built for %s. Match the conductor to the voltage."
 }

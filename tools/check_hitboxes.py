@@ -25,7 +25,9 @@ BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'blo
 RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
 
 # Groups that are a marker, a moving part, or something that is only sometimes there.
-MOVING = ('pivot_', 'rotate_', 'harness', 'entry')
+# 'flag_' is a breaker's position indicator: two plates in one place, one drawn per state, and both far
+# under MIN_OWN anyway.
+MOVING = ('pivot_', 'rotate_', 'harness', 'entry', 'flag_')
 
 # Everything below is in pixels
 MIN_OWN = 0.25
@@ -48,6 +50,8 @@ BLOCK_CLASS = {
     'pv_combiner': 'PvCombinerBlock',
     'tx_machine': 'TransformerBlock',
     'tx_substation': 'TransformerBlock',
+    'mv_disconnector': 'SwitchgearBlock',
+    'mv_breaker': 'SwitchgearBlock',
 }
 
 # One block class, several models: which constant in its file holds the table cut from this one.
@@ -64,6 +68,9 @@ MODEL_TABLE = {
     # one block class, two machines: a table each, told apart by name
     'tx_machine': 'MACHINE_CELLS',
     'tx_substation': 'SUBSTATION_CELLS',
+    # one block class, two switches, and what the two collide as is not the same shape
+    'mv_disconnector': 'DISCONNECTOR_CELLS',
+    'mv_breaker': 'BREAKER_CELLS',
 }
 
 # Machines with no facing at all, and why. Nothing about them can be turned wrongly. Empty as it stands:
@@ -167,6 +174,30 @@ RECTANGLES = {
         ('arrester_1', ('arrester_1',)),
         ('arrester_2', ('arrester_2',)),
         ('arrester_3', ('arrester_3',)),
+    ),
+    # A disconnector is a frame, six posts and the shaft that gangs them.  The shaft is its own rectangle
+    # because it is 0.4 wide and 0.03 thick over the top of the posts: swept into the frame it would be a
+    # solid block from the ground to the blades.
+    'mv_disconnector': (
+        ('frame', ('pad', 'frame', 'earth')),
+        ('shaft', ('shaft',)),
+        ('insulator_1', ('insulator_1',)),
+        ('insulator_2', ('insulator_2',)),
+        ('insulator_3', ('insulator_3',)),
+        ('insulator_4', ('insulator_4',)),
+        ('insulator_5', ('insulator_5',)),
+        ('insulator_6', ('insulator_6',)),
+    ),
+    # And a breaker is a box with three poles standing on it, which is one rectangle: the poles cover nearly
+    # all of the box's own footprint, so a second box would be air.  The bushings stick out past it.
+    'mv_breaker': (
+        ('cabinet', ('pad', 'cabinet', 'door', 'earth', 'pole_1', 'pole_2', 'pole_3')),
+        ('insulator_1', ('insulator_1',)),
+        ('insulator_2', ('insulator_2',)),
+        ('insulator_3', ('insulator_3',)),
+        ('insulator_4', ('insulator_4',)),
+        ('insulator_5', ('insulator_5',)),
+        ('insulator_6', ('insulator_6',)),
     ),
     'utility_pole': (
         # the steps are what a player climbs, and they are within a pixel of the shaft either side of it

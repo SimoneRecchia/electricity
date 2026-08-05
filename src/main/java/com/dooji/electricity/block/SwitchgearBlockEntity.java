@@ -1,14 +1,13 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.api.power.TransformerSpec;
+import com.dooji.electricity.api.power.ConductorSpec;
+import com.dooji.electricity.api.power.SwitchgearSpec;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
-import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
-import com.dooji.electricity.main.registry.TransformerCatalog;
 import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
@@ -23,7 +22,10 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -31,29 +33,31 @@ import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
 /**
- * A transformer, of either duty.
+ * The six fittings of a switch, and what open does to them.
  *
- * The bushings are its fittings, low-voltage side first, in the order gen_transformer_models writes them.
- * What a transformer *does* to power is take a loss off it: {@link #throughput()} is what came in less
- * what the core and the load cost, which is the only reason a player would rather have one big machine
- * unit than three small ones.
+ * {@link #busOf} is the whole of the electrical behaviour: closed, all six are one bus and power crosses the
+ * switch; open, the line side and the load side are two, and PowerNetwork has two clusters at one position
+ * with no connection between them. Nothing else about the network had to change.
  */
-public class TransformerBlockEntity extends BlockEntity implements InsulatorHost {
+public class SwitchgearBlockEntity extends BlockEntity implements InsulatorHost {
+	/** Above this fraction of the rating there is enough current in it to draw an arc on a bare blade. */
+	private static final double LOADED = 0.02;
+	/** How often a breaker looks at what is going through it, in ticks. */
+	private static final int TRIP_INTERVAL = 20;
+
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
-	private double incomingKw = 0.0;
+	private double currentPower = 0.0;
 
-	public TransformerBlockEntity(BlockPos pos, BlockState state) {
-		super(Electricity.TRANSFORMER_BLOCK_ENTITY.get(), pos, state);
+	public SwitchgearBlockEntity(BlockPos pos, BlockState state) {
+		super(Electricity.SWITCHGEAR_BLOCK_ENTITY.get(), pos, state);
 		ensureArraySizes();
 		refresh();
 		InsulatorIdRegistry.claimMissing(insulatorIds);
 	}
 
-	public TransformerSpec spec() {
-		if (getBlockState().getBlock() instanceof TransformerBlock block) return block.spec();
-
-		return TransformerCatalog.MACHINE;
+	private SwitchgearSpec spec() {
+		return getBlockState().getBlock() instanceof SwitchgearBlock gear ? gear.spec() : null;
 	}
 
 	private List<String> insulatorGroups() {
@@ -76,19 +80,19 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 		}
 	}
 
+	/** Where each palm is, from the model's own boxes, turned onto the block's facing. */
 	private void refresh() {
 		ensureArraySizes();
 		List<String> groups = insulatorGroups();
 		for (int i = 0; i < groups.size() && i < wirePositions.length; i++) {
-			// the palm on top of the bushing, not the middle of the porcelain
-			Vector3f centre = ObjBoundingBoxRegistry.getTopSafe(getBlockState().getBlock(), groups.get(i));
-			if (centre == null) continue;
+			Vector3f top = ObjBoundingBoxRegistry.getTopSafe(getBlockState().getBlock(), groups.get(i));
+			if (top == null) continue;
 
-			double radians = Math.toRadians(ModelFacing.degrees(TransformerBlock.AUTHORED,
-					getBlockState().getValue(TransformerBlock.FACING)));
+			double radians = Math.toRadians(ModelFacing.degrees(SwitchgearBlock.AUTHORED,
+					getBlockState().getValue(SwitchgearBlock.FACING)));
 			double cos = Math.cos(radians);
 			double sin = Math.sin(radians);
-			wirePositions[i] = new Vec3(centre.x * cos + centre.z * sin, centre.y, -centre.x * sin + centre.z * cos)
+			wirePositions[i] = new Vec3(top.x * cos + top.z * sin, top.y, -top.x * sin + top.z * cos)
 					.add(Vec3.atLowerCornerOf(getBlockPos())).add(0.5, 0.0, 0.5);
 		}
 	}
@@ -107,64 +111,79 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 
 	@Override
 	public String fittingType() {
-		return InsulatorPartHelper.TYPE_TRANSFORMER;
+		return InsulatorPartHelper.TYPE_SWITCHGEAR;
 	}
 
 	/**
-	 * Where a transformer sits in the chain, which is the whole reason it exists.
+	 * Which side of the switch a fitting is on, and whether the two sides are still one bus.
 	 *
-	 * A machine unit takes generators in and puts a collector network out, so it feeds a substation - or
-	 * another machine unit, which is how a row of machines shares one run back. A substation unit puts a
-	 * transmission line out, so it feeds towers, and nothing else.
+	 * The first half of the fittings is the line side and the second the load side. Closed they share a bus,
+	 * which is what makes power cross; open they do not, and there is nothing else in the network joining
+	 * two fittings at one position.
+	 */
+	@Override
+	public int busOf(int index) {
+		SwitchgearSpec spec = spec();
+		if (spec == null || !SwitchgearBlock.open(getBlockState())) return 0;
+
+		return index < spec.poles() ? 0 : 1;
+	}
+
+	/**
+	 * A switch is a series element: whatever the line carries, it carries.
+	 *
+	 * Which conductor may land on it is {@link #takesConductor}, not this - a switch does not care what is
+	 * on the other side of the span, only that it is at its own voltage.
 	 */
 	@Override
 	public boolean feeds(InsulatorHost other) {
-		return switch (spec().duty()) {
-			// a machine unit puts a collector network out: into the substation, into another machine unit,
-			// or into a run laid along the ground between them
-			case MACHINE -> other instanceof ElectricCabinBlockEntity
-					|| other instanceof TransformerBlockEntity
-					|| other instanceof GroundConductorBlockEntity;
-			// and a substation unit puts a transmission line out, which starts at a tower or at a run
-			case SUBSTATION -> other instanceof LatticeTowerBlockEntity
-					|| other instanceof GroundConductorBlockEntity;
-		};
+		return true;
 	}
 
-	/**
-	 * Which side of the transformer a bushing is, and so what may be strung to it.
-	 *
-	 * ObjDefinitions names them low-voltage side first, so on a substation unit the first three are the
-	 * 33 kV collector and the last three the 400 kV line. A machine unit has one side of three, and all of
-	 * it is the collector.
-	 */
+	/** Its own voltage class and nothing else: a 24 kV unit is not where a transmission line lands. */
 	@Override
 	public boolean takesConductor(ConductorSpec conductor, int index) {
-		boolean transmission = spec().bushings() > 3 && index >= spec().bushings() / 2;
-		return conductor.voltageClass() == (transmission ? ConductorSpec.VoltageClass.HIGH
-				: ConductorSpec.VoltageClass.MEDIUM);
+		SwitchgearSpec spec = spec();
+		return spec == null || conductor.voltageClass() == spec.voltageClass();
 	}
 
 	@Override
 	public void deliverPower(double power) {
-		incomingKw = power;
+		currentPower = power;
 	}
 
-	/** What came in. */
 	public double getCurrentPower() {
-		return incomingKw;
+		return currentPower;
 	}
 
-	/** What leaves: what came in, less the core loss and the load's share of it. */
-	public double throughput() {
-		double loss = spec().lossKw(incomingKw);
-		return Math.max(0.0, Math.abs(incomingKw) - loss) * Math.signum(incomingKw == 0.0 ? 1.0 : incomingKw);
+	/** Whether there is enough in it that parting bare contacts would draw an arc. */
+	public boolean underLoad() {
+		SwitchgearSpec spec = spec();
+		return spec != null && currentPower > spec.ratedKw() * LOADED;
+	}
+
+	/**
+	 * What a breaker is for: above its rating it opens itself.
+	 *
+	 * A disconnector does not, because a real one cannot - its contacts simply carry more than they were
+	 * built for until something gives.
+	 */
+	public void serverTick() {
+		if (level == null || level.getGameTime() % TRIP_INTERVAL != 0) return;
+
+		SwitchgearSpec spec = spec();
+		BlockState state = getBlockState();
+		if (spec == null || !spec.breaksLoad() || state.getValue(SwitchgearBlock.OPEN)) return;
+		if (currentPower <= spec.ratedKw()) return;
+
+		((SwitchgearBlock) state.getBlock()).throwSwitch(level, getBlockPos(), state, true);
+		level.playSound(null, getBlockPos(), SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.8f, 1.4f);
 	}
 
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);
-		tag.putDouble("incomingKw", incomingKw);
+		tag.putDouble("currentPower", currentPower);
 		ListTag ids = new ListTag();
 		for (int id : insulatorIds) ids.add(IntTag.valueOf(id));
 		tag.put("insulatorIds", ids);
@@ -174,7 +193,7 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 	public void load(@Nonnull CompoundTag tag) {
 		super.load(tag);
 		ensureArraySizes();
-		incomingKw = tag.getDouble("incomingKw");
+		currentPower = tag.getDouble("currentPower");
 		readIds(tag);
 		refresh();
 	}
@@ -195,7 +214,7 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 	@Override
 	public CompoundTag getUpdateTag() {
 		CompoundTag tag = super.getUpdateTag();
-		tag.putDouble("incomingKw", incomingKw);
+		tag.putDouble("currentPower", currentPower);
 		ListTag ids = new ListTag();
 		for (int id : insulatorIds) ids.add(IntTag.valueOf(id));
 		tag.put("insulatorIds", ids);
@@ -206,7 +225,7 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 	public void handleUpdateTag(CompoundTag tag) {
 		super.handleUpdateTag(tag);
 		ensureArraySizes();
-		incomingKw = tag.getDouble("incomingKw");
+		currentPower = tag.getDouble("currentPower");
 		readIds(tag);
 		refresh();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -248,5 +267,9 @@ public class TransformerBlockEntity extends BlockEntity implements InsulatorHost
 				WireManagerClient.invalidateInsulatorCache(getInsulatorIds());
 			});
 		}
+	}
+
+	public static BlockEntityType<SwitchgearBlockEntity> type() {
+		return Electricity.SWITCHGEAR_BLOCK_ENTITY.get();
 	}
 }

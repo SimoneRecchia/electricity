@@ -29,7 +29,8 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'te
 # Models the mod draws itself.
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
         'utility_pole', 'power_box', 'tx_machine', 'tx_substation',
-        'lattice_suspension', 'lattice_tension', 'lattice_terminal', 'electric_cab')
+        'lattice_suspension', 'lattice_tension', 'lattice_terminal', 'electric_cab',
+        'mv_disconnector', 'mv_breaker')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4
@@ -39,6 +40,7 @@ OVERLAP = 1e-4
 # meets the middle of that edge, the socket where a row plugs into the corner, the plain lead otherwise -
 # and they meet at the same joint, so of course they share its faces.
 EXCLUSIVE = (('harness', 'harness_plug'),
+             ('flag_shut', 'flag_open'),
              ('harness_input', 'harness_lead_north'),
              ('harness_input', 'harness_entry_north'),
              ('harness_lead_north', 'harness_entry_north'),

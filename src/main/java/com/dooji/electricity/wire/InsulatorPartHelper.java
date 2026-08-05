@@ -28,6 +28,8 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_TRANSFORMER = "transformer";
 	/** A length of conductor laid on the ground, which offers one fitting. */
 	public static final String TYPE_GROUND_CONDUCTOR = "ground_conductor";
+	/** A switch in a line, of either kind: a disconnector or a circuit breaker. */
+	public static final String TYPE_SWITCHGEAR = "switchgear";
 
 	/** The part names a device's insulators are drawn as, read off the model's own definition. */
 	private static List<String> parts(BlockEntity entity) {

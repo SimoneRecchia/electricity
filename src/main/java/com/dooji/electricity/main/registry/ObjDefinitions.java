@@ -85,6 +85,17 @@ public final class ObjDefinitions {
 							"insulator_4_porcelain", "insulator_5_porcelain", "insulator_6_porcelain")));
 		}
 
+		// The six fittings of a switch: the line side first, then the load side, which is the order
+		// SwitchgearBlockEntity.busOf splits them on.
+		for (var spec : SwitchgearCatalog.all()) {
+			Block block = Electricity.SWITCHGEAR_BLOCKS.get(spec.id()).get();
+			List<String> fittings = new ArrayList<>();
+			for (int i = 1; i <= spec.fittings(); i++) fittings.add("insulator_" + i + "_porcelain");
+			ALL.add(new ObjBlockDefinition(block,
+					new ResourceLocation(Electricity.MOD_ID, "models/" + spec.modelName() + "/" + spec.modelName() + ".obj"),
+					List.copyOf(fittings)));
+		}
+
 		ALL.add(new ObjBlockDefinition(Electricity.MET_STATION_BLOCK.get(),
 				new ResourceLocation(Electricity.MOD_ID, "models/met_mast/met_mast.obj"), List.of()));
 	}

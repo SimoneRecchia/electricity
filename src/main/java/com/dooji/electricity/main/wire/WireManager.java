@@ -102,6 +102,17 @@ public class WireManager {
 		// Which conductor this is, read off the player's own hand rather than sent from the client: a
 		// client that lies about it gets whatever it is actually holding.
 		ConductorSpec spec = heldConductor(player);
+
+		// And whether both fittings will take it at all. Five conductors that anything accepts are five
+		// conductors that look interchangeable; a tower takes transmission, a pole takes a street bundle or a
+		// medium-voltage line, and a kiosk takes the bundle. Each fitting says for itself.
+		if (spec != null && !(accepts(startEntity, startInsulator.get().index(), spec)
+				&& accepts(endEntity, endInsulator.get().index(), spec))) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.wrong_class",
+					Component.translatable("item.electricity." + spec.id().getPath())));
+			return;
+		}
+
 		double span = Math.sqrt(spanDistanceSq);
 		double limit = spec == null ? MAX_WIRE_DISTANCE : spec.maxSpan();
 		if (span > limit) {
@@ -140,6 +151,11 @@ public class WireManager {
 		}
 
 		return false;
+	}
+
+	/** Whether one fitting will take this conductor: a class per fitting, not one rule for the mod. */
+	private static boolean accepts(BlockEntity entity, int index, ConductorSpec spec) {
+		return !(entity instanceof InsulatorHost host) || host.takesConductor(spec, index);
 	}
 
 	/** The conductor in the player's hand, or null if they are holding the old plain wire or nothing. */

@@ -6,6 +6,7 @@ import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
+import com.dooji.electricity.client.render.block.SwitchgearRenderer;
 import com.dooji.electricity.client.render.block.LatticeTowerRenderer;
 import com.dooji.electricity.client.render.block.PowerBoxRenderer;
 import com.dooji.electricity.client.render.block.TransformerRenderer;
@@ -57,6 +58,7 @@ public class ElectricityClient {
 		PvInverterRenderer.init();
 		PvCombinerRenderer.init();
 		MetStationRenderer.init();
+		SwitchgearRenderer.init();
 	}
 
 	private static void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {

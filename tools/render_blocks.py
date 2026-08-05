@@ -780,6 +780,41 @@ def scene_pole():
     return triangles, (-1.4, 3.0, 6.4), (2.5, 2.6, 2.5)
 
 
+def scene_switches():
+    """The pair, closed: a disconnector's blade lying between its posts and a breaker's flag showing red."""
+    triangles = ground(-1, -1, 5, 5, SAND)
+    triangles += placed(machine_model('mv_disconnector'), (1, 0, 2), drop=('flag_open',))
+    triangles += placed(machine_model('mv_breaker'), (3, 0, 2), drop=('flag_open',))
+    return triangles, (2.5, 1.55, -1.6), (2.5, 0.30, 2.5)
+
+
+def scene_switches_open():
+    """And open: the blade stood up on its hinge, the handle down, the flag showing green."""
+    import gen_switch_models as switches
+
+    triangles = ground(-1, -1, 5, 5, SAND)
+    turned = []
+    for group, texture, corners, normal, shade, cull in machine_model('mv_disconnector'):
+        if group.startswith('pivot_') or group == 'flag_open':
+            continue
+        if group.startswith('rotate_'):
+            corners = tuple((spun(point, switches.HINGE_Y, switches.REACH, 84.0), uv)
+                            for point, uv in corners)
+            normal = spun((normal[0], normal[1], normal[2]), 0.0, 0.0, 84.0)
+        turned.append((group, texture, corners, normal, shade, cull))
+    triangles += placed(turned, (1, 0, 2))
+    triangles += placed(machine_model('mv_breaker'), (3, 0, 2), drop=('flag_shut',))
+    return triangles, (2.5, 1.55, -1.6), (2.5, 0.30, 2.5)
+
+
+def spun(point, hinge_y, hinge_z, degrees):
+    """A point turned about the hinge axis, which runs along x - the same turn the renderer applies."""
+    angle = math.radians(degrees)
+    y, z = point[1] - hinge_y, point[2] - 0.5 - hinge_z
+    return (point[0], hinge_y + y * math.cos(angle) - z * math.sin(angle),
+            0.5 + hinge_z + y * math.sin(angle) + z * math.cos(angle))
+
+
 def scene_tower():
     triangles = ground(-6, -6, 12, 12, SAND)
     triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))  # noqa: E501
@@ -931,6 +966,8 @@ SCENES = {
     'cab': scene_cab,
     'pole': scene_pole,
     'tower': scene_tower,
+    'switches': scene_switches,
+    'switches_open': scene_switches_open,
     'tower_head': scene_tower_head,
     'tower_arm': scene_tower_arm,
 }

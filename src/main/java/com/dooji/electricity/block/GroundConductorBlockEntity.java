@@ -83,6 +83,13 @@ public class GroundConductorBlockEntity extends BlockEntity implements Insulator
 				|| other instanceof TransformerBlockEntity;
 	}
 
+	/** Its own product and nothing else: a run of street bundle is not where a transmission phase lands. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		ConductorSpec mine = spec();
+		return mine == null || mine.id().equals(conductor.id());
+	}
+
 	@Override
 	public void deliverPower(double power) {
 		currentPower = power;
