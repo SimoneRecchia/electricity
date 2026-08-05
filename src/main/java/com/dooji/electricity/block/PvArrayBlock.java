@@ -42,10 +42,10 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 
 	/** The four mountings as collision, each cut from its own model. */
 	private static final List<Cell> FLAT_CELLS = List.of(
-			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.48, 15.52, 2.45, 15.52)));
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.48, 15.52, 4.13, 15.52)));
 
 	private static final List<Cell> TILT_CELLS = List.of(
-			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.83, 15.52, 8.50, 15.10)));
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 0.83, 15.52, 10.66, 15.10)));
 
 	/**
 	 * A turning row is one box, floor to the top of what its plane can sweep.

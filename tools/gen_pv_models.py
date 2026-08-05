@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from modellib import (FITTING, HEX, MC4_RADIUS, MC4_SPREAD, ROUND, Mesh, angle, arc, bolt, box,
                       channel, clad_box, cylinder, eyebolt, hemisphere, ibeam, mc4, pin_insulator,
-                      pivot, rotate, strut, tube, write_mtl)
+                      pivot, rotate, square_uv, strut, tube, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
@@ -43,6 +43,11 @@ MATERIALS = {
     'instrument': 'pv_instrument.png',
     'dome': 'pv_dome.png',
     'core': 'dc_core.png',
+    # the laid run's own fittings: a row's joints are the same products as a run's, so they are the same
+    # textures, and a moulded box under a table is the box a player laid outside it
+    'jbox': 'dc_jbox.png',
+    'jbox_side': 'dc_jbox_side.png',
+    'gland': 'dc_gland.png',
     'plug_plus': 'dc_connector_plus.png',
     'plug_minus': 'dc_connector_minus.png',
     'combiner_door': 'pv_combiner_door.png',
@@ -91,9 +96,9 @@ CORE_Y = CORE_RADIUS
 # and a pair of them splays to MC4_SPREAD because two coupling rings will not sit at the cable's spacing.
 MC4_Y = MC4_RADIUS / 16.0
 MC4_LANE = MC4_SPREAD / 16.0
-# How far back from the edge the pair leaves its own lane to climb onto the plugs.  A row's lead has to
-# reach this far or the rise starts on nothing - see flat_table.
-SOCKET_RISE = 0.34
+# How far back from the edge the pair leaves its own lane to climb onto the plugs.  It has to stay inside
+# JOINT, or the climb starts further in than the cable feeding it does and the two run through each other.
+SOCKET_RISE = 0.16
 # How far short of the middle a machine's stub stops
 UNDER = 0.20
 
@@ -165,83 +170,244 @@ def stubs(mesh, name='stub', reach=UNDER):
         box(mesh, faces, (-0.115, top, -0.425), (0.115, top + 0.026, -0.395), uv_scale=0.3, rot=spin)
 
 
-# How far the socket's rise reaches back inside the lead it continues.  Butted end to end the two caps are
-# coplanar and fight; this buries the rise's, and the two are the same cable so the overlap is invisible.
+# How far one piece of the run reaches back inside the piece it continues.  Butted end to end their two
+# caps are coplanar and fight; this buries them, and it is one cable either side so the overlap is invisible.
 SOCKET_LAP = 0.02
 
+# ------------------------------------------------------------------ how a fixed row is cabled
+#
+# One route, and it is the route a real row takes: the pair arrives at the middle of the edge a laid run
+# meets, S-bends onto the **left-hand lane**, crosses the block under the modules, and S-bends back out to
+# the middle of the far edge.  Where the far edge is another row instead, it stays on the lane and the two
+# plug together - which is the whole reason the lane is at the side and not down the middle.
+#
+# Round on the ground, flat clipped to the structure.  That is the division between the two forms, and it is
+# what puts a ribbon under a ballasted table - 2.5 px of table has no room for a 3.4 px pair - and leaves a
+# rack's pair round, because a rack stands on piers with a quarter of a block of headroom under it.
+#
+# Five groups a row, and exactly one of the three at each end is ever drawn: see PvArrayRenderer.drawn.
 
-def row_lead(mesh, x0, height, start=-0.44 + SOCKET_RISE):
-    """The lead out of one end of a row.
+# Where the lane runs.  A table's ballast blocks and a rack's piers both start at 0.30; the widest thing on
+# the lane is the MC4 pair, which splays to 0.147 either side of it, so 0.15 clears them both.
+LANE = 0.15
+# The S-bend's radius.  Nothing physical fixes it: the cable is drawn sixteen times oversize, so its real
+# 20 mm bend radius comes to a fifth of a pixel here.  Chosen to read as a bend rather than a kink, and the
+# pair of arcs is then as short as that allows.
+BEND = 0.17
 
-    ``start`` is where the socket's rise takes over, so the pair is continuous from the plugs to the block's
-    far edge.  Starting it at the block edge instead ran the lead the whole length of the rise, inside it -
-    5365 voxels of one tube inside another on the fixed-tilt rack.
+
+def sbend(offset, radius=BEND, steps=7):
+    """Two arcs that carry a path across ``offset`` and leave it pointing the way it came in.
+
+    A cable does not turn the square corner a polyline gives it.  Both arcs turn through the same angle, and
+    the offset fixes it: 2r(1 - cos t) = offset.  The figure is point-symmetric about its middle, so the
+    second arc is the first one reflected through its own end.
     """
+    turn = math.acos(max(-1.0, 1.0 - abs(offset) / (2.0 * radius)))
+    side = 1.0 if offset >= 0.0 else -1.0
+    first = [(side * radius * (1.0 - math.cos(turn * i / steps)), radius * math.sin(turn * i / steps))
+             for i in range(steps + 1)]
+    end = first[-1]
+    return first + [(2.0 * end[0] - x, 2.0 * end[1] - z) for x, z in reversed(first[:-1])]
+
+
+# Where a row's own cable starts and stops, measured from the middle: as far in as one S-bend from the block
+# edge reaches.  The spine is what is left between the two, and every end piece begins inside it.
+JOINT = 0.5 - sbend(LANE)[-1][1]
+
+# A flat twin cable is two cores in one moulded web, which in section is two circles touching - so the
+# ribbon is the same pair at the only spacing that makes it flat, and nothing swells at the joint.
+RIBBON_LANE = CORE_RADIUS
+# How much air the clips leave between the ribbon and what they hold it against.
+RIBBON_GAP = 0.012
+
+# The moulded joint where the two forms meet.  Wide enough to take the round pair's own spacing on one face,
+# long enough to bury both sets of end caps, and tall enough to take the step in height between them.
+JOINT_X = CORE_OFFSET + CORE_RADIUS + 0.010
+JOINT_Z = 0.038
+# How far inside the spine's own end the piece continuing it starts: inside the moulded joint where there is
+# one, and inside the spine's last hundredth where there is not.  At 2 x SOCKET_LAP it fell 0.002 short of
+# the joint's inner face, and two capped cable ends stood in the open under the table.
+HANDOVER = 0.030
+
+
+def joint_body(mesh, group, x0, z, base, top):
+    """The moulded joint that turns the ground run's round pair into the ribbon clipped up under the panel.
+
+    The same polycarbonate the laid run's own junction boxes are, and all six faces take the wall tile: a
+    moulded joint is resin-filled and has no screwed lid, so dc_jbox's bolt heads have no business on it.
+    The round pair comes in one face on the ground and the ribbon leaves the other at module height, and the
+    step between the two is inside the box, which is what a moulded joint is for.
+    """
+    lo = (x0 - JOINT_X, base, z - JOINT_Z)
+    hi = (x0 + JOINT_X, top, z + JOINT_Z)
+    clad_box(mesh, group, lo, hi, {'*': 'jbox_side'}, uv=square_uv(lo, hi, 3.0))
+
+
+def ribbon_clip(mesh, group, x0, z, axis_y, under):
+    """A saddle clip holding the ribbon up against the member above it.
+
+    ``under`` is the height of what it is bolted to - the laminate's own frame on a table - so the cheeks are
+    as deep as the gap they bridge, which is what makes the cable read as attached rather than as laid.
+    """
+    faces = mesh.faces(group, 'steel')
+    wide = RIBBON_LANE + CORE_RADIUS + 0.012
+    low, high = axis_y - CORE_RADIUS, axis_y + CORE_RADIUS
+    box(mesh, faces, (x0 - wide, low - 0.010, z - 0.015), (x0 + wide, low, z + 0.015), uv_scale=0.2)
+    for side in (-1.0, 1.0):
+        box(mesh, faces, (x0 + side * wide - 0.011, low - 0.010, z - 0.015),
+            (x0 + side * wide, under, z + 0.015), uv_scale=0.2)
+    box(mesh, faces, (x0 - wide, high + 0.002, z - 0.015), (x0 + wide, under, z + 0.015), uv_scale=0.2)
+
+
+def pair_cleat(mesh, group, x0, z, height):
+    """The cleat that holds a pair down where it crosses open ground: the laid run's own fitting.
+
+    A rack's pair is on the ground with nothing over it to clip to, and cable pulled along a row is pegged
+    down - the same two feet and strap a run laid across the sand gets.
+    """
+    faces = mesh.faces(group, 'steel')
+    strap = CORE_OFFSET + CORE_RADIUS
+    top = height + CORE_Y + CORE_RADIUS
+    for lo, hi in ((-0.115, -strap), (strap, 0.115)):
+        box(mesh, faces, (x0 + lo, height, z - 0.015), (x0 + hi, top, z + 0.015), uv_scale=0.2)
+    box(mesh, faces, (x0 - 0.115, top, z - 0.015), (x0 + 0.115, top + 0.026, z + 0.015), uv_scale=0.3)
+
+
+def row_spine(mesh, height, ribbon_y=None, under=None, clips=(), ties=()):
+    """The stretch of a row's own cable that crosses the block, on the lane.
+
+    ``ribbon_y`` is where the flat cable's own axis runs when it is clipped to the structure; None leaves the
+    pair round on the ground, which is what a rack with headroom under it gets.
+    """
+    flat = ribbon_y is not None
+    y = ribbon_y if flat else height + CORE_Y
+    reach = JOINT - SOCKET_LAP
+    cable_pair(mesh, 'harness', [(LANE, y, -reach), (LANE, y, reach)],
+               lanes=RIBBON_LANE if flat else CORE_OFFSET)
+    for z in clips:
+        ribbon_clip(mesh, 'harness', LANE, z, y, under)
+    for z in ties:
+        pair_cleat(mesh, 'harness', LANE, z, height)
+
+
+def row_joint(mesh, group, height, ribbon_y, end):
+    """One end's moulded joint, if this mounting has one at all."""
+    if ribbon_y is None:
+        return
+
+    joint_body(mesh, group, LANE, JOINT * end, height + 0.002, ribbon_y + CORE_RADIUS + 0.006)
+
+
+def row_lead(mesh, height, end=-1, ribbon_y=None):
+    """The straight round pair from the joint out to the block edge, on the lane.
+
+    Drawn at whichever end has another row against it or nothing at all: it is the cable a row is chained by,
+    and it stays on the lane because that is where the row in front presents its own.
+    """
+    name = 'harness_lead_north' if end < 0 else 'harness_lead_south'
+    row_joint(mesh, name, height, ribbon_y, end)
     y = height + CORE_Y
-    cable_pair(mesh, 'harness', [(x0 - CORE_OFFSET, y, start), (x0 - CORE_OFFSET, y, 0.5)],
+    cable_pair(mesh, name, [(LANE, y, (JOINT - HANDOVER) * end), (LANE, y, 0.5 * end)],
                ends=(True, False))
 
 
-def row_socket(mesh, x0, height, name='harness_input', end=-1):
-    """Where the row behind plugs in: a pair of MC4s on the edge a row is wired on."""
-    # The rise onto the plug's own axis and the plugs themselves: row_lead brings the pair up to here
-    edge = -0.44 if end < 0 else 0.44
+def row_socket(mesh, height, end=-1, ribbon_y=None):
+    """The same lead, ending in the pair of MC4s the row in front plugs into.
+
+    It carries its own cable rather than continuing row_lead's, because exactly one of the two is ever
+    drawn - two pieces of cable in one place is not a state this can be in.
+    """
+    name = 'harness_input'
+    row_joint(mesh, name, height, ribbon_y, end)
+    y = height + CORE_Y
+    plugs = 0.44 * end
     faces = mesh.faces(name, 'core')
-    # The rise starts *inside* the block and runs out to the edge: the other way round it climbs backwards
-    # through the plug it is meant to feed.
-    reach = SOCKET_RISE + SOCKET_LAP
-    for path in tail_rise(edge + (reach if end < 0 else -reach), edge, base=height):
-        tube(mesh, faces, [(x0 - CORE_OFFSET + x, y, z) for x, y, z in path], CORE_RADIUS,
-             sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces)
-    mc4_pair(mesh, name, edge, y=height + MC4_Y, into=-1.0 if end < 0 else 1.0,
-             at_x=x0 - CORE_OFFSET)
+    for path in tail_rise(plugs - SOCKET_RISE * end, plugs, base=height):
+        tube(mesh, faces, [(LANE + x, py, pz) for x, py, pz in path], CORE_RADIUS, sides=FITTING,
+             uv_scale=1.0, uv_along=1.0, caps=faces)
+    cable_pair(mesh, name, [(LANE, y, (JOINT - HANDOVER) * end),
+                            (LANE, y, (0.44 - SOCKET_RISE + SOCKET_LAP) * end)])
+    mc4_pair(mesh, name, plugs, y=height + MC4_Y, into=float(end), at_x=LANE)
 
 
-# Where a laid run's pair leaves the middle of the block and where it lands on the row's own two lanes, per
-# end: (corner z, join z) for the inner core then the outer one.  The two corners are a step apart so the
-# pair never has to cross itself, and the corner that reaches the outer lane is the one nearer the edge, so
-# the other passes behind it.  Axis-aligned rather than diagonal on purpose: a diagonal cuts across the
-# frame and the ballast under the table, and cable is pulled along a rack, not across it.
-#
-# North lands where the lead starts, with nothing there to cross - the socket is not drawn when an entry is,
-# since a socket is what a row plugs into and an entry is what a cable arrives by (PvArrayRenderer.drawn).
-# South lands hard against the block edge, where the run's own arm covers the join.
-ENTRY_PATH = {-1: ((-0.10, -0.10), (-0.20, -0.10)), 1: ((0.38, 0.38), (0.46, 0.46))}
+def row_entry(mesh, height, end=-1, ribbon_y=None):
+    """Where a laid run meets the middle of an edge: the S-bend from there onto the lane.
 
-
-def row_entry(mesh, x0, height, end=-1):
-    """Where a laid run's pair comes off the middle of a block onto the row's own pair.
-
-    One crossing is left, and it is forced: the outer core has to get past the inner lane to reach its own,
-    and the row's east edge is occupied for the whole length of the block.  It is put at the south edge,
-    square on, which is the shortest a crossing can be - and under the laid run's own arm.
+    Both cores turn together, a lane apart the whole way, so neither has to cross the other.  The one square
+    crossing the old axis-aligned route could not avoid has gone with the corner that forced it.
     """
     name = 'harness_entry_north' if end < 0 else 'harness_entry_south'
-    edge = -0.5 if end < 0 else 0.5
-    faces = mesh.faces(name, 'core')
-
-    for lane, target, (corner, join) in ((-CORE_OFFSET, x0 - 2.0 * CORE_OFFSET, ENTRY_PATH[end][0]),
-                                         (CORE_OFFSET, x0, ENTRY_PATH[end][1])):
-        path = [(lane, CORE_Y, edge), (lane, CORE_Y, corner), (target, CORE_Y, corner)]
-        if abs(join - corner) > 1e-6:
-            path.append((target, CORE_Y, join))
-        if height > 0.0:
-            path.append((target, height + CORE_Y, join))
-        # the block edge is carried on by the laid run's own arm, so that end takes no cap
-        tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=faces,
-             cap_ends=(1,))
+    row_joint(mesh, name, height, ribbon_y, end)
+    y = height + CORE_Y
+    points = [(x, y, (0.5 - z) * end) for x, z in sbend(LANE)]
+    points.append((LANE, y, (JOINT - HANDOVER) * end))
+    # the block edge is carried on by the laid run's own arm, so that end takes no cap
+    cable_pair(mesh, name, points, ends=(False, True))
 
 
-def row_harness(mesh):
-    """A tracked row's harness: a run along the ground down the middle, and nothing else."""
-    cable_pair(mesh, 'harness', [(0.0, CORE_Y, -0.5), (0.0, CORE_Y, 0.5)], ends=(False, False))
+def row_cabling(mesh, height=0.0, ribbon_y=None, under=None, clips=(), ties=()):
+    """Every piece of a fixed row's cabling, in the five groups the renderer chooses between."""
+    row_spine(mesh, height, ribbon_y=ribbon_y, under=under, clips=clips, ties=ties)
+    row_socket(mesh, height, end=-1, ribbon_y=ribbon_y)
+    for end in (-1, 1):
+        row_lead(mesh, height, end=end, ribbon_y=ribbon_y)
+        row_entry(mesh, height, end=end, ribbon_y=ribbon_y)
+
+
+# ------------------------------------------------------------------ how a tracked row is cabled
+#
+# Down the middle, because a tracked row's own axis is where its harness runs and both its faces take a
+# connection.  Straight through the pier it stood on, until the pull box: the pair used to be drawn inside
+# the pier's own I-beam and inside its base plate for the whole length of the block.
+
+# The pull box at the foot of the pier, and the height the pair rises to enter it.
+BOX_RISE = 0.088
+
+
+# A gland is 1.4x the cable it seals, so its tip has to stay wider than the core it is threaded over or the
+# cone comes out inside the cable.  Same figure as the combiner's conduit.
+GLAND_RADIUS = 0.057
+
+
+def pull_box(mesh, group, half_x, half_z, base, top, rise):
+    """A cast pull box at the foot of a tracker's pier, with a gland a core each side.
+
+    The pier comes up through it, which is what a trough at a pier's foot really looks like: the pair goes
+    in one face and out the other, and where it runs inside is the box's business.
+    """
+    lo, hi = (-half_x, base, -half_z), (half_x, top, half_z)
+    clad_box(mesh, group, lo, hi, {'up': 'jbox', '*': 'jbox_side'}, uv=square_uv(lo, hi, 3.0))
+    faces = mesh.faces(group, 'gland')
+    for end in (-1.0, 1.0):
+        for lane in (-CORE_OFFSET, CORE_OFFSET):
+            cursor = half_z
+            # a hex body against the wall and a plain sleeve outboard of it: no taper, because cylinder()
+            # always narrows towards +z and one of these two glands faces the other way
+            for length, radius, sides in ((0.016, GLAND_RADIUS, HEX), (0.022, GLAND_RADIUS * 0.80, FITTING)):
+                cylinder(mesh, faces, (lane, rise, end * (cursor + length * 0.5)), 'z', radius,
+                         length * 0.5, sides=sides, uv_scale=0.5)
+                cursor += length
+
+
+def row_harness(mesh, half_x=0.128, half_z=0.105, base=0.030, rise=BOX_RISE):
+    """A tracked row's harness: down the middle, in one side of the pull box and out the other."""
+    top = rise + GLAND_RADIUS + 0.008
+    pull_box(mesh, 'harness', half_x, half_z, base, top, rise)
+    for end in (-1.0, 1.0):
+        # along the ground to the pier, then an S-rise onto the gland's own axis and in through it
+        climb = [(0.0, CORE_Y + up, end * (0.32 - along))
+                 for up, along in sbend(rise - CORE_Y, radius=0.10)]
+        cable_pair(mesh, 'harness', [(0.0, CORE_Y, end * 0.5)] + climb
+                   + [(0.0, rise, end * (half_z - 0.02))], ends=(False, True))
+
     for end, side in ((-1, 'north'), (1, 'south')):
         name = 'harness_plug_%s' % side
         edge = -0.44 if end < 0 else 0.44
         faces = mesh.faces(name, 'core')
         # Each rise starts its own side of the middle, not on it: both starting at zero put the two ends in
         # the same place, and a player fed from both ends saw the two sets of plugs share a tube.
-        for path in tail_rise(end * SOCKET_LAP, edge):
+        for path in tail_rise(edge - SOCKET_RISE * end, edge):
             tube(mesh, faces, path, CORE_RADIUS, sides=FITTING, uv_scale=1.0, uv_along=1.0,
                  caps=faces)
         mc4_pair(mesh, name, edge, into=-1.0 if end < 0 else 1.0)
@@ -249,49 +415,66 @@ def row_harness(mesh):
 
 # ------------------------------------------------------------------ the flat table
 
+# A precast ballast block, in blocks.  It used to be 0.045, which left 0.7 px of ground clearance - nothing
+# could pass under the table at all, which is why the cable ran on the ground beside it and through the
+# ballast rather than under the panel.  What sets the figure is the mated pair of MC4s that has to get under
+# the perimeter frame: 0.138 tall, because the cable is drawn sixteen times oversize and its connectors with
+# it.  375 mm of precast at this model's scale, which is a tall block or two stacked, and both are built.
+BALLAST = 0.15
+# and the courses above it: the perimeter frame, the rails across it, the laminate.
+FLAT_FRAME_TOP = BALLAST + 0.040
+FLAT_GLASS = FLAT_FRAME_TOP + 0.020
+# Where the two rails sit.  Far enough out that the moulded joint at each end of the ribbon passes under
+# the modules and not through a rail: the joint stands 0.037 taller than the frame does.
+FLAT_RAILS = (-0.31, 0.25)
+
+
 def flat_table():
     """A ballasted table lying flat: two modules on an aluminium frame on concrete ballast."""
     mesh = Mesh()
 
-    # the ballast: four precast blocks, one under each corner of the frame
+    # The ballast: two precast beams, one under each long edge of the frame.  Four blocks under the corners
+    # read as legs once the table stood tall enough for its own cable to pass under it, and a ballast beam is
+    # the other thing a real one stands on - which also leaves the corridor between them clear the whole way,
+    # so the pair crosses no concrete at all.
     ballast = mesh.faces('ballast', 'concrete')
-    for x in (-0.44, 0.30):
-        for z in (-0.44, 0.30):
-            box(mesh, ballast, (x, 0.0, z), (x + 0.14, 0.045, z + 0.14), uv_scale=0.6)
+    for x in (-0.47, 0.33):
+        box(mesh, ballast, (x, 0.0, -0.47), (x + 0.14, BALLAST, 0.47), uv_scale=0.6)
 
     frame = mesh.faces('frame', 'frame')
     # the perimeter frame: channel
     for z0, z1 in ((-0.47, -0.41), (0.41, 0.47)):
-        channel(mesh, frame, (-0.47, 0.045, z0), (0.47, 0.085, z1), along='x', opening='down',
-                uv_scale=0.35)
+        channel(mesh, frame, (-0.47, BALLAST, z0), (0.47, FLAT_FRAME_TOP, z1), along='x',
+                opening='down', uv_scale=0.35)
     for x0, x1 in ((-0.47, -0.41), (0.41, 0.47)):
-        channel(mesh, frame, (x0, 0.045, -0.41), (x1, 0.085, 0.41), along='z', opening='down',
-                uv_scale=0.35)
+        channel(mesh, frame, (x0, BALLAST, -0.41), (x1, FLAT_FRAME_TOP, 0.41), along='z',
+                opening='down', uv_scale=0.35)
     # the two rails the modules are clamped to, across the frame
-    for z in (-0.28, 0.22):
-        box(mesh, frame, (-0.44, 0.085, z), (0.44, 0.105, z + 0.06), uv_scale=0.3)
+    for z in FLAT_RAILS:
+        box(mesh, frame, (-0.44, FLAT_FRAME_TOP, z), (0.44, FLAT_GLASS, z + 0.06), uv_scale=0.3)
 
     # the modules: two whole tiles, portrait, with the rail gap between them
-    top = 0.105 + MODULE_THICK
+    top = FLAT_GLASS + MODULE_THICK
     for x0 in (-0.44, 0.02):
-        laminate(mesh, 'modules', (x0, 0.105, -MODULE_LONG / 2), (x0 + MODULE_WIDE, top, MODULE_LONG / 2))
+        laminate(mesh, 'modules', (x0, FLAT_GLASS, -MODULE_LONG / 2),
+                 (x0 + MODULE_WIDE, top, MODULE_LONG / 2))
 
     # the clamps: a mid clamp between the two modules and an end clamp outside each
     # actually holds a laminate onto a rail
     clamps = mesh.faces('modules', 'frame')
     # inside the rail's own span rather than flush with its edge, so no two faces share a plane
-    for z in (-0.265, 0.235):
-        box(mesh, clamps, (-0.025, 0.101, z), (0.025, top + 0.004, z + 0.03), uv_scale=0.12)
+    for z in (FLAT_RAILS[0] + 0.015, FLAT_RAILS[1] + 0.015):
+        box(mesh, clamps, (-0.025, FLAT_GLASS - 0.004, z), (0.025, top + 0.004, z + 0.03), uv_scale=0.12)
         bolt(mesh, clamps, (0.0, top + 0.004, z + 0.015), 'y', 0.007, 0.014, uv_scale=0.1)
         for x in (-0.455, 0.435):
-            box(mesh, clamps, (x, 0.101, z), (x + 0.02, top + 0.004, z + 0.03), uv_scale=0.12)
+            box(mesh, clamps, (x, FLAT_GLASS - 0.004, z), (x + 0.02, top + 0.004, z + 0.03),
+                uv_scale=0.12)
 
-    # The harness: the lead reaches back as far as the socket's rise, so the pair is continuous from the
-    # plugs to the block's south edge, and no further - the ballast holds the corners.
-    row_lead(mesh, EDGE, 0.0)
-    row_socket(mesh, EDGE, 0.0)
-    for end in (-1, 1):
-        row_entry(mesh, EDGE, 0.0, end=end)
+    # The cabling: round on the ground from the middle of each edge, then a moulded joint and the flat
+    # ribbon clipped up under the laminate for the crossing.  A table is 3 px tall in all, so the round
+    # pair could never have gone under it - see row_cabling.
+    row_cabling(mesh, ribbon_y=FLAT_GLASS - RIBBON_GAP - CORE_RADIUS, under=FLAT_GLASS - 0.003,
+                clips=(-0.14, 0.0, 0.14))
 
     return mesh
 
@@ -307,7 +490,12 @@ def tilted_rack():
 
     depth = MODULE_LONG / 2
     purlin_depth = 0.046
-    pivot_y = 0.045 + purlin_depth * cos_tilt + depth * sin_tilt
+    # How high the plane's low edge stands off the ground.  A real fixed-tilt rack keeps half a metre under
+    # its front purlin - for shading, for snow, and because that is where the cable runs.  At 0.045 the low
+    # corner sat 0.107 off the ground with the row's own pair 0.081 tall and its connectors 0.138: the cable
+    # could not pass under its own rack, which is most of what "the cables collide" was.
+    clearance = 0.18
+    pivot_y = clearance + purlin_depth * cos_tilt + depth * sin_tilt
     pivot_point = (0.0, pivot_y, 0.0)
     spin = (pivot_point, 'x', -tilt)
     # the two purlin lines, in the plane's own frame
@@ -369,12 +557,10 @@ def tilted_rack():
             box(mesh, clamps, (x, glass - 0.004, z - 0.018), (x + 0.020, top + 0.004, z + 0.018),
                 uv_scale=0.1, rot=spin)
 
-    # The harness: the same pair as a table's, on the ground rather than on the modules.
-    # stands off the ground on piers
-    row_lead(mesh, EDGE, 0.0)
-    row_socket(mesh, EDGE, 0.0)
-    for end in (-1, 1):
-        row_entry(mesh, EDGE, 0.0, end=end)
+    # The cabling: the same route as a table's, and round the whole way.  A rack stands on piers with a
+    # quarter of a block of headroom under it, so there is nothing a ribbon would solve - and cable is
+    # pulled along a row on the ground and tied down, which is what it does here.
+    row_cabling(mesh, ties=(-0.10, 0.10))
 
     return mesh
 
@@ -400,7 +586,9 @@ def single_axis():
     # swept disc: within one block a real row has a pier every six metres
     ibeam(mesh, pier, (-0.075, 0.0, -bay + 0.008), (0.075, axis_y - 0.105, bay - 0.008),
           uv_scale=0.3)
-    box(mesh, plate, (-0.13, 0.0, -bay), (0.13, 0.028, bay), uv_scale=0.5)
+    # 0.11 in z rather than the bay's own 0.055: the pull box that carries the pair through the pier sits
+    # on this plate, and a box overhanging the plate it stands on floats at its corners
+    box(mesh, plate, (-0.13, 0.0, -0.11), (0.13, 0.028, 0.11), uv_scale=0.5)
     for x in (-0.105, 0.075):
         bolt(mesh, plate, (x + 0.015, 0.028, 0.0), 'y', 0.009, 0.020, uv_scale=0.15)
 
@@ -516,8 +704,9 @@ def dual_axis():
                 box(mesh, clamps, (x, glass - 0.004, z), (x + 0.03, glass + MODULE_THICK + 0.004,
                                                           z + 0.024), uv_scale=0.1)
 
-    # The harness: the run along the ground and nothing else, the same as a single-axis row.
-    row_harness(mesh)
+    # The harness: down the middle, the same as a single-axis row, but the box sits on the pedestal's own
+    # base plate at 0.05 - so it and the glands in its walls start that much higher.
+    row_harness(mesh, half_x=0.145, half_z=0.125, base=0.052, rise=0.115)
     return mesh
 
 
@@ -886,7 +1075,8 @@ def met_mast():
 
 
 LAMINATE_MATERIALS = ('module', 'module_back', 'module_edge')
-HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'core', 'plug_plus', 'plug_minus')
+HARNESS_MATERIALS = ('cabinet', 'cabinet_top', 'core', 'plug_plus', 'plug_minus',
+                     'jbox', 'jbox_side', 'gland')
 STRUCTURE = ('steel', 'steel_end', 'plate', 'frame')
 
 MODELS = [

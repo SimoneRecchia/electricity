@@ -254,6 +254,19 @@ def box(mesh, faces, lo, hi, uv_scale=1.0, rot=None, only=None, uv=None, uv_rot=
         mesh.quad(faces, pts, normal, uvs)
 
 
+def square_uv(lo, hi, scale=1.0):
+    """A uv rect per face taken off the part's own size, so u and v get the same scale on all six of them.
+
+    One rect on every face of a box that is not a cube stretches the texture, and a circle drawn on it comes
+    out an oval - which is the most common fault in this mod and what check_model_textures calls OVAL.
+    ``scale`` is tiles per block. See CLAUDE.md section 3.
+    """
+    span = tuple((hi[i] - lo[i]) * scale for i in range(3))
+    across = {'up': (0, 2), 'down': (0, 2), 'north': (0, 1), 'south': (0, 1), 'east': (2, 1),
+              'west': (2, 1)}
+    return {face: (0.0, 0.0, span[u], span[v]) for face, (u, v) in across.items()}
+
+
 def clad_box(mesh, name, lo, hi, sides, uv_scale=1.0, rot=None, uv=None, uv_rot=0):
     """A box whose six faces are not all the same material."""
     for face in FACES:

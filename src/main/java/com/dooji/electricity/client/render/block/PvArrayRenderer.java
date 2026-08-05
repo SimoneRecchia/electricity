@@ -138,12 +138,15 @@ public class PvArrayRenderer extends ObjRendererBase {
 		if (!isHarness(groupName)) return true;
 		if (groupName.startsWith("harness_plug_north")) return !harnessed && ends.fedNorth();
 		if (groupName.startsWith("harness_plug_south")) return !harnessed && ends.fedSouth();
-		// A socket is what a row plugs into at the corner; an entry is what carries a laid run in from the
-		// middle. Drawn together they fought over the same north-east corner, because the socket's plugs and
-		// the rise behind them fill it - so whatever meets this edge in the middle gets the entry instead.
-		if (groupName.startsWith("harness_input")) return ends.fedNorth() && !ends.midNorth();
+		// Exactly one piece is drawn at each end of a fixed row, and each carries its own cable from the
+		// moulded joint outwards: an entry where something meets this edge in the middle, a socket where a
+		// row plugs into the corner, and the plain lead otherwise. Two of them at once is what put a laid
+		// run's cable through the connectors of the row behind - they both wanted the same corner.
 		if (groupName.startsWith("harness_entry_north")) return ends.midNorth();
 		if (groupName.startsWith("harness_entry_south")) return harnessed && ends.midSouth();
+		if (groupName.startsWith("harness_input")) return ends.fedNorth() && !ends.midNorth();
+		if (groupName.startsWith("harness_lead_north")) return harnessed && !ends.midNorth() && !ends.fedNorth();
+		if (groupName.startsWith("harness_lead_south")) return harnessed && !ends.midSouth();
 
 		return harnessed;
 	}

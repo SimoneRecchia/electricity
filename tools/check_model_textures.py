@@ -34,8 +34,15 @@ OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner
 # How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4
 
-# Pairs of parts that are never drawn at the same time, so sharing a plane costs nothing.
-EXCLUSIVE = (('harness', 'harness_plug'),)
+# Pairs of parts the renderer never draws in the same frame, so sharing a plane costs nothing.
+# PvArrayRenderer.drawn picks exactly one piece for each end of a fixed row - the entry where a laid run
+# meets the middle of that edge, the socket where a row plugs into the corner, the plain lead otherwise -
+# and they meet at the same joint, so of course they share its faces.
+EXCLUSIVE = (('harness', 'harness_plug'),
+             ('harness_input', 'harness_lead_north'),
+             ('harness_input', 'harness_entry_north'),
+             ('harness_lead_north', 'harness_entry_north'),
+             ('harness_lead_south', 'harness_entry_south'))
 # Below this fraction of a texture's own size
 SUBSAMPLE = 0.98
 # Textures a face is *meant* to take the middle out of.

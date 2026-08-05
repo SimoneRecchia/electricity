@@ -813,17 +813,61 @@ def scene_machine_cable():
     return triangles, (0.55, 0.85, -1.0), (2.2, 0.25, 1.4)
 
 
+def row(name, at, harnessed=True, fed_north=False, fed_south=False, mid_north=False, mid_south=False):
+    """One array in one of the states PvArrayRenderer can draw it in.
+
+    The state is what makes a row's cabling right or wrong, so a picture of a row has to be a picture of a
+    state - drawn with every harness group at once it is five cables in the same place and proves nothing.
+    """
+    import check_row_cabling as cabling
+
+    args = (harnessed, fed_north, fed_south, mid_north, mid_south)
+    # kept by name rather than through placed()'s drop, which matches by prefix: "harness" is a prefix of
+    # every other harness group, so dropping the spine that way dropped the whole row's cabling with it
+    kept = [triangle for triangle in machine_model(name) if cabling.drawn(triangle[0], *args)]
+    return placed(kept, at)
+
+
 def scene_array_harness():
-    """Where a row's own harness ends: the plugs the row behind it mates with, on the ground at the edge.
+    """Where a row's own cabling ends: the plugs the row behind it mates with, on the lane at the edge.
 
     Two rows a block apart, so the socket on one and the lead of the other are in the same picture - which
     is what has to line up for a string to read as one product.
     """
     triangles = ground(-2, -2, 6, 6, SAND)
-    for z in (1, 2):
-        triangles += placed(machine_model('pv_tilt'), (2, 0, z))
-    triangles += placed(machine_model('pv_track'), (4, 0, 1))
+    triangles += row('pv_tilt', (2, 0, 1), fed_north=True)
+    triangles += row('pv_tilt', (2, 0, 2), fed_north=True)
+    triangles += row('pv_track', (4, 0, 1))
     return triangles, (0.9, 0.75, 0.2), (2.6, 0.16, 1.35)
+
+
+def scene_row_entry():
+    """A laid run arriving at the middle of a table's edge and leaving at the far one.
+
+    The S-bend onto the lane, the moulded joint, the ribbon clipped up under the laminate, and the joint at
+    the other end - which is the whole route, and the state a row in the middle of a plant is in.
+    """
+    triangles = ground(-1, -1, 5, 5, SAND)
+    triangles += row('pv_flat', (2, 0, 2), mid_north=True, mid_south=True)
+    for z, towards in ((1, 180), (3, 0)):
+        triangles += cable_piece('line', (2, 0, z), yaw=0)
+        triangles += cable_piece('arm', (2, 0, z), yaw=towards)
+    return triangles, (0.10, 1.25, 0.05), (2.5, 0.16, 2.4)
+
+
+def scene_row_under():
+    """The same table from underneath its low side, which is the only way to see what is clipped to it."""
+    triangles = ground(-1, -1, 5, 5, SAND)
+    triangles += row('pv_flat', (2, 0, 2), mid_north=True, mid_south=True)
+    return triangles, (1.35, 0.24, 0.45), (2.6, 0.17, 2.5)
+
+
+def scene_row_track():
+    """A tracked row's pull box: the pair down the middle, in one gland and out the other."""
+    triangles = ground(-1, -1, 4, 4, SAND)
+    triangles += row('pv_track', (1, 0, 1))
+    triangles += row('pv_dual', (2, 0, 1))
+    return triangles, (0.15, 0.75, -0.35), (2.0, 0.14, 1.35)
 
 
 def scene_tx_machine():
@@ -868,6 +912,9 @@ SCENES = {
     'tx_substation': scene_tx_substation,
     'machine_cable': scene_machine_cable,
     'array_harness': scene_array_harness,
+    'row_entry': scene_row_entry,
+    'row_under': scene_row_under,
+    'row_track': scene_row_track,
     'cable_run': scene_cable_run,
     'cable_corner': scene_cable_corner,
     'cable_junction': scene_cable_junction,
