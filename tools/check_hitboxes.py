@@ -60,6 +60,7 @@ MODEL_TABLE = {
     'pv_tilt': 'TILT_CELLS',
     'pv_track': 'TRACK_CELLS',
     'pv_dual': 'DUAL_CELLS',
+    'electric_cab': 'CELLS',
     # one block class, two machines: a table each, told apart by name
     'tx_machine': 'MACHINE_CELLS',
     'tx_substation': 'SUBSTATION_CELLS',

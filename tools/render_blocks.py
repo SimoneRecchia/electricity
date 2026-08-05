@@ -454,7 +454,7 @@ def scene_power_box():
 def scene_cab():
     triangles = ground(-3, -3, 6, 6, SAND)
     triangles += placed(machine_model('electric_cab', 'cab'), (1, 0, 1))
-    return triangles, (-0.4, 1.9, -2.2), (1.45, 0.85, 1.0)
+    return triangles, (-1.9, 2.6, -3.4), (1.45, 1.0, 1.1)
 
 
 def scene_pole():

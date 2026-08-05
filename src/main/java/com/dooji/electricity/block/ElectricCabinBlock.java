@@ -26,8 +26,14 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class ElectricCabinBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/** The facing cab.obj was modelled at, which is not north. */
-	public static final Direction AUTHORED = Direction.EAST;
+	/**
+	 * The facing cab.obj is modelled at.
+	 *
+	 * North now, like every model the mod generates for itself. Changing this and the asset together turns
+	 * nothing in the world: the renderer poses by quarters(AUTHORED, facing), so a cabin placed facing north
+	 * still has its doors north. What it does change is the frame CELLS is written in, which is regenerated.
+	 */
+	public static final Direction AUTHORED = Direction.NORTH;
 
 	/**
 	 * The whole cabin as collision, cell by cell, cut from cab.obj rather than guessed.
@@ -36,18 +42,34 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	 */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.block()),
-			new Cell(0, 0, -1, Block.box(0.00, 0.00, 6.34, 16.00, 16.00, 16.00)),
-			new Cell(0, 0, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 9.66)),
+			new Cell(0, 0, -1, Shapes.or(Block.box(0.00, 0.00, 4.88, 16.00, 2.56, 16.00),
+					Block.box(0.00, 2.27, 4.90, 16.00, 16.00, 16.00),
+					Block.box(0.00, 3.20, 4.51, 16.00, 16.00, 5.44),
+					Block.box(11.20, 3.84, 4.86, 16.00, 16.00, 16.00))),
+			new Cell(0, 0, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 2.56, 11.12),
+					Block.box(0.00, 2.27, 0.00, 16.00, 16.00, 10.94),
+					Block.box(11.20, 3.84, 0.00, 16.00, 16.00, 11.10))),
 			new Cell(0, 1, 0, Shapes.block()),
-			new Cell(0, 1, -1, Block.box(0.00, 0.00, 6.34, 16.00, 16.00, 16.00)),
-			new Cell(0, 1, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 9.66)),
-			new Cell(0, 2, 0, Block.box(0.00, 0.00, 0.00, 16.00, 10.03, 16.00)),
-			new Cell(0, 2, -1, Shapes.or(Block.box(0.00, 0.00, 6.34, 16.00, 5.73, 16.00),
-					Block.box(0.00, 5.77, 5.48, 16.00, 10.03, 16.00),
-					Block.box(5.88, 8.79, 11.54, 9.31, 12.38, 14.97))),
-			new Cell(0, 2, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 5.73, 9.66),
-					Block.box(0.00, 5.77, 0.00, 16.00, 10.03, 10.52),
-					Block.box(3.80, 8.79, 3.21, 7.23, 12.38, 6.64))));
+			new Cell(0, 1, -1, Shapes.or(Block.box(0.00, 0.00, 4.51, 16.00, 16.00, 16.00),
+					Block.box(11.20, 0.00, 4.86, 16.00, 16.00, 16.00))),
+			new Cell(0, 1, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 10.94),
+					Block.box(11.20, 0.00, 0.00, 16.00, 16.00, 11.10))),
+			new Cell(0, 2, 0, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 12.40, 16.00),
+					Block.box(6.80, 11.55, 0.00, 9.20, 12.50, 16.00))),
+			new Cell(0, 2, -1, Shapes.or(Block.box(0.00, 0.00, 4.51, 16.00, 7.20, 5.44),
+					Block.box(0.00, 0.00, 4.90, 16.00, 8.80, 16.00),
+					Block.box(0.00, 8.35, 4.64, 16.00, 12.40, 16.00),
+					Block.box(6.67, 12.51, 11.15, 9.33, 14.58, 13.81),
+					Block.box(6.80, 11.55, 11.28, 9.20, 12.50, 16.00),
+					Block.box(11.20, 0.00, 4.86, 16.00, 8.80, 16.00))),
+			new Cell(0, 2, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 8.80, 10.94),
+					Block.box(0.00, 8.35, 0.00, 16.00, 12.40, 11.36),
+					Block.box(2.37, 11.62, 7.49, 4.03, 16.00, 9.31),
+					Block.box(6.67, 12.51, 2.19, 9.33, 14.58, 4.85),
+					Block.box(6.80, 11.55, 0.00, 9.20, 12.50, 4.72),
+					Block.box(7.17, 11.62, 7.49, 8.83, 16.00, 9.31),
+					Block.box(11.20, 0.00, 0.00, 16.00, 8.80, 11.10),
+					Block.box(11.97, 11.62, 7.49, 13.63, 16.00, 9.31))));
 
 	public ElectricCabinBlock(Properties properties) {
 		super(properties);

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Patches the one pin insulator into the machines that already carry one, in place.
+"""Patches the one pin insulator into wind_turbine.obj, which is the last model not generated here.
 
     python3 tools/gen_insulators.py
 
-Rewrites the named objects in cab.obj and wind_turbine.obj and compacts the shared tables, so a second
-run is byte-identical.  Placements are constants here for the same reason.
+Rewrites the named object and compacts the shared tables, so a second run is byte-identical.  The
+placement is a constant for the same reason.
+
+The cabin used to be patched too and is not any more: gen_cab_models.py draws it, insulator and all.
 """
 
 import os
@@ -25,10 +27,6 @@ NEEDED = {
 
 # Where each one goes, measured off the object it replaces: the centre of its footprint
 PLACEMENTS = {
-    'electric_cab/cab.obj': (
-        ('insulator_input', (-0.0255, 2.6062, -0.67165), 0.2146),
-        ('insulatoroutput', (-0.1554, 2.6062, 0.80785), 0.2146),
-    ),
     'wind_turbine/wind_turbine.obj': (
         ('insulator', (0.0, -0.1515, 0.0), 0.1660),
     ),

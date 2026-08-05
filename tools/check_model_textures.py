@@ -29,7 +29,7 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'te
 # Models the mod draws itself.
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
         'utility_pole', 'power_box', 'tx_machine', 'tx_substation',
-        'lattice_suspension', 'lattice_tension', 'lattice_terminal')
+        'lattice_suspension', 'lattice_tension', 'lattice_terminal', 'electric_cab')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4
@@ -319,10 +319,16 @@ def single_boxes(model_faces):
     return found
 
 
+# One model whose file is not named after its directory, which is inherited and stays that way: a rename
+# would move the asset every existing world's cabins are loaded from.
+OBJ_NAME = {'electric_cab': 'cab'}
+
+
 def report(name):
-    path = os.path.join(MODELS, name, name + '.obj')
+    stem = OBJ_NAME.get(name, name)
+    path = os.path.join(MODELS, name, stem + '.obj')
     model_faces = faces(path)
-    texture_of = materials(os.path.join(MODELS, name, name + '.mtl'))
+    texture_of = materials(os.path.join(MODELS, name, stem + '.mtl'))
     print('=== %s: %d faces, %d objects' % (name, len(model_faces), len(boxes(model_faces))))
     problems = 0
 

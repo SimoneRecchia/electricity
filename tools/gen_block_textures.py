@@ -920,6 +920,8 @@ SQUASH = {
     'pv_cabinet_door': 0.395 / 0.500,       # the inverter's, DOOR_LOW..DOOR_HIGH in gen_pv_models
     'pv_cabinet_leaf': 0.395 / 0.500,       # its plain second leaf
     'pv_blank': 0.810 / 0.327,              # the blanking plate, wider than tall
+    'cab_door': 0.495 / 2.350,              # the cabin's leaf, which is a door a trolley goes through
+    'cab_leaf': 0.495 / 2.350,
     'pv_dc_section': 1.14,                  # the DC compartment's own door
     'pv_module_back': 0.45,                 # a module's backsheet, two and a quarter times taller
     'pole_plate': 0.81,                     # the pole's number plate and danger sign
@@ -1195,6 +1197,101 @@ def line_fitting():
     return c
 
 
+
+def cab_panel():
+    """A prefabricated kiosk's wall: a moulded panel in a light grey, weathered where the rain runs.
+
+    Glass-reinforced concrete, which is what these are made of - so the surface is a fine aggregate rather
+    than paint, and it holds dirt in the mould lines and at the foot.
+    """
+    size = 512
+    c = Canvas(size, size)
+    concrete(c, (176, 174, 168, 255), salt=671, aggregate=True)
+    # the moulded relief every panel carries: a recessed field inside a raised margin
+    c.aa_rect(size * 0.07, size * 0.06, size * 0.93, size * 0.94, shade((176, 174, 168, 255), -10),
+              alpha=0.6)
+    bevel(c, size * 0.07, size * 0.06, size * 0.93, size * 0.94, size * 0.016, lift=20, drop=26)
+    grime(c, salt=673, amount=0.24, colour=(92, 90, 84, 255))
+    # rain runs down a wall, and the foot of one is always the dirtiest part of it
+    for i in range(6):
+        streak(c, size * hash01(i, 9, 677), size * hash01(i, 10, 683) * 0.25, size, size * 0.035,
+               alpha=0.16, salt=691 + i)
+    for i in range(int(size * 0.10)):
+        t = i / (size * 0.10)
+        c.aa_rect(0, size - i - 1, size, size - i, (58, 56, 50, 255), alpha=0.22 * (1 - t))
+    return c
+
+
+def cab_roof():
+    """The kiosk's roof: a felted flat roof, which is what a prefabricated one always has."""
+    size = 512
+    c = Canvas(size, size)
+    concrete(c, (128, 126, 122, 255), salt=701, aggregate=False)
+    grain = stretched(size, along=size * 1.2, across=size / 34.0, octaves=3, salt=703)
+    c.over(lambda x, y, base: shade(base, int(grain.signed(x, y) * 14)))
+    # the laps of the felt, which run one way and overlap by a hand's width
+    for i in range(6):
+        y = size * (i + 0.5) / 6.0
+        c.aa_rect(0, y, size, y + size * 0.006, shade((128, 126, 122, 255), -26))
+        c.aa_rect(0, y + size * 0.006, size, y + size * 0.014, shade((128, 126, 122, 255), 12))
+    # and the standing water a flat roof always has some of
+    grime(c, salt=709, amount=0.30, colour=(64, 66, 62, 255), cell=90)
+    return c
+
+
+def cab_arrester():
+    """A surge arrester's housing: grey silicone rubber, which is what a polymer-housed one is."""
+    size = 128
+    c = Canvas(size, size)
+    base = (96, 98, 102, 255)
+    profile = []
+    for i in range(size):
+        t = i / float(size)
+        lit = max(0.0, math.cos(2.0 * math.pi * t))
+        profile.append(mix(shade(base, int(-14 + lit * lit * 54)), (208, 212, 216, 255),
+                           lit ** 20 * 0.30))
+    for i in range(size):
+        for j in range(size):
+            c.set(i, j, profile[i])
+    return c
+
+
+
+def cab_door(plain=False):
+    """The cabin's door leaf: full height, moss green, louvred low, with the danger sign on it.
+
+    Its own tile rather than the kiosk's, because a cabin's leaf is half a block wide and two and a third
+    tall - a door a switchgear trolley goes through - and a tile drawn for a leaf a third that height puts
+    every circle on it four times too tall.  SQUASH['cab_door'] is that ratio and check_model_textures
+    measures the faces against it.
+    """
+    size = 512
+    c = Canvas(size, size)
+    squash = SQUASH['cab_door']
+    powder(c, MOSS, salt=713, peel=8)
+    bevel(c, size * 0.03, size * 0.01, size * 0.97, size * 0.99, size * 0.014, lift=24, drop=32)
+
+    # the louvre bank low on the leaf, where cool air is drawn in
+    lx0, ly0, lx1, ly1 = size * 0.14, size * 0.70, size * 0.86, size * 0.92
+    mesh_screen(c, lx0, ly0, lx1, ly1, size * 0.010, MOSS, alpha=0.95)
+    louvre(c, lx0, ly0, lx1, ly1, 4, shade(MOSS, 8))
+    bevel(c, lx0 - size * 0.010, ly0 - size * 0.010, lx1 + size * 0.010, ly1 + size * 0.010,
+          size * 0.006, lift=18, drop=24)
+
+    if not plain:
+        warning_triangle(c, size * 0.5, size * 0.30, size * 0.30, squash=squash)
+        plate_label(c, size * 0.22, size * 0.40, size * 0.78, size * 0.50, shade(MOSS, 20), lines=2,
+                    ink=(28, 30, 32, 255))
+        # the padlock hasp every substation door is locked with
+        c.aa_rect(size * 0.10, size * 0.545, size * 0.22, size * 0.565, shade(MOSS, -34))
+        c.aa_disc(size * 0.16, size * 0.555, size * 0.030, shade(MOSS, -44), squash=squash)
+
+    grime(c, salt=719, amount=0.20, colour=(38, 44, 34, 255))
+    for i in range(4):
+        streak(c, size * (0.18 + 0.22 * i), size * 0.36, size, size * 0.026, alpha=0.13, salt=727 + i)
+    return c
+
+
 TEXTURES = {
     'pv_module': pv_module,
     'pv_module_back': pv_module_back,
@@ -1243,6 +1340,11 @@ TEXTURES = {
     'line_abc': line_abc,
     'line_alu': line_alu,
     'line_fitting': line_fitting,
+    'cab_panel': cab_panel,
+    'cab_roof': cab_roof,
+    'cab_arrester': cab_arrester,
+    'cab_door': cab_door,
+    'cab_leaf': lambda: cab_door(plain=True),
 }
 
 

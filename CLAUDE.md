@@ -112,7 +112,8 @@ reasoning lives — read the module docstring before changing figures.
 python3 tools/gen_block_textures.py     # every block texture
 python3 tools/gen_pv_textures.py        # item sprites and panel layouts
 python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
-python3 tools/gen_grid_models.py        # the pole and the kiosk
+python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
+python3 tools/gen_cab_models.py         # the substation cabin
 python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
 python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it

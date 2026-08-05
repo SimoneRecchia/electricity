@@ -34,8 +34,8 @@ public final class ObjDefinitions {
 		)));
 
 		ALL.add(new ObjBlockDefinition(Electricity.ELECTRIC_CABIN_BLOCK.get(), new ResourceLocation(Electricity.MOD_ID, "models/electric_cab/cab.obj"), List.of(
-				"insulator_input_Material.065",
-				"insulatoroutput_Material.044"
+				"insulator_input_porcelain",
+				"insulator_output_porcelain"
 		)));
 
 		// Every machine in the catalogue draws the same model: the renderer scales it per
