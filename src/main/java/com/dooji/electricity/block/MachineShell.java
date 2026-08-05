@@ -41,6 +41,11 @@ public interface MachineShell {
 			return turned[quarters];
 		}
 
+		/** Where this cell is relative to the machine, as authored: the key a table is composed on. */
+		public BlockPos offset() {
+			return offset;
+		}
+
 		/** Whether this is the machine's own cell, which is the one that never becomes a shell. */
 		public boolean own() {
 			return offset.equals(BlockPos.ZERO);

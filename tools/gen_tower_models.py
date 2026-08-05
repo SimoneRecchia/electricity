@@ -427,8 +427,42 @@ def collision_cells(duty):
     return out
 
 
+def tables():
+    """The shared body and the three deltas, as the declarations LatticeTowerBlock holds.
+
+    The three duties are one structure with three heads: two thirds of their cells are identical, and
+    declaring them three times was two hundred lines of Java saying the same thing.  A delta cell *replaces*
+    the body's rather than adding to it - coarse() may have merged a duty's own strings into the structure's
+    boxes into fewer, bigger ones, so the duty's cell is already the whole of that cell.
+    """
+    per_duty = {duty: collision_cells(duty) for _, duty in MODELS}
+    body = {cell: boxes for cell, boxes in per_duty['suspension'].items()
+            if all(other.get(cell) == boxes for other in per_duty.values())}
+
+    out = [('BODY_CELLS', body, None)]
+    for _, duty in MODELS:
+        out.append(('%s_CELLS' % duty.upper(),
+                    {c: b for c, b in per_duty[duty].items() if body.get(c) != b}, 'BODY_CELLS'))
+    return out
+
+
+def declaration(name, cells, over):
+    """One table as the line LatticeTowerBlock declares it on."""
+    rows = []
+    for (x, y, z), boxes in cells.items():
+        drawn = ['Block.box(%s)' % ', '.join('%.2f' % v for v in box) for box in boxes]
+        shape = drawn[0] if len(drawn) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(drawn))
+        rows.append('\t\t\tnew Cell(%d, %d, %d, %s)' % (x, y, z, shape))
+
+    body = ',\n'.join(rows)
+    if over is None:
+        return '\tprivate static final List<Cell> %s = List.of(\n%s);' % (name, body)
+
+    return '\tprivate static final List<Cell> %s = over(%s, List.of(\n%s));' % (name, over, body)
+
+
 def check_java():
-    """Proves LatticeTowerBlock still declares the cells this authors, for all three duties.
+    """Proves LatticeTowerBlock still declares the cells this authors, body and all three deltas.
 
     Same reason gen_cable_models checks its own: check_hitboxes cannot compare these, because they are
     authored rather than cut from the model, so nothing else would notice them going stale.
@@ -436,22 +470,8 @@ def check_java():
     path = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
                         'LatticeTowerBlock.java')
     source = ' '.join(open(path).read().split())
-    problems = []
-    for _, duty in MODELS:
-        wanted = ' '.join(java(duty).split())
-        if wanted not in source:
-            problems.append('%s_CELLS is not what LatticeTowerBlock declares' % duty.upper())
-    return problems
-
-
-def java(duty):
-    """The cell table for one duty, ready to paste into LatticeTowerBlock."""
-    rows = []
-    for (x, y, z), boxes in collision_cells(duty).items():
-        drawn = ['Block.box(%s)' % ', '.join('%.2f' % v for v in box) for box in boxes]
-        shape = drawn[0] if len(drawn) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(drawn))
-        rows.append('\t\t\tnew Cell(%d, %d, %d, %s)' % (x, y, z, shape))
-    return ',\n'.join(rows) + ');'
+    return ['%s is not what LatticeTowerBlock declares' % name
+            for name, cells, over in tables() if ' '.join(declaration(name, cells, over).split()) not in source]
 
 
 MODELS = [
@@ -476,6 +496,8 @@ def main():
               % (name, vertices, faces, len(groups), len(cells),
                  sum(len(b) for b in cells.values())))
 
+    print('%d cells are the same in all three duties, and are declared once' % len(tables()[0][1]))
+
     problems = check_java()
     for line in problems:
         print('    TABLE %s' % line)
@@ -483,10 +505,10 @@ def main():
         print('LatticeTowerBlock declares the cells this authors, for all three duties')
 
     if '--java' in sys.argv:
-        for name, duty in MODELS:
-            print('\n\t// ---- %s, printed by tools/gen_tower_models.py --java ----' % name)
-            print('\tprivate static final List<Cell> %s_CELLS = List.of(' % duty.upper())
-            print(java(duty))
+        for name, cells, over in tables():
+            print('\n\t/** ---- %d cell(s), printed by tools/gen_tower_models.py --java ---- */'
+                  % len(cells))
+            print(declaration(name, cells, over))
 
 
 if __name__ == '__main__':
