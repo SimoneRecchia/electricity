@@ -240,11 +240,17 @@ class Canvas:
                     continue
                 self.blend(x, y, colour, alpha * cover_x * cover_y)
 
-    def aa_disc(self, cx, cy, radius, colour, alpha=1.0, inner=0.0):
-        """A disc, or a ring if ``inner`` is given, with a one-pixel soft rim."""
-        for y in range(max(0, int(cy - radius - 1)), min(self.h, int(cy + radius + 2))):
+    def aa_disc(self, cx, cy, radius, colour, alpha=1.0, inner=0.0, squash=1.0):
+        """A disc, or a ring if ``inner`` is given, with a one-pixel soft rim.
+
+        ``squash`` multiplies the vertical extent, for a circle on a texture that lands on a face which
+        is not square: a tile on a door leaf twice as tall as it is wide has to be drawn flat to come out
+        round, and a circle drawn round comes out an oval.  It is the face's width over its height.
+        """
+        ry = radius * squash
+        for y in range(max(0, int(cy - ry - 1)), min(self.h, int(cy + ry + 2))):
             for x in range(max(0, int(cx - radius - 1)), min(self.w, int(cx + radius + 2))):
-                d = math.hypot(x + 0.5 - cx, y + 0.5 - cy)
+                d = math.hypot(x + 0.5 - cx, (y + 0.5 - cy) / max(1e-6, squash))
                 cover = min(1.0, max(0.0, radius + 0.5 - d))
                 if inner > 0.0:
                     cover = min(cover, max(0.0, min(1.0, d - inner + 0.5)))
@@ -518,12 +524,17 @@ def groove(c, x0, y0, x1, y1, width, dark=44, light=30, vertical=False):
         c.aa_rect(x0, y0 + width, x1, y0 + 2 * width, (255, 255, 255, 255), alpha=light / 255.0)
 
 
-def dome(c, cx, cy, radius, base, lift=54, drop=40, alpha=1.0):
-    """A hemisphere shaded from the light: a bolt head, a rivet, a boss, an instrument dome."""
+def dome(c, cx, cy, radius, base, lift=54, drop=40, alpha=1.0, squash=1.0):
+    """A hemisphere shaded from the light: a bolt head, a rivet, a boss, an instrument dome.
+
+    ``squash`` is the same correction ``aa_disc`` takes: the face's width over its height, for a tile
+    that lands on something not square.
+    """
     lx, ly = LIGHT
-    for y in range(max(0, int(cy - radius - 1)), min(c.h, int(cy + radius + 2))):
+    ry = radius * squash
+    for y in range(max(0, int(cy - ry - 1)), min(c.h, int(cy + ry + 2))):
         for x in range(max(0, int(cx - radius - 1)), min(c.w, int(cx + radius + 2))):
-            dx, dy = (x + 0.5 - cx) / radius, (y + 0.5 - cy) / radius
+            dx, dy = (x + 0.5 - cx) / radius, (y + 0.5 - cy) / max(1e-6, ry)
             d2 = dx * dx + dy * dy
             if d2 > 1.25:
                 continue
@@ -600,29 +611,82 @@ def plate_label(c, x0, y0, x1, y1, base, lines=3, ink=(52, 56, 62, 255)):
         c.aa_rect(x0 + (x1 - x0) * 0.12, y, x0 + (x1 - x0) * 0.12 + width, y + max(1.0, step * 0.16), ink)
 
 
-def warning_triangle(c, cx, cy, size, salt=149):
-    """The lightning-bolt triangle every piece of switchgear in the world carries."""
+def polygon(c, points, colour, alpha=1.0):
+    """A filled polygon by scanline, sampled four times a row so the edges come out soft.
+
+    Wanted because a symbol drawn from overlapping strokes is never quite the symbol: the lightning
+    bolt on the warning sign was three lines whose ends nearly met, and what it looked like was a
+    squiggle with a kink in it.  A shape with an outline is one polygon.
+    """
+    if len(points) < 3:
+        return
+
+    lo = max(0, int(min(p[1] for p in points)))
+    hi = min(c.h, int(max(p[1] for p in points)) + 1)
+    for y in range(lo, hi):
+        cover = {}
+        for sub in range(4):
+            scan = y + (sub + 0.5) / 4.0
+            crossings = []
+            for i in range(len(points)):
+                (x0, y0), (x1, y1) = points[i], points[(i + 1) % len(points)]
+                if (y0 <= scan < y1) or (y1 <= scan < y0):
+                    crossings.append(x0 + (x1 - x0) * (scan - y0) / (y1 - y0))
+            crossings.sort()
+            for k in range(0, len(crossings) - 1, 2):
+                a, b = crossings[k], crossings[k + 1]
+                for x in range(max(0, int(a)), min(c.w, int(b) + 1)):
+                    part = min(x + 1.0, b) - max(float(x), a)
+                    if part > 0.0:
+                        cover[x] = cover.get(x, 0.0) + part / 4.0
+
+        for x, amount in cover.items():
+            c.blend(x, y, colour, alpha * min(1.0, amount))
+
+
+# The lightning arrow of IEC 60417-5036, in units of the sign's own size with x right and y down from
+# its centre: two strokes stepping down to the left and an arrowhead on the end.  Three convex pieces
+# rather than one outline, because a single ring round a shape with a barbed head is easy to get wrong
+# and impossible to read once it is - the first attempt crossed itself and filled as a handful of shards.
+BOLT = (
+    ((0.06, -0.44), (0.26, -0.44), (0.02, 0.05), (-0.18, 0.05)),      # the upper stroke
+    ((0.00, 0.00), (0.18, 0.00), (-0.04, 0.33), (-0.22, 0.33)),       # the lower one, stepped right
+    ((0.02, 0.26), (-0.26, 0.19), (-0.09, 0.50)),                     # the head
+)
+
+
+def warning_triangle(c, cx, cy, size, salt=149, squash=1.0):
+    """The lightning-arrow triangle every piece of switchgear in the world carries.
+
+    Equilateral, which is what the standard says and what it looks wrong without - and ``squash`` is how
+    it stays equilateral on a face that is not square.  A kiosk's door leaf is 0.277 by 0.585 of a block,
+    so a square tile on it is stretched two and a tenth to one: a triangle drawn equilateral arrives
+    stretched, which is exactly how the first version looked.  Pass the face's width over its height.
+
+    Built as a black triangle with a yellow one inside it rather than as a yellow one with its edges
+    stroked.  Stroking gives a border whose width varies with the angle of each edge and which spreads
+    over the corners, and at the apex of a triangle that is most of the sign.
+    """
     yellow = (232, 196, 24, 255)
     black = (26, 26, 28, 255)
-    half = size / 2.0
-    apex = (cx, cy - half)
-    left = (cx - half * 1.05, cy + half * 0.82)
-    right = (cx + half * 1.05, cy + half * 0.82)
-    # filled by scanline between the two sloping edges, which keeps the edges soft
-    for y in range(max(0, int(apex[1])), min(c.h, int(left[1]) + 1)):
-        t = (y - apex[1]) / max(1e-6, left[1] - apex[1])
-        x0 = apex[0] + (left[0] - apex[0]) * t
-        x1 = apex[0] + (right[0] - apex[0]) * t
-        c.aa_rect(x0, y, x1, y + 1, yellow)
-    for a, b in ((apex, left), (left, right), (right, apex)):
-        c.aa_line(a[0], a[1], b[0], b[1], black, width=max(1.0, size * 0.11))
-    # the bolt: two strokes with a kink, which is the shape on the real sign
-    c.aa_line(cx + size * 0.10, cy - size * 0.24, cx - size * 0.06, cy + size * 0.06, black,
-              width=max(1.0, size * 0.13))
-    c.aa_line(cx - size * 0.06, cy + size * 0.04, cx + size * 0.04, cy + size * 0.04, black,
-              width=max(1.0, size * 0.10))
-    c.aa_line(cx + size * 0.04, cy + size * 0.02, cx - size * 0.08, cy + size * 0.34, black,
-              width=max(1.0, size * 0.12))
+    half = size * 0.525
+    height = size * 1.05 * math.sqrt(3.0) / 2.0 * squash
+
+    def triangle(scale):
+        return ((cx, cy - height * 0.5 * scale),
+                (cx + half * scale, cy + height * 0.5 * scale),
+                (cx - half * scale, cy + height * 0.5 * scale))
+
+    polygon(c, triangle(1.0), black)
+    polygon(c, triangle(0.78), yellow)
+    # The arrow is scaled to sit inside the yellow rather than drawn at the sign's own size: written out
+    # it spans nine tenths of the size in y, and the yellow triangle is only seven tenths tall, so at full
+    # size it hung out of the sign at both ends.  Down a little too, because a triangle has room low down
+    # and none at its apex.
+    fit = 0.52
+    for piece in BOLT:
+        polygon(c, [(cx + x * size * fit, cy + (y * fit + 0.045) * size * squash)
+                    for x, y in piece], black)
 
 
 def cross_hatch(c, x0, y0, x1, y1, step, colour, width=1.0, alpha=0.5):

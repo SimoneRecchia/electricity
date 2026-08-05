@@ -86,6 +86,18 @@ public interface MachineShell {
 	 */
 	List<Cell> shellCells();
 
+	/**
+	 * The same table for one state, for a machine with an optional part.
+	 *
+	 * Only the inverter has one: its direct-current compartment is a factory-fitted combiner, drawn only
+	 * when the machine has one. Without this the collision claimed it either way, so a machine with no
+	 * combiner had a slab of nothing standing off the front of its doors - which is what a player walked
+	 * into. Everything else answers with its whole table and does not care.
+	 */
+	default List<Cell> shellCells(BlockState state) {
+		return shellCells();
+	}
+
 	/** Which way this machine's model has been turned. */
 	Direction shellFacing(BlockState state);
 
@@ -107,7 +119,7 @@ public interface MachineShell {
 	/** The machine's own block's shape, which is the one cell of its table that stays a machine. */
 	default VoxelShape shellShape(BlockState state) {
 		int quarters = shellTurns(state);
-		for (Cell cell : shellCells()) {
+		for (Cell cell : shellCells(state)) {
 			if (cell.own()) return cell.shape(quarters);
 		}
 

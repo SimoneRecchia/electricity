@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -92,6 +93,37 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 	 */
 	private static final List<Cell> CABINET_CELLS = scaledCells(0.92);
 	private static final List<Cell> WALL_CELLS = scaledCells(0.62);
+
+	/**
+	 * The direct-current compartment on its own, so it can be taken back out again.
+	 *
+	 * It is one of the boxes of {@link #CELLS} above, restated here rather than picked out of the table -
+	 * which would mean deciding by position which box it is, and the table is regenerated from the model.
+	 * {@code tools/check_hitboxes.py} checks that this box really is in that table, so the two cannot
+	 * drift apart without something saying so.
+	 */
+	private static final VoxelShape DC_SECTION = Block.box(3.20, 0.85, 2.00, 12.80, 6.72, 2.64);
+
+	/** The three tables again with the compartment removed, for a machine that has no combiner in it. */
+	private static final List<Cell> PLAIN_CELLS = without(CELLS, 1.0);
+	private static final List<Cell> PLAIN_CABINET_CELLS = without(CABINET_CELLS, 0.92);
+	private static final List<Cell> PLAIN_WALL_CELLS = without(WALL_CELLS, 0.62);
+
+	private static List<Cell> without(List<Cell> cells, double factor) {
+		VoxelShape section = Shapes.empty();
+		for (AABB box : DC_SECTION.toAabbs()) {
+			section = Shapes.or(section, Shapes.box(
+					0.5 + (box.minX - 0.5) * factor, box.minY * factor, 0.5 + (box.minZ - 0.5) * factor,
+					0.5 + (box.maxX - 0.5) * factor, box.maxY * factor, 0.5 + (box.maxZ - 0.5) * factor));
+		}
+
+		List<Cell> out = new ArrayList<>();
+		for (Cell cell : cells) {
+			out.add(new Cell(0, 0, 0, Shapes.join(cell.shape(0), section, BooleanOp.ONLY_FIRST)));
+		}
+
+		return List.copyOf(out);
+	}
 
 	private static List<Cell> scaledCells(double factor) {
 		List<Cell> out = new ArrayList<>();
@@ -179,10 +211,16 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public List<Cell> shellCells() {
-		if (spec.acPowerKw() >= CONTAINER_KW) return CELLS;
-		if (spec.acPowerKw() <= WALL_KW) return WALL_CELLS;
+		return shellCells(defaultBlockState().setValue(COMBINER, true));
+	}
 
-		return CABINET_CELLS;
+	@Override
+	public List<Cell> shellCells(BlockState state) {
+		boolean fitted = !state.hasProperty(COMBINER) || state.getValue(COMBINER);
+		if (spec.acPowerKw() >= CONTAINER_KW) return fitted ? CELLS : PLAIN_CELLS;
+		if (spec.acPowerKw() <= WALL_KW) return fitted ? WALL_CELLS : PLAIN_WALL_CELLS;
+
+		return fitted ? CABINET_CELLS : PLAIN_CABINET_CELLS;
 	}
 
 	@Override

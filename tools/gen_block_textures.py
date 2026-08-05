@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from texlib import (Canvas, Field, LIGHT, bevel, brushed, concrete, cross_hatch, dome, galvanised,
                     grime, groove, hash01, hex_head, louvre, mesh_screen, mix, mul, plate_label,
-                    porcelain, powder, rubber, rust, screw, shade, streak, stretched,
+                    polygon, porcelain, powder, rubber, rust, screw, shade, streak, stretched,
                     warning_triangle, wood)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures', 'block')
@@ -1159,6 +1159,13 @@ def porcelain_brown():
     return c
 
 
+# How much a door leaf's tile is stretched, as the face's width over its height.  The kiosk's leaf is
+# 0.277 by 0.585 of a block and the inverter's 0.395 by 0.845 - both a hair under a half - so a square
+# tile on either arrives two and a tenth times taller than it is wide.  Every circle and every symbol on
+# a door is drawn flat by this much so that it comes out right on the leaf.
+DOOR_SQUASH = 0.47
+
+
 # ------------------------------------------------------------------ the kiosk
 
 def box_door(plain=False):
@@ -1184,16 +1191,20 @@ def box_door(plain=False):
 
     if not plain:
         # the high-voltage label, on the upper half where it can be read from a distance
-        warning_triangle(c, size * 0.28, size * 0.28, size * 0.30)
+        warning_triangle(c, size * 0.30, size * 0.22, size * 0.34, squash=DOOR_SQUASH)
         plate_label(c, size * 0.48, size * 0.18, size * 0.86, size * 0.40, shade(MOSS, 20), lines=3,
                     ink=(30, 32, 34, 255))
 
         # the lock: a triangular substation key, which is what these are all opened with
         lock_x, lock_y = size * 0.92, size * 0.50
-        c.aa_disc(lock_x, lock_y, size * 0.040, shade(MOSS, -30))
-        dome(c, lock_x, lock_y, size * 0.032, (150, 154, 160, 255), lift=40, drop=28)
-        c.aa_rect(lock_x - size * 0.012, lock_y - size * 0.012, lock_x + size * 0.012,
-                  lock_y + size * 0.012, (48, 50, 54, 255))
+        c.aa_disc(lock_x, lock_y, size * 0.040, shade(MOSS, -30), squash=DOOR_SQUASH)
+        dome(c, lock_x, lock_y, size * 0.032, (150, 154, 160, 255), lift=40, drop=28,
+             squash=DOOR_SQUASH)
+        # the triangular substation key's socket, which is what these are all opened with
+        polygon(c, ((lock_x, lock_y - size * 0.016 * DOOR_SQUASH),
+                    (lock_x + size * 0.014, lock_y + size * 0.010 * DOOR_SQUASH),
+                    (lock_x - size * 0.014, lock_y + size * 0.010 * DOOR_SQUASH)),
+                (44, 46, 50, 255))
 
     # the hinges down the other edge, and the drip lip along the top
     for y in (size * 0.14, size * 0.50, size * 0.86):

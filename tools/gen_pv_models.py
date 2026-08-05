@@ -628,9 +628,13 @@ def inverter():
     box(mesh, mesh.faces('cabinet', 'frame'), (-0.012, 0.095, face - 0.036),
         (0.012, body_y - 0.04, face - 0.030), uv_scale=0.1)
 
-    # the screen on the front of its bezel and nowhere else: it used to be lit on all six faces, so
-    # the machine appeared to have four displays and a lit underside
-    clad_box(mesh, 'display', (-0.28, 0.66, face - 0.048), (0.02, 0.80, face - 0.036),
+    # The screen, on the *left leaf* and on the front of its bezel and nowhere else.
+    #
+    # Two faults it used to have. It was lit on all six faces, so the machine appeared to have four
+    # displays and a lit underside. And it ran from x -0.28 to 0.02, which crosses the centre stile at
+    # x -0.012 to 0.012 - so the interface sat astride the joint between the two doors and moved with
+    # neither of them. It is inside the left leaf's own span now, which is -0.405 to -0.010.
+    clad_box(mesh, 'display', (-0.325, 0.66, face - 0.048), (-0.045, 0.80, face - 0.036),
              {'north': 'display', '*': 'cabinet'})
 
     # The roof fans: two guarded impellers, which is how a station inverter exhausts.

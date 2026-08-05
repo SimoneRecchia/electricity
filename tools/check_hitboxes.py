@@ -536,6 +536,38 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
+# A part a machine only sometimes has, and the constant its block declares for taking it back out of the
+# collision. Checked rather than trusted: the table is regenerated from the model, so if the model moves
+# that part the block's own copy of it would quietly stop matching anything.
+OPTIONAL = {
+    'pv_inverter': ('section', 'DC_SECTION', 'PvInverterBlock'),
+}
+
+
+def optional_faults(directory, cells):
+    """Whether the block's copy of an optional part is still one of the boxes the model draws."""
+    if directory not in OPTIONAL:
+        return []
+
+    group, constant, block = OPTIONAL[directory]
+    source = open(os.path.join(BLOCKS, block + '.java')).read()
+    match = re.search(r'%s\s*=\s*Block\.box\(([^)]*)\)' % re.escape(constant), source)
+    if match is None:
+        return ['%s declares no %s, so nothing can take the optional %s out of its collision'
+                % (block, constant, group)]
+
+    declared = tuple(round(float(v), 2) for v in match.group(1).split(','))
+    # a box here is (minX, maxX, minY, maxY, minZ, maxZ); Block.box wants the two corners in order
+    drawn = [(round(b[0], 2), round(b[2], 2), round(b[4], 2),
+              round(b[1], 2), round(b[3], 2), round(b[5], 2))
+             for boxes in cells.values() for box in boxes for b in (box,)]
+    if declared not in drawn:
+        return ['%s.%s is %s, which is not one of the boxes %s draws'
+                % (block, constant, declared, directory)]
+
+    return []
+
+
 def main():
     printing = '--java' in sys.argv
     faults = 0
@@ -563,6 +595,10 @@ def main():
         if directory in SWEPT:
             print('    not compared: %s' % SWEPT[directory])
             continue
+
+        for fault in optional_faults(directory, cells):
+            print('    OPTIONAL %s' % fault)
+            faults += 1
 
         for fault in facing_faults(name, block, source):
             faults += 1
