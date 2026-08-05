@@ -536,20 +536,31 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
-# A part a machine only sometimes has, and the constant its block declares for taking it back out of the
-# collision. Checked rather than trusted: the table is regenerated from the model, so if the model moves
-# that part the block's own copy of it would quietly stop matching anything.
-OPTIONAL = {
-    'pv_inverter': ('section', 'DC_SECTION', 'PvInverterBlock'),
+# A machine whose geometry changes with its state, as
+#     model: (block, [(group only drawn in this state, constant that adds or removes it), ...],
+#             group drawn instead)
+#
+# A block that draws a different shape in two states has to *collide* differently in the two, and
+# nothing else here would notice: the checker cuts one shape out of every group the model has and
+# compares it to one table, so a machine with an optional part passes whichever way its block is wrong.
+STATEFUL = {
+    'pv_inverter': ('PvInverterBlock', 'section', 'DC_SECTION', 'blank'),
 }
 
 
-def optional_faults(directory, cells):
-    """Whether the block's copy of an optional part is still one of the boxes the model draws."""
-    if directory not in OPTIONAL:
+def optional_faults(directory, cells, groups):
+    """Whether a stateful machine's two shapes are still the two the model draws.
+
+    Two things, and the second is the one that matters. The constant the block adds for the fitted state
+    has to be a box the model actually draws in it - that is the table and the model agreeing. And the
+    part drawn *instead* in the other state has to be wholly inside what is left, because that is what
+    makes "the plain shape is the full shape minus this one box" true: a blanking plate standing proud of
+    the cabinet would need collision of its own and would silently get none.
+    """
+    if directory not in STATEFUL:
         return []
 
-    group, constant, block = OPTIONAL[directory]
+    block, group, constant, alternative = STATEFUL[directory]
     source = open(os.path.join(BLOCKS, block + '.java')).read()
     match = re.search(r'%s\s*=\s*Block\.box\(([^)]*)\)' % re.escape(constant), source)
     if match is None:
@@ -561,11 +572,41 @@ def optional_faults(directory, cells):
     drawn = [(round(b[0], 2), round(b[2], 2), round(b[4], 2),
               round(b[1], 2), round(b[3], 2), round(b[5], 2))
              for boxes in cells.values() for box in boxes for b in (box,)]
+    faults = []
     if declared not in drawn:
-        return ['%s.%s is %s, which is not one of the boxes %s draws'
-                % (block, constant, declared, directory)]
+        faults.append('%s.%s is %s, which is not one of the boxes %s draws'
+                      % (block, constant, declared, directory))
 
-    return []
+    # everything the plain state keeps *except* the alternative itself, or it would be inside itself
+    kept = [box for name, polygons in groups.items()
+            if not name.startswith(group) and not name.startswith(alternative)
+            and not name.startswith(MOVING)
+            for box in [extent(polygons)] if box]
+    for name, polygons in groups.items():
+        if not name.startswith(alternative):
+            continue
+
+        box = extent(polygons)
+        if box and not any(inside(box, other) for other in kept):
+            faults.append('%s stands outside everything the plain state keeps, so the plain shape is '
+                          'not the fitted shape less %s' % (name, constant))
+    return faults
+
+
+def extent(polygons):
+    """One box round a group's polygons, in pixels, or None if it has none."""
+    points = [point for polygon in polygons for point in polygon]
+    if not points:
+        return None
+
+    return tuple(f(p[axis] for p in points) * 16.0
+                 for f in (min, max) for axis in range(3))
+
+
+def inside(box, other):
+    lo, hi = box[:3], box[3:]
+    other_lo, other_hi = other[:3], other[3:]
+    return all(other_lo[i] - EPS <= lo[i] and hi[i] <= other_hi[i] + EPS for i in range(3))
 
 
 def main():
@@ -584,7 +625,8 @@ def main():
             print('%-16s no block class known, skipped' % name)
             continue
 
-        cells = claimed(pieces(body(obj_groups(path))))
+        groups = obj_groups(path)
+        cells = claimed(pieces(body(groups)))
         source = open(os.path.join(BLOCKS, block + '.java')).read()
         print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
             os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),
@@ -596,8 +638,8 @@ def main():
             print('    not compared: %s' % SWEPT[directory])
             continue
 
-        for fault in optional_faults(directory, cells):
-            print('    OPTIONAL %s' % fault)
+        for fault in optional_faults(directory, cells, groups):
+            print('    STATE    %s' % fault)
             faults += 1
 
         for fault in facing_faults(name, block, source):

@@ -248,7 +248,8 @@ def pv_module_back():
     bevel(c, bx, by, bx + bw, by + bh, size * 0.006, lift=34, drop=40)
     c.aa_rect(bx + bw * 0.10, by + bh * 0.20, bx + bw * 0.90, by + bh * 0.80, (26, 27, 30, 255))
     for i in range(2):
-        screw(c, bx + bw * (0.22 + 0.56 * i), by + bh * 0.5, across(9.0), (86, 88, 92, 255))
+        screw(c, bx + bw * (0.22 + 0.56 * i), by + bh * 0.5, across(9.0), (86, 88, 92, 255),
+              squash=SQUASH['pv_module_back'])
 
     # the two leads out of it - 4 mm cable, so a hairline - and an MC4 on the end of each
     for side, y in ((-1, by + bh * 0.30), (1, by + bh * 0.70)):
@@ -325,9 +326,6 @@ def pv_frame():
     # the slot: a dark channel with a bright lip either side, along the rail
     groove(c, 0, size * 0.44, size, 0, size * 0.020, dark=64, light=30)
     c.aa_rect(0, size * 0.40, size, size * 0.425, shade(ALU, 14))
-    # the clamp bolts along it
-    for i in range(4):
-        hex_head(c, size * (0.12 + 0.25 * i), size * 0.465, size * 0.030, shade(ALU, -14), salt=71 + i)
     grime(c, salt=73, amount=0.10)
     return c
 
@@ -363,9 +361,6 @@ def pv_plate():
     c = Canvas(size, size)
     galvanised(c, shade(ZINC, -6), salt=103)
     cross_hatch(c, 0, 0, size, size, size * 0.16, shade(ZINC, 14), width=size * 0.012, alpha=0.18)
-    for x, y in ((0.14, 0.14), (0.86, 0.14), (0.14, 0.86), (0.86, 0.86)):
-        c.aa_disc(size * x, size * y, size * 0.055, shade(ZINC, -34), alpha=0.6)
-        hex_head(c, size * x, size * y, size * 0.042, shade(ZINC, 6), salt=107)
     grime(c, salt=109, amount=0.18)
     return c
 
@@ -408,10 +403,6 @@ def pv_cabinet():
     c = Canvas(size, size)
     powder(c, SHEET, salt=31)
     groove(c, 0, size * 0.50, size, 0, size * 0.016, dark=30, light=18)
-    for i in range(5):
-        y = size * (0.10 + 0.20 * i)
-        for x in (size * 0.045, size * 0.955):
-            screw(c, x, y, size * 0.016, shade(SHEET, -40))
     grime(c, salt=137, amount=0.13, colour=(96, 94, 88, 255))
     # rain runs down a vertical panel, so the dirt is streaked and not only patchy
     for i in range(6):
@@ -464,8 +455,6 @@ def pv_cabinet_top():
         for x0, y0, x1, y1 in ((0, i, size, i + 1), (0, size - i - 1, size, size - i),
                                (i, 0, i + 1, size), (size - i - 1, 0, size - i, size)):
             c.aa_rect(x0, y0, x1, y1, (0, 0, 0, 255), alpha=abs(tone) / 255.0 * 0.8)
-    for x, y in ((0.09, 0.09), (0.91, 0.09), (0.09, 0.91), (0.91, 0.91)):
-        hex_head(c, size * x, size * y, size * 0.024, shade(SHEET, -26), salt=163)
 
     # the tide line along the low edge, where water stands before it goes over: a band, not a ring
     for i in range(int(size * 0.06)):
@@ -605,8 +594,6 @@ def pv_vent():
                                (i, 0, i + 1, size), (size - i - 1, 0, size - i, size)):
             c.aa_rect(x0, y0, x1, y1, (255, 255, 255, 255) if i < inset * 0.2 else (0, 0, 0, 255),
                       alpha=(0.12 if i < inset * 0.2 else 0.10) * (1 - t))
-    for x, y in ((0.045, 0.045), (0.955, 0.045), (0.045, 0.955), (0.955, 0.955)):
-        screw(c, size * x, size * y, size * 0.018, shade(SHEET, -44))
     grime(c, salt=227, amount=0.22, colour=(88, 86, 80, 255))
     return c
 
@@ -642,7 +629,8 @@ def pv_dc_section():
     c.aa_rect(w * 0.04, h * 0.76, w * 0.96, h * 0.94, shade(ZINC, -8))
     for i in range(10):
         x = w * (0.08 + i * 0.088)
-        dome(c, x, h * 0.85, w * 0.020, (46, 48, 52, 255), lift=30, drop=24)
+        dome(c, x, h * 0.85, w * 0.020, (46, 48, 52, 255), lift=30, drop=24,
+             squash=SQUASH['pv_dc_section'])
     grime(c, salt=233, amount=0.16)
     return c
 
@@ -696,8 +684,6 @@ def pv_instrument():
         c.aa_rect(0, y + size * 0.008, size, y + size * 0.016, (255, 255, 255, 255), alpha=0.5)
     # the black band round the middle, which is the level bubble and the label ring
     c.aa_rect(0, size * 0.46, size, size * 0.58, (42, 44, 48, 255))
-    c.aa_disc(size * 0.30, size * 0.52, size * 0.035, (222, 226, 230, 255))
-    c.aa_disc(size * 0.30, size * 0.52, size * 0.018, (150, 200, 170, 255))
     plate_label(c, size * 0.46, size * 0.475, size * 0.90, size * 0.555, (86, 88, 92, 255), lines=2)
     grime(c, salt=257, amount=0.10, colour=(140, 138, 132, 255))
     return c
@@ -1137,7 +1123,7 @@ def pole_plate():
     c = Canvas(size, size)
     brushed(c, (206, 208, 212, 255), grain=8, blotch=6, salt=379)
     bevel(c, 0, 0, size, size, size * 0.04, lift=26, drop=30)
-    warning_triangle(c, size * 0.5, size * 0.34, size * 0.42)
+    warning_triangle(c, size * 0.5, size * 0.34, size * 0.42, squash=SQUASH['pole_plate'])
     # the pole number, stamped rather than printed
     for i in range(5):
         x = size * (0.18 + i * 0.14)
@@ -1202,8 +1188,13 @@ def porcelain_brown():
 # which is the only thing that keeps these numbers true after a model moves.
 SQUASH = {
     'box_door': 0.277 / 0.585,              # the kiosk's leaf
+    'box_leaf': 0.277 / 0.585,              # its plain second leaf, the same shape
     'pv_cabinet_door': 0.395 / 0.500,       # the inverter's, DOOR_LOW..DOOR_HIGH in gen_pv_models
+    'pv_cabinet_leaf': 0.395 / 0.500,       # its plain second leaf
     'pv_blank': 0.810 / 0.327,              # the blanking plate, wider than tall
+    'pv_dc_section': 1.14,                  # the DC compartment's own door
+    'pv_module_back': 0.45,                 # a module's backsheet, two and a quarter times taller
+    'pole_plate': 0.81,                     # the pole's number plate and danger sign
 }
 DOOR_SQUASH = SQUASH['box_door']
 

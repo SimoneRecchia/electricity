@@ -794,23 +794,51 @@ def shape(boxes):
     return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
 
 
-def java():
-    print('\n\t// ---- printed by tools/gen_cable_models.py --java ----\n')
-    print('\tprivate static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(')
-    rows = []
+def tables():
+    """Every shape the block declares, as text, keyed by the table it belongs to."""
+    hubs = {}
     for connected, (kind, turn) in sorted(HUBS.items(), key=lambda kv: mask(kv[0])):
         boxes = [b for p in MIDDLES[kind](0.0) for b in p.turned(turn).boxes()]
-        rows.append('\t\t\tMap.entry(0b%s, %s)' % (format(mask(connected), '04b'), shape(boxes)))
-    print(',\n'.join(rows) + ');')
+        hubs['0b%s' % format(mask(connected), '04b')] = shape(boxes)
 
+    out = {'STRING_HUBS': hubs}
     for label, builder in (('STRING_ARMS', lambda: piece_arm(0.0, 0.0)),
                            ('STRING_CLIMBS', lambda: piece_climb(0.0))):
-        print('\n\tprivate static final Map<Direction, VoxelShape> %s = Map.of(' % label)
-        rows = []
+        rows = {}
         for side, turn in (('NORTH', 0), ('EAST', 90), ('SOUTH', 180), ('WEST', 270)):
-            boxes = [b for p in builder() for b in p.turned(turn).boxes()]
-            rows.append('\t\t\tDirection.%s, %s' % (side, shape(boxes)))
-        print(',\n'.join(rows) + ');')
+            rows['Direction.%s' % side] = shape([b for p in builder() for b in p.turned(turn).boxes()])
+        out[label] = rows
+    return out
+
+
+def java():
+    print('\n\t// ---- printed by tools/gen_cable_models.py --java ----\n')
+    built = tables()
+    print('\tprivate static final Map<Integer, VoxelShape> STRING_HUBS = Map.ofEntries(')
+    print(',\n'.join('\t\t\tMap.entry(%s, %s)' % item for item in built['STRING_HUBS'].items()) + ');')
+    for label in ('STRING_ARMS', 'STRING_CLIMBS'):
+        print('\n\tprivate static final Map<Direction, VoxelShape> %s = Map.of(' % label)
+        print(',\n'.join('\t\t\t%s, %s' % item for item in built[label].items()) + ');')
+
+
+def check_java():
+    """Proves DcCableBlock still declares the shape this draws, in all twenty-four states.
+
+    Not the same thing as check_hitboxes.py, which cuts one shape out of a model and compares it to one
+    table: a cable is a different shape in every one of its sixteen patterns, and a table that has fallen
+    behind by one of them is a run a player walks through in exactly one configuration.  Comparing the
+    printed text is enough because both sides of it come from ``shape()``.
+    """
+    path = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
+                        'DcCableBlock.java')
+    source = ' '.join(open(path).read().split())
+    problems = []
+    for label, rows in tables().items():
+        for key, text in rows.items():
+            wanted = ' '.join(('%s, %s' % (key, text)).split())
+            if wanted not in source:
+                problems.append('%s[%s] is not what DcCableBlock declares' % (label, key))
+    return problems
 
 
 def mask(connected):
@@ -974,6 +1002,12 @@ def main():
         write(os.path.join(ITEM_MODELS, cable + '.json'),
               {'parent': 'minecraft:item/generated',
                'textures': {'layer0': 'electricity:item/' + cable}})
+
+    for line in check_java():
+        print('    TABLE %s' % line)
+        problems.append(line)
+    if not problems:
+        print('DcCableBlock declares the same shape this draws, in all twenty-four states')
 
     if '--java' in sys.argv:
         java()
