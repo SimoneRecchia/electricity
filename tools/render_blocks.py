@@ -510,6 +510,45 @@ def scene_cable_junction():
     return triangles, (3.1, 1.70, 3.9), (1.5, 0.06, 1.45)
 
 
+def scene_cable_states():
+    """All sixteen states of a run at once, composed the way the blockstate composes them.
+
+    Three scenes chosen by hand kept missing what the other thirteen do, and a fault that only shows on
+    one connection pattern is invisible until every pattern is on the same sheet.
+    """
+    import gen_cable_models as cable
+
+    triangles = ground(-2, -2, 15, 15, SAND)
+    for index, connected in enumerate(sorted(cable.HUBS, key=len)):
+        at = (1 + (index % 4) * 4, 0, 1 + (index // 4) * 4)
+        kind, turn = cable.HUBS[connected]
+        triangles += cable_piece(kind, at, yaw=turn)
+        for side in connected:
+            yaw = cable.QUARTERS[side]
+            triangles += cable_piece('arm', at, yaw=yaw)
+            dx, dz = NEIGHBOUR[yaw]
+            beyond = (at[0] + dx, at[1], at[2] + dz)
+            triangles += cable_piece('line', beyond, yaw=90 if dx else 0)
+            triangles += cable_piece('arm', beyond, yaw=yaw)
+            triangles += cable_piece('arm', beyond, yaw=(yaw + 180) % 360)
+    return triangles, (7.5, 7.2, 20.0), (7.5, 0.1, 7.0)
+
+
+def scene_cable_climb():
+    """A run turning up a wall, and the piece nothing else in these scenes draws."""
+    triangles = ground(-1, -1, 4, 4, SAND)
+    triangles += cable_piece('line', (1, 0, 2), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 2), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 2), yaw=180)
+    triangles += cable_piece('end', (1, 0, 1), yaw=0)
+    triangles += cable_piece('arm', (1, 0, 1), yaw=180)
+    triangles += cable_piece('climb', (1, 0, 1), yaw=0)
+    triangles += cable_piece('line', (1, 1, 1), yaw=0)
+    triangles += cable_piece('arm', (1, 1, 1), yaw=0)
+    triangles += cable_piece('arm', (1, 1, 1), yaw=180)
+    return triangles, (2.6, 1.9, 3.6), (1.5, 0.9, 1.4)
+
+
 def scene_cable_hitbox():
     """A dead end with its collision drawn, which is the view every cable fault has been reported from.
 
@@ -662,6 +701,8 @@ SCENES = {
     'cable_corner': scene_cable_corner,
     'cable_junction': scene_cable_junction,
     'cable_hitbox': scene_cable_hitbox,
+    'cable_states': scene_cable_states,
+    'cable_climb': scene_cable_climb,
     'cable_plug': scene_cable_plug,
     'inverter_front': scene_inverter_front,
     'inverter_roof': scene_inverter_roof,

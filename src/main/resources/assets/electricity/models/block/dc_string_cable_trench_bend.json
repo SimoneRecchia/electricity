@@ -7,6 +7,7 @@
   "textures": {
     "core": "electricity:block/dc_core",
     "cleat": "electricity:block/dc_cleat",
+    "tie": "electricity:block/dc_tie",
     "plug_plus": "electricity:block/dc_connector_plus",
     "plug_minus": "electricity:block/dc_connector_minus",
     "joint_plus": "electricity:block/dc_joint_plus",

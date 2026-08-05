@@ -37,11 +37,12 @@ SIDES = ('north', 'east', 'south', 'west')
 # The materials, and the textures they resolve to.
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
 MATERIALS = {name: '#' + name for name in
-             ('core', 'cleat', 'plug_plus', 'plug_minus', 'joint_plus', 'joint_minus', 'gland',
+             ('core', 'cleat', 'tie', 'plug_plus', 'plug_minus', 'joint_plus', 'joint_minus', 'gland',
               'jbox', 'jbox_side', 'trench')}
 TEXTURES = {
     'core': 'electricity:block/dc_core',
     'cleat': 'electricity:block/dc_cleat',
+    'tie': 'electricity:block/dc_tie',
     'plug_plus': 'electricity:block/dc_connector_plus',
     'plug_minus': 'electricity:block/dc_connector_minus',
     'joint_plus': 'electricity:block/dc_joint_plus',
@@ -333,6 +334,27 @@ def gland(base, side, centre):
     return parts
 
 
+def tie(base, low, high):
+    """A UV-black nylon cable tie round the pair, which is what actually holds a string down.
+
+    A stainless cleat belongs where the cable is on a tray or up a wall, and that is where piece_climb
+    keeps one.  On open ground a strap 5.2 px wide in bright steel was the loudest thing in the plant -
+    from ten metres the run read as a double pipe cinched every third of a block.
+    """
+    crown = base + CORE_Y + CORE_RADIUS
+    # clear of the cable, not into it: the strap passes outside the pair
+    outer = CORE_OFFSET + CORE_RADIUS + 0.34
+    return [
+        # over the crown and down both flanks: the strap of a tie is one band, not a plate on feet
+        Slab('tie', 'tie', (8.0 - outer, crown, low), (8.0 + outer, crown + 0.28, high), uv_scale=0.5),
+        Slab('tie', 'tie', (8.0 - outer, base, low), (8.0 - outer + 0.28, crown, high), uv_scale=0.3),
+        Slab('tie', 'tie', (8.0 + outer - 0.28, base, low), (8.0 + outer, crown, high), uv_scale=0.3),
+        # the ratchet head, which is the one lump a tie has and the only way to tell which it is
+        Slab('tie', 'tie', (8.0 + outer, base + 0.2, low - 0.10),
+             (8.0 + outer + 0.42, base + 0.95, high + 0.10), uv_scale=0.4),
+    ]
+
+
 def cleat(base, low, high):
     """A stainless clip: a strap over the pair into a foot each side"""
     inner = CORE_OFFSET + CORE_RADIUS
@@ -446,7 +468,7 @@ def piece_arm(base, near):
     y = base + CORE_Y
     # An arm is drawn only for a side that connects, so neither of its ends is ever free.
     return [Run([(c, y, near), (c, y, HUB_LO)], ends=(False, False)) for c in CORES] \
-        + cleat(base, 2.3, 3.1)
+        + tie(base, 2.5, 3.5)
 
 
 def piece_climb(base):
@@ -459,7 +481,21 @@ def piece_climb(base):
         path = ([(c, y, HUB_LO)] + [(c, p[1], p[2]) for p in turn] + [(c, 16.0, WALL_STANDOFF)])
         # down into the middle, up into the block above: a climb has no free end either
         parts.append(Run(path, ends=(False, False)))
-    return parts
+    # Cable on a wall is cleated in steel, not tied: this is the one place a cleat belongs, and the strap
+    # sits above the elbow where the run has gone vertical.
+    return parts + wall_cleat(base)
+
+
+def wall_cleat(base):
+    """The stainless cleat that holds a climb to the wall it runs up."""
+    inner = CORE_OFFSET + CORE_RADIUS
+    face = WALL_STANDOFF + CORE_RADIUS
+    return [
+        Slab('cleat', 'cleat', (8.0 - inner, 9.0, 0.0), (8.0 + inner, 10.4, face - 0.02),
+             uv_scale=0.4),
+        Slab('cleat', 'cleat', (HUB_LO, 9.0, face - 0.02), (HUB_HI, 10.4, face + 0.40), uv_scale=0.6),
+        Barrel('cleat', 'cleat', (8.0, 9.7, 0.0), 'z', 0.34, face + 0.40, face + 0.70),
+    ]
 
 
 def bedding():

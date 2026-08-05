@@ -733,6 +733,24 @@ def _moulded(bands, positive):
     return c
 
 
+def dc_tie():
+    """A UV-black nylon cable tie: the ratchet teeth along it, and nothing else.
+
+    Its own band, so a tie never wears the cable's cylinder gradient - a tie is a flat strap.
+    """
+    size = 128
+    c = Canvas(size, size)
+    rubber(c, (34, 34, 38, 255), salt=331, sheen=14)
+    # the teeth, across the strap, which is the one feature a tie has
+    for i in range(22):
+        y = size * (i + 0.15) / 22.0
+        c.aa_rect(0, y, size, y + size / 22.0 * 0.42, (24, 24, 27, 255), alpha=0.75)
+        c.aa_rect(0, y + size / 22.0 * 0.42, size, y + size / 22.0 * 0.58, (58, 58, 64, 255),
+                  alpha=0.55)
+    grime(c, salt=337, amount=0.10, colour=(70, 68, 62, 255))
+    return c
+
+
 def dc_gland():
     """An M16 cable gland, as a strip from the box wall out: the hex body, then the compression nut.
 
@@ -1370,6 +1388,7 @@ TEXTURES = {
     'dc_connector_minus': dc_connector_minus,
     'dc_joint_plus': dc_joint_plus,
     'dc_joint_minus': dc_joint_minus,
+    'dc_tie': dc_tie,
     'dc_gland': dc_gland,
     'dc_jbox': dc_jbox,
     'dc_jbox_side': dc_jbox_side,
