@@ -35,10 +35,9 @@ public class WireRenderer {
 	private static final int FULL_BRIGHT = 15728880;
 	private static final double MIN_LENGTH = 0.1;
 	private static final double WIRE_RADIUS = 0.025;
+	/** How round a wire is, straight or sagging: it is the same wire, so it is one figure. */
 	private static final int WIRE_SIDES = 12;
-	private static final int DEFLECTION_SIDES = 8;
 	private static final double DEFLECTION_STEP = 0.25;
-	private static final double SEGMENT_UNIT = 0.1;
 	private static final ResourceLocation WIRE_TEXTURE = new ResourceLocation("minecraft", "block/black_wool");
 
 	private record WireStyle(int red, int green, int blue, int alpha) {
@@ -181,7 +180,7 @@ public class WireRenderer {
 		poseStack.scale(1.0f, 1.0f, (float) distance);
 
 		VertexConsumer consumer = bufferSource.getBuffer(RenderType.solid());
-		emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), WIRE_SIDES, sprite);
+		emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), sprite);
 
 		poseStack.popPose();
 	}
@@ -225,10 +224,10 @@ public class WireRenderer {
 
 			poseStack.pushPose();
 			poseStack.translate(0, startY, x);
-			poseStack.mulPose(Axis.XP.rotationDegrees(pitchC + 90.0f));
-			poseStack.scale(1.0f, (float) (actualSegmentDistance / SEGMENT_UNIT), 1.0f);
+			poseStack.mulPose(Axis.XP.rotationDegrees(pitchC));
+			poseStack.scale(1.0f, 1.0f, (float) actualSegmentDistance);
 
-			emitCylinderSegment(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), DEFLECTION_SIDES, sprite);
+			emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), sprite);
 
 			poseStack.popPose();
 			x = nextX;
@@ -237,15 +236,21 @@ public class WireRenderer {
 		poseStack.popPose();
 	}
 
-	private static void emitCylinder(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, int segments, TextureAtlasSprite sprite) {
+	/**
+	 * One wire, a unit length of it, along +z.
+	 *
+	 * Both spans are made of these: a straight one is yawed and pitched onto the span and stretched to its
+	 * whole length, a sagging one is a chain of them, each pitched to the slope of the curve at its own step.
+	 */
+	private static void emitCylinder(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, TextureAtlasSprite sprite) {
 		var pose = poseStack.last();
 		float u0 = sprite.getU(0);
 		float u1 = sprite.getU(16);
 		float v0 = sprite.getV(0);
 		float v1 = sprite.getV(16);
-		for (int i = 0; i < segments; i++) {
-			double angle1 = (2 * Math.PI * i) / segments;
-			double angle2 = (2 * Math.PI * (i + 1)) / segments;
+		for (int i = 0; i < WIRE_SIDES; i++) {
+			double angle1 = (2 * Math.PI * i) / WIRE_SIDES;
+			double angle2 = (2 * Math.PI * (i + 1)) / WIRE_SIDES;
 
 			double x1 = Math.cos(angle1) * wireRadius;
 			double y1 = Math.sin(angle1) * wireRadius;
@@ -268,40 +273,6 @@ public class WireRenderer {
 
 			consumer.vertex(pose.pose(), (float) x2, (float) y2, 0).color(style.red, style.green, style.blue, style.alpha).uv(u1, v0).overlayCoords(0, 10).uv2(packedLight)
 					.normal(pose.normal(), nx2, ny2, 0).endVertex();
-		}
-	}
-
-	private static void emitCylinderSegment(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, int segments, TextureAtlasSprite sprite) {
-		var pose = poseStack.last();
-		float u0 = sprite.getU(0);
-		float u1 = sprite.getU(16);
-		float v0 = sprite.getV(0);
-		float v1 = sprite.getV(16);
-		for (int i = 0; i < segments; i++) {
-			double angle1 = (2 * Math.PI * i) / segments;
-			double angle2 = (2 * Math.PI * (i + 1)) / segments;
-
-			double x1 = Math.cos(angle1) * wireRadius;
-			double z1 = Math.sin(angle1) * wireRadius;
-			double x2 = Math.cos(angle2) * wireRadius;
-			double z2 = Math.sin(angle2) * wireRadius;
-
-			float nx1 = (float) (x1 / wireRadius);
-			float nz1 = (float) (z1 / wireRadius);
-			float nx2 = (float) (x2 / wireRadius);
-			float nz2 = (float) (z2 / wireRadius);
-
-			consumer.vertex(pose.pose(), (float) x1, 0, (float) z1).color(style.red, style.green, style.blue, style.alpha).uv(u0, v0).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx1, 0, nz1).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x1, (float) SEGMENT_UNIT, (float) z1).color(style.red, style.green, style.blue, style.alpha).uv(u0, v1).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx1, 0, nz1).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x2, (float) SEGMENT_UNIT, (float) z2).color(style.red, style.green, style.blue, style.alpha).uv(u1, v1).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx2, 0, nz2).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x2, 0, (float) z2).color(style.red, style.green, style.blue, style.alpha).uv(u1, v0).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx2, 0, nz2).endVertex();
 		}
 	}
 
