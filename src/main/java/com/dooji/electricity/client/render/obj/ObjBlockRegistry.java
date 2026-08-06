@@ -20,12 +20,24 @@ public class ObjBlockRegistry {
 		ENTRIES.put(block, new Entry(modelLocation, textureLocation));
 	}
 
-	/** Makes a block renderable and marks its insulators clickable. */
+	/**
+	 * Makes a block renderable, marks its fittings clickable and says where each one is.
+	 *
+	 * The box per fitting used to be a private method in each of eight renderers, all of them the same loop
+	 * over the same list this one already walks - and a renderer that forgot it had fittings a wire could be
+	 * clicked onto and never found.
+	 */
 	public static void register(ObjBlockDefinition definition) {
 		register(definition.block(), definition.model(), null);
+		ObjModel model = ObjLoader.getModel(definition.model());
+		Map<String, ObjModel.BoundingBox> boxes = new HashMap<>();
 		for (String insulator : definition.insulators()) {
 			ObjInteractionRegistry.register(definition.block(), insulator);
+			ObjModel.BoundingBox box = model == null ? null : model.getBoundingBox(insulator);
+			if (box != null) boxes.put(insulator, box);
 		}
+
+		if (!boxes.isEmpty()) ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
 	}
 
 	public static ResourceLocation getModelLocation(Block block) {

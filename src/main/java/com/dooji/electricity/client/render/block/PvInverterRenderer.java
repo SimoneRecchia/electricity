@@ -5,8 +5,6 @@ import com.dooji.electricity.block.PvInverterBlock;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
-import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
-import com.dooji.electricity.client.render.obj.ObjLoader;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.render.obj.ObjRenderUtil;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
@@ -133,24 +131,8 @@ public class PvInverterRenderer extends ObjRendererBase {
 			if (definition == null) continue;
 
 			ObjBlockRegistry.register(definition);
-			registerInsulators(definition);
 		}
 	}
 
-	/** The wire fitting on top of the cabinet, so a wire can be attached to it and seen where it attaches. */
-	private static void registerInsulators(ObjBlockDefinition definition) {
-		ObjModel model = ObjLoader.getModel(definition.model());
-		if (model == null) return;
-
-		Map<String, ObjModel.BoundingBox> boxes = new HashMap<>();
-		for (String groupName : definition.insulators()) {
-			ObjModel.BoundingBox box = model.getBoundingBox(groupName);
-			if (box != null) {
-				boxes.put(groupName, box);
-			}
-		}
-
-		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
-	}
 
 }

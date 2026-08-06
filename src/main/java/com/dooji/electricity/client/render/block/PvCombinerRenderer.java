@@ -113,5 +113,4 @@ public class PvCombinerRenderer extends ObjRendererBase {
 			ObjBlockRegistry.register(definition);
 		}
 	}
-
 }

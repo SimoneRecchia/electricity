@@ -1,13 +1,12 @@
 package com.dooji.electricity.client.render.obj;
 
-import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlock;
+import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.LatticeTowerBlock;
-import com.dooji.electricity.block.UtilityPoleBlock;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjTransforms.Transform;
+import com.dooji.electricity.main.registry.ObjBlockDefinition;
+import com.dooji.electricity.main.registry.ObjDefinitions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +20,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -112,57 +112,6 @@ public class ObjRaycaster {
 		Transform transform = ObjTransforms.resolve(mc.level.getBlockEntity(blockPos));
 		Direction effectiveFacing = facing != null ? facing : getFacing(blockState);
 		return buildWorldCenter(partBox, blockPos, blockState, effectiveFacing, transform);
-	}
-
-	public static Vec3 rotatePointAroundCenter(Vec3 point, Vec3 center, Direction facing, BlockState blockState) {
-		Vec3 relative = point.subtract(center);
-
-		double rotatedX = relative.x;
-		double rotatedZ = relative.z;
-
-		if (blockState.getBlock() instanceof ElectricCabinBlock || blockState.getBlock() instanceof PowerBoxBlock) {
-			switch (facing) {
-				case EAST :
-					rotatedX = relative.x;
-					rotatedZ = relative.z;
-					break;
-				case SOUTH :
-					rotatedX = -relative.z;
-					rotatedZ = relative.x;
-					break;
-				case WEST :
-					rotatedX = -relative.x;
-					rotatedZ = -relative.z;
-					break;
-				case NORTH :
-				default :
-					rotatedX = relative.z;
-					rotatedZ = -relative.x;
-					break;
-			}
-		} else {
-			switch (facing) {
-				case EAST :
-					rotatedX = -relative.x;
-					rotatedZ = -relative.z;
-					break;
-				case SOUTH :
-					rotatedX = -relative.z;
-					rotatedZ = relative.x;
-					break;
-				case WEST :
-					rotatedX = relative.x;
-					rotatedZ = relative.z;
-					break;
-				case NORTH :
-				default :
-					rotatedX = relative.z;
-					rotatedZ = -relative.x;
-					break;
-			}
-		}
-
-		return new Vec3(center.x + rotatedX, center.y + relative.y, center.z + rotatedZ);
 	}
 
 	public static Vec3 applyYawPitchRotation(Vec3 point, Vec3 center, float yaw, float pitch) {
@@ -283,12 +232,28 @@ public class ObjRaycaster {
 		return bestCenter;
 	}
 
-	private static Direction getFacing(BlockState blockState) {
-		if (blockState.hasProperty(UtilityPoleBlock.FACING)) return blockState.getValue(UtilityPoleBlock.FACING);
-		if (blockState.hasProperty(LatticeTowerBlock.FACING)) return blockState.getValue(LatticeTowerBlock.FACING);
-		if (blockState.hasProperty(ElectricCabinBlock.FACING)) return blockState.getValue(ElectricCabinBlock.FACING);
-		if (blockState.hasProperty(PowerBoxBlock.FACING)) return blockState.getValue(PowerBoxBlock.FACING);
-		return null;
+	/**
+	 * Which way a block is placed.
+	 *
+	 * One property, not a chain: every machine in this mod is placed with BlockStateProperties.HORIZONTAL_FACING,
+	 * so the four-branch chain this replaced always took its first branch - and silently returned null for the
+	 * machines added after it was written.
+	 */
+	static Direction getFacing(BlockState blockState) {
+		return blockState.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
+				? blockState.getValue(BlockStateProperties.HORIZONTAL_FACING) : null;
+	}
+
+	/**
+	 * Which way the model was authored, off the machine's own model definition.
+	 *
+	 * This has to be the turn ModelFacing does or a part's hover box is not where the part is - which is what
+	 * rotatePointAroundCenter got wrong: both of its branches were a quarter turn out at every facing, so every
+	 * insulator in the mod was hit-tested in the wrong quadrant of its own block.
+	 */
+	private static Direction authoredFacing(BlockState blockState) {
+		ObjBlockDefinition definition = ObjDefinitions.get(blockState.getBlock());
+		return definition == null ? Direction.NORTH : definition.authored();
 	}
 
 	private static void ensureBoundingBoxes(Block block, ObjModel model) {
@@ -307,8 +272,11 @@ public class ObjRaycaster {
 		Vec3 center = new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 0.5, blockPos.getZ() + 0.5);
 
 		if (facing != null) {
-			min = rotatePointAroundCenter(min, center, facing, state);
-			max = rotatePointAroundCenter(max, center, facing, state);
+			Direction authored = authoredFacing(state);
+			// min and max turn independently, so a quarter turn swaps which is which - rayIntersectsBox takes
+			// the two corners either way round
+			min = center.add(ModelFacing.turned(min.subtract(center), authored, facing));
+			max = center.add(ModelFacing.turned(max.subtract(center), authored, facing));
 		}
 
 		min = min.add(transform.offsetX(), transform.offsetY(), transform.offsetZ());
@@ -327,7 +295,7 @@ public class ObjRaycaster {
 		Vec3 blockCenter = new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 0.5, blockPos.getZ() + 0.5);
 
 		if (facing != null) {
-			center = rotatePointAroundCenter(center, blockCenter, facing, state);
+			center = blockCenter.add(ModelFacing.turned(center.subtract(blockCenter), authoredFacing(state), facing));
 		}
 
 		center = center.add(transform.offsetX(), transform.offsetY(), transform.offsetZ());

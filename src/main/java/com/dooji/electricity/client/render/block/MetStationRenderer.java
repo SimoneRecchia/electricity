@@ -131,5 +131,4 @@ public class MetStationRenderer extends ObjRendererBase {
 			ObjBlockRegistry.register(definition);
 		}
 	}
-
 }

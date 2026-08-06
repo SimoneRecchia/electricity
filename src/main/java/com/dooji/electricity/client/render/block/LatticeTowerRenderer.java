@@ -5,9 +5,6 @@ import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.LatticeTowerBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
-import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
-import com.dooji.electricity.client.render.obj.ObjLoader;
-import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.render.obj.ObjRenderUtil;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
@@ -65,21 +62,6 @@ public class LatticeTowerRenderer extends ObjRendererBase {
 			if (definition == null) continue;
 
 			ObjBlockRegistry.register(definition);
-			registerInsulators(definition);
 		}
-	}
-
-	/** The six fittings a wire can be hung from, so a click on one finds it. */
-	private static void registerInsulators(ObjBlockDefinition definition) {
-		ObjModel model = ObjLoader.getModel(definition.model());
-		if (model == null) return;
-
-		Map<String, ObjModel.BoundingBox> boxes = new HashMap<>();
-		for (String groupName : definition.insulators()) {
-			ObjModel.BoundingBox box = model.getBoundingBox(groupName);
-			if (box != null) boxes.put(groupName, box);
-		}
-
-		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
 	}
 }

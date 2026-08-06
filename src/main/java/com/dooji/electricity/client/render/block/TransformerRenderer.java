@@ -5,9 +5,6 @@ import com.dooji.electricity.block.TransformerBlock;
 import com.dooji.electricity.block.TransformerBlockEntity;
 import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
-import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
-import com.dooji.electricity.client.render.obj.ObjLoader;
-import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.render.obj.ObjRenderUtil;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
@@ -59,21 +56,6 @@ public class TransformerRenderer extends ObjRendererBase {
 			if (definition == null) continue;
 
 			ObjBlockRegistry.register(definition);
-			registerBushings(definition);
 		}
-	}
-
-	/** The bushings, so a wire hung on one is drawn where it is hung. */
-	private static void registerBushings(ObjBlockDefinition definition) {
-		ObjModel model = ObjLoader.getModel(definition.model());
-		if (model == null) return;
-
-		Map<String, ObjModel.BoundingBox> boxes = new HashMap<>();
-		for (String groupName : definition.insulators()) {
-			ObjModel.BoundingBox box = model.getBoundingBox(groupName);
-			if (box != null) boxes.put(groupName, box);
-		}
-
-		ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
 	}
 }
