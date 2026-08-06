@@ -22,7 +22,6 @@ import com.dooji.electricity.power.TurbineTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import com.dooji.electricity.wire.InsulatorHost;
-import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

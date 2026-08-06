@@ -339,22 +339,6 @@ def concrete(c, base=(158, 156, 150, 255), salt=61, aggregate=True):
         c.aa_disc(cx, cy, radius, shade(base, tint), alpha=0.5)
 
 
-def wood(c, base=(122, 88, 54, 255), salt=71, rings=26, horizontal=False):
-    """Sawn softwood: rings along the board, with the darker latewood between them."""
-    wander = Field(c.w, cell=c.w / 2.0, octaves=3, salt=salt)
-    fibre = stretched(c.w, along=c.w * 1.4, across=max(2.0, c.w / 140.0), octaves=2, salt=salt + 3)
-
-    def pixel(x, y):
-        u, v = (y, x) if horizontal else (x, y)
-        # the ring pattern bends along the board, which is what stops it looking like a barcode
-        phase = (u + wander.signed(u, v) * c.w * 0.22) / c.w * rings
-        ring = abs(phase - math.floor(phase) - 0.5) * 2.0
-        tone = -26 + ring * 30 + fibre.signed(u, v) * 9
-        return shade(base, tone)
-
-    c.each(pixel)
-
-
 def rubber(c, base=(30, 31, 35, 255), salt=83, sheen=10):
     """Cable sheathing: near black, faintly ribbed along its length, with a soft sheen."""
     grain = stretched(c.w, along=c.w * 2.0, across=max(2.0, c.w / 80.0), octaves=2, salt=salt)

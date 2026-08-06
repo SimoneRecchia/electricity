@@ -26,7 +26,6 @@ import com.dooji.electricity.power.SolarTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import com.dooji.electricity.wire.InsulatorHost;
-import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;

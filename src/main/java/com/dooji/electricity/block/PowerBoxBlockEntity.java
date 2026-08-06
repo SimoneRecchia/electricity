@@ -14,9 +14,7 @@ import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
-import com.dooji.electricity.power.PowerFieldManager;
 import com.dooji.electricity.wire.InsulatorHost;
-import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -222,7 +220,6 @@ public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 
 	private void refreshPowerField() {
 		if (level == null) return;
-		PowerFieldManager.clearSource(worldPosition);
 		Set<BlockPos> newlyPowered = new HashSet<>();
 		var consumers = new ArrayList<PowerConsumerTarget>();
 
@@ -249,7 +246,6 @@ public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 	private void deactivatePowerField() {
 		if (level == null) return;
 
-		PowerFieldManager.clearSource(worldPosition);
 		for (BlockPos pos : poweredBlocks) {
 			applyPowerToBlock(pos, false);
 		}
@@ -363,7 +359,6 @@ public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 			boolean meets = regulated >= minimum;
 
 			target.consumer().onPowerSupplied(regulated, meets, consumerEvent);
-			PowerFieldManager.markPowered(worldPosition, target.position(), regulated);
 		}
 	}
 

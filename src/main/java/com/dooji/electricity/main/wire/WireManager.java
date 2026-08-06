@@ -1,12 +1,7 @@
 package com.dooji.electricity.main.wire;
 
 import com.dooji.electricity.api.power.ConductorSpec;
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.MachineShell;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;

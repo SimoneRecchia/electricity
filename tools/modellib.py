@@ -12,7 +12,7 @@ import math
 import os
 
 # The turbine's own subdivisions, restated here because they are now the whole mod's.  Overridable so a
-# setting can be generated and *looked at* side by side - tools/compare_sides.py writes the sheet, and a
+# setting can be generated and *looked at* side by side - render_blocks.py draws the sheet, and a
 # render is the only way to argue with a figure like this.  CLAUDE.md section 1 says what each is for.
 ROUND = int(os.environ.get('ELECTRICITY_ROUND', 80))
 FITTING = int(os.environ.get('ELECTRICITY_FITTING', 16))

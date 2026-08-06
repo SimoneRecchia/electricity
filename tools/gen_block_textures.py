@@ -935,59 +935,6 @@ def dc_jbox_side():
     return c
 
 
-def _line_tile(armoured=False):
-    """A cable texture for the vanilla JSON models, whose faces sample it in sixteenths.
-
-    Which sixteenths is not a matter of taste - ``gen_cable_models.py`` writes the uv rectangles
-    """
-    size = 256
-    unit = size / 16.0
-    c = Canvas(size, size)
-    rubber(c, (26, 27, 31, 255), salt=287, sheen=12)
-
-    # the pair, running down the tile: one core a sixteenth wide
-    for i in range(2):
-        x0 = (7 + i) * unit
-        x1 = x0 + unit
-        strand = Canvas(size, size)
-        rubber(strand, JACKET, salt=283 + i, sheen=22)
-        for x in range(int(x0), int(x1)):
-            t = min(1.0, max(0.0, (x - x0) / unit))
-            lit = max(0.0, math.cos((t - 0.38) * math.pi * 1.05))
-            for y in range(size):
-                c.blend(x, y, shade(strand.get(x, y), -42 + lit * 72), 1.0)
-
-    if armoured:
-        # the armour bands, which is how a trunk is told from a string at a glance
-        for i in range(7):
-            y = size * (0.03 + i * 0.14)
-            c.aa_rect(7 * unit, y, 9 * unit, y + unit * 0.55, (146, 150, 156, 255), alpha=0.9)
-            c.aa_rect(7 * unit, y, 9 * unit, y + unit * 0.20, (192, 196, 202, 255), alpha=0.75)
-
-    # the clips that hold a surface run down
-    for i in range(3):
-        y = size * (0.14 + i * 0.34)
-        c.aa_rect(7 * unit - unit * 0.25, y, 9 * unit + unit * 0.25, y + unit * 0.9,
-                  (140, 144, 150, 255))
-        c.aa_rect(7 * unit - unit * 0.25, y, 9 * unit + unit * 0.25, y + unit * 0.3,
-                  (186, 190, 196, 255), alpha=0.8)
-
-    # the flank strip along the bottom row, which is what every side face samples: a round cable
-    # seen edge on, so it is lit along its middle
-    for y in range(int(15 * unit), size):
-        t = (y - 15 * unit) / unit
-        lit = math.sin(min(1.0, max(0.0, t)) * math.pi) ** 1.4
-        for x in range(size):
-            c.blend(x, y, shade((30, 31, 35, 255), -10 + lit * 26), 1.0)
-    return c
-
-
-def dc_string_line():
-    return _line_tile(armoured=False)
-
-
-# ------------------------------------------------------------------ the pole
-
 def pole_concrete():
     """A spun concrete distribution pole: pale grey, seamed, weathered, faintly rust-stained."""
     size = 512
@@ -1346,7 +1293,6 @@ def tx_nameplate():
     return c
 
 
-
 def line_abc():
     """Aerial bundled cable: four insulated cores laid up round a bare messenger, as one black bundle.
 
@@ -1409,7 +1355,6 @@ def line_fitting():
     return c
 
 
-
 def cab_panel():
     """A prefabricated kiosk's wall: a moulded panel in a light grey, weathered where the rain runs.
 
@@ -1466,7 +1411,6 @@ def cab_arrester():
         for j in range(size):
             c.set(i, j, profile[i])
     return c
-
 
 
 def cab_door(plain=False):

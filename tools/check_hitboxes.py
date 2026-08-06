@@ -9,8 +9,13 @@ The model is the authority: every group a machine draws, clipped to each cell it
 Tables to know about.  MOVING is what gets no collision (markers, moving parts, cable stubs).  MIN_OWN
 and MIN_CLAIM are the thresholds - a box in the machine's own cell is free, claiming the cell next door
 costs the player that cell.  SWEPT and ELSEWHERE are what is not compared, and why.  MODEL_TABLE scopes
-the search when a block derives other shapes from one table.  STATEFUL is a machine whose geometry
-changes with its state.
+the search when a block derives other shapes from one table.  RECTANGLES is what a machine's collision is
+made of.
+
+There is no table for a machine whose *collision* changes with its state, and that is a decision: the
+inverter used to need one, to prove its direct-current compartment could be taken back out of the shape,
+and now that the cabinet is one rectangle the compartment is 0.6 px of its front face.  A machine that
+grows a part a player can walk into would need it again.
 """
 
 import collections
@@ -547,68 +552,6 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
-# A machine whose *collision* changes with its state.  Empty as it stands, and the reason is a decision
-# rather than an oversight: the inverter was here, to prove its direct-current compartment could be taken
-# back out of the shape, and now that the cabinet is one rectangle the compartment is 0.6 px of its front
-# face - so PvInverterBlock declares one table and the geometry still changes with the state while the
-# collision does not.  A machine that grows a part a player can walk into belongs here again.
-STATEFUL = {}
-
-
-def optional_faults(directory, cells, groups):
-    """Whether a stateful machine's two shapes are still the two the model draws."""
-    if directory not in STATEFUL:
-        return []
-
-    block, group, constant, alternative = STATEFUL[directory]
-    source = open(os.path.join(BLOCKS, block + '.java')).read()
-    match = re.search(r'%s\s*=\s*Block\.box\(([^)]*)\)' % re.escape(constant), source)
-    if match is None:
-        return ['%s declares no %s, so nothing can take the optional %s out of its collision'
-                % (block, constant, group)]
-
-    declared = tuple(round(float(v), 2) for v in match.group(1).split(','))
-    # a box here is (minX, maxX, minY, maxY, minZ, maxZ); Block.box wants the two corners in order
-    drawn = [(round(b[0], 2), round(b[2], 2), round(b[4], 2),
-              round(b[1], 2), round(b[3], 2), round(b[5], 2))
-             for boxes in cells.values() for box in boxes for b in (box,)]
-    faults = []
-    if declared not in drawn:
-        faults.append('%s.%s is %s, which is not one of the boxes %s draws'
-                      % (block, constant, declared, directory))
-
-    # everything the plain state keeps *except* the alternative itself, or it would be inside itself
-    kept = [box for name, polygons in groups.items()
-            if not name.startswith(group) and not name.startswith(alternative)
-            and not name.startswith(MOVING)
-            for box in [extent(polygons)] if box]
-    for name, polygons in groups.items():
-        if not name.startswith(alternative):
-            continue
-
-        box = extent(polygons)
-        if box and not any(inside(box, other) for other in kept):
-            faults.append('%s stands outside everything the plain state keeps, so the plain shape is '
-                          'not the fitted shape less %s' % (name, constant))
-    return faults
-
-
-def extent(polygons):
-    """One box round a group's polygons, in pixels, or None if it has none."""
-    points = [point for polygon in polygons for point in polygon]
-    if not points:
-        return None
-
-    return tuple(f(p[axis] for p in points) * 16.0
-                 for f in (min, max) for axis in range(3))
-
-
-def inside(box, other):
-    lo, hi = box[:3], box[3:]
-    other_lo, other_hi = other[:3], other[3:]
-    return all(other_lo[i] - EPS <= lo[i] and hi[i] <= other_hi[i] + EPS for i in range(3))
-
-
 def main():
     printing = '--java' in sys.argv
     faults = 0
@@ -637,10 +580,6 @@ def main():
         if directory in SWEPT:
             print('    not compared: %s' % SWEPT[directory])
             continue
-
-        for fault in optional_faults(directory, cells, groups):
-            print('    STATE    %s' % fault)
-            faults += 1
 
         for fault in facing_faults(name, block, source):
             faults += 1

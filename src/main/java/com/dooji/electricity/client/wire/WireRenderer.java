@@ -1,9 +1,5 @@
 package com.dooji.electricity.client.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.api.power.ConductorSpec;

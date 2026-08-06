@@ -13,87 +13,16 @@ check_generated_assets.py fails the build if two generators claim one path.
 
 import math
 import os
-import struct
-import zlib
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from texlib import Canvas                                                       # noqa: E402
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'textures')
 
 # How many pixels a texture gets per unit of the drawing.
 DETAIL = 4
-
-
-# ------------------------------------------------------------------ the canvas
-
-class Canvas:
-    """An RGBA image with the handful of drawing operations these textures need."""
-
-    def __init__(self, width, height, fill=(0, 0, 0, 0)):
-        self.w = width
-        self.h = height
-        self.px = [list(fill) for _ in range(width * height)]
-
-    def set(self, x, y, colour):
-        if 0 <= x < self.w and 0 <= y < self.h:
-            self.px[y * self.w + x] = list(colour) if len(colour) == 4 else list(colour) + [255]
-
-    def get(self, x, y):
-        return tuple(self.px[y * self.w + x])
-
-    def rect(self, x0, y0, x1, y1, colour):
-        for y in range(max(0, y0), min(self.h, y1)):
-            for x in range(max(0, x0), min(self.w, x1)):
-                self.set(x, y, colour)
-
-    def outline(self, x0, y0, x1, y1, colour):
-        for x in range(x0, x1):
-            self.set(x, y0, colour)
-            self.set(x, y1 - 1, colour)
-        for y in range(y0, y1):
-            self.set(x0, y, colour)
-            self.set(x1 - 1, y, colour)
-
-    def disc(self, cx, cy, radius, colour):
-        for y in range(int(cy - radius), int(cy + radius) + 1):
-            for x in range(int(cx - radius), int(cx + radius) + 1):
-                if (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius:
-                    self.set(x, y, colour)
-
-    def stroke(self, x0, y0, x1, y1, colour, width=1.0):
-        """A thick line between two points, ends included."""
-        dx, dy = x1 - x0, y1 - y0
-        length = max(1e-6, (dx * dx + dy * dy) ** 0.5)
-        half = width / 2.0
-        lo_x = int(min(x0, x1) - half - 1)
-        hi_x = int(max(x0, x1) + half + 2)
-        lo_y = int(min(y0, y1) - half - 1)
-        hi_y = int(max(y0, y1) + half + 2)
-
-        for y in range(max(0, lo_y), min(self.h, hi_y)):
-            for x in range(max(0, lo_x), min(self.w, hi_x)):
-                px, py = x + 0.5, y + 0.5
-                t = max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / (length * length)))
-                near_x, near_y = x0 + t * dx, y0 + t * dy
-                if (px - near_x) ** 2 + (py - near_y) ** 2 <= half * half:
-                    self.set(x, y, colour)
-
-    def write(self, path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        raw = bytearray()
-        for y in range(self.h):
-            raw.append(0)  # filter type 0: no filtering, which compresses well enough here
-            for x in range(self.w):
-                raw.extend(self.px[y * self.w + x])
-
-        def chunk(kind, payload):
-            data = kind + payload
-            return struct.pack('>I', len(payload)) + data + struct.pack('>I', zlib.crc32(data) & 0xffffffff)
-
-        png = b'\x89PNG\r\n\x1a\n'
-        png += chunk(b'IHDR', struct.pack('>IIBBBBB', self.w, self.h, 8, 6, 0, 0, 0))
-        png += chunk(b'IDAT', zlib.compress(bytes(raw), 9))
-        png += chunk(b'IEND', b'')
-        with open(path, 'wb') as f:
-            f.write(png)
 
 
 def sprite(rows, palette):

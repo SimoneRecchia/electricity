@@ -1,10 +1,6 @@
 package com.dooji.electricity.client.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.wire.InsulatorHost;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

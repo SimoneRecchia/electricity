@@ -14,8 +14,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, ROUND, Mesh, angle, bolt, box, channel, clad_box, cylinder,
-                      emit, hemisphere, ibeam, pin_insulator, strut)
+from modellib import (FITTING, ROUND, Mesh, bolt, box, channel, clad_box, cylinder, emit,
+                      hemisphere, pin_insulator, strut)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 

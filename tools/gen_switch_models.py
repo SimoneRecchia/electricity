@@ -25,7 +25,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, HEX, Mesh, angle, bolt, box, channel, clad_box, cylinder, emit,   # noqa: E402
+from modellib import (FITTING, Mesh, angle, bolt, box, channel, clad_box, cylinder, emit,   # noqa: E402
                       pivot, sheds, square_uv)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
