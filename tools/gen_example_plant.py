@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """A whole photovoltaic plant, as commands a dev server can be handed.
 
-    python3 tools/gen_example_plant.py              # checks the layout and writes the command file
-    python3 tools/gen_example_plant.py --at 0 -60 0  # somewhere other than the origin
-    python3 tools/rcon.py -f build/plant/plant.txt   # and builds it
+    python3 tools/gen_example_plant.py               # checks the layout and writes both outputs
 
-Writes build/plant/plant.txt and prints the spans a player has to string, because a span is a player
-action by design - it is saved against two fittings a conductor apart, not against a block.
+Two ways to build what it writes, because there are two ways to have a world:
+
+    python3 tools/rcon.py -f build/plant/plant.txt   # a dev server (./gradlew runServer), absolute coordinates
+    /function electricity:plant                      # any world at all, from the datapack, where you stand
+
+The datapack is written to build/plant/datapack/ with *relative* coordinates, so it builds from the block
+the player is standing on.  Copy it into a world's datapacks folder, /reload, and run the function.
+
+Either way it prints the spans a player has to string afterwards, because a span is a player action by
+design - it is saved against two fittings a conductor apart, not against a block.
 
 The layout is checked before it is written: no two machines' cells may overlap, every array has to touch
 a run of the gauge its inverter looks for, and every span has to be inside its conductor's own limit.
@@ -31,6 +37,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_hitboxes                                                            # noqa: E402
 
 OUT = os.path.join('build', 'plant', 'plant.txt')
+PACK = os.path.join('build', 'plant', 'datapack')
+# The namespace and name the function is called by: /function electricity:plant
+FUNCTION = ('electricity', 'plant')
 REGISTRY = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'main', 'registry')
 BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block')
 
@@ -245,6 +254,21 @@ class Plant:
 
     # ---- what a server is handed ----
 
+    def relative(self, origin):
+        """The same commands with every coordinate written as an offset, for a datapack function.
+
+        A function runs at whoever calls it, so `~ ~ ~` is the block the player is standing on - which is
+        what makes one datapack build the plant anywhere rather than only at the coordinates it was written
+        for.  Minecraft floors a relative coordinate, so standing anywhere in a block is the same block.
+        """
+        out = []
+        for line in self.commands():
+            head, x, y, z, tail = line.split(' ', 4)
+            offsets = ' '.join('~%s' % (int(value) - origin[i] or '')
+                               for i, value in enumerate((x, y, z)))
+            out.append('%s %s %s' % (head, offsets, tail))
+        return out
+
     def commands(self):
         """The runs first and the machines after, which is what makes the cables join up.
 
@@ -435,7 +459,19 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w') as f:
         f.write('\n'.join(p.commands()) + '\n')
-    print('%s: %d commands' % (OUT, len(p.commands())))
+    print('%s: %d commands, at %s' % (OUT, len(p.commands()), origin))
+
+    namespace, name = FUNCTION
+    functions = os.path.join(PACK, 'data', namespace, 'functions')
+    os.makedirs(functions, exist_ok=True)
+    with open(os.path.join(PACK, 'pack.mcmeta'), 'w') as f:
+        f.write('{\n  "pack": {\n    "pack_format": 15,\n'
+                '    "description": "Electricity: a 533 kW photovoltaic plant, where you stand"\n  }\n}\n')
+    with open(os.path.join(functions, name + '.mcfunction'), 'w') as f:
+        f.write('# written by tools/gen_example_plant.py - do not edit by hand\n')
+        f.write('# /function %s:%s builds the plant from the block you are standing on\n' % (namespace, name))
+        f.write('\n'.join(p.relative(origin)) + '\n')
+    print('%s: /function %s:%s, relative to whoever runs it' % (PACK, namespace, name))
 
     print('\nthe spans, which a player strings by hand with the reel in hand:')
     for conductor, name_a, a, name_b, b in p.spans:
