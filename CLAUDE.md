@@ -284,6 +284,18 @@ them and the next machine added got none at all - which with `requiresCorrectToo
 breaks into nothing. `DROPS` is derived from `MACHINES`, and `check_generated_assets` fails on a machine that
 drops nothing, the same way it already failed on a blockstate no generator writes.
 
+**A whole plant is a fixture, and building one is how the topology gets tested.**
+`gen_example_plant.py` lays out four sub-fields, three string boxes, two inverters, a switch bay, a 400 kV
+line and a kiosk, checks the layout off the mod's own files - footprints from each block's cell table, module
+wattages from the catalogues, span reach from `ConductorCatalog` - and writes the `setblock` commands
+`tools/rcon.py -f` replays. Two faults in the *documentation* fell straight out of it: **a span between a
+tower and a pole cannot exist** (a tower takes transmission only, a pole refuses it, and both are on the
+tower's own `feeds` list), so the way off a line is a second substation transformer into a laid run; and row
+spacing does nothing, because row shading is the product's ground cover ratio, while **the sun is only ever
+due east or due west**, so a fixed row must face east or west and anything standing east or west of it shades
+it. Cables are emitted before machines on purpose: `setblock` does not run a block's placement rule, so a
+cable's machine-facing sides are left for the machine to fix when it lands.
+
 **A part's box and a part's mesh have to be compared, not just declared.** `check_hitboxes.py` skips the
 cables — their shape is per state, not per model file — so nothing checked a cable fitting's own geometry
 against its own box. `Barrel` passed `cylinder` a centre of `low` and the *whole* length as the *half*
@@ -321,6 +333,7 @@ python3 tools/gen_transformer_models.py # the two transformers
 python3 tools/gen_switch_models.py      # the disconnector and the breaker
 python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
 python3 tools/gen_control_models.py     # the plant control cabinet
+python3 tools/gen_example_plant.py      # a whole 533 kW plant, as setblock commands for the dev server
 ```
 
 ## 7. What must pass before anything is done
