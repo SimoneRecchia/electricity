@@ -49,11 +49,15 @@ public final class ObjDefinitions {
 				"insulator_output_porcelain"
 		)));
 
-		// Every machine in the catalogue draws the same model: the renderer scales it per
+		// Every machine in the catalogue draws the same model: the renderer scales it per spec.  The fitting is
+		// insulator_insulator_porcelain, because the inherited turbine model's object is "insulator" and its
+		// material is "insulator_porcelain" - the mod's loader keys a group as object + "_" + material.  It
+		// said insulator_Plastic, which is no group at all, so a turbine's terminal had no hover box and no
+		// wire could be hung on one; check_obj_loading fails on a name like that now.
 		ResourceLocation turbineModel = new ResourceLocation(Electricity.MOD_ID, "models/wind_turbine/wind_turbine.obj");
 		for (var spec : TurbineCatalog.all()) {
 			Block block = Electricity.TURBINE_BLOCKS.get(spec.id()).get();
-			ALL.add(new ObjBlockDefinition(block, turbineModel, WindTurbineBlock.AUTHORED, List.of("insulator_Plastic")));
+			ALL.add(new ObjBlockDefinition(block, turbineModel, WindTurbineBlock.AUTHORED, List.of("insulator_insulator_porcelain")));
 		}
 
 		// One model per mounting rather than per product
@@ -62,11 +66,13 @@ public final class ObjDefinitions {
 			ALL.add(new ObjBlockDefinition(block, arrayModel(spec.mounting()), PvArrayBlock.AUTHORED, List.of()));
 		}
 
-		// The inverters share one cabinet
+		// The inverters share one cabinet.  The fitting is insulator_porcelain: it said insulator_instrument,
+		// which is no group at all, so the plant's one connection to the grid had no hover box and no wire could
+		// be hung on it either.
 		ResourceLocation inverterModel = new ResourceLocation(Electricity.MOD_ID, "models/pv_inverter/pv_inverter.obj");
 		for (var spec : InverterCatalog.all()) {
 			Block block = Electricity.PV_INVERTER_BLOCKS.get(spec.id()).get();
-			ALL.add(new ObjBlockDefinition(block, inverterModel, PvInverterBlock.AUTHORED, List.of("insulator_instrument")));
+			ALL.add(new ObjBlockDefinition(block, inverterModel, PvInverterBlock.AUTHORED, List.of("insulator_porcelain")));
 		}
 
 		// The combiner boxes share one model: the difference between a six-way box and a thirty-two way

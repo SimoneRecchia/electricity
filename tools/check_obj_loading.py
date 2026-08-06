@@ -12,6 +12,13 @@ so the game drew the junction box's lid and dropped its five walls, and drew one
 pair.  Nothing else could see it: check_hitboxes, check_winding and render_blocks all append faces to a
 flat list, so every tool here read the twelve faces the game had reduced to one.
 
+**A fitting named after nothing.**  ObjDefinitions names each machine's fittings by group, and a wire is hung
+on one by pointing at it - so a name no model draws is a terminal that has no hover box and no anchor.  The
+wind turbine's said ``insulator_Plastic`` for as long as it has existed: the inherited model's object is
+``insulator`` and its material ``insulator_porcelain``, and the mod's loader keys a group as object + "_" +
+material, so the real name is ``insulator_insulator_porcelain``.  No wire could ever be hung on a turbine, and
+the only sign of it was a warning in the log at every resource reload.
+
 **A model whose OBJ is not there.**  Minecraft logs ``Failed to load model`` at ERROR and carries on with
 a missing model, which in a multipart blockstate is a part of the run that silently does not draw.  A
 stale dc_trunk_cable_climb.json outlived the climb it drew that way.
@@ -24,6 +31,7 @@ import collections
 import glob
 import json
 import os
+import re
 import sys
 
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -51,6 +59,35 @@ def split_materials(path):
     return out
 
 
+def fitting_names(java):
+    """Every group name ObjDefinitions names a fitting by, as a literal.
+
+    The names built in a loop - "bushing_" + i + "_porcelain" - are covered by their own family's literals
+    elsewhere in the same file, so the literals are what is worth checking and what went wrong.
+    """
+    source = open(os.path.join(java, 'com', 'dooji', 'electricity', 'main', 'registry',
+                               'ObjDefinitions.java')).read()
+    # followed by a comma or a close bracket, so the prefix of a "bushing_" + i + "_porcelain" is not one
+    return sorted({name for name in re.findall(r'"([a-z][a-z0-9_]*)"\s*[,)]', source)
+                   if name.startswith(('insulator', 'bushing'))})
+
+
+def group_keys(objs):
+    """Every group the mod's own loader would see: object + "_" + material, over every model."""
+    keys = set()
+    for path in objs:
+        group = None
+        for line in open(path):
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[0] == 'o':
+                group = parts[1]
+            elif parts[0] == 'usemtl' and group is not None:
+                keys.add(group + '_' + parts[1])
+    return keys
+
+
 def resolved(reference):
     """``electricity:models/x/y.obj`` as a path under the mod's assets."""
     return os.path.join(ASSETS, *reference.split(':', 1)[-1].split('/'))
@@ -66,6 +103,14 @@ def main():
             print('REPEATED  %s: "o %s" declared %d times -> the game bakes only the last.  '
                   'Materials seen: %s' % (os.path.relpath(path, ASSETS), name, count,
                                           ', '.join(materials) or '(none)'))
+            problems += 1
+
+    java = os.path.join(ASSETS.split(os.sep + 'src' + os.sep)[0], 'src', 'main', 'java')
+    drawn = group_keys(objs)
+    for name in fitting_names(java):
+        if name not in drawn:
+            print('NO GROUP  ObjDefinitions names the fitting "%s", which no model draws -> that terminal has '
+                  'no hover box and no wire can be hung on it.' % name)
             problems += 1
 
     models = sorted(glob.glob(os.path.join(ASSETS, 'models', 'block', '*.json')))
@@ -86,7 +131,6 @@ def main():
     # named in Java by ObjDefinitions, either as a whole path (electric_cab/cab.obj, which is not named
     # after its directory) or built as "models/" + modelName() + "/" + modelName() + ".obj" - so accept
     # the directory name as a string literal too, which is all the Java ever holds for those.
-    java = os.path.join(ASSETS.split(os.sep + 'src' + os.sep)[0], 'src', 'main', 'java')
     sources = ''.join(open(os.path.join(root, name)).read()
                       for root, _, names in os.walk(java) for name in names if name.endswith('.java'))
     for path in objs:
