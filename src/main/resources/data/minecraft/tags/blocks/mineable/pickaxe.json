@@ -16,6 +16,7 @@
     "electricity:met_station",
     "electricity:mv_breaker",
     "electricity:mv_disconnector",
+    "electricity:plant_controller",
     "electricity:power_box",
     "electricity:pv_combiner_16",
     "electricity:pv_combiner_32",

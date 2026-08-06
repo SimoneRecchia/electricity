@@ -53,6 +53,7 @@ BLOCK_CLASS = {
     'power_box': 'PowerBoxBlock',
     'electric_cabin': 'ElectricCabinBlock',
     'met_station': 'MetStationBlock',
+    'plant_controller': 'PlantControllerBlock',
     'wind_turbine': 'WindTurbineBlock',
     'pv_array': 'PvArrayBlock',
     'pv_inverter': 'PvInverterBlock',
@@ -150,6 +151,13 @@ RECTANGLES = {
     ),
     'pv_tilt': (
         ('rack', ('piers', 'purlin_0', 'purlin_1', 'rails', 'modules')),
+    ),
+    # The enclosure is one rectangle - a cabinet is a cabinet, and the door and everything let into it are
+    # 2 px of its own face.  The antenna is its own, because it is 16 mm across on a bracket at one end of a
+    # 400 mm roof: swept into the cabinet's box it would be a slab of air over the other end of it.
+    'plant_controller': (
+        ('cabinet', ('plinth', 'cabinet', 'door', 'rail', 'glands')),
+        ('antenna', ('antenna',)),
     ),
     'met_mast': (
         ('mast', ('mast', 'logger', 'anemometer')),

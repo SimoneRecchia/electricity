@@ -23,7 +23,7 @@ import net.minecraft.util.Mth;
 public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_array.png");
 	private static final int WIDTH = 288;
-	private static final int HEIGHT = 232;
+	private static final int HEIGHT = 244;
 
 	// the wells cut into the texture by tools/gen_pv_textures.py
 	private static final int POA_BAR_Y = 70;
@@ -31,6 +31,10 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 	private static final int TRACKER_BAR_Y = 126;
 	private static final int FIRST_SEPARATOR_Y = 40;
 	private static final int SECOND_SEPARATOR_Y = 142;
+	/** The four summary lines under it, and then the two widgets clear of them. */
+	private static final int LOSSES_Y = 146;
+	private static final int TRACKER_SLIDER_Y = 192;
+	private static final int MODE_BUTTON_Y = 216;
 
 	/** Top of the plane-of-array scale, W/m2. */
 	private static final double POA_SCALE = 1100.0;
@@ -50,10 +54,10 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 		TrackerSpec tracker = array == null ? null : array.tracker();
 
 		if (tracker != null) {
-			angleSlider = addRenderableWidget(new AngleSlider(leftPos + 11, topPos + 180, WIDTH - 22, 20,
+			angleSlider = addRenderableWidget(new AngleSlider(leftPos + 11, topPos + TRACKER_SLIDER_Y, WIDTH - 22, 20,
 					fractionOf(tracker, array.manualRotationDeg())));
 			modeButton = addRenderableWidget(Button.builder(Component.empty(), b -> send(SolarControlPayload.Action.ARRAY_CYCLE_TRACKER_MODE))
-					.bounds(leftPos + 12, topPos + 204, WIDTH - 24, 20).build());
+					.bounds(leftPos + 12, topPos + MODE_BUTTON_Y, WIDTH - 24, 20).build());
 			refreshWidgets();
 		}
 	}

@@ -249,16 +249,25 @@ def rows(source, where):
     return found
 
 
-def widgets(source):
-    """Where the buttons and sliders sit, as (top, bottom) bands."""
-    return [(int(match.group(1)), int(match.group(1)) + 20)
-            for match in re.finditer(r'topPos \+ (\d+),\s*\w+[^;]*?,\s*20\)', source)]
+def widgets(source, where):
+    """Where the buttons and sliders sit, as (top, bottom) bands.
+
+    A y written as a named constant counts as much as one written as a figure - and every widget on the
+    newer panels is named, so a regex that only read digits saw none of them.
+    """
+    bands = []
+    for match in re.finditer(r'topPos \+ (\w+),\s*\w+[^;]*?,\s*20[,)]', source):
+        argument = match.group(1)
+        y = int(argument) if argument.isdigit() else where.get(argument)
+        if y is not None:
+            bands.append((y, y + 20))
+    return bands
 
 
 def collisions(prefix, source, where):
     """Rows where two things are writing over each other: two helpers, or a helper and a widget."""
     out = []
-    bands = widgets(source)
+    bands = widgets(source, where)
     for y, helpers in sorted(rows(source, where).items()):
         for top, bottom in bands:
             # a line of text is nine pixels tall, so it clashes with anything starting under its baseline
@@ -312,7 +321,8 @@ def main():
 
     for name, prefix in (('PvArrayScreen.java', 'pv_array'), ('PvInverterScreen.java', 'pv_inverter'),
                          ('PvCombinerScreen.java', 'pv_combiner'), ('WindTurbineScreen.java', 'wind_turbine'),
-                         ('MetStationScreen.java', 'met_station')):
+                         ('MetStationScreen.java', 'met_station'),
+                         ('PlantControllerScreen.java', 'plant_controller')):
         source = open(os.path.join(SCREENS, name)).read()
         where = constants(source)
         problems.extend(collisions(prefix, source, where))

@@ -16,6 +16,8 @@ import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.MachineShellBlock;
 import com.dooji.electricity.block.MetStationBlock;
 import com.dooji.electricity.block.MetStationBlockEntity;
+import com.dooji.electricity.block.PlantControllerBlock;
+import com.dooji.electricity.block.PlantControllerBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PvArrayBlock;
 import com.dooji.electricity.block.PvCombinerBlock;
@@ -231,6 +233,12 @@ public class Electricity {
 	public static final RegistryObject<Item> MET_STATION_ITEM = ITEMS.register("met_station",
 			() -> new TooltipBlockItem(MET_STATION_BLOCK.get(), new Item.Properties(), "tooltip.electricity.met_station"));
 
+	/** The plant control cabinet: one setpoint for every dispatchable machine within reach of its radio. */
+	public static final RegistryObject<Block> PLANT_CONTROLLER_BLOCK = BLOCKS.register("plant_controller",
+			() -> new PlantControllerBlock(machine(1.5f, 3.0f)));
+	public static final RegistryObject<Item> PLANT_CONTROLLER_ITEM = ITEMS.register("plant_controller",
+			() -> new TooltipBlockItem(PLANT_CONTROLLER_BLOCK.get(), new Item.Properties(), "tooltip.electricity.plant_controller"));
+
 	/**
 	 * A block for every machine in the catalogue, keyed by spec id.
 	 *
@@ -360,6 +368,8 @@ public class Electricity {
 				}
 
 				output.accept(MET_STATION_ITEM.get());
+				// what the site is run from, after everything it runs
+				output.accept(PLANT_CONTROLLER_ITEM.get());
 				output.accept(CIRCUIT_BOARD_ITEM.get());
 				output.accept(CPU_ITEM.get());
 				output.accept(SCREEN_ITEM.get());
@@ -381,6 +391,7 @@ public class Electricity {
 	public static RegistryObject<BlockEntityType<PvInverterBlockEntity>> PV_INVERTER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<PvCombinerBlockEntity>> PV_COMBINER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<MetStationBlockEntity>> MET_STATION_BLOCK_ENTITY;
+	public static RegistryObject<BlockEntityType<PlantControllerBlockEntity>> PLANT_CONTROLLER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<LatticeTowerBlockEntity>> LATTICE_TOWER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<TransformerBlockEntity>> TRANSFORMER_BLOCK_ENTITY;
 	public static RegistryObject<BlockEntityType<GroundConductorBlockEntity>> GROUND_CONDUCTOR_BLOCK_ENTITY;
@@ -433,6 +444,7 @@ public class Electricity {
 		PV_COMBINER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("pv_combiner", () -> BlockEntityType.Builder.of(PvCombinerBlockEntity::new, blocksOf(PV_COMBINER_BLOCKS)).build(null));
 
 		MET_STATION_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("met_station", () -> BlockEntityType.Builder.of(MetStationBlockEntity::new, MET_STATION_BLOCK.get()).build(null));
+		PLANT_CONTROLLER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("plant_controller", () -> BlockEntityType.Builder.of(PlantControllerBlockEntity::new, PLANT_CONTROLLER_BLOCK.get()).build(null));
 
 		SWITCHGEAR_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register("switchgear", () -> BlockEntityType.Builder.of(SwitchgearBlockEntity::new, blocksOf(SWITCHGEAR_BLOCKS)).build(null));
 

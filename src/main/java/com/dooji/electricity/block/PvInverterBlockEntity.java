@@ -585,6 +585,12 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		return redstone.mode();
 	}
 
+	@Override
+	public double getNameplateKw() {
+		return spec().acPowerKw();
+	}
+
+	@Override
 	public double getActivePowerLimit() {
 		return activePowerLimitKw;
 	}

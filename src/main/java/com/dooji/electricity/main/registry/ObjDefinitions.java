@@ -4,6 +4,7 @@ import com.dooji.electricity.api.power.PvMounting;
 import com.dooji.electricity.block.ElectricCabinBlock;
 import com.dooji.electricity.block.LatticeTowerBlock;
 import com.dooji.electricity.block.MetStationBlock;
+import com.dooji.electricity.block.PlantControllerBlock;
 import com.dooji.electricity.block.PowerBoxBlock;
 import com.dooji.electricity.block.PvArrayBlock;
 import com.dooji.electricity.block.PvCombinerBlock;
@@ -117,6 +118,11 @@ public final class ObjDefinitions {
 		ALL.add(new ObjBlockDefinition(Electricity.MET_STATION_BLOCK.get(),
 				new ResourceLocation(Electricity.MOD_ID, "models/met_mast/met_mast.obj"),
 				MetStationBlock.AUTHORED, List.of()));
+
+		// No fittings: a control cabinet is wired in fibre and metering leads, not strung to a conductor.
+		ALL.add(new ObjBlockDefinition(Electricity.PLANT_CONTROLLER_BLOCK.get(),
+				new ResourceLocation(Electricity.MOD_ID, "models/plant_controller/plant_controller.obj"),
+				PlantControllerBlock.AUTHORED, List.of()));
 	}
 
 	private static ResourceLocation arrayModel(PvMounting mounting) {

@@ -14,6 +14,22 @@ public interface Dispatchable extends IEnergyBudget {
 	/** Joules produced in the last tick, before anything was claimed. */
 	double getGrossJoulesPerTick();
 
+	/**
+	 * The unit's nameplate, in kW.
+	 *
+	 * What a plant controller shares a setpoint out in proportion to, and the ceiling
+	 * {@link #setActivePowerLimit} clamps to.
+	 */
+	double getNameplateKw();
+
+	/**
+	 * What the unit is exporting now, in kW.
+	 *
+	 * Also on {@code InsulatorHost}, and it is the same figure: a machine has one output, whether the
+	 * question comes from a wire or from a control system.
+	 */
+	double getCurrentPower();
+
 	// ---- what a computer may do to it ----
 
 	void setStoppedByComputer(boolean stopped);

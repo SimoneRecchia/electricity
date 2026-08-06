@@ -334,6 +334,12 @@ public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost
 		return redstone.mode();
 	}
 
+	@Override
+	public double getNameplateKw() {
+		return spec().ratedPowerKw();
+	}
+
+	@Override
 	public double getActivePowerLimit() {
 		return activePowerLimitKw;
 	}

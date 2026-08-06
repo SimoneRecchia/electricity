@@ -124,6 +124,21 @@ def blockstates():
     return claimed, on_disk
 
 
+def loot():
+    """Every block that must drop something, against the tables on disk.
+
+    A block with requiresCorrectToolForDrops() and no loot table breaks into nothing, and nothing in the
+    game says so.  Twenty-six of these sat on disk with no generator behind them while the table that wrote
+    the rest was a hand-written list of ten - so the next machine added got none at all.
+    """
+    import gen_crafting
+    claimed = set(gen_crafting.DROPS)
+    folder = os.path.join('src', 'main', 'resources', 'data', 'electricity', 'loot_tables', 'blocks')
+    on_disk = {name[:-5] for name in os.listdir(folder) if name.endswith('.json')}
+    machines = {name for name in gen_crafting.MACHINES if name != 'machine_shell'}
+    return claimed, on_disk, machines
+
+
 def referenced():
     """Every texture named by a model, a material library, a blockstate or the Java."""
     seen = set()
@@ -202,9 +217,17 @@ def main():
         if name not in states:
             problems.append('blockstates/%s is on disk but no generator writes it' % name)
 
-    print('%d generated assets, %d referenced, %d blockstates from %d generators'
+    dropped, tables, machines = loot()
+    for name in sorted(machines - dropped):
+        problems.append('%s is a machine that drops nothing: no generator writes its loot table' % name)
+    for name in sorted(dropped - tables):
+        problems.append('loot_tables/blocks/%s.json is claimed but is not on disk' % name)
+    for name in sorted(tables - dropped):
+        problems.append('loot_tables/blocks/%s.json is on disk but no generator writes it' % name)
+
+    print('%d generated assets, %d referenced, %d blockstates from %d generators, %d loot tables'
           % (len(measured), len(used & set(measured)), len(on_disk),
-             len({tool for tools in states.values() for tool in tools})))
+             len({tool for tools in states.values() for tool in tools}), len(tables)))
     for problem in problems:
         print('  %s' % problem)
     if problems:

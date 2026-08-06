@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.network;
 
+import com.dooji.electricity.block.PlantControllerBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -8,6 +9,7 @@ import com.dooji.electricity.client.ElectricityClient;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
+import com.dooji.electricity.main.network.payloads.PlantControlPayload;
 import com.dooji.electricity.main.network.payloads.SolarControlPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
@@ -86,6 +88,20 @@ public class ElectricityNetworking {
 
 		toClient(id++, PowerUpdatePayload.class, PowerUpdatePayload::write, PowerUpdatePayload::read,
 				ElectricityClient::handlePowerUpdatePacket);
+
+		panelCommand(id++, PlantControlPayload.class, PlantControlPayload::write, PlantControlPayload::read,
+				PlantControlPayload::blockPos, (player, msg) -> {
+					if (player.serverLevel().getBlockEntity(msg.blockPos()) instanceof PlantControllerBlockEntity controller) {
+						applyPlantControl(controller, msg);
+					}
+				});
+	}
+
+	private static void applyPlantControl(PlantControllerBlockEntity controller, PlantControlPayload msg) {
+		switch (msg.action()) {
+			case CYCLE_MODE -> controller.setMode(controller.getMode().next());
+			case SET_SETPOINT -> controller.setSetpointKw(msg.value());
+		}
 	}
 
 	/** A reading the server sends out and the client draws: nothing to check but the side it arrived on. */

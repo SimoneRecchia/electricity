@@ -170,6 +170,11 @@ RECIPES = [
     # nothing else consumed one, so it was an item a player could craft and never use.
     ('met_station', 1, SHAPED, [' p ', 'pbp', 'SRS']),
 
+    # -------------------------------------------------------------- the plant controller
+    # A cabinet with a controller and a screen in it, over the switchgear it is wired to.  Two control
+    # boards rather than one: the controller and the gateways behind the same door are two devices.
+    ('plant_controller', 1, SHAPED, ['ScS', 'bEb', 'PQP']),
+
     # ------------------------------------------------------------------- the transformers
     # A tank, a core with windings on it, and the bushings the windings leave through.  The substation
     # unit is the same machine with radiators, a conservator and a tap changer on it.
@@ -302,6 +307,7 @@ MACHINES = {
     'power_box': ('stone_particle', 'power_box'),
     'turbine_tower': ('stone_particle', 'turbine_tower'),
     'met_station': ('metal_particle', 'met_station'),
+    'plant_controller': ('metal_particle', 'plant_controller'),
     'machine_shell': ('metal_particle', None),
     'sw_10': ('stone_particle', 'sw_10'),
     'c52_085': ('stone_particle', 'c52_085'),
@@ -348,6 +354,9 @@ BLOCK_NAMES = {
     'mv_disconnector': ('Disconnector',
                         'Makes a gap in a 24 kV line that you can see. Will not open under load: open the '
                         'breaker first.'),
+    'plant_controller': ('Plant Controller',
+                        'Holds every turbine and inverter within 64 blocks to one setpoint, shared out by '
+                        'rating. A comparator on it reads how loaded the plant is.'),
     'mv_breaker': ('Circuit Breaker',
                    'Breaks a 24 kV line under load, and trips itself above 26 MW. Its contacts are in a '
                    'vacuum, so all it shows is a flag.'),
@@ -376,18 +385,28 @@ MESSAGES = {
 
 
 # What a broken block gives back: itself, unless it is a run of conductor, which gives back the reel.
-DROPS = {
-    'tx_machine': 'tx_machine',
-    'tx_substation': 'tx_substation',
-    'lattice_suspension': 'lattice_suspension',
-    'lattice_tension': 'lattice_tension',
-    'lattice_terminal': 'lattice_terminal',
-    'mv_disconnector': 'mv_disconnector',
-    'mv_breaker': 'mv_breaker',
+# A machine drops itself, so the table is the register - every machine in MACHINES, plus the runs, which
+# are not machines and drop the reel they were laid from rather than a block of their own.
+#
+# It was a hand-written list of ten, and the mod has thirty-two machines: the twenty-six older tables sat on
+# disk with no generator behind them, which is the drift CLAUDE.md section 6 is about, and the *next* machine
+# added simply got no loot table.  With requiresCorrectToolForDrops() that block breaks into nothing.
+RUN_DROPS = {
     'abc_conductor_run': 'abc_conductor',
     'mv_conductor_run': 'mv_conductor',
     'hv_conductor_run': 'hv_conductor',
+    'dc_string_cable': 'dc_string_cable',
+    'dc_trunk_cable': 'dc_trunk_cable',
 }
+
+
+def drops():
+    out = {name: name for name in MACHINES if name != 'machine_shell'}
+    out.update(RUN_DROPS)
+    return out
+
+
+DROPS = drops()
 
 
 def loot_tables():

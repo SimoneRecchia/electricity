@@ -2,6 +2,7 @@ package com.dooji.electricity.client.hooks;
 
 import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.block.MetStationBlockEntity;
+import com.dooji.electricity.block.PlantControllerBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
@@ -9,6 +10,7 @@ import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.screen.MetStationScreen;
+import com.dooji.electricity.client.screen.PlantControllerScreen;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
 import com.dooji.electricity.client.screen.PvArrayScreen;
 import com.dooji.electricity.client.screen.PvCombinerScreen;
@@ -54,6 +56,7 @@ public final class PowerWrenchClientHooks {
 		out.put(PvArrayBlockEntity.class, PvArrayScreen::new);
 		out.put(PvCombinerBlockEntity.class, PvCombinerScreen::new);
 		out.put(MetStationBlockEntity.class, MetStationScreen::new);
+		out.put(PlantControllerBlockEntity.class, PlantControllerScreen::new);
 		return out;
 	}
 

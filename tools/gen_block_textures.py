@@ -590,6 +590,31 @@ def pv_switch():
     return c
 
 
+def control_lamp(lens, bright):
+    """A 22 mm indicator lamp: a chrome bezel round a domed lens, lit from the same direction as the rest.
+
+    One drawing, three colours - RUN, REMOTE and ALARM - because the only thing that differs on a real one
+    is the lens.  A lamp is what a player reads a control cabinet by, so it is a texture and not a grey nub.
+    """
+    size = 128
+    c = Canvas(size, size)
+    brushed(c, (176, 180, 186, 255), salt=311)
+    # the lens, filling the tile: the cap of a cylinder takes a square, so a circle here stays a circle
+    c.aa_disc(size * 0.5, size * 0.5, size * 0.46, lens)
+    # the highlight where LIGHT hits the dome, and the shadow opposite it
+    c.aa_disc(size * 0.5 - size * 0.10, size * 0.5 - size * 0.10, size * 0.16, bright, alpha=0.85)
+    c.aa_disc(size * 0.5 + size * 0.13, size * 0.5 + size * 0.13, size * 0.22,
+              shade(lens, -45), alpha=0.45)
+    return c
+
+
+# Green means running, amber means somebody is holding it back, red means it has tripped - the same three
+# colours the panels use, so a lamp on the door and a state line in a panel say the same thing.
+LAMP_RUN = ((38, 148, 62, 255), (150, 236, 168, 255))
+LAMP_REMOTE = ((206, 155, 24, 255), (250, 226, 150, 255))
+LAMP_ALARM = ((179, 58, 46, 255), (246, 168, 156, 255))
+
+
 # ------------------------------------------------------------------ cable
 # four diameters at worst, and terminated in MC4 connectors.
 
@@ -1468,6 +1493,9 @@ TEXTURES = {
     'pv_instrument': pv_instrument,
     'pv_dome': pv_dome,
     'pv_switch': pv_switch,
+    'lamp_run': lambda: control_lamp(*LAMP_RUN),
+    'lamp_remote': lambda: control_lamp(*LAMP_REMOTE),
+    'lamp_alarm': lambda: control_lamp(*LAMP_ALARM),
     'dc_core': dc_core,
     'dc_cleat': dc_cleat,
     'dc_connector_plus': dc_connector_plus,

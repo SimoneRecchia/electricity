@@ -613,10 +613,12 @@ TURBINES = {
 
 PANELS = {
     'pv_inverter': dict(width=288, height=252, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
-    'pv_array': dict(width=288, height=232, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
+    'pv_array': dict(width=288, height=244, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
     # shorter than the rest, because a combiner box is switchgear: one bar, and nothing to control
     'pv_combiner': dict(width=288, height=148, bar_x=12, bar_width=264, bars=(72,), separators=(40, 88)),
+    # one bar for the plant's loading, and the three mode buttons and the setpoint slider under it
+    'plant_controller': dict(width=288, height=178, bar_x=12, bar_width=264, bars=(58,), separators=(40, 78)),
 }
 
 
@@ -1017,6 +1019,30 @@ def item_enclosure():
     return c
 
 
+def item_controller():
+    """The control cabinet: a door with an HMI on it, three lamps, and the antenna above the roof."""
+    c = Canvas(16, 16)
+    dark, mid, light = ((150, 154, 160, 255), (198, 202, 208, 255), (226, 230, 236, 255))
+    # the whip, before the body, so the roof line covers its foot
+    c.rect(11, 0, 12, 4, STEEL[0])
+    c.rect(10, 3, 13, 4, STEEL[1])
+    # the enclosure, lit along the roof and dark at the plinth
+    c.rect(3, 3, 13, 16, mid)
+    c.rect(2, 3, 14, 4, light)
+    c.rect(3, 14, 13, 16, shade(mid, -45))
+    # the door, inset, with the HMI let into it and the swing handle down its closing edge
+    c.outline(4, 5, 12, 14, shade(mid, -30))
+    c.rect(5, 6, 11, 9, DARK[0])
+    c.rect(5, 6, 11, 7, CIRCUIT[1])
+    for x in (5, 7, 9):
+        c.rect(x, 10, x + 1, 11, (232, 196, 92, 255) if x == 7 else (108, 196, 120, 255))
+    c.rect(11, 10, 12, 13, shade(mid, -55))
+    # the louvre over the DIN rail
+    for y in (12, 13):
+        c.rect(5, y, 10, y + 1, shade(mid, -40))
+    return c
+
+
 def item_dc_section():
     """A fuse way assembly: carriers in a row on a busbar, with the switch at the end."""
     c = Canvas(16, 16)
@@ -1189,6 +1215,7 @@ PARTS = {
 
 
 ITEM_TEXTURES = {
+    'plant_controller': item_controller,
     'pv_combiner': item_combiner,
     'dc_string_cable': item_string_cable,
     'dc_trunk_cable': item_trunk_cable,

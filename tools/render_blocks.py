@@ -747,6 +747,13 @@ def scene_power_box():
     return triangles, (1.1, 0.82, -0.55), (1.45, 0.62, 0.85)
 
 
+def scene_controller():
+    """The control cabinet from where a player stands at its door, and its own height above it."""
+    triangles = ground(-2, -2, 4, 4, SAND)
+    triangles += placed(machine_model('plant_controller'), (1, 0, 1))
+    return triangles, (1.05, 1.05, -1.35), (1.45, 0.95, 0.9)
+
+
 def scene_cab():
     triangles = ground(-3, -3, 6, 6, SAND)
     triangles += placed(machine_model('electric_cab', 'cab'), (1, 0, 1))
@@ -942,6 +949,7 @@ SCENES = {
     'inverter_roof': scene_inverter_roof,
     'combiner_front': scene_combiner_front,
     'power_box': scene_power_box,
+    'controller': scene_controller,
     'cab': scene_cab,
     'pole': scene_pole,
     'tower': scene_tower,
