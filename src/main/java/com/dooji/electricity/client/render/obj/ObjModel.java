@@ -56,10 +56,6 @@ public class ObjModel {
 		}
 	}
 
-	public static ObjModel loadFromStream(InputStream stream) {
-		return loadFromStream(stream, null);
-	}
-
 	public static ObjModel loadFromStream(InputStream stream, ResourceLocation resourceLocation) {
 		ObjModel model = new ObjModel();
 		try {
@@ -212,66 +208,11 @@ public class ObjModel {
 		public final Vector3f min;
 		public final Vector3f max;
 		public final Vector3f center;
-		public final Vector3f size;
 
 		public BoundingBox(Vector3f min, Vector3f max) {
 			this.min = min;
 			this.max = max;
 			this.center = new Vector3f((min.x + max.x) / 2.0f, (min.y + max.y) / 2.0f, (min.z + max.z) / 2.0f);
-			this.size = new Vector3f(max.x - min.x, max.y - min.y, max.z - min.z);
-		}
-	}
-
-	public static class OrientedBoundingBox {
-		public final Vector3f[] corners;
-		public final Vector3f center;
-		public final Vector3f size;
-
-		public OrientedBoundingBox(Vector3f center, Vector3f size, float yaw, float pitch) {
-			this.center = center;
-			this.size = size;
-			this.corners = calculateOrientedCorners(center, size, yaw, pitch);
-		}
-
-		public OrientedBoundingBox(Vector3f center, Vector3f size) {
-			this(center, size, 0.0f, 0.0f);
-		}
-
-		private static Vector3f[] calculateOrientedCorners(Vector3f center, Vector3f size, float yaw, float pitch) {
-			Vector3f[] corners = new Vector3f[8];
-			float halfWidth = size.x / 2.0f;
-			float halfHeight = size.y / 2.0f;
-			float halfDepth = size.z / 2.0f;
-
-			Vector3f[] localCorners = {new Vector3f(-halfWidth, -halfHeight, -halfDepth), new Vector3f(halfWidth, -halfHeight, -halfDepth), new Vector3f(halfWidth, -halfHeight, halfDepth),
-					new Vector3f(-halfWidth, -halfHeight, halfDepth), new Vector3f(-halfWidth, halfHeight, -halfDepth), new Vector3f(halfWidth, halfHeight, -halfDepth),
-					new Vector3f(halfWidth, halfHeight, halfDepth), new Vector3f(-halfWidth, halfHeight, halfDepth)};
-
-			for (int i = 0; i < 8; i++) {
-				Vector3f corner = new Vector3f(localCorners[i]);
-
-				if (yaw != 0) {
-					float cosYaw = (float) Math.cos(Math.toRadians(yaw));
-					float sinYaw = (float) Math.sin(Math.toRadians(yaw));
-					float x = corner.x * cosYaw + corner.z * sinYaw;
-					float z = -corner.x * sinYaw + corner.z * cosYaw;
-					corner.x = x;
-					corner.z = z;
-				}
-
-				if (pitch != 0) {
-					float cosPitch = (float) Math.cos(Math.toRadians(pitch));
-					float sinPitch = (float) Math.sin(Math.toRadians(pitch));
-					float y = corner.y * cosPitch - corner.z * sinPitch;
-					float z = corner.y * sinPitch + corner.z * cosPitch;
-					corner.y = y;
-					corner.z = z;
-				}
-
-				corners[i] = new Vector3f(corner).add(center);
-			}
-
-			return corners;
 		}
 	}
 
