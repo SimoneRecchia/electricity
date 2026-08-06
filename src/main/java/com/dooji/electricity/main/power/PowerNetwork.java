@@ -299,36 +299,44 @@ public class PowerNetwork {
 		return groups;
 	}
 
+	/**
+	 * Every span power may leave this fitting by.
+	 *
+	 * A span has no direction of its own, so the same three rules were written out twice with start and end
+	 * swapped - and the two copies had drifted: the third rule read "input to output" one way round and
+	 * "output to input" the other, which is the same rule said backwards.
+	 */
 	private List<PowerConnection> getOutgoingConnections(int fromNodeId) {
 		List<PowerConnection> connections = new ArrayList<>();
 		for (PowerConnection connection : powerConnections.values()) {
-			if (connection.startNode.insulatorId == fromNodeId) {
-				boolean sameBlockPos = connection.startNode.position.equals(connection.endNode.position);
-				if (!canTransfer(connection.startNode, connection.endNode)) continue;
+			PowerNode from = connection.startNode.insulatorId == fromNodeId ? connection.startNode
+					: connection.endNode.insulatorId == fromNodeId ? connection.endNode : null;
+			if (from == null) continue;
 
-				if ("output".equals(connection.startPowerType) && ("input".equals(connection.endPowerType) || "bidirectional".equals(connection.endPowerType))) {
-					connections.add(connection);
-				} else if ("bidirectional".equals(connection.startPowerType) && ("input".equals(connection.endPowerType) || "bidirectional".equals(connection.endPowerType))) {
-					connections.add(connection);
-				} else if (sameBlockPos && "input".equals(connection.startPowerType) && "output".equals(connection.endPowerType)) {
-					connections.add(connection);
-				}
-			} else if (connection.endNode.insulatorId == fromNodeId) {
-				boolean sameBlockPos = connection.startNode.position.equals(connection.endNode.position);
-				if (!canTransfer(connection.endNode, connection.startNode)) continue;
-
-				if ("output".equals(connection.endPowerType) && ("input".equals(connection.startPowerType) || "bidirectional".equals(connection.startPowerType))) {
-					connections.add(connection);
-				} else if ("bidirectional".equals(connection.endPowerType) && ("input".equals(connection.startPowerType) || "bidirectional".equals(connection.startPowerType))) {
-					connections.add(connection);
-				} else if (sameBlockPos && "output".equals(connection.endPowerType) && "input".equals(connection.startPowerType)) {
-					connections.add(connection);
-				}
+			PowerNode to = connection.getOtherNode(from);
+			if (!canTransfer(from, to)) continue;
+			if (leaves(connection.typeOf(from), connection.typeOf(to), from.position.equals(to.position))) {
+				connections.add(connection);
 			}
 		}
 
 		return connections;
 	}
+
+	/**
+	 * Whether power leaves a fitting of this type for one of that type.
+	 *
+	 * An output or a bidirectional fitting feeds an input or a bidirectional one. The third rule is for two
+	 * fittings of one machine wired to each other, where an input may feed an output - that is a jumper across
+	 * the machine, and it is the only case where the direction runs the other way.
+	 */
+	private static boolean leaves(String from, String to, boolean sameBlock) {
+		boolean takes = "input".equals(to) || "bidirectional".equals(to);
+		if (("output".equals(from) || "bidirectional".equals(from)) && takes) return true;
+
+		return sameBlock && "input".equals(from) && "output".equals(to);
+	}
+
 	public void syncToClients() {
 		Map<BlockPos, Double> blockPower = new HashMap<>();
 		Map<BlockPos, PowerNode> representatives = new HashMap<>();
@@ -468,6 +476,11 @@ public class PowerNetwork {
 
 		PowerNode getOtherNode(PowerNode node) {
 			return node == startNode ? endNode : startNode;
+		}
+
+		/** Whether this end of the span is an input, an output, or either. */
+		String typeOf(PowerNode node) {
+			return node == startNode ? startPowerType : endPowerType;
 		}
 	}
 
