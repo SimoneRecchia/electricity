@@ -3,7 +3,10 @@
 
     python3 tools/check_gui_fits.py
 
-Measured at the widest each field can get, not at the value it happens to hold.
+Measured at the widest each field can get, not at the value it happens to hold - and a line that fits
+today but overruns at the extremes of its own fields is a failure, not a warning.  SPANS is what bounds
+"the extremes": a reading with a unit this file knows is measured at what that unit can really reach, and
+one it does not know is measured at an absurd figure, because asking for too much room is the safe error.
 """
 
 import json
@@ -114,20 +117,88 @@ def resolved(text, key, source, typical=False):
             depth -= 1
         i += 1
 
+    formats = re.findall(r'fmt\("([^"]+)"', source[at:i])
+    slots = [match.start() for match in re.finditer('%s', text)]
+    units = [unit_of(fmt, inside_format=True) or unit_of(text[slot + 2:])
+             for fmt, slot in zip(formats, slots)]
+    # A bare reading takes the unit of the next one that states it: "Cut-in %s · rated %s · cut-out %s m/s"
+    # is three wind speeds, and the line says so once at the end, the way the panel is read.
+    for index in range(len(units) - 2, -1, -1):
+        if units[index] is None:
+            units[index] = units[index + 1]
+
     out = text
-    for fmt in re.findall(r'fmt\("([^"]+)"', source[at:i]):
-        out = out.replace('%s', typical_value(fmt) if typical else widest_value(fmt), 1)
+    for fmt, unit in zip(formats, units):
+        slot = out.index('%s')
+        out = out[:slot] + (typical_value(fmt) if typical else widest_value(fmt, unit)) + out[slot + 2:]
 
     return out
 
 
-def widest_value(fmt):
-    """The widest string a format could plausibly produce."""
+# What a reading can actually hold, by the unit written beside it.  A percentage cannot pass 100 and an
+# angle of incidence cannot pass 90, so measuring either at 1400 makes this file demand room for a value
+# the mod cannot produce - and the only way to answer that is to shorten a label that was never too long.
+# The bound is the widest *text*, not the number: a signed field pays for its minus sign.
+SPANS = {
+    '%': '100.0',      # soiling, shading, buried fraction, efficiency, availability
+    '°C': '-60.0',     # colder than any biome, hotter than any module gets
+    '°': '-180.0',     # an azimuth, or a tracker angle, which is signed
+    'm/s': '60.0',     # over the cut-out speed of every turbine in the catalogue
+    'cm': '300.0',
+    'm': '40960',      # DcNetwork.MAX_RUNS blocks at WorldConditions.METRES_PER_BLOCK
+    'V': '1500',       # the DC ceiling of the string catalogue
+    'A': '1500',
+    'kW': '-9999',
+    'kWh': '999999',
+    'Hz': '-60.0',
+    'kohm': '99999',
+    'rpm': '-60.0',
+}
+
+# The order matters: the longest unit has to be tried first, or 'm/s' is read as 'm'.
+_UNITS = sorted(SPANS, key=len, reverse=True)
+
+
+def unit_of(text, inside_format=False):
+    """The unit a reading is written in, taken from what immediately follows it.
+
+    Two places carry it and both count: the format the screen passes - {@code fmt("%.1f%%")} - and the
+    translation the value lands in - {@code "Cell %s°C"}.  Only up to the next separator or the next
+    placeholder, or the wind in "wind %s m/s · AOI %s°" reads its unit off the angle behind it.
+    """
+    tail = text
+    if inside_format:
+        for mark in ('%+.0f', '%.0f', '%.1f', '%.2f', '%.3f', '%d', '%s'):
+            if mark in tail:
+                tail = tail[tail.index(mark) + len(mark):]
+                break
+    tail = tail.split('·')[0].split('%s')[0].replace('%%', '%').strip()
+    for unit in _UNITS:
+        if tail.startswith(unit):
+            return unit
+    return None
+
+
+def widest_value(fmt, unit=None):
+    """The widest string a format could produce, bounded by its unit where SPANS knows one.
+
+    A format with no unit this file recognises is measured at an absurd figure on purpose: a checker that
+    guesses low is worse than one that asks for too much room.
+    """
+    ceiling = SPANS.get(unit)
     out = fmt
+    if ceiling:
+        whole, point, decimals = ceiling.partition('.')
+        out = out.replace('%.0f', whole).replace('%+.0f', whole)
+        out = out.replace('%.1f', whole + '.' + (decimals or '0')[:1].ljust(1, '0'))
+        out = out.replace('%.2f', whole + '.' + (decimals or '0').ljust(2, '0')[:2])
+        out = out.replace('%.3f', whole + '.' + (decimals or '0').ljust(3, '0')[:3])
+        return out.replace('%d', whole).replace('%s', whole).replace('%%', '%')
+
     out = out.replace('%.0f', '1400').replace('%+.0f', '-60').replace('%.1f', '-40.0')
     out = out.replace('%.2f', '1.00').replace('%.3f', '1.000')
     out = out.replace('%d', '1500').replace('%s', '1500')
-    return out
+    return out.replace('%%', '%')
 
 
 def typical_value(fmt):
@@ -136,7 +207,7 @@ def typical_value(fmt):
     out = out.replace('%.0f', '35').replace('%+.0f', '-45').replace('%.1f', '34.8')
     out = out.replace('%.2f', '0.98').replace('%.3f', '0.985')
     out = out.replace('%d', '12').replace('%s', '12')
-    return out
+    return out.replace('%%', '%')
 
 
 # Which drawing helpers share a line legitimately.
@@ -209,7 +280,6 @@ def main():
     table = advances(FONT)
     lang = json.load(open(LANG))
     problems = []
-    warnings = []
 
     source = open(os.path.join(SCREENS, 'MetStationScreen.java')).read()
     where = constants(source)
@@ -267,18 +337,16 @@ def main():
                 problems.append('%s: "%s" needs %d of %d at ordinary values' % (prefix, text, usual, inner))
                 print('  OVERFLOWS %-52s %3d of %3d' % (text[:50], usual, inner))
             elif worst > inner:
-                warnings.append('%s: "%s" fits at %d but reaches %d at the extremes of every field'
-                                % (prefix, text, usual, worst))
-                print('  tight     %-52s %3d usual, %3d worst, of %3d' % (text[:50], usual, worst, inner))
+                problems.append('%s: "%s" fits at %d but reaches %d of %d at the extremes of every field'
+                                % (prefix, text, usual, worst, inner))
+                print('  OVERRUNS  %-52s %3d usual, %3d worst, of %3d' % (text[:50], usual, worst, inner))
         print('  inner width %d' % inner)
 
     print()
-    for warning in warnings:
-        print('  tight    %s' % warning)
     for problem in problems:
         print('  PROBLEM  %s' % problem)
 
-    print('%d problems, %d tight' % (len(problems), len(warnings)))
+    print('%d problems' % len(problems))
     return 1 if problems else 0
 
 
