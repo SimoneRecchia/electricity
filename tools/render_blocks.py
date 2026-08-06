@@ -288,24 +288,48 @@ def outline(boxes, offset=(0.0, 0.0, 0.0), yaw=0):
     return segments
 
 
-def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0), edges=()):
-    """A z-buffered pass with perspective-correct texture sampling."""
-    forward = _unit(_sub(target, eye))
-    right = _unit(_cross(forward, up))
-    above = _cross(right, forward)
-    focal = 0.5 * size / math.tan(math.radians(fov) * 0.5)
+class Camera:
+    """Where the eye is, and where a point in the world lands on the picture.
 
-    depth = [1e30] * (size * size)
-    canvas = Canvas(size, size, (96, 108, 122, 255))
+    One projection: there were four copies of these six lines, and the only difference between them was
+    whether the caller wanted z or 1/z back.
+    """
 
-    def project(point):
-        offset = _sub(point, eye)
-        z = _dot(offset, forward)
+    def __init__(self, eye, target, size, fov=42.0, up=(0.0, 1.0, 0.0)):
+        self.eye = eye
+        self.size = size
+        self.forward = _unit(_sub(target, eye))
+        self.right = _unit(_cross(self.forward, up))
+        self.above = _cross(self.right, self.forward)
+        self.focal = 0.5 * size / math.tan(math.radians(fov) * 0.5)
+
+    def screen(self, point):
+        """Pixel x, y and the distance along the view axis, or None for a point behind the eye."""
+        offset = _sub(point, self.eye)
+        z = _dot(offset, self.forward)
         if z <= 0.05:
             return None
-        inverse = focal / z
-        return (size * 0.5 + _dot(offset, right) * inverse,
-                size * 0.5 - _dot(offset, above) * inverse, z)
+        inverse = self.focal / z
+        return (self.size * 0.5 + _dot(offset, self.right) * inverse,
+                self.size * 0.5 - _dot(offset, self.above) * inverse, z)
+
+    def corners(self, points):
+        """The same for a whole face, as the rasterisers want it - 1/z, so u/z and v/z interpolate linearly."""
+        out = []
+        for point in points:
+            at = self.screen(point)
+            if at is None:
+                return None
+            out.append((at[0], at[1], 1.0 / at[2]))
+
+        return out
+
+
+def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0), edges=()):
+    """A z-buffered pass with perspective-correct texture sampling."""
+    camera = Camera(eye, target, size, fov, up)
+    depth = [1e30] * (size * size)
+    canvas = Canvas(size, size, (96, 108, 122, 255))
 
     for _, texture, corners, normal, shade, cull in triangles:
         # Culled by *winding*, the way a GPU does it, not by the stated normal: a quad wound the wrong way
@@ -315,23 +339,14 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
 
         lit = 1.0 if not shade else \
             AMBIENT + (1.0 - AMBIENT) * max(0.0, sum(normal[i] * LIGHT[i] for i in range(3)))
-        screen = []
-        for point, uv in corners:
-            offset = _sub(point, eye)
-            z = _dot(offset, forward)
-            if z <= 0.05:
-                screen = None
-                break
-            inverse = focal / z
-            screen.append((size * 0.5 + _dot(offset, right) * inverse,
-                           size * 0.5 - _dot(offset, above) * inverse, 1.0 / z, uv))
+        screen = camera.corners([point for point, _ in corners])
         if screen is None:
             continue
 
-        _triangle(canvas, depth, size, screen, texture, lit)
+        _triangle(canvas, depth, size, [at + (uv,) for at, (_, uv) in zip(screen, corners)], texture, lit)
 
     for a, b in edges:
-        first, second = project(a), project(b)
+        first, second = camera.screen(a), camera.screen(b)
         if first and second:
             _line(canvas, depth, size, first, second)
 
@@ -346,10 +361,7 @@ def see_through(triangles, eye, target, size=520, up=(0.0, 1.0, 0.0), inside=Non
     - so a pixel the second pass covers and the first does not has no front face on it at all, and what a
     player sees there is the inside.  That is "in molti punti ci sono zone trasparenti", measured.
     """
-    forward = _unit(_sub(target, eye))
-    right = _unit(_cross(forward, up))
-    above = _cross(right, forward)
-    focal = 0.5 * size / math.tan(math.radians(42.0) * 0.5)
+    camera = Camera(eye, target, size)
 
     def pass_over(cull):
         depth = [1e30] * (size * size)
@@ -364,35 +376,18 @@ def see_through(triangles, eye, target, size=520, up=(0.0, 1.0, 0.0), inside=Non
             normal = _face_normal(points)
             if cull and _dot(normal, _sub(points[0], eye)) > 0.0:
                 continue
-            screen = []
-            for point in points:
-                offset = _sub(point, eye)
-                z = _dot(offset, forward)
-                if z <= 0.05:
-                    screen = None
-                    break
-                inverse = focal / z
-                screen.append((size * 0.5 + _dot(offset, right) * inverse,
-                               size * 0.5 - _dot(offset, above) * inverse, 1.0 / z))
+            screen = camera.corners(points)
             if screen is None:
                 continue
             _cover(seen, depth, size, screen, downward, normal[1] < -0.5)
         return seen, downward
-
-    def to_screen(point):
-        offset = _sub(point, eye)
-        z = _dot(offset, forward)
-        if z <= 0.05:
-            return None
-        inverse = focal / z
-        return (size * 0.5 + _dot(offset, right) * inverse, size * 0.5 - _dot(offset, above) * inverse)
 
     # ``inside`` bounds the region that is being judged.  A composed run's outermost tube ends are open by
     # design - the block past them is where the run carries on - so counting them is counting the edge of
     # the picture, not a fault in the piece.
     window = None
     if inside:
-        corners = [to_screen(p) for p in inside]
+        corners = [camera.screen(p) for p in inside]
         corners = [c for c in corners if c]
         if corners:
             window = (min(c[0] for c in corners), min(c[1] for c in corners),
@@ -407,7 +402,11 @@ def see_through(triangles, eye, target, size=520, up=(0.0, 1.0, 0.0), inside=Non
 
 
 def _cover(seen, depth, size, screen, downward=None, faces_down=False):
-    """Marks the pixels this triangle is nearest at, and whether that nearest face points at the ground."""
+    """Marks the pixels this triangle is nearest at, and whether that nearest face points at the ground.
+
+    Deliberately its own scan-conversion rather than sharing _triangle's: this is a per-pixel loop in the
+    slowest tool here, and every way of sharing it puts a call or a yield inside that loop.
+    """
     (x0, y0, w0), (x1, y1, w1), (x2, y2, w2) = screen
     area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     if abs(area) < 1e-9:
