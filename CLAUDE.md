@@ -221,6 +221,25 @@ written: `wireable()` would not let a conductor be clicked onto a tower, and `re
 the span and then drew nothing. **If you are writing `instanceof` over more than two block entities in the
 wire path, the answer is a method on `InsulatorHost`.**
 
+The same rule made five more spines, and a machine added later gets each of them for free. **Look here before
+writing a loop or a helper that a sibling class already has:**
+
+| | |
+|---|---|
+| `ObjRendererBase.drawAll` | the pass a renderer makes: every loaded machine of a type, posed onto its facing, then the buffers of what left the screen released. Three arities — whole model, a `Drawing` where something moves, a `Predicate` where only some are drawn. It returns what it drew, which is what `cleanupAngles` wants |
+| `PlantScreen<T>` + `SetpointSlider` | a panel names its machine once and `machine()` comes back typed; a slider follows the machine while nobody holds it and sends only when the drag ends. **A caller never asks whether a drag is in progress** |
+| `Nameplate` | `rating()` for a label that never moves, `reading()` for a panel watched while it changes, and `fmt` at the root locale. Two precisions on purpose; there were five copies of the formatter |
+| `Dispatchable` | a machine a control system can stop, tell how to read redstone and hold to a setpoint. The turbine and the inverter, so `DispatchablePeripheral` is written once |
+| `Catalogue<T>` | the keyed, ordered set of specs every family had its own copy of. `Catalogue.id(path)` is the mod's namespace |
+
+And **the network layer decides reach, once**: `panelCommand` guards a command from a machine's panel (chunk
+loaded, inside the border, `mayInteract`, and within six blocks of the machine's own column), `clientRequest`
+is for a request that validates its own targets. Stringing a span is the only `clientRequest`, because its two
+ends are a conductor apart by design and the far one may be a fitting eleven blocks up a tower — twice a bound
+meant for a panel has stopped a wire being strung. A new server-bound message is one of those two, not a
+fourth hand-written subset of the checks: the pole's offsets had no distance bound at all for as long as they
+were written by hand.
+
 ## 6. Generate, never hand-edit
 
 Every model, texture, recipe and blockstate in this mod is written by a script in `tools/`. Editing
