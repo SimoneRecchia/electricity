@@ -28,6 +28,23 @@ public interface InsulatorHost {
 	boolean feeds(InsulatorHost other);
 
 	/**
+	 * Whether power passes through this machine rather than stopping at it: a switch, and nothing else.
+	 *
+	 * Every machine's {@link #feeds} is a list of the machine types it may send to, and the switches are on
+	 * none of those eight lists, because they were added to the mod after all of them were written. So
+	 * nothing could send power *to* a disconnector or a breaker: a switch put in a line silently blocked it,
+	 * and the machinery that makes a switch a switch - {@link #busOf}, the refusal to open under load, the
+	 * trip - could never engage, because no power ever arrived.
+	 *
+	 * A switch has no role of its own; it takes the role of the line it is in, which is why it cannot be on a
+	 * list of roles. What may reach it is settled by {@link #takesConductor}: a span to a switch can only be
+	 * strung at the switch's own voltage, so only the machines at that voltage can be at the other end of it.
+	 */
+	default boolean passesThrough() {
+		return false;
+	}
+
+	/**
 	 * Which internal bus a fitting is bonded to.
 	  *
 	 * Every fitting on one machine shares a bus, so power crosses it - that is what makes a pole a pole and

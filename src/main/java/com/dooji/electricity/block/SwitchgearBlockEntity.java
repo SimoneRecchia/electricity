@@ -66,6 +66,12 @@ public class SwitchgearBlockEntity extends FittedBlockEntity {
 		return true;
 	}
 
+	/** A switch is in a line, not at an end of one - see {@link InsulatorHost#passesThrough}. */
+	@Override
+	public boolean passesThrough() {
+		return true;
+	}
+
 	/** Its own voltage class and nothing else: a 24 kV unit is not where a transmission line lands. */
 	@Override
 	public boolean takesConductor(ConductorSpec conductor, int index) {

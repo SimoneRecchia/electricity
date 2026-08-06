@@ -497,7 +497,7 @@ public class PowerNetwork {
 	/** Whether power may flow along a wire, which each machine says for itself. */
 	private boolean canTransfer(PowerNode from, PowerNode to) {
 		return from.blockEntity instanceof InsulatorHost a && to.blockEntity instanceof InsulatorHost b
-				&& a.feeds(b);
+				&& (a.feeds(b) || b.passesThrough());
 	}
 
 	private static class TargetGroup {
