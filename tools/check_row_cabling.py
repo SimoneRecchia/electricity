@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import gen_pv_models as cabling                                                 # noqa: E402
+import objlib                                                                    # noqa: E402
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 RENDERER = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render',
@@ -51,30 +52,11 @@ CONTINUES = ('harness_lead_north', 'harness_lead_south', 'harness_entry_north', 
 
 
 def read_groups(path):
-    """Every object's triangles, keyed by object name, the way the mod's own loader groups them.
-
-    Split by object and then by material and merged, not replaced - RenderixSplitter's rule, not Forge's.
-    A machine model is read by the mod's renderer, so a repeated name adds faces rather than dropping them.
-    """
-    verts = []
-    groups = collections.OrderedDict()
-    name, material = 'root', 'none'
-    for line in open(path):
-        parts = line.split()
-        if not parts:
-            continue
-        if parts[0] == 'v':
-            verts.append(tuple(float(v) for v in parts[1:4]))
-        elif parts[0] == 'o':
-            name = parts[1]
-        elif parts[0] == 'usemtl':
-            material = parts[1]
-        elif parts[0] == 'f':
-            points = [verts[int(t.split('/')[0]) - 1] for t in parts[1:]]
-            for i in range(1, len(points) - 1):
-                groups.setdefault((name, material), []).append((points[0], points[i], points[i + 1]))
-
-    return groups
+    """Every object's triangles, keyed by (object, material) - the way the mod's own loader groups them."""
+    return collections.OrderedDict(
+        (key, objlib.triangles(faces))
+        for key, faces in objlib.grouped(objlib.read(path),
+                                         key=lambda face: (face.group, face.material)).items())
 
 
 def voxels(triangles):

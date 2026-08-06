@@ -19,6 +19,10 @@ import math
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import objlib                                                                    # noqa: E402
+
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 
 # The turbine's own model came with the mod and is not generated - see CLAUDE.md section 6.  Its normals
@@ -27,25 +31,14 @@ INHERITED = {'wind_turbine.obj'}
 
 
 def faces(path):
-    """Every face as (group, points, stated normal)."""
-    verts, norms, group = [], [], '?'
-    for line in open(path):
-        parts = line.split()
-        if not parts:
-            continue
+    """Every face that states a normal, as (group, points, that normal).
 
-        if parts[0] == 'v':
-            verts.append(tuple(float(v) for v in parts[1:4]))
-        elif parts[0] == 'vn':
-            norms.append(tuple(float(v) for v in parts[1:4]))
-        elif parts[0] == 'o':
-            group = parts[1]
-        elif parts[0] == 'f':
-            tokens = [t.split('/') for t in parts[1:]]
-            if len(tokens) < 3 or len(tokens[0]) < 3 or not tokens[0][2]:
-                continue
-
-            yield group, [verts[int(t[0]) - 1] for t in tokens], norms[int(tokens[0][2]) - 1]
+    A face with no stated normal is skipped rather than given one: this checker compares the winding against
+    what the file *says*, so a normal worked out from the winding would agree with it every time.
+    """
+    for face in objlib.read(path):
+        if face.normal is not None and len(face.points) >= 3:
+            yield face.group, face.points, face.normal
 
 
 def backwards(points, normal):

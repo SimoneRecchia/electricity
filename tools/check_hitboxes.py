@@ -25,6 +25,10 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import objlib                                                                    # noqa: E402
+
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block')
 RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
@@ -243,20 +247,8 @@ ELSEWHERE = {
 
 
 def obj_groups(path):
-    """Every object in an OBJ with the polygons it is made of."""
-    verts = []
-    groups = collections.OrderedDict()
-    current = 'none'
-    for line in open(path):
-        if line.startswith('v '):
-            verts.append(tuple(float(v) for v in line.split()[1:4]))
-        elif line.startswith('o '):
-            current = line.split(None, 1)[1].strip()
-        elif line.startswith('f '):
-            face = [verts[int(f.split('/')[0]) - 1] for f in line.split()[1:]]
-            groups.setdefault(current, []).append(face)
-
-    return groups
+    """Every object in an OBJ with the polygons it is made of.  Merged, not replaced - see objlib."""
+    return objlib.polygons(objlib.read(path))
 
 
 def bounds(faces):

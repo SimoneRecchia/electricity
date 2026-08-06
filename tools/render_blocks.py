@@ -22,6 +22,7 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import objlib                                                                    # noqa: E402
 from texlib import Canvas                                                       # noqa: E402
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
@@ -168,51 +169,30 @@ def read_obj(path, resolve, flip_v=False, shade=True, cull=True, forge_groups=Tr
     ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does 1 - v.
     ``cull`` because the two pipelines differ: a block model is baked into the chunk with RenderType.solid,
     which culls by winding, while ObjRendererBase draws a machine with entityCutoutNoCull, which does not.
-    ``forge_groups`` applies the other difference between them, which is why this renderer said the
-    junction box had walls for four rounds while the game drew a bare plate: Forge's ObjModel does
-    ``parts.put(name, ...)`` into a map, so a repeated ``o`` name *replaces* the earlier group and every
-    face it held goes undrawn.  The mod's own parser splits by object and then by material instead, which
-    merges rather than replaces, so a machine loses nothing - hence the flag.
+    ``forge_groups`` is the other difference and objlib.forge_only explains it.  A face with no stated normal
+    gets one from its winding, which is what the game does and what only a *renderer* may do.
     """
-    directory = os.path.dirname(path)
-    verts, uvs, normals, materials = [], [], [], {}
-    group, material, out = 'root', None, []
-    occurrence, last_of = 0, {}
-    for line in open(path):
-        parts = line.split()
-        if not parts:
-            continue
-        head = parts[0]
-        if head == 'mtllib':
-            materials = read_mtl(os.path.join(directory, parts[1]), resolve)
-        elif head == 'v':
-            verts.append(tuple(float(v) for v in parts[1:4]))
-        elif head == 'vt':
-            v = float(parts[2])
-            uvs.append((float(parts[1]), 1.0 - v if flip_v else v))
-        elif head == 'vn':
-            normals.append(tuple(float(v) for v in parts[1:4]))
-        elif head == 'o':
-            group = parts[1]
-            occurrence += 1
-            last_of[group] = occurrence
-        elif head == 'usemtl':
-            material = parts[1]
-        elif head == 'f':
-            fields = [f.split('/') for f in parts[1:]]
-            corners = [(verts[int(f[0]) - 1],
-                        uvs[int(f[1]) - 1] if len(f) > 1 and f[1] else (0.0, 0.0)) for f in fields]
-            first = fields[0]
-            normal = normals[int(first[2]) - 1] if len(first) > 2 and first[2] else None
-            if normal is None:
-                normal = _face_normal([c[0] for c in corners])
-            for i in range(1, len(corners) - 1):
-                out.append((group, materials.get(material), (corners[0], corners[i], corners[i + 1]),
-                            normal, shade, cull, occurrence))
-
+    faces = objlib.read(path)
     if forge_groups:
-        out = [t for t in out if last_of.get(t[0]) == t[6]]
-    return [t[:6] for t in out]
+        faces = objlib.forge_only(faces)
+
+    materials = read_mtl(os.path.join(os.path.dirname(path), objlib.material_library(path)), resolve)
+    out = []
+    for face in faces:
+        corners = [(point, _uv(uv, flip_v)) for point, uv in zip(face.points, face.uvs)]
+        normal = face.normal or _face_normal(face.points)
+        for index in range(1, len(corners) - 1):
+            out.append((face.group, materials.get(face.material),
+                        (corners[0], corners[index], corners[index + 1]), normal, shade, cull))
+
+    return out
+
+
+def _uv(uv, flip_v):
+    if uv is None:
+        return (0.0, 0.0)
+
+    return (uv[0], 1.0 - uv[1] if flip_v else uv[1])
 
 
 def _face_normal(points):

@@ -21,6 +21,7 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import objlib                                                                    # noqa: E402
 from gen_block_textures import SQUASH                                            # noqa: E402
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
@@ -192,30 +193,8 @@ def bordered(path):
 
 def faces(path):
     """Every face of an OBJ as (object, material, corners, uvs, normal)."""
-    verts, uvs, normals, out = [], [], [], []
-    obj = material = None
-    for line in open(path):
-        parts = line.split()
-        if not parts:
-            continue
-        if parts[0] == 'v':
-            verts.append(tuple(float(v) for v in parts[1:4]))
-        elif parts[0] == 'vt':
-            uvs.append(tuple(float(v) for v in parts[1:3]))
-        elif parts[0] == 'vn':
-            normals.append(tuple(float(v) for v in parts[1:4]))
-        elif parts[0] == 'o':
-            obj = parts[1]
-        elif parts[0] == 'usemtl':
-            material = parts[1]
-        elif parts[0] == 'f':
-            fields = [f.split('/') for f in parts[1:]]
-            out.append((obj, material,
-                        [verts[int(f[0]) - 1] for f in fields],
-                        [uvs[int(f[1]) - 1] for f in fields if len(f) > 1 and f[1]],
-                        normals[int(fields[0][2]) - 1] if len(fields[0]) > 2 and fields[0][2] else None))
-
-    return out
+    return [(face.group, face.material, face.points, [uv for uv in face.uvs if uv is not None], face.normal)
+            for face in objlib.read(path)]
 
 
 def materials(path):

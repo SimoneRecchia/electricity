@@ -12,6 +12,10 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import objlib                                                                    # noqa: E402
+
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 ARRAY_BLOCK = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
                            'PvArrayBlock.java')
@@ -25,19 +29,8 @@ PEDESTAL_RADIUS = 0.062
 
 
 def read_faces(path):
-    """Every face of every object in an OBJ, keyed by object name."""
-    objects, current, verts = {}, None, []
-    for line in open(path):
-        if line.startswith('v '):
-            verts.append(tuple(float(v) for v in line.split()[1:4]))
-        elif line.startswith('o '):
-            # accumulated rather than assigned: a part whose faces are not all the same
-            current = line.split(None, 1)[1].strip()
-            objects.setdefault(current, [])
-        elif line.startswith('f ') and current is not None:
-            objects[current].append([verts[int(t.split('/')[0]) - 1] for t in line.split()[1:]])
-
-    return objects
+    """Every face of every object in an OBJ, keyed by object name.  Merged, not replaced - see objlib."""
+    return objlib.polygons(objlib.read(path))
 
 
 def span(face, axis):
