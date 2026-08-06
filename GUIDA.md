@@ -118,9 +118,21 @@ Ogni blocco è una **fila** di moduli, non un modulo singolo.
 |---|---|---|
 | **FT-415**, **FT-430** | tavolo zavorrato, piatto | non si muove, nessuna parte mobile |
 | | | *(la FT-415 è il vecchio "Solar Panel": è la stessa macchina, col nome nuovo)* |
-| **TR-530**, **TR-580** | rastrelliera a inclinazione fissa | non si muove, inclinata verso l'equatore |
+| **TR-530**, **TR-580** | rastrelliera a inclinazione fissa | non si muove: conta come la orienti |
 | **HX-700** | inseguitore a un asse | ruota da est a ovest seguendo il sole |
 | **AE-440** | inseguitore a due assi | ruota e si inclina, segue il sole in tutto |
+
+**Come orientare una fila fissa, che è la cosa che nessuno indovina.** Il sole di questo mod sta **solo a
+est** (tutta la mattina) o **solo a ovest** (tutto il pomeriggio): non passa mai per sud. Quindi una fila a
+inclinazione fissa va posata **guardando a est o a ovest**. Una fila che guarda a nord o a sud sta a 90°
+dal sole tutto il giorno, la sua inclinazione non guadagna niente e rende meno di un tavolo piatto.
+**Metà delle file a est e metà a ovest** è quello che appiattisce la curva della giornata. Una fila su
+**inseguitore** invece ignora del tutto il suo orientamento: si gira lei.
+
+**Distanziare le file non serve.** L'ombra fra una fila e quella dietro è una proprietà del prodotto, non
+di quanto le allontani: puoi metterle attaccate. Quello che **ombreggia davvero è qualsiasi cosa stia a est
+o a ovest** di una fila — un armadio, un albero, un muro — perché è lì che sta il sole. Quindi tieni le
+estremità est e ovest libere, e metti armadi, quadri e trasformatori **a nord** del campo.
 
 **Collegamento:** posa un cavo **SC-6** che tocchi la fila e portalo fino a un quadro di stringa o a un
 inverter. Il pannello del pannello ti dice `Wired` / `Not wired`.
@@ -389,6 +401,9 @@ ferro**; pannelli, inverter, quadri, palo meteo e quadro di controllo vengono vi
 
 ## 10. Simulazione di un impianto completo
 
+> Per un impianto **solo solare** con le coordinate esatte di ogni blocco, l'elenco numerato delle campate
+> e un file di comandi che lo costruisce, vedi [IMPIANTO-SOLARE.md](IMPIANTO-SOLARE.md).
+
 Un impianto ibrido: **circa 1,4 MW di fotovoltaico** e **due turbine da 3 MW**, che escono su una linea a
 400 kV, con un kiosk in fondo che alimenta una casa.
 
@@ -396,11 +411,9 @@ Le coordinate sono relative: prendi un pianoro, chiama X l'asse est-ovest e Z l'
 
 ### Passo 1 — Il campo solare
 
-Posa **quattro file di FT-430** in linea lungo X, con **due blocchi di distanza** fra una fila e l'altra
-lungo Z, così l'ombra di una fila non finisce su quella dietro (il pannello di ogni fila ti dice, nella
-riga delle perdite, quanto si stanno ombreggiando: se `rows` non è a zero, allarga).
-
-Poi altre quattro file identiche accanto. In tutto otto file.
+Posa **quattro file di FT-430** in linea lungo X guardando a **est**, e altre quattro guardando a
+**ovest**: mattina da una metà, pomeriggio dall'altra. Attaccate va bene — vedi il §4.1 sul perché
+distanziarle non serve e cosa ombreggia davvero.
 
 ```
  Z+
@@ -487,10 +500,21 @@ Poi la linea. Prendi la bobina di **Curlew ACSR quadruplo**:
 * dove la linea gira, metti un **Tension Tower** invece di un suspension;
 * all'altro capo, un altro **Terminal Tower**.
 
-### Passo 9 — La discesa in bassa tensione
+### Passo 9 — La discesa: serve una seconda sottostazione, non un palo
 
-Al capo della linea: dal traliccio terminale, campata **MT** a un **palo**. Poi da palo a palo con MT
-fino dove ti serve, e per l'ultimo tratto passa al **bundle in bassa tensione** fino a un **kiosk**.
+Questa è la cosa che sorprende, e non è un difetto. Un **traliccio accetta solo conduttore di
+trasmissione**, e un **palo lo rifiuta**: non esiste nessuna bobina che vada bene per entrambe le
+estremità, quindi **una campata fra traliccio e palo non si può tirare**. Vale anche fra traliccio e cabina.
+
+Per scendere da una linea a 400 kV serve quello che serve nella realtà: **una sottostazione di arrivo**.
+
+* metti un secondo **Substation Transformer** al capo della linea;
+* campata **AT** dal traliccio terminale ai suoi **tre isolatori alti**;
+* dai suoi **tre isolatori bassi** esce media tensione — e da un trasformatore da sottostazione la MT può
+  andare solo verso un traliccio (che la rifiuta) o verso un **tratto posato a terra**, quindi posa qualche
+  blocco di **Medium-Voltage Run** e tiraci la campata;
+* dall'ultimo blocco del tratto posato, campata **MT** a un **palo**, e poi da palo a palo;
+* l'ultimo tratto in **bundle di bassa tensione** fino a un **kiosk**.
 
 Il kiosk dà FE: attaccaci il macchinario di un altro mod.
 
@@ -546,6 +570,12 @@ fila FT-430 ──SC-6──► CB-16 ──DT-240──► VX-350K ──MT─�
                                                                       │ AT 400 kV
                                                                       ▼
                                           TERMINAL ─ SUSPENSION ─ … ─ TERMINAL
+                                                                      │ AT
+                                                                      ▼
+                                                          TX SOTTOSTAZIONE (arrivo)
+                                                                      │ MT
+                                                                      ▼
+                                                            tratto MT posato a terra
                                                                       │ MT
                                                                       ▼
                                                             PALO ─ PALO ─ PALO
@@ -578,3 +608,5 @@ classe di conduttore sbagliata.
 | una macchina resta limitata dopo aver tolto il quadro | non può succedere: il quadro restituisce i limiti quando lo rompi |
 | la fila di pannelli si è messa piatta | è andata in bandiera per vento o neve; il pannello dice perché |
 | il pannello di una macchina non si apre | avevi qualcosa in mano: usa la chiave inglese, o la mano vuota |
+| non posso tirare niente fra un traliccio e un palo | e non si può: serve una sottostazione di arrivo — §10 passo 9 |
+| una fila inclinata rende meno di un tavolo piatto | guarda a nord o a sud: giràla a est o a ovest — §4.1 |
