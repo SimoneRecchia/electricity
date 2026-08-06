@@ -1,6 +1,6 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.api.power.IEnergyBudget;
+import com.dooji.electricity.api.power.Dispatchable;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.PvModuleSpec;
@@ -54,7 +54,7 @@ import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
 /** The inverter: the whole electrical side of a photovoltaic plant, in one block. */
-public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost, IEnergyBudget {
+public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost, Dispatchable {
 	/** How often the plant is surveyed for arrays again, in ticks. */
 	private static final int RESCAN_TICKS = 40;
 	/** Ticks in a day, for the energy counters that reset with it. */

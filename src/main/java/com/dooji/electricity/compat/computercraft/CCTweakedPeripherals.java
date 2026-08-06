@@ -1,5 +1,6 @@
 package com.dooji.electricity.compat.computercraft;
 
+import com.dooji.electricity.api.power.Dispatchable;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.SolarTelemetry;
 import com.dooji.electricity.api.power.Telemetry;
@@ -21,7 +22,10 @@ import dan200.computercraft.api.lua.MethodResult;
 import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IDynamicPeripheral;
 import dan200.computercraft.api.peripheral.IPeripheral;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,19 +78,20 @@ public final class CCTweakedPeripherals {
 		return null;
 	}
 
-	/** A tag-to-kind map as Lua sees it: the kinds by name rather than as enum constants. */
-	private static Map<String, Object> namedKinds(Map<String, Telemetry.Kind> kinds) {
-		Map<String, Object> named = new LinkedHashMap<>();
-		kinds.forEach((tag, kind) -> named.put(tag, kind.name()));
-		return named;
-	}
-
-	/** One generated getter per telemetry tag. */
-	private abstract static class TagPeripheral implements IDynamicPeripheral {
+	/**
+	 * One generated getter per telemetry tag, plus the two readings every machine here publishes.
+	 *
+	 * Public because CC:Tweaked finds an annotated method by reflecting over the concrete peripheral class,
+	 * and a method it cannot reach is a method Lua cannot call.
+	 */
+	public abstract static class TagPeripheral implements IDynamicPeripheral {
+		private final Map<String, Telemetry.Kind> kinds;
 		private final String[] tags;
 		private final String[] methodNames;
 
-		private TagPeripheral(Map<String, Telemetry.Kind> kinds, Set<String> reserved) {
+		private TagPeripheral(Map<String, Telemetry.Kind> kinds) {
+			this.kinds = kinds;
+			Set<String> reserved = annotatedNames();
 			List<String> keptTags = new ArrayList<>();
 			List<String> keptNames = new ArrayList<>();
 
@@ -102,11 +107,48 @@ public final class CCTweakedPeripherals {
 			this.methodNames = keptNames.toArray(String[]::new);
 		}
 
+		/**
+		 * Every name this peripheral already answers to, so a tag cannot generate a second method of that name.
+		 *
+		 * Read off the class rather than from a list each peripheral kept by hand: a @LuaFunction added without
+		 * remembering the list would have been a duplicate method name, which is not a mistake worth being able
+		 * to make.
+		 */
+		private Set<String> annotatedNames() {
+			Set<String> names = new HashSet<>();
+			for (Method method : getClass().getMethods()) {
+				LuaFunction annotation = method.getAnnotation(LuaFunction.class);
+				if (annotation == null) continue;
+
+				names.add(method.getName());
+				names.addAll(Arrays.asList(annotation.value()));
+			}
+
+			return names;
+		}
+
 		/** The machine's latest published readings. */
 		protected abstract Telemetry.Snapshot snapshot();
 
 		/** What the machine is, for the error message when a tag has not been published yet. */
 		protected abstract String describe();
+
+		/** Every signal at once, as a table keyed by tag. */
+		@LuaFunction
+		public final Map<String, Object> getTelemetry() {
+			return snapshot().values();
+		}
+
+		/**
+		 * Which tags are instrument readings and which are invented, as a table of tag to "MEASURED",
+		 * "DERIVED" or "SIMULATED".
+		 */
+		@LuaFunction
+		public final Map<String, Object> getTelemetryKinds() {
+			Map<String, Object> named = new LinkedHashMap<>();
+			kinds.forEach((tag, kind) -> named.put(tag, kind.name()));
+			return named;
+		}
 
 		@Override
 		public final String[] getMethodNames() {
@@ -131,18 +173,135 @@ public final class CCTweakedPeripherals {
 		}
 	}
 
-	/** The turbine as seen from Lua. */
-	public static final class WindTurbinePeripheral extends TagPeripheral {
-		private static final Set<String> RESERVED_NAMES = Set.of(
-				"getProductionRate", "getMaxOutput", "getEnergy", "getMaxEnergy", "getEnergyNeeded", "getEnergyFilledPercentage",
-				"isBlacklistedDimension", "stop", "start", "isStopped", "isRunning", "isWindCutOut", "isStoppedByRedstone",
-				"getRedstoneMode", "setRedstoneMode", "getActivePowerLimit", "setActivePowerLimit", "getTelemetry", "getTelemetryKinds"
-		);
+	/**
+	 * A machine a computer can dispatch, as Lua sees it.
+	 *
+	 * The sixteen names below were written twice, once against the turbine and once against the inverter, in
+	 * bodies that differed only in which field they read. Seven of them are Mekanism's own generator names,
+	 * kept so a program written for those works here.
+	 */
+	public abstract static class DispatchablePeripheral extends TagPeripheral {
+		private final Dispatchable machine;
 
+		private DispatchablePeripheral(Dispatchable machine, Map<String, Telemetry.Kind> kinds) {
+			super(kinds);
+			this.machine = machine;
+		}
+
+		@Override
+		public final Object getTarget() {
+			return machine;
+		}
+
+		// ---- names shared with Mekanism's generators ----
+
+		/** Joules produced in the last tick. */
+		@LuaFunction
+		public final double getProductionRate() {
+			return machine.getGrossJoulesPerTick();
+		}
+
+		/** Ceiling on what this generator will hand out per tick, in Joules. */
+		@LuaFunction
+		public final double getMaxOutput() {
+			return machine.getMaxJoulesPerTick();
+		}
+
+		/** Joules still unclaimed in this tick's budget. */
+		@LuaFunction
+		public final double getEnergy() {
+			return machine.getAvailableJoules();
+		}
+
+		@LuaFunction
+		public final double getMaxEnergy() {
+			return machine.getMaxJoulesPerTick();
+		}
+
+		/** Always zero: these machines are sources and accept nothing. */
+		@LuaFunction
+		public final double getEnergyNeeded() {
+			return 0.0;
+		}
+
+		@LuaFunction
+		public final double getEnergyFilledPercentage() {
+			double max = machine.getMaxJoulesPerTick();
+			return max <= 0.0 ? 0.0 : machine.getAvailableJoules() / max;
+		}
+
+		/**
+		 * Present for parity with Mekanism's Wind Generator, which can be barred from generating in configured
+		 * dimensions.
+		 */
+		@LuaFunction
+		public final boolean isBlacklistedDimension() {
+			return false;
+		}
+
+		// ---- control ----
+
+		/** Stops the machine, and keeps it stopped until {@link #start()}. */
+		@LuaFunction(mainThread = true)
+		public final void stop() {
+			machine.setStoppedByComputer(true);
+		}
+
+		/** Releases a stop issued by {@link #stop()}. */
+		@LuaFunction(mainThread = true)
+		public final void start() {
+			machine.setStoppedByComputer(false);
+		}
+
+		/** Whether it is stopped specifically by a computer command. */
+		@LuaFunction
+		public final boolean isStopped() {
+			return machine.isStoppedByComputer();
+		}
+
+		/** Whether it is running and allowed to generate, for any reason. */
+		@LuaFunction
+		public final boolean isRunning() {
+			return machine.isRunning();
+		}
+
+		/** True when the current redstone mode and signal are holding it down. */
+		@LuaFunction
+		public final boolean isStoppedByRedstone() {
+			return machine.isStoppedByRedstone();
+		}
+
+		/** "DISABLED", "HIGH" or "LOW". */
+		@LuaFunction
+		public final String getRedstoneMode() {
+			return machine.getRedstoneMode().name();
+		}
+
+		/** Sets how it reacts to redstone. */
+		@LuaFunction(mainThread = true)
+		public final void setRedstoneMode(String mode) throws LuaException {
+			machine.setRedstoneMode(parseRedstoneMode(mode));
+		}
+
+		/** Curtailment setpoint in kW. */
+		@LuaFunction
+		public final double getActivePowerLimit() {
+			return machine.getActivePowerLimit();
+		}
+
+		/** Caps output at {@code limitKw}, clamped to what the machine can do. */
+		@LuaFunction(mainThread = true)
+		public final void setActivePowerLimit(double limitKw) throws LuaException {
+			machine.setActivePowerLimit(requireFinite(limitKw, "active power limit"));
+		}
+	}
+
+	/** The turbine as seen from Lua. */
+	public static final class WindTurbinePeripheral extends DispatchablePeripheral {
 		private final WindTurbineBlockEntity turbine;
 
 		private WindTurbinePeripheral(WindTurbineBlockEntity turbine) {
-			super(TurbineTelemetry.kinds(), RESERVED_NAMES);
+			super(turbine, TurbineTelemetry.kinds());
 			this.turbine = turbine;
 		}
 
@@ -157,11 +316,6 @@ public final class CCTweakedPeripherals {
 		}
 
 		@Override
-		public Object getTarget() {
-			return turbine;
-		}
-
-		@Override
 		protected Telemetry.Snapshot snapshot() {
 			return turbine.getTelemetry();
 		}
@@ -171,143 +325,19 @@ public final class CCTweakedPeripherals {
 			return "turbine";
 		}
 
-		// ---- names shared with Mekanism's generators ----
-
-		/** Joules produced in the last tick. */
-		@LuaFunction
-		public final double getProductionRate() {
-			return turbine.getGrossJoulesPerTick();
-		}
-
-		/** Ceiling on what this generator will hand out per tick, in Joules. */
-		@LuaFunction
-		public final double getMaxOutput() {
-			return turbine.getMaxJoulesPerTick();
-		}
-
-		/** Joules still unclaimed in this tick's budget. */
-		@LuaFunction
-		public final double getEnergy() {
-			return turbine.getAvailableJoules();
-		}
-
-		@LuaFunction
-		public final double getMaxEnergy() {
-			return turbine.getMaxJoulesPerTick();
-		}
-
-		/** Always zero: the turbine is a source and accepts nothing. */
-		@LuaFunction
-		public final double getEnergyNeeded() {
-			return 0.0;
-		}
-
-		@LuaFunction
-		public final double getEnergyFilledPercentage() {
-			double max = turbine.getMaxJoulesPerTick();
-			return max <= 0.0 ? 0.0 : turbine.getAvailableJoules() / max;
-		}
-
-		/**
-		 * Present for parity with Mekanism's Wind Generator, which can be barred from generating in configured dimensions.
-		 */
-		@LuaFunction
-		public final boolean isBlacklistedDimension() {
-			return false;
-		}
-
-		// ---- control ----
-
-		/** Applies the brake. */
-		@LuaFunction(mainThread = true)
-		public final void stop() {
-			turbine.setStoppedByComputer(true);
-		}
-
-		/** Releases a stop issued by {@link #stop()}. */
-		@LuaFunction(mainThread = true)
-		public final void start() {
-			turbine.setStoppedByComputer(false);
-		}
-
-		/** Whether this turbine is stopped specifically by a computer command. */
-		@LuaFunction
-		public final boolean isStopped() {
-			return turbine.isStoppedByComputer();
-		}
-
-		/** Whether the rotor is turning and allowed to generate, for any reason. */
-		@LuaFunction
-		public final boolean isRunning() {
-			return turbine.isRunning();
-		}
-
 		/** True when the machine stopped itself because the wind exceeded its cut-out speed. */
 		@LuaFunction
 		public final boolean isWindCutOut() {
 			return turbine.isWindCutOut();
 		}
-
-		/** True when the current redstone mode and signal are holding the turbine down. */
-		@LuaFunction
-		public final boolean isStoppedByRedstone() {
-			return turbine.isStoppedByRedstone();
-		}
-
-		/** "DISABLED", "HIGH" or "LOW". */
-		@LuaFunction
-		public final String getRedstoneMode() {
-			return turbine.getRedstoneMode().name();
-		}
-
-		/** Sets how the turbine reacts to redstone. */
-		@LuaFunction(mainThread = true)
-		public final void setRedstoneMode(String mode) throws LuaException {
-			turbine.setRedstoneMode(parseRedstoneMode(mode));
-		}
-
-		/** Curtailment setpoint in kW. */
-		@LuaFunction
-		public final double getActivePowerLimit() {
-			return turbine.getActivePowerLimit();
-		}
-
-		/** Caps output at {@code limitKw}. */
-		@LuaFunction(mainThread = true)
-		public final void setActivePowerLimit(double limitKw) throws LuaException {
-			turbine.setActivePowerLimit(requireFinite(limitKw, "active power limit"));
-		}
-
-		// ---- telemetry ----
-
-		/** Every signal at once, as a table keyed by tag. */
-		@LuaFunction
-		public final Map<String, Object> getTelemetry() {
-			return turbine.getTelemetry().values();
-		}
-
-		/**
-		 * Which tags are instrument readings and which are invented, as a table of tag to "MEASURED", "DERIVED" or "SIMULATED".
-		 */
-		@LuaFunction
-		public final Map<String, Object> getTelemetryKinds() {
-			return namedKinds(TurbineTelemetry.kinds());
-		}
 	}
 
 	/** The inverter as seen from Lua: the node a plant's control program actually talks to. */
-	public static final class PvInverterPeripheral extends TagPeripheral {
-		private static final Set<String> RESERVED_NAMES = Set.of(
-				"getProductionRate", "getMaxOutput", "getEnergy", "getMaxEnergy", "getEnergyNeeded", "getEnergyFilledPercentage",
-				"isBlacklistedDimension", "stop", "start", "isStopped", "isRunning", "isClipping", "isDerating", "isStoppedByRedstone",
-				"getRedstoneMode", "setRedstoneMode", "getActivePowerLimit", "setActivePowerLimit", "getPowerFactor", "setPowerFactor",
-				"getTelemetry", "getTelemetryKinds", "getRatedPower", "getArrays"
-		);
-
+	public static final class PvInverterPeripheral extends DispatchablePeripheral {
 		private final PvInverterBlockEntity inverter;
 
 		private PvInverterPeripheral(PvInverterBlockEntity inverter) {
-			super(SolarTelemetry.inverterKinds(), RESERVED_NAMES);
+			super(inverter, SolarTelemetry.inverterKinds());
 			this.inverter = inverter;
 		}
 
@@ -322,11 +352,6 @@ public final class CCTweakedPeripherals {
 		}
 
 		@Override
-		public Object getTarget() {
-			return inverter;
-		}
-
-		@Override
 		protected Telemetry.Snapshot snapshot() {
 			return inverter.getTelemetry();
 		}
@@ -336,72 +361,10 @@ public final class CCTweakedPeripherals {
 			return "inverter";
 		}
 
-		// ---- names shared with Mekanism's generators ----
-
-		@LuaFunction
-		public final double getProductionRate() {
-			return inverter.getGrossJoulesPerTick();
-		}
-
-		@LuaFunction
-		public final double getMaxOutput() {
-			return inverter.getMaxJoulesPerTick();
-		}
-
-		@LuaFunction
-		public final double getEnergy() {
-			return inverter.getAvailableJoules();
-		}
-
-		@LuaFunction
-		public final double getMaxEnergy() {
-			return inverter.getMaxJoulesPerTick();
-		}
-
-		@LuaFunction
-		public final double getEnergyNeeded() {
-			return 0.0;
-		}
-
-		@LuaFunction
-		public final double getEnergyFilledPercentage() {
-			double max = inverter.getMaxJoulesPerTick();
-			return max <= 0.0 ? 0.0 : inverter.getAvailableJoules() / max;
-		}
-
-		@LuaFunction
-		public final boolean isBlacklistedDimension() {
-			return false;
-		}
-
 		/** AC nameplate in kW: what this machine can pass however much glass is in front of it. */
 		@LuaFunction
 		public final double getRatedPower() {
 			return inverter.spec().acPowerKw();
-		}
-
-		// ---- control ----
-
-		/** Disconnects from the grid and stops converting. */
-		@LuaFunction(mainThread = true)
-		public final void stop() {
-			inverter.setStoppedByComputer(true);
-		}
-
-		/** Releases a stop issued by {@link #stop()}. */
-		@LuaFunction(mainThread = true)
-		public final void start() {
-			inverter.setStoppedByComputer(false);
-		}
-
-		@LuaFunction
-		public final boolean isStopped() {
-			return inverter.isStoppedByComputer();
-		}
-
-		@LuaFunction
-		public final boolean isRunning() {
-			return inverter.isRunning();
 		}
 
 		/** Whether the arrays are offering more than the nameplate can pass. */
@@ -414,32 +377,6 @@ public final class CCTweakedPeripherals {
 		@LuaFunction
 		public final boolean isDerating() {
 			return inverter.derating();
-		}
-
-		@LuaFunction
-		public final boolean isStoppedByRedstone() {
-			return inverter.isStoppedByRedstone();
-		}
-
-		@LuaFunction
-		public final String getRedstoneMode() {
-			return inverter.getRedstoneMode().name();
-		}
-
-		@LuaFunction(mainThread = true)
-		public final void setRedstoneMode(String mode) throws LuaException {
-			inverter.setRedstoneMode(parseRedstoneMode(mode));
-		}
-
-		@LuaFunction
-		public final double getActivePowerLimit() {
-			return inverter.getActivePowerLimit();
-		}
-
-		/** Caps output at {@code limitKw}, clamped to the machine's nameplate. */
-		@LuaFunction(mainThread = true)
-		public final void setActivePowerLimit(double limitKw) throws LuaException {
-			inverter.setActivePowerLimit(requireFinite(limitKw, "active power limit"));
 		}
 
 		@LuaFunction
@@ -468,31 +405,14 @@ public final class CCTweakedPeripherals {
 			return out;
 		}
 
-		// ---- telemetry ----
-
-		@LuaFunction
-		public final Map<String, Object> getTelemetry() {
-			return inverter.getTelemetry().values();
-		}
-
-		@LuaFunction
-		public final Map<String, Object> getTelemetryKinds() {
-			return namedKinds(SolarTelemetry.inverterKinds());
-		}
 	}
 
 	/** One array as seen from Lua. */
 	public static final class PvArrayPeripheral extends TagPeripheral {
-		private static final Set<String> RESERVED_NAMES = Set.of(
-				"getProductionRate", "canSeeSun", "getActivePower", "getRatedPower", "getIrradiance", "getCellTemperature",
-				"getAmbientTemperature", "getCloudCover", "getPerformanceRatio", "getTrackerMode", "setTrackerMode",
-				"getTrackerAngle", "setTrackerAngle", "stow", "getTelemetry", "getTelemetryKinds", "getModule", "getInverter"
-		);
-
 		private final PvArrayBlockEntity array;
 
 		private PvArrayPeripheral(PvArrayBlockEntity array) {
-			super(SolarTelemetry.arrayKinds(), RESERVED_NAMES);
+			super(SolarTelemetry.arrayKinds());
 			this.array = array;
 		}
 
@@ -656,25 +576,14 @@ public final class CCTweakedPeripherals {
 			return out;
 		}
 
-		@LuaFunction
-		public final Map<String, Object> getTelemetry() {
-			return array.getTelemetry().values();
-		}
-
-		@LuaFunction
-		public final Map<String, Object> getTelemetryKinds() {
-			return namedKinds(SolarTelemetry.arrayKinds());
-		}
 	}
 
 	/** The met mast as seen from Lua: the sky, and nothing about any particular array. */
 	public static final class MetStationPeripheral extends TagPeripheral {
-		private static final Set<String> RESERVED_NAMES = Set.of("getTelemetry", "getTelemetryKinds", "getInstruments");
-
 		private final MetStationBlockEntity station;
 
 		private MetStationPeripheral(MetStationBlockEntity station) {
-			super(SolarTelemetry.stationKinds(), RESERVED_NAMES);
+			super(SolarTelemetry.stationKinds());
 			this.station = station;
 		}
 
@@ -728,15 +637,6 @@ public final class CCTweakedPeripherals {
 			return out;
 		}
 
-		@LuaFunction
-		public final Map<String, Object> getTelemetry() {
-			return station.getTelemetry().values();
-		}
-
-		@LuaFunction
-		public final Map<String, Object> getTelemetryKinds() {
-			return namedKinds(SolarTelemetry.stationKinds());
-		}
 	}
 
 	/** Parses a redstone mode name */

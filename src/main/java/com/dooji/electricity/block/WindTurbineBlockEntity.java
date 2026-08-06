@@ -1,7 +1,7 @@
 package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.WorldConditions;
-import com.dooji.electricity.api.power.IEnergyBudget;
+import com.dooji.electricity.api.power.Dispatchable;
 import com.dooji.electricity.api.power.RedstoneMode;
 import com.dooji.electricity.api.power.TickBudget;
 import com.dooji.electricity.api.power.Telemetry;
@@ -48,7 +48,7 @@ import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost, IEnergyBudget {
+public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost, Dispatchable {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
