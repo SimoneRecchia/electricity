@@ -12,19 +12,11 @@ ogni rete in continua sia un pezzo solo e non ne tocchi un'altra, e che ogni cam
 del suo conduttore — ed è stato **costruito e letto macchina per macchina** su un server, prima di essere
 scritto qui.
 
-## Il mondo già pronto
+> Questo è l'**esempio minimo**: un solo impianto solare, per capire la catena.
+> Il sito completo — due parchi solari, un parco eolico e la sottostazione con i servizi ausiliari — è
+> [IMPIANTO.md](IMPIANTO.md), ed è quello che sta nel mondo `run/impianto`.
 
-Il mondo `run/impianto` è un **superpiatto Redstone Ready** (deserto, 116 di arenaria su 3 di pietra su
-bedrock, superficie a **y = 55**, quindi si costruisce a **y = 56**) con l'impianto già in piedi, in
-creativa, trucchi attivi, senza mob.
-
-```bash
-./gradlew runServer
-```
-
-e ti colleghi a `localhost`. Compari a **(0, 56, 0)**, con il campo davanti a te verso sud.
-
-## Costruirlo altrove
+## Costruirlo
 
 ```bash
 python3 tools/gen_example_plant.py

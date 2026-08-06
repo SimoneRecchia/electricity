@@ -333,7 +333,8 @@ python3 tools/gen_transformer_models.py # the two transformers
 python3 tools/gen_switch_models.py      # the disconnector and the breaker
 python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
 python3 tools/gen_control_models.py     # the plant control cabinet
-python3 tools/gen_example_plant.py      # a whole 533 kW plant, as setblock commands for the dev server
+python3 tools/gen_example_plant.py      # one solar plant, as setblock commands and a datapack
+python3 tools/gen_example_site.py       # the whole site: two solar parks, a wind farm, a substation
 ```
 
 ## 7. What must pass before anything is done
