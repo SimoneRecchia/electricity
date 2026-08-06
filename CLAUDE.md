@@ -215,6 +215,7 @@ not an `instanceof` chain in eight files:
 | `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `PowerNetwork` keys a cluster on (position, bus) for it |
 | `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the five conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
 | `fittingType()` | the string a saved wire holds. **Never change one**: every wire in every existing world has it |
+| `passesThrough()` | whether power crosses this fitting rather than stopping at it. A switch has no role of its own - it takes the role of the line it is in - so it is on nobody's `feeds` list, and for as long as that was the only rule **nothing in the mod could send power to a switch at all**: a switch in a line silently blocked it, and `busOf`, the refusal to open under load and the trip all read a power that never arrived |
 
 Twice now an `instanceof` chain over machine types has silently dropped the machines added after it was
 written: `wireable()` would not let a conductor be clicked onto a tower, and `resolveInsulatorPosition` saved
@@ -231,6 +232,11 @@ writing a loop or a helper that a sibling class already has:**
 | `Nameplate` | `rating()` for a label that never moves, `reading()` for a panel watched while it changes, and `fmt` at the root locale. Two precisions on purpose; there were five copies of the formatter |
 | `Dispatchable` | a machine a control system can stop, tell how to read redstone and hold to a setpoint. The turbine and the inverter, so `DispatchablePeripheral` is written once |
 | `Catalogue<T>` | the keyed, ordered set of specs every family had its own copy of. `Catalogue.id(path)` is the mod's namespace |
+
+A machine a control system can dispatch is on the other end of one more spine: **`PlantControllerBlockEntity`
+is the only thing in the mod that dispatches**, and what it holds it has to give back - on OFF, out of range,
+and from `onRemove`. A limit left on a machine with the cabinet gone cannot be explained by anything standing
+in the world.
 
 And **the network layer decides reach, once**: `panelCommand` guards a command from a machine's panel (chunk
 loaded, inside the border, `mayInteract`, and within six blocks of the machine's own column), `clientRequest`
@@ -271,6 +277,13 @@ to no model. And seven machines were in no mineable tag, which with `requiresCor
 block breaks into nothing whatever you hit it with. `gen_crafting.MACHINES` owns all of it now, and
 `check_generated_assets` fails on a blockstate no generator writes and on a block model nothing names.
 
+**A register that half the tree is derived from has to be *all* of it.** `gen_crafting.MACHINES` writes the
+blockstate, the item model, the recipe and the mineable tag; `DROPS` wrote the loot tables and was a
+hand-written list of ten against thirty-two machines. Twenty-six tables sat on disk with no generator behind
+them and the next machine added got none at all - which with `requiresCorrectToolForDrops()` is a block that
+breaks into nothing. `DROPS` is derived from `MACHINES`, and `check_generated_assets` fails on a machine that
+drops nothing, the same way it already failed on a blockstate no generator writes.
+
 **A part's box and a part's mesh have to be compared, not just declared.** `check_hitboxes.py` skips the
 cables — their shape is per state, not per model file — so nothing checked a cable fitting's own geometry
 against its own box. `Barrel` passed `cylinder` a centre of `low` and the *whole* length as the *half*
@@ -307,6 +320,7 @@ python3 tools/gen_tower_models.py       # the three lattice towers (--java print
 python3 tools/gen_transformer_models.py # the two transformers
 python3 tools/gen_switch_models.py      # the disconnector and the breaker
 python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
+python3 tools/gen_control_models.py     # the plant control cabinet
 ```
 
 ## 7. What must pass before anything is done
