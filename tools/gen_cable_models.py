@@ -21,9 +21,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, HEX, MC4, MC4_JOINT, MC4_JOINT_LENGTH,          # noqa: E402
-                      MC4_LENGTH, MC4_PIN, MC4_RADIUS, MC4_SPREAD, MC4_STAGGER, Mesh, arc, box,
-                      clad_box, coarse, cylinder, mc4, tube, write_mtl)
+from modellib import (FITTING, HEX, HUBS, MC4, MC4_JOINT, MC4_JOINT_LENGTH,    # noqa: E402
+                      MC4_LENGTH, MC4_PIN, MC4_RADIUS, MC4_SPREAD, MC4_STAGGER, Mesh, QUARTERS,
+                      SIDES, arc, box, clad_box, cylinder, mask, mc4, shape, tube, write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
@@ -32,7 +32,6 @@ ITEM_MODELS = os.path.join(ASSETS, 'models', 'item')
 OBJ_DIR = os.path.join(ASSETS, 'models', 'dc_string_cable')
 
 NAME = 'dc_string_cable'
-SIDES = ('north', 'east', 'south', 'west')
 
 # The materials, and the textures they resolve to.
 # model's own textures map, the way a vanilla model declares one - so the paths live in one place.
@@ -353,6 +352,43 @@ TIE_TOP, TIE_SIDE = (0.0, 0.02, 0.55, 0.48), (0.0, 0.52, 0.55, 0.98)
 CLEAT_TOP, CLEAT_SIDE = (0.0, 0.02, 1.0, 0.48), (0.0, 0.52, 1.0, 0.98)
 
 
+class Gauge:
+    """The pair itself: where its two cores lie, how thick they are, and where a middle piece ends.
+
+    The two shapes that are pure cable and carry no fitting - a swept corner and a straight length - are
+    the same drawing on either gauge, so they are here and not written twice.
+    """
+
+    def __init__(self, cores, core_y, radius, hub_lo, hub_hi, bend_steps=BEND_STEPS):
+        self.cores, self.core_y, self.radius = cores, core_y, radius
+        self.hub_lo, self.hub_hi, self.bend_steps = hub_lo, hub_hi, bend_steps
+
+    def bend(self, base):
+        """Two adjacent sides: the pair turns on a radius, swept rather than broken at a corner."""
+        y = base + self.core_y
+        # A core comes in on one lane and leaves on the other, so both turn about the corner of the middle
+        # piece, (hub_hi, hub_lo) - which keeps the pair concentric all the way round.
+        centre = (self.hub_hi, y, self.hub_lo)
+        parts = []
+        for lane, other in ((self.cores[1], self.cores[0]), (self.cores[0], self.cores[1])):
+            turn = arc(centre, other - self.hub_lo, (0, 2), 180.0, 90.0, self.bend_steps)
+            # both ends meet an arm, by definition of a bend
+            parts.append(Run([(lane, y, self.hub_lo)] + [(p[0], y, p[2]) for p in turn]
+                             + [(self.hub_hi, y, other)], radius=self.radius, ends=(False, False)))
+        return parts
+
+    def straight(self, base, near):
+        """The pair from a block edge in to the middle piece.  Neither end is ever free: an arm is drawn
+        only for a side that connects, and the far end is the middle it feeds."""
+        y = base + self.core_y
+        return [Run([(c, y, near), (c, y, self.hub_lo)], radius=self.radius, ends=(False, False))
+                for c in self.cores]
+
+
+# The string pair: a 6 mm2 H1Z2Z2-K each pole, resting on the ground.
+GAUGE = Gauge(CORES, CORE_Y, CORE_RADIUS, HUB_LO, HUB_HI)
+
+
 # ---------------------------------------------------------------- the fittings
 
 def plug_lane(centre):
@@ -496,19 +532,7 @@ def piece_line(base):
 
 
 def piece_bend(base):
-    """Two adjacent sides: the pair turns on a radius, swept rather than broken at a corner."""
-    y = base + CORE_Y
-    # A core comes in on one lane and leaves on the other
-    # Which puts both centres at the same place, (HUB_HI, HUB_LO), so the pair is concentric.
-    centre = (HUB_HI, y, HUB_LO)
-    parts = []
-    for lane, other in ((CORES[1], CORES[0]), (CORES[0], CORES[1])):
-        radius = other - HUB_LO
-        turn = arc(centre, radius, (0, 2), 180.0, 90.0, BEND_STEPS)
-        # both ends meet an arm, by definition of a bend
-        parts.append(Run([(lane, y, HUB_LO)] + [(p[0], y, p[2]) for p in turn]
-                         + [(HUB_HI, y, other)], ends=(False, False)))
-    return parts
+    return GAUGE.bend(base)
 
 
 def piece_end(base):
@@ -542,11 +566,8 @@ def piece_cross(base):
 
 
 def piece_arm(base, near):
-    """The pair from a block edge in to the middle piece, cleated where it crosses open ground."""
-    y = base + CORE_Y
-    # An arm is drawn only for a side that connects, so neither of its ends is ever free.
-    return [Run([(c, y, near), (c, y, HUB_LO)], ends=(False, False)) for c in CORES] \
-        + tie(base, 2.6, 3.4)
+    """The pair from a block edge in to the middle piece, tied down where it crosses open ground."""
+    return GAUGE.straight(base, near) + tie(base, 2.6, 3.4)
 
 
 def piece_climb(base):
@@ -597,22 +618,10 @@ def bedding(ground, rim=RIM):
     return parts
 
 
-# Which middle a set of connected sides gets, and how far round it is turned.
-HUBS = {
-    (): ('loose', 0),
-    ('north',): ('end', 0), ('east',): ('end', 90),
-    ('south',): ('end', 180), ('west',): ('end', 270),
-    ('north', 'south'): ('line', 0), ('east', 'west'): ('line', 90),
-    ('north', 'east'): ('bend', 0), ('east', 'south'): ('bend', 90),
-    ('south', 'west'): ('bend', 180), ('north', 'west'): ('bend', 270),
-    ('north', 'east', 'south'): ('tee', 0), ('east', 'south', 'west'): ('tee', 90),
-    ('north', 'south', 'west'): ('tee', 180), ('north', 'east', 'west'): ('tee', 270),
-    ('north', 'east', 'south', 'west'): ('cross', 0),
-}
-
+# Which middle a set of connected sides gets, and how far round it is turned: modellib.HUBS, shared with
+# the ground conductors, because a run through a block is the same sixteen patterns whatever is in it.
 MIDDLES = {'loose': piece_loose, 'end': piece_end, 'line': piece_line, 'bend': piece_bend,
            'tee': piece_tee, 'cross': piece_cross}
-QUARTERS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
 
 
 # ---------------------------------------------------------------- one cable product
@@ -862,32 +871,8 @@ def _path_gap(first, second):
 
 # ---------------------------------------------------------------- the Java tables
 
-def merged(boxes):
-    """Boxes cut to the block and merged where one contains another, so a curve is not fifty boxes."""
-    inside = []
-    for lo, hi in boxes:
-        lo = tuple(min(max(v, 0.0), 16.0) for v in lo)
-        hi = tuple(min(max(v, 0.0), 16.0) for v in hi)
-        if all(hi[i] - lo[i] > 1e-6 for i in range(3)):
-            inside.append((lo, hi))
-
-    kept = []
-    for candidate in sorted(inside, key=lambda b: -sum(b[1][i] - b[0][i] for i in range(3))):
-        contained = any(all(k[0][i] <= candidate[0][i] + 1e-6 and k[1][i] >= candidate[1][i] - 1e-6
-                            for i in range(3)) for k in kept)
-        if not contained:
-            kept.append(candidate)
-    return kept
-
-
-def shape(boxes):
-    lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2],
-                                                             hi[0], hi[1], hi[2]))
-             for lo, hi in coarse(merged(boxes))]
-    if len(lines) == 1:
-        return lines[0]
-    return 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
-
+# modellib.shape is what a set of collision boxes reads as in Java, and modellib.mask how a pattern is
+# keyed.  Both gauges and the ground conductors go through it, so one figure decides how coarse a run is.
 
 def tables(p):
     """Every shape the block declares, as text"""
@@ -934,10 +919,6 @@ def check_java(p):
             if wanted not in source:
                 problems.append('%s[%s] is not what %s declares' % (label, key, p.java_class))
     return problems
-
-
-def mask(connected):
-    return sum(1 << SIDES.index(s) for s in connected)
 
 
 STRING = Product(

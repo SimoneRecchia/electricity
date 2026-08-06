@@ -13,15 +13,14 @@ RADIUS is the figure everything else follows from.  HUB_LO is set by the bend: a
 has to stay at twice its own, or the inner core folds back on itself.
 """
 
-import math
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import gen_cable_models as cable                                                # noqa: E402
-from gen_cable_models import Barrel, Plug, Product, Run, Slab                    # noqa: E402
-from modellib import (FITTING, HEX, SHRINK, SHRINK_LENGTH, SHRINK_RADIUS, arc)   # noqa: E402
+from gen_cable_models import Barrel, Gauge, Plug, Product, Run, Slab             # noqa: E402
+from modellib import FITTING, HEX, SHRINK, SHRINK_LENGTH, SHRINK_RADIUS   # noqa: E402
 
 NAME = 'dc_trunk_cable'
 
@@ -75,6 +74,10 @@ BOX_LID = 0.34
 GLAND_RADIUS = 1.95
 GROUND = 16.0 - 2.0 - BOX_TOP
 RIM = 1.0
+
+
+# One 240 mm2 single-core each pole.  BEND_STEPS is the string's, so both gauges sweep alike.
+GAUGE = Gauge(CORES, CORE_Y, RADIUS, HUB_LO, HUB_HI, BEND_STEPS)
 
 
 # ---------------------------------------------------------------- the fittings
@@ -199,15 +202,8 @@ def piece_line(base):
 
 
 def piece_bend(base):
-    """Two adjacent sides, swept on a radius a 240 mm2 cable will actually take."""
-    y = base + CORE_Y
-    centre = (HUB_HI, y, HUB_LO)
-    parts = []
-    for lane, other in ((CORES[1], CORES[0]), (CORES[0], CORES[1])):
-        turn = arc(centre, other - HUB_LO, (0, 2), 180.0, 90.0, BEND_STEPS)
-        parts.append(Run([(lane, y, HUB_LO)] + [(p[0], y, p[2]) for p in turn] + [(HUB_HI, y, other)],
-                         radius=RADIUS, ends=(False, False)))
-    return parts
+    """Two adjacent sides, swept on a radius a 240 mm2 cable will actually take - see HUB_LO."""
+    return GAUGE.bend(base)
 
 
 def piece_end(base):
@@ -248,9 +244,7 @@ def piece_arm(base, near):
     Hard against the block edge, because a bend on this gauge sweeps almost to HUB_LO and its outline pads
     by the cable's own radius.  A buried run gets none: it is bedded in sand, not cleated to anything.
     """
-    y = base + CORE_Y
-    runs = [Run([(c, y, near), (c, y, HUB_LO)], radius=RADIUS, ends=(False, False)) for c in CORES]
-    return runs + (cleat(base, 0.05, 1.15) if near == 0.0 else [])
+    return GAUGE.straight(base, near) + (cleat(base, 0.05, 1.15) if near == 0.0 else [])
 
 
 MIDDLES = {'loose': piece_loose, 'end': piece_end, 'line': piece_line, 'bend': piece_bend,

@@ -22,15 +22,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import FITTING, Mesh, arc, box, coarse, cylinder, tube, write_mtl  # noqa: E402
+from modellib import (FITTING, HUBS, Mesh, QUARTERS, SIDES, arc, box, cylinder,  # noqa: E402
+                      mask, shape, tube, write_mtl)
 
 ASSETS = os.path.join('src', 'main', 'resources', 'assets', 'electricity')
 BLOCKSTATES = os.path.join(ASSETS, 'blockstates')
 BLOCK_MODELS = os.path.join(ASSETS, 'models', 'block')
 ITEM_MODELS = os.path.join(ASSETS, 'models', 'item')
 
-SIDES = ('north', 'east', 'south', 'west')
-QUARTERS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
 
 # Which tile each conductor's own surface takes: a jacketed bundle is black, a bare one is aluminium.
 JACKETS = {'abc_conductor': 'line_abc', 'mv_conductor': 'line_alu', 'hv_conductor': 'line_alu'}
@@ -364,20 +363,9 @@ def piece_arm(spec):
     return parts
 
 
+# Which pattern gets which of the six, and how far round: modellib.HUBS, shared with the two cable gauges.
 MIDDLES = {'loose': piece_loose, 'end': piece_end, 'line': piece_line, 'bend': piece_bend,
            'tee': piece_tee, 'cross': piece_cross}
-
-HUBS = {
-    (): ('loose', 0),
-    ('north',): ('end', 0), ('east',): ('end', 90),
-    ('south',): ('end', 180), ('west',): ('end', 270),
-    ('north', 'south'): ('line', 0), ('east', 'west'): ('line', 90),
-    ('north', 'east'): ('bend', 0), ('east', 'south'): ('bend', 90),
-    ('south', 'west'): ('bend', 180), ('north', 'west'): ('bend', 270),
-    ('north', 'east', 'south'): ('tee', 0), ('east', 'south', 'west'): ('tee', 90),
-    ('north', 'south', 'west'): ('tee', 180), ('north', 'east', 'west'): ('tee', 270),
-    ('north', 'east', 'south', 'west'): ('cross', 0),
-}
 
 
 # ---------------------------------------------------------------- writing
@@ -464,34 +452,6 @@ def blockstate(spec):
 
 
 # ---------------------------------------------------------------- the Java tables
-
-def merged(boxes):
-    inside = []
-    for lo, hi in boxes:
-        lo = tuple(min(max(v, 0.0), 16.0) for v in lo)
-        hi = tuple(min(max(v, 0.0), 16.0) for v in hi)
-        if all(hi[i] - lo[i] > 1e-6 for i in range(3)):
-            inside.append((lo, hi))
-
-    kept = []
-    for candidate in sorted(inside, key=lambda b: -sum(b[1][i] - b[0][i] for i in range(3))):
-        if not any(all(k[0][i] <= candidate[0][i] + 1e-6 and k[1][i] >= candidate[1][i] - 1e-6
-                       for i in range(3)) for k in kept):
-            kept.append(candidate)
-    return kept
-
-
-def shape(boxes):
-    # coarse() as well as merged(): a conductor's own segments are one box each, and a run that a player
-    # points at and walks over does not need to be carved per segment - modellib.COLLISION_SLACK.
-    lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
-             for lo, hi in coarse(merged(boxes))]
-    return lines[0] if len(lines) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
-
-
-def mask(connected):
-    return sum(1 << SIDES.index(s) for s in connected)
-
 
 def tables():
     """Every shape GroundConductorBlock declares, keyed by conductor and by pattern."""

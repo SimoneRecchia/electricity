@@ -63,6 +63,61 @@ def coarse(boxes, slack=None):
     return kept
 
 
+def contained(boxes):
+    """Boxes cut to the block and dropped where another already contains them."""
+    inside = []
+    for lo, hi in boxes:
+        lo = tuple(min(max(v, 0.0), 16.0) for v in lo)
+        hi = tuple(min(max(v, 0.0), 16.0) for v in hi)
+        if all(hi[i] - lo[i] > 1e-6 for i in range(3)):
+            inside.append((lo, hi))
+
+    kept = []
+    for candidate in sorted(inside, key=lambda b: -sum(b[1][i] - b[0][i] for i in range(3))):
+        if not any(all(k[0][i] <= candidate[0][i] + 1e-6 and k[1][i] >= candidate[1][i] - 1e-6
+                       for i in range(3)) for k in kept):
+            kept.append(candidate)
+    return kept
+
+
+def shape(boxes):
+    """Collision boxes as the Java a block declares: contained(), then coarse() - see COLLISION_SLACK."""
+    lines = ['Block.box(%s)' % ', '.join('%.2f' % v for v in (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
+             for lo, hi in coarse(contained(boxes))]
+    return lines[0] if len(lines) == 1 else 'Shapes.or(%s)' % (',\n\t\t\t\t\t'.join(lines))
+
+
+# ------------------------------------------------------------------ a run through a block
+
+# A cable or a conductor laid through a block connects to some of its four sides, and the sixteen patterns
+# that makes are six shapes at four rotations.  Both run generators kept their own fifteen-key copy of the
+# table, so a mistyped rotation in one of them was a piece facing the wrong way with nothing to say so.
+SIDES = ('north', 'east', 'south', 'west')
+QUARTERS = {'north': 0, 'east': 90, 'south': 180, 'west': 270}
+
+# One seed per shape; every other pattern is that seed turned, so a rotation cannot be written by hand.
+_SEEDS = (('loose', ()), ('end', ('north',)), ('line', ('north', 'south')),
+          ('bend', ('north', 'east')), ('tee', ('north', 'east', 'south')), ('cross', SIDES))
+
+
+def _hubs():
+    hubs = {}
+    for kind, seed in _SEEDS:
+        for turn in (0, 90, 180, 270):
+            turned = tuple(sorted((SIDES[(SIDES.index(s) + turn // 90) % 4] for s in seed),
+                                  key=SIDES.index))
+            hubs.setdefault(turned, (kind, turn))
+    return hubs
+
+
+HUBS = _hubs()
+
+
+def mask(connected):
+    """The connected sides as a bit per side, which is how a run's Java tables are keyed."""
+    return sum(1 << SIDES.index(s) for s in connected)
+
+
 class Mesh:
     """Accumulates vertices, normals, texture coordinates and faces for one OBJ file."""
 
