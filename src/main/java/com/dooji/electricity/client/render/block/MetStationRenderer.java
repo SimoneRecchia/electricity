@@ -3,23 +3,19 @@ package com.dooji.electricity.client.render.block;
 import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.MetStationBlock;
 import com.dooji.electricity.block.MetStationBlockEntity;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
-import com.dooji.electricity.client.render.obj.ObjRenderUtil;
+import com.dooji.electricity.client.render.obj.ObjRenderContext;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.registry.ObjBlockDefinition;
-import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -46,30 +42,14 @@ public class MetStationRenderer extends ObjRendererBase {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return;
-
-		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-		HashSet<BlockPos> seen = new HashSet<>();
-
-		for (MetStationBlockEntity station : TrackedBlockEntities.ofType(MetStationBlockEntity.class)) {
-			seen.add(station.getBlockPos());
-			ObjRenderUtil.withAlignedPose(station, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(MetStationBlock.FACING), turnedFrom(MetStationBlock.AUTHORED),
-					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), station));
-		}
-
-		cleanupCache(BUFFER_CACHE, seen);
-		if (!seen.isEmpty()) {
-			CUP_ANGLE.keySet().removeIf(pos -> !seen.contains(pos));
-			VANE_ANGLE.keySet().removeIf(pos -> !seen.contains(pos));
-		}
+		Set<BlockPos> seen = drawAll(event, MetStationBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
+				state -> state.getValue(MetStationBlock.FACING), MetStationBlock.AUTHORED, BUFFER_CACHE, MetStationRenderer::render);
+		cleanupAngles(CUP_ANGLE, seen);
+		cleanupAngles(VANE_ANGLE, seen);
 	}
 
-	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight,
-			MetStationBlockEntity station) {
+	private static void render(MetStationBlockEntity station, ObjRenderContext context, PoseStack poseStack, Matrix4f projection) {
+		ObjModel model = context.model();
 		float cups = advanceCups(station.getBlockPos(), station.windSpeed());
 		float vane = smoothVane(station.getBlockPos(), (float) station.windDirection(), station.getBlockState().getValue(MetStationBlock.FACING));
 
@@ -95,7 +75,7 @@ public class MetStationRenderer extends ObjRendererBase {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projectionMatrix, texture, packedLight, station.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), station.getBlockPos(), BUFFER_CACHE);
 	}
 
 	/** Advances the cups at the speed the wind they are reading implies. */
@@ -126,9 +106,6 @@ public class MetStationRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		ObjBlockDefinition definition = ObjDefinitions.get(Electricity.MET_STATION_BLOCK.get());
-		if (definition != null) {
-			ObjBlockRegistry.register(definition);
-		}
+		ObjBlockRegistry.register(Electricity.MET_STATION_BLOCK.get());
 	}
 }

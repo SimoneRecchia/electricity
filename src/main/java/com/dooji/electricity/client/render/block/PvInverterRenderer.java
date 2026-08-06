@@ -3,25 +3,19 @@ package com.dooji.electricity.client.render.block;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.block.PvInverterBlock;
 import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
-import com.dooji.electricity.client.render.obj.ObjRenderUtil;
+import com.dooji.electricity.client.render.obj.ObjRenderContext;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.registry.InverterCatalog;
-import com.dooji.electricity.main.registry.ObjBlockDefinition;
-import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -46,29 +40,12 @@ public class PvInverterRenderer extends ObjRendererBase {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return;
-
-		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-		HashSet<BlockPos> seen = new HashSet<>();
-
-		for (PvInverterBlockEntity inverter : TrackedBlockEntities.ofType(PvInverterBlockEntity.class)) {
-			seen.add(inverter.getBlockPos());
-			ObjRenderUtil.withAlignedPose(inverter, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(PvInverterBlock.FACING), turnedFrom(PvInverterBlock.AUTHORED),
-					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), inverter));
-		}
-
-		cleanupCache(BUFFER_CACHE, seen);
-		if (!FAN_ANGLE.isEmpty() && !seen.isEmpty()) {
-			FAN_ANGLE.keySet().removeIf(pos -> !seen.contains(pos));
-		}
+		cleanupAngles(FAN_ANGLE, drawAll(event, PvInverterBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
+				state -> state.getValue(PvInverterBlock.FACING), PvInverterBlock.AUTHORED, BUFFER_CACHE, PvInverterRenderer::render));
 	}
 
-	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight,
-			PvInverterBlockEntity inverter) {
+	private static void render(PvInverterBlockEntity inverter, ObjRenderContext context, PoseStack poseStack, Matrix4f projection) {
+		ObjModel model = context.model();
 		InverterSpec spec = inverter.spec();
 		float scale = (float) renderScale(spec);
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
@@ -103,7 +80,7 @@ public class PvInverterRenderer extends ObjRendererBase {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projectionMatrix, texture, packedLight, inverter.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), inverter.getBlockPos(), BUFFER_CACHE);
 	}
 
 	/** How large to draw a machine, from its nameplate. */
@@ -126,13 +103,6 @@ public class PvInverterRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		for (InverterSpec spec : InverterCatalog.all()) {
-			ObjBlockDefinition definition = ObjDefinitions.get(Electricity.PV_INVERTER_BLOCKS.get(spec.id()).get());
-			if (definition == null) continue;
-
-			ObjBlockRegistry.register(definition);
-		}
+		ObjBlockRegistry.registerAll(Electricity.PV_INVERTER_BLOCKS);
 	}
-
-
 }

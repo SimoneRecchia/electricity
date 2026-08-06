@@ -1,23 +1,16 @@
 package com.dooji.electricity.client.render.block;
 
-import com.dooji.electricity.api.power.SwitchgearSpec;
 import com.dooji.electricity.block.SwitchgearBlock;
 import com.dooji.electricity.block.SwitchgearBlockEntity;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
-import com.dooji.electricity.client.render.obj.ObjRenderUtil;
+import com.dooji.electricity.client.render.obj.ObjRenderContext;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.registry.ObjBlockDefinition;
-import com.dooji.electricity.main.registry.ObjDefinitions;
-import com.dooji.electricity.main.registry.SwitchgearCatalog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -45,29 +38,13 @@ public class SwitchgearRenderer extends ObjRendererBase {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return;
-
-		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-		HashSet<BlockPos> seen = new HashSet<>();
-
-		for (SwitchgearBlockEntity gear : TrackedBlockEntities.ofType(SwitchgearBlockEntity.class)) {
-			seen.add(gear.getBlockPos());
-			boolean open = SwitchgearBlock.open(gear.getBlockState());
-			ObjRenderUtil.withAlignedPose(gear, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos,
-					MAX_RENDER_DISTANCE_SQ, state -> state.getValue(SwitchgearBlock.FACING),
-					turnedFrom(SwitchgearBlock.AUTHORED),
-					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(),
-							context.texture(), context.packedLight(), gear.getBlockPos(), open));
-		}
-
-		cleanupCache(BUFFER_CACHE, seen);
+		drawAll(event, SwitchgearBlockEntity.class, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(SwitchgearBlock.FACING),
+				SwitchgearBlock.AUTHORED, BUFFER_CACHE, SwitchgearRenderer::render);
 	}
 
-	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix,
-			net.minecraft.resources.ResourceLocation texture, int packedLight, BlockPos pos, boolean open) {
+	private static void render(SwitchgearBlockEntity gear, ObjRenderContext context, PoseStack poseStack, Matrix4f projection) {
+		ObjModel model = context.model();
+		boolean open = SwitchgearBlock.open(gear.getBlockState());
 		Vec3 hinge = pivot(model, "blade", new Vec3(0.0, 0.336, 0.155));
 		Map<String, Matrix4f> poses = new HashMap<>();
 
@@ -85,7 +62,7 @@ public class SwitchgearRenderer extends ObjRendererBase {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projectionMatrix, texture, packedLight, pos, BUFFER_CACHE);
+		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), gear.getBlockPos(), BUFFER_CACHE);
 	}
 
 	/** The two flag plates are one plate: whichever the position calls for. */
@@ -97,11 +74,6 @@ public class SwitchgearRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		for (SwitchgearSpec spec : SwitchgearCatalog.all()) {
-			ObjBlockDefinition definition = ObjDefinitions.get(Electricity.SWITCHGEAR_BLOCKS.get(spec.id()).get());
-			if (definition == null) continue;
-
-			ObjBlockRegistry.register(definition);
-		}
+		ObjBlockRegistry.registerAll(Electricity.SWITCHGEAR_BLOCKS);
 	}
 }

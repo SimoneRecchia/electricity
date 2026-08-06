@@ -2,6 +2,7 @@ package com.dooji.electricity.client.render.obj;
 
 import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.DcCableBlock;
+import com.dooji.electricity.client.TrackedBlockEntities;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -12,7 +13,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -21,12 +24,62 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
 // OBJ pipeline code will be migrated to Renderix
 public abstract class ObjRendererBase {
+	/**
+	 * The pass every machine renderer makes: every loaded machine of one type, each posed onto its own facing
+	 * and drawn whole, then the buffers of whatever has left the screen released.
+	 *
+	 * Returns the positions it drew, so a renderer keeping an interpolated angle per position can forget the
+	 * same ones through {@link #cleanupAngles}.
+	 */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, cache,
+				(entity, context, pose, projection) -> renderGrouped(context.model(), pose, projection, context.texture(),
+						context.packedLight(), entity.getBlockPos(), cache));
+	}
+
+	/** The same, for a machine with something that moves, or a part that is only drawn sometimes. */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache, Drawing<T> drawing) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, cache, entity -> true, drawing);
+	}
+
+	/** The same, where only some of the loaded machines of the type are drawn at all. */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache,
+			Predicate<T> when, Drawing<T> drawing) {
+		Set<BlockPos> seen = new HashSet<>();
+		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return seen;
+
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.level == null) return seen;
+
+		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+		for (T entity : TrackedBlockEntities.ofType(type)) {
+			if (!when.test(entity)) continue;
+
+			seen.add(entity.getBlockPos());
+			ObjRenderUtil.withAlignedPose(entity, event.getPoseStack(), cameraPos, maxDistanceSq, facing, authored,
+					(context, pose) -> drawing.draw(entity, context, pose, event.getProjectionMatrix()));
+		}
+
+		cleanupCache(cache, seen);
+		return seen;
+	}
+
+	/** What a renderer does with one machine, once the pose of its block is on the stack. */
+	protected interface Drawing<T extends BlockEntity> {
+		void draw(T entity, ObjRenderContext context, PoseStack pose, Matrix4f projection);
+	}
+
 	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
 		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, cache, groupName -> true);
 	}
@@ -123,12 +176,7 @@ public abstract class ObjRendererBase {
 		return true;
 	}
 
-	/** Where a moving part turns */
-	/** The turn a model authored facing one way takes to face another, as the function a pose needs. */
-	protected static FacingRotationFunction turnedFrom(Direction authored) {
-		return facing -> ModelFacing.degrees(authored, facing);
-	}
-
+	/** Where a moving part turns: the marker the model carries for it, or a figure to fall back on. */
 	protected static Vec3 pivot(ObjModel model, String name, Vec3 fallback) {
 		return groupCentre(model, "pivot_" + name, fallback);
 	}

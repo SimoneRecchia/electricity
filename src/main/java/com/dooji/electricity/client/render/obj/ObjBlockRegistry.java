@@ -3,10 +3,12 @@ package com.dooji.electricity.client.render.obj;
 import java.util.HashMap;
 import java.util.Map;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
+import com.dooji.electricity.main.registry.ObjDefinitions;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.registries.RegistryObject;
 
 // OBJ pipeline code will be migrated to Renderix
 @OnlyIn(Dist.CLIENT)
@@ -38,6 +40,19 @@ public class ObjBlockRegistry {
 		}
 
 		if (!boxes.isEmpty()) ObjBoundingBoxRegistry.registerBoundingBoxes(definition.block(), boxes);
+	}
+
+	/** The same, by block: whatever {@link ObjDefinitions} says this one is drawn from, if anything. */
+	public static void register(Block block) {
+		ObjBlockDefinition definition = ObjDefinitions.get(block);
+		if (definition != null) register(definition);
+	}
+
+	/** Every machine of one family, which is how a renderer covers its whole catalogue. */
+	public static void registerAll(Map<ResourceLocation, RegistryObject<Block>> family) {
+		for (RegistryObject<Block> block : family.values()) {
+			register(block.get());
+		}
 	}
 
 	public static ResourceLocation getModelLocation(Block block) {

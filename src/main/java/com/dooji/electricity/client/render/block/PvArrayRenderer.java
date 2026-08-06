@@ -1,21 +1,15 @@
 package com.dooji.electricity.client.render.block;
 
-import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.block.PvArrayBlock;
 import com.dooji.electricity.block.PvArrayBlockEntity;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
-import com.dooji.electricity.client.render.obj.ObjRenderUtil;
+import com.dooji.electricity.client.render.obj.ObjRenderContext;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.registry.ObjBlockDefinition;
-import com.dooji.electricity.main.registry.ObjDefinitions;
-import com.dooji.electricity.main.registry.PvCatalog;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -44,34 +38,19 @@ public class PvArrayRenderer extends ObjRendererBase {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return;
-
-		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-		HashSet<BlockPos> seen = new HashSet<>();
-
-		for (PvArrayBlockEntity array : TrackedBlockEntities.ofType(PvArrayBlockEntity.class)) {
-			seen.add(array.getBlockPos());
-			ObjRenderUtil.withAlignedPose(array, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					PvArrayRenderer::drawnFacing, turnedFrom(PvArrayBlock.AUTHORED),
-					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), array));
-		}
-
-		cleanupCache(BUFFER_CACHE, seen);
-		cleanupAngles(AZIMUTH_CACHE, seen);
+		cleanupAngles(AZIMUTH_CACHE, drawAll(event, PvArrayBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
+				PvArrayRenderer::drawnFacing, PvArrayBlock.AUTHORED, BUFFER_CACHE, PvArrayRenderer::render));
 	}
 
-	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, net.minecraft.resources.ResourceLocation texture,
-			int packedLight, PvArrayBlockEntity array) {
+	private static void render(PvArrayBlockEntity array, ObjRenderContext context, PoseStack poseStack, Matrix4f projection) {
+		ObjModel model = context.model();
 		boolean harnessed = array.harnessed();
 		Ends ends = ends(array);
 
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
-			renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE,
+			renderGrouped(model, poseStack, projection, context.texture(), context.packedLight(), array.getBlockPos(), BUFFER_CACHE,
 					groupName -> drawn(groupName, harnessed, ends));
 			return;
 		}
@@ -87,7 +66,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 
 		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, ends));
 
-		renderGrouped(model, poses, projectionMatrix, texture, packedLight, array.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), array.getBlockPos(), BUFFER_CACHE);
 	}
 
 	/** The groups that only exist once a set of leads has been worked into the array. */
@@ -210,12 +189,7 @@ public class PvArrayRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		for (PvArraySpec spec : PvCatalog.all()) {
-			ObjBlockDefinition definition = ObjDefinitions.get(Electricity.PV_ARRAY_BLOCKS.get(spec.id()).get());
-			if (definition == null) continue;
-
-			ObjBlockRegistry.register(definition);
-		}
+		ObjBlockRegistry.registerAll(Electricity.PV_ARRAY_BLOCKS);
 	}
 
 	/** Which way the model is turned before the tracker's own rotation is applied. */
@@ -224,6 +198,4 @@ public class PvArrayRenderer extends ObjRendererBase {
 
 		return state.getValue(PvArrayBlock.FACING);
 	}
-
-	/** How far to turn the model for a given facing. */
 }
