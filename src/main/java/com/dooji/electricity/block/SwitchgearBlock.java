@@ -107,6 +107,10 @@ public class SwitchgearBlock extends Block implements EntityBlock, MachineShell 
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
 			BlockHitResult hit) {
+		// An empty hand throws it, anything else goes to the item: a wrench click used to flip the switch
+		// instead of reading it, and a conductor click flipped it instead of stringing a span to a fitting.
+		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+
 		boolean wanted = !state.getValue(OPEN);
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
