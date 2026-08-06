@@ -86,43 +86,31 @@ public abstract class ObjRendererBase {
 
 	/** The same, with a say in which groups are drawn. */
 	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache, Predicate<String> draw) {
-		Map<ResourceLocation, List<GroupBuffer>> byTexture = new HashMap<>();
-		for (Map.Entry<String, ObjModel.ObjGroup> groupEntry : model.groups.entrySet()) {
-			String groupName = groupEntry.getKey();
-			if (!draw.test(groupName)) continue;
-
-			ObjModel.ObjGroup group = groupEntry.getValue();
-			GroupBuffer buffer = bufferFor(pos, groupName, group, model, texture, packedLight, cache);
-			if (buffer == null) continue;
-			byTexture.computeIfAbsent(buffer.texture, t -> new ArrayList<>()).add(buffer.withPose(poseStack.last().pose()));
-		}
-
-		for (Map.Entry<ResourceLocation, List<GroupBuffer>> textureEntry : byTexture.entrySet()) {
-			RenderType type = RenderType.entityCutoutNoCull(textureEntry.getKey());
-			type.setupRenderState();
-
-			RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-			ShaderInstance shader = GameRenderer.getRendertypeEntityCutoutNoCullShader();
-
-			for (GroupBuffer buffer : textureEntry.getValue()) {
-				buffer.buffer.bind();
-				buffer.buffer.drawWithShader(buffer.modelMatrix, projectionMatrix, shader);
-			}
-
-			VertexBuffer.unbind();
-			type.clearRenderState();
-		}
+		Matrix4f pose = poseStack.last().pose();
+		draw(model, groupName -> draw.test(groupName) ? pose : null, projectionMatrix, texture, packedLight, pos, cache);
 	}
 
+	/** Each group under its own matrix, for a machine with something that moves. */
 	protected static void renderGrouped(ObjModel model, Map<String, Matrix4f> poses, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+		draw(model, poses::get, projectionMatrix, texture, packedLight, pos, cache);
+	}
+
+	/**
+	 * One pass over a model: every group that has a matrix, batched by texture and drawn.
+	 *
+	 * Batched because a machine's groups share two or three textures between them, and setting the render
+	 * state is the expensive part - not the draw.
+	 */
+	private static void draw(ObjModel model, Function<String, Matrix4f> poseOf, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
 		Map<ResourceLocation, List<GroupBuffer>> byTexture = new HashMap<>();
 		for (Map.Entry<String, ObjModel.ObjGroup> groupEntry : model.groups.entrySet()) {
 			String groupName = groupEntry.getKey();
-			ObjModel.ObjGroup group = groupEntry.getValue();
-			Matrix4f pose = poses.get(groupName);
+			Matrix4f pose = poseOf.apply(groupName);
 			if (pose == null) continue;
-			GroupBuffer buffer = bufferFor(pos, groupName, group, model, texture, packedLight, cache);
+
+			GroupBuffer buffer = bufferFor(pos, groupName, groupEntry.getValue(), model, texture, packedLight, cache);
 			if (buffer == null) continue;
+
 			byTexture.computeIfAbsent(buffer.texture, t -> new ArrayList<>()).add(buffer.withPose(pose));
 		}
 

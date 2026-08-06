@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import check_hitboxes                                                            # noqa: E402
 import objlib                                                                    # noqa: E402
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
@@ -104,11 +105,10 @@ def declared_floor(name):
     *contains* the sweep is the proposition - it used to have to start exactly where the sweep reached,
     which only held while the pier had a box of its own underneath.
     """
-    source = open(ARRAY_BLOCK).read()
-    table = re.search(r'%s = List\.of\((.*?)\n\n' % SWEPT[name], source, re.S)
-    if table is None:
-        return None
-    floors = [float(box.split(',')[1]) for box in re.findall(r'Block\.box\(([^)]*)\)', table.group(1))]
+    # Read with check_hitboxes' own paren-balanced reader rather than a second regex: this one stopped at
+    # the first blank line, so a table that ever grows one would have been read short and silently.
+    table = check_hitboxes.scoped(open(ARRAY_BLOCK).read(), SWEPT[name])
+    floors = [float(box.split(',')[1]) for box in re.findall(r'Block\.box\(([^)]*)\)', table)]
     return min(floors) / 16.0 if floors else None
 
 
