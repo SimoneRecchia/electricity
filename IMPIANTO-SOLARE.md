@@ -13,18 +13,55 @@ portata del suo conduttore.
 
 ## Costruirlo da solo
 
+Prima genera, e questo non tocca il gioco: funziona sempre, anche senza Minecraft aperto.
+
 ```bash
-python3 tools/gen_example_plant.py --at 0 -60 0
+python3 tools/gen_example_plant.py
 ```
 
-Scrive `build/plant/plant.txt` e stampa l'elenco delle campate. Con un server di sviluppo avviato:
+Scrive **due** cose, perché ci sono due modi di avere un mondo.
+
+### A) In un mondo qualsiasi, anche in singleplayer — il datapack
+
+È il modo normale. `build/plant/datapack/` è un datapack con una sola funzione, scritta a **coordinate
+relative**: costruisce l'impianto **partendo dal blocco su cui stai in piedi**.
+
+1. copia la cartella `build/plant/datapack` dentro `saves/<il tuo mondo>/datapacks/`
+   (su Mac: `~/Library/Application Support/minecraft/saves/…`; per il mondo del mod: `run/saves/…`);
+2. entra nel mondo, con i **trucchi attivi** (o da operatore su un server);
+3. mettiti in un posto pianeggiante e libero, guardando dove vuoi che vada il campo;
+4. `/reload`
+5. `/function electricity:plant`
+
+L'impianto compare tutto in un colpo, quindi guardati intorno prima: occupa **da 3 blocchi a ovest di te
+fino a 144 a est** (148 in tutto) e **17 blocchi verso sud**. Il campo solare sono i primi 20 blocchi a est;
+il resto è la linea, che se non hai spazio puoi anche non costruire — l'impianto produce comunque, e la
+lettura si fermerà alla cabina.
+
+### B) Sul server di sviluppo — RCON
+
+Serve solo se stai provando la mod con `./gradlew runServer`. Con il server **avviato**, da un altro
+terminale:
 
 ```bash
 python3 tools/rcon.py -f build/plant/plant.txt
 ```
 
+Questo usa coordinate **assolute**, quindi decidile prima:
+
+```bash
+python3 tools/gen_example_plant.py --at 200 64 200
+```
+
+RCON è un protocollo da server: su un mondo aperto in singleplayer **non funziona** — lì usa il datapack.
+
+### In entrambi i casi: le campate restano da fare
+
 Le **campate** non si possono piazzare con un comando: una campata è salvata contro due isolatori, non
-contro un blocco, e va tirata a mano con la bobina in mano. L'elenco esatto è al §5 qui sotto.
+contro un blocco, e va tirata a mano con la bobina. Sono 16, elencate al §5 con le coordinate.
+
+Ti serviranno **2 bobine di conduttore MT** (8 blocchi cadauna, 9 campate), **6 di AT** (16 blocchi
+cadauna, 5 campate da 20) e **2 di BT**. In creativa prendile dalla scheda del mod.
 
 ---
 
