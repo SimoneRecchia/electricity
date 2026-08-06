@@ -1,6 +1,5 @@
 package com.dooji.electricity.client;
 
-import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
 import com.dooji.electricity.client.render.block.SwitchgearRenderer;

@@ -2,13 +2,8 @@ package com.dooji.electricity.main.registry;
 
 import com.dooji.electricity.api.power.TransformerSpec;
 import com.dooji.electricity.api.power.TransformerSpec.Duty;
-import com.dooji.electricity.main.Electricity;
-import java.util.Collection;
-import java.util.LinkedHashMap;
+import static com.dooji.electricity.main.registry.Catalogue.id;
 import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * The two transformers, which are the two steps a plant's output really takes.
@@ -29,34 +24,21 @@ import net.minecraft.resources.ResourceLocation;
  * plant that is switched off still costs something to keep energised.
  */
 public final class TransformerCatalog {
-	private static final Map<ResourceLocation, TransformerSpec> BY_ID = new LinkedHashMap<>();
+	private static final Catalogue<TransformerSpec> TRANSFORMERS = new Catalogue<>(TransformerSpec::id);
 
-	public static final TransformerSpec MACHINE = register(new TransformerSpec(
+	public static final TransformerSpec MACHINE = TRANSFORMERS.register(new TransformerSpec(
 			id("tx_machine"), "VT-2500 Pad", Duty.MACHINE,
 			2500.0, 800.0, 33_000.0, 0.011, 2.4, "tx_machine", 3));
 
-	public static final TransformerSpec SUBSTATION = register(new TransformerSpec(
+	public static final TransformerSpec SUBSTATION = TRANSFORMERS.register(new TransformerSpec(
 			id("tx_substation"), "VT-63000 Grid", Duty.SUBSTATION,
 			63_000.0, 33_000.0, 400_000.0, 0.0055, 28.0, "tx_substation", 6));
 
 	private TransformerCatalog() {
 	}
 
-	private static ResourceLocation id(String path) {
-		return new ResourceLocation(Electricity.MOD_ID, path);
+	public static List<TransformerSpec> all() {
+		return TRANSFORMERS.all();
 	}
 
-	private static TransformerSpec register(TransformerSpec spec) {
-		BY_ID.put(spec.id(), spec);
-		return spec;
-	}
-
-	public static Collection<TransformerSpec> all() {
-		return List.copyOf(BY_ID.values());
-	}
-
-	@Nullable
-	public static TransformerSpec get(ResourceLocation id) {
-		return BY_ID.get(id);
-	}
 }

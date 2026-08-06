@@ -3,13 +3,8 @@ package com.dooji.electricity.main.registry;
 import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.api.power.SwitchgearSpec;
 import com.dooji.electricity.api.power.SwitchgearSpec.Duty;
-import com.dooji.electricity.main.Electricity;
-import java.util.Collection;
-import java.util.LinkedHashMap;
+import static com.dooji.electricity.main.registry.Catalogue.id;
 import java.util.List;
-import java.util.Map;
-import javax.annotation.Nullable;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * The two switches, both at 24 kV, because that is the voltage a player's own network runs at.
@@ -20,36 +15,23 @@ import net.minecraft.resources.ResourceLocation;
  * above is the figure its nameplate would carry.
  */
 public final class SwitchgearCatalog {
-	private static final Map<ResourceLocation, SwitchgearSpec> BY_ID = new LinkedHashMap<>();
+	private static final Catalogue<SwitchgearSpec> SWITCHES = new Catalogue<>(SwitchgearSpec::id);
 
 	/** A 630 A three-pole air-break disconnector: porcelain posts, a copper blade, a hand lever. */
-	public static final SwitchgearSpec MV_DISCONNECTOR = register(new SwitchgearSpec(
+	public static final SwitchgearSpec MV_DISCONNECTOR = SWITCHES.register(new SwitchgearSpec(
 			id("mv_disconnector"), "AB-24/630", Duty.DISCONNECTOR,
 			ConductorSpec.VoltageClass.MEDIUM, 24_000.0, 3, 26_000.0, "mv_disconnector"));
 
 	/** A 630 A three-pole vacuum circuit breaker: cast epoxy poles over a spring mechanism. */
-	public static final SwitchgearSpec MV_BREAKER = register(new SwitchgearSpec(
+	public static final SwitchgearSpec MV_BREAKER = SWITCHES.register(new SwitchgearSpec(
 			id("mv_breaker"), "VB-24/630", Duty.BREAKER,
 			ConductorSpec.VoltageClass.MEDIUM, 24_000.0, 3, 26_000.0, "mv_breaker"));
 
 	private SwitchgearCatalog() {
 	}
 
-	private static ResourceLocation id(String path) {
-		return new ResourceLocation(Electricity.MOD_ID, path);
+	public static List<SwitchgearSpec> all() {
+		return SWITCHES.all();
 	}
 
-	private static SwitchgearSpec register(SwitchgearSpec spec) {
-		BY_ID.put(spec.id(), spec);
-		return spec;
-	}
-
-	public static Collection<SwitchgearSpec> all() {
-		return List.copyOf(BY_ID.values());
-	}
-
-	@Nullable
-	public static SwitchgearSpec get(ResourceLocation id) {
-		return BY_ID.get(id);
-	}
 }

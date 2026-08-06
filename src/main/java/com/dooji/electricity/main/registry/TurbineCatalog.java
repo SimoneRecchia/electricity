@@ -1,11 +1,8 @@
 package com.dooji.electricity.main.registry;
 
 import com.dooji.electricity.api.power.TurbineSpec;
-import com.dooji.electricity.main.Electricity;
-import java.util.LinkedHashMap;
+import static com.dooji.electricity.main.registry.Catalogue.id;
 import java.util.List;
-import java.util.Map;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * The machines the mod ships, in the order a player builds them.
@@ -16,10 +13,10 @@ public final class TurbineCatalog {
 	/** The fictional maker whose initial the model numbers carry. */
 	public static final String MANUFACTURER = "Cube";
 
-	private static final Map<ResourceLocation, TurbineSpec> BY_ID = new LinkedHashMap<>();
+	private static final Catalogue<TurbineSpec> TURBINES = new Catalogue<>(TurbineSpec::id);
 
 	/** The 10 kW machine, and the only one outside the C line. */
-	public static final TurbineSpec SW_10 = register(new TurbineSpec(
+	public static final TurbineSpec SW_10 = TURBINES.register(new TurbineSpec(
 			id("sw_10"), "SW-10", "",
 			10.0, 7.0, 0.35,
 			3.0, 25.0, 25.0,
@@ -28,7 +25,7 @@ public final class TurbineCatalog {
 			3.3, TurbineSpec.Nacelle.SMALL_WIND));
 
 	/** High-wind class: a small rotor worked hard, for an exposed site. */
-	public static final TurbineSpec C52_085 = register(new TurbineSpec(
+	public static final TurbineSpec C52_085 = TURBINES.register(new TurbineSpec(
 			id("c52_085"), "C52-0.85", "IA",
 			850.0, 52.0, 0.44,
 			4.0, 25.0, 22.0,
@@ -36,7 +33,7 @@ public final class TurbineCatalog {
 			4, 7,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
-	public static final TurbineSpec C80_20 = register(new TurbineSpec(
+	public static final TurbineSpec C80_20 = TURBINES.register(new TurbineSpec(
 			id("c80_20"), "C80-2.0", "IIA",
 			2000.0, 80.0, 0.46,
 			4.0, 25.0, 22.0,
@@ -44,7 +41,7 @@ public final class TurbineCatalog {
 			6, 10,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
-	public static final TurbineSpec C90_30 = register(new TurbineSpec(
+	public static final TurbineSpec C90_30 = TURBINES.register(new TurbineSpec(
 			id("c90_30"), "C90-3.0", "IIA",
 			3000.0, 90.0, 0.46,
 			3.5, 25.0, 22.0,
@@ -53,7 +50,7 @@ public final class TurbineCatalog {
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
 	/** The C90's generator behind a rotor a fifth wider: same nameplate, reached in less wind. */
-	public static final TurbineSpec C112_30 = register(new TurbineSpec(
+	public static final TurbineSpec C112_30 = TURBINES.register(new TurbineSpec(
 			id("c112_30"), "C112-3.0", "IIIA",
 			3000.0, 112.0, 0.47,
 			3.0, 25.0, 22.0,
@@ -64,7 +61,7 @@ public final class TurbineCatalog {
 	/**
 	 * The top of the line, and the machine the authored model already was: its rotor measures 13.044 blocks from the hub, so this is the one that draws at 1:1 and every other model is it scaled down.
 	 */
-	public static final TurbineSpec C130_40 = register(new TurbineSpec(
+	public static final TurbineSpec C130_40 = TURBINES.register(new TurbineSpec(
 			id("c130_40"), "C130-4.0", "IIIA",
 			4000.0, 130.0, 0.47,
 			3.0, 25.0, 22.5,
@@ -75,18 +72,9 @@ public final class TurbineCatalog {
 	private TurbineCatalog() {
 	}
 
-	private static ResourceLocation id(String path) {
-		return new ResourceLocation(Electricity.MOD_ID, path);
-	}
-
-	private static TurbineSpec register(TurbineSpec spec) {
-		BY_ID.put(spec.id(), spec);
-		return spec;
-	}
-
 	/** Every known machine */
 	public static List<TurbineSpec> all() {
-		return List.copyOf(BY_ID.values());
+		return TURBINES.all();
 	}
 
 	/**
