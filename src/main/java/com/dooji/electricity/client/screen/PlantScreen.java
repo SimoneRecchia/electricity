@@ -1,6 +1,7 @@
 package com.dooji.electricity.client.screen;
 
 import java.util.Locale;
+import javax.annotation.Nullable;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -9,8 +10,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-/** What every machine's control panel in this mod has in common. */
-public abstract class PlantScreen extends Screen {
+/**
+ * What every machine's control panel in this mod has in common, over the machine it is open on.
+ *
+ * The type parameter is there so a panel says which machine it belongs to once: every one of them used to
+ * carry the same three-line instanceof lookup and then hand it back through an abstract accessor.
+ */
+public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 	/** Side of the sheet the panel textures are drawn into. */
 	protected static final int PANEL_SHEET = 512;
 
@@ -38,6 +44,7 @@ public abstract class PlantScreen extends Screen {
 	protected static final int VIOLET = 0xFF7E6BA8;
 
 	private final ResourceLocation texture;
+	private final Class<T> machineType;
 	protected final int imageWidth;
 	protected final int imageHeight;
 	/**
@@ -51,9 +58,11 @@ public abstract class PlantScreen extends Screen {
 	protected int leftPos;
 	protected int topPos;
 
-	protected PlantScreen(Component title, ResourceLocation texture, int imageWidth, int imageHeight, BlockPos targetPos) {
+	protected PlantScreen(Component title, ResourceLocation texture, int imageWidth, int imageHeight, BlockPos targetPos,
+			Class<T> machineType) {
 		super(title);
 		this.texture = texture;
+		this.machineType = machineType;
 		this.imageWidth = imageWidth;
 		this.imageHeight = imageHeight;
 		// the wells are inset twelve pixels either side, so the bar's width follows the panel's rather
@@ -68,11 +77,20 @@ public abstract class PlantScreen extends Screen {
 		topPos = (height - imageHeight) / 2;
 	}
 
+	/** The machine this panel is open on, or null if it has gone. */
+	@Nullable
+	protected final T machine() {
+		if (minecraft == null || minecraft.level == null) return null;
+
+		BlockEntity entity = minecraft.level.getBlockEntity(targetPos);
+		return machineType.isInstance(entity) ? machineType.cast(entity) : null;
+	}
+
 	/** Closes the panel when the machine it belongs to stops existing. */
 	@Override
 	public void tick() {
 		super.tick();
-		if (blockEntity() == null) {
+		if (machine() == null) {
 			onClose();
 		}
 	}
@@ -82,7 +100,7 @@ public abstract class PlantScreen extends Screen {
 		renderBackground(graphics);
 		graphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight, PANEL_SHEET, PANEL_SHEET);
 
-		if (blockEntity() != null) {
+		if (machine() != null) {
 			drawPanel(graphics);
 		}
 
@@ -91,9 +109,6 @@ public abstract class PlantScreen extends Screen {
 
 	/** Everything inside the panel. */
 	protected abstract void drawPanel(GuiGraphics graphics);
-
-	/** The machine this panel is open on, or null if it has gone. */
-	protected abstract BlockEntity blockEntity();
 
 	@Override
 	public boolean isPauseScreen() {

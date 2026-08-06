@@ -7,10 +7,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /** The met mast's panel: nine instrument readings and what is reading them. */
-public class MetStationScreen extends PlantScreen {
+public class MetStationScreen extends PlantScreen<MetStationBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/met_station.png");
 	private static final int WIDTH = 288;
 	private static final int HEIGHT = 208;
@@ -27,12 +26,12 @@ public class MetStationScreen extends PlantScreen {
 	private static final int ROW_HEIGHT = 11;
 
 	public MetStationScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.met_station.title"), TEXTURE, WIDTH, HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.met_station.title"), TEXTURE, WIDTH, HEIGHT, targetPos, MetStationBlockEntity.class);
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		MetStationBlockEntity station = station();
+		MetStationBlockEntity station = machine();
 		if (station == null) return;
 
 		graphics.drawString(font, Component.translatable("screen.electricity.met_station.title"), leftPos + MARGIN, topPos + 6, VALUE_COLOUR, false);
@@ -102,17 +101,5 @@ public class MetStationScreen extends PlantScreen {
 			graphics.drawString(font, line, leftPos + MARGIN, y, FAINT_COLOUR, false);
 			y += 10;
 		}
-	}
-
-	private MetStationBlockEntity station() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof MetStationBlockEntity station) return station;
-
-		return null;
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		return station();
 	}
 }

@@ -8,17 +8,14 @@ import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /** The control panel at the foot of a wind turbine. */
-public class WindTurbineScreen extends PlantScreen {
+public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
 	// 240 wide rather than the vanilla 176: the nameplate lines are the longest thing
 	// here and at 200 the cut-out speed ran off the right edge
@@ -34,14 +31,14 @@ public class WindTurbineScreen extends PlantScreen {
 	private LimitSlider limitSlider;
 
 	public WindTurbineScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.wind_turbine.title"), TEXTURE, IMAGE_WIDTH, IMAGE_HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.wind_turbine.title"), TEXTURE, IMAGE_WIDTH, IMAGE_HEIGHT, targetPos, WindTurbineBlockEntity.class);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		double limitFraction = turbine == null ? 1.0 : turbine.getActivePowerLimit() / turbine.spec().ratedPowerKw();
 		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 139, 218, 20, limitFraction));
 
@@ -56,14 +53,14 @@ public class WindTurbineScreen extends PlantScreen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (turbine() != null) {
+		if (machine() != null) {
 			refreshWidgets();
 		}
 	}
 
 	/** Keeps the buttons telling the truth. */
 	private void refreshWidgets() {
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		if (turbine == null) return;
 
 		TurbineSpec spec = turbine.spec();
@@ -77,14 +74,12 @@ public class WindTurbineScreen extends PlantScreen {
 
 		// while a drag is in progress the handle is the player's, not the machine's:
 		// overwriting it from the synced setpoint would fight the mouse
-		if (!limitSlider.beingDragged) {
-			limitSlider.syncTo(turbine.getActivePowerLimit() / spec.ratedPowerKw());
-		}
+		limitSlider.syncTo(turbine.getActivePowerLimit() / spec.ratedPowerKw());
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		if (turbine == null) return;
 
 		drawNameplate(graphics, turbine);
@@ -204,62 +199,26 @@ public class WindTurbineScreen extends PlantScreen {
 		}
 	}
 
-	private WindTurbineBlockEntity turbine() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof WindTurbineBlockEntity turbine) return turbine;
-
-		return null;
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		return turbine();
-	}
-
 	private void send(TurbineControlPayload.Action action) {
 		ElectricityNetworking.INSTANCE.sendToServer(TurbineControlPayload.of(targetPos, action));
 	}
 
 	/** The curtailment setpoint. */
-	private class LimitSlider extends AbstractSliderButton {
-		private boolean beingDragged;
-
+	private class LimitSlider extends SetpointSlider {
 		private LimitSlider(int x, int y, int width, int height, double fraction) {
-			super(x, y, width, height, Component.empty(), Mth.clamp(fraction, 0.0, 1.0));
-			updateMessage();
-		}
-
-		private void syncTo(double fraction) {
-			double clamped = Mth.clamp(fraction, 0.0, 1.0);
-			if (Math.abs(clamped - value) < 1.0e-4) return;
-
-			value = clamped;
-			updateMessage();
+			super(x, y, width, height, fraction);
 		}
 
 		@Override
 		protected void updateMessage() {
-			WindTurbineBlockEntity turbine = turbine();
+			WindTurbineBlockEntity turbine = machine();
 			double rated = turbine == null ? 1.0 : turbine.spec().ratedPowerKw();
 			setMessage(Component.translatable("screen.electricity.wind_turbine.limit", TurbineBlockItem.formatPower(value * rated), fmt("%.0f", value * 100.0)));
 		}
 
 		@Override
-		protected void applyValue() {
-			// nothing until the drag ends, see onRelease
-		}
-
-		@Override
-		public void onClick(double mouseX, double mouseY) {
-			beingDragged = true;
-			super.onClick(mouseX, mouseY);
-		}
-
-		@Override
-		public void onRelease(double mouseX, double mouseY) {
-			super.onRelease(mouseX, mouseY);
-			beingDragged = false;
-			WindTurbineBlockEntity turbine = turbine();
+		protected void commit() {
+			WindTurbineBlockEntity turbine = machine();
 			if (turbine == null) return;
 
 			ElectricityNetworking.INSTANCE.sendToServer(new TurbineControlPayload(targetPos, TurbineControlPayload.Action.SET_POWER_LIMIT, value * turbine.spec().ratedPowerKw()));

@@ -7,17 +7,14 @@ import com.dooji.electricity.main.network.payloads.SolarControlPayload;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /** The inverter's panel: the plant */
-public class PvInverterScreen extends PlantScreen {
+public class PvInverterScreen extends PlantScreen<PvInverterBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_inverter.png");
 	private static final int WIDTH = 288;
 	private static final int HEIGHT = 252;
@@ -38,14 +35,14 @@ public class PvInverterScreen extends PlantScreen {
 	private static final double[] POWER_FACTORS = {1.0, 0.95, 0.90, 0.85, 0.80};
 
 	public PvInverterScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.pv_inverter.title"), TEXTURE, WIDTH, HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.pv_inverter.title"), TEXTURE, WIDTH, HEIGHT, targetPos, PvInverterBlockEntity.class);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		double limitFraction = inverter == null ? 1.0 : inverter.getActivePowerLimit() / inverter.spec().acPowerKw();
 		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 200, WIDTH - 22, 20, limitFraction));
 
@@ -63,14 +60,14 @@ public class PvInverterScreen extends PlantScreen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (inverter() != null) {
+		if (machine() != null) {
 			refreshWidgets();
 		}
 	}
 
 	/** Keeps the buttons telling the truth. */
 	private void refreshWidgets() {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		stopButton.setMessage(Component.translatable(inverter.isStoppedByPlayer()
@@ -85,14 +82,12 @@ public class PvInverterScreen extends PlantScreen {
 		powerFactorButton.setTooltip(Tooltip.create(Component.translatable("screen.electricity.pv_inverter.pf.tip")));
 
 		// while a drag is in progress the handle is the player's, not the machine's
-		if (!limitSlider.beingDragged) {
-			limitSlider.syncTo(inverter.getActivePowerLimit() / inverter.spec().acPowerKw());
-		}
+		limitSlider.syncTo(inverter.getActivePowerLimit() / inverter.spec().acPowerKw());
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		drawNameplate(graphics, inverter);
@@ -224,7 +219,7 @@ public class PvInverterScreen extends PlantScreen {
 	}
 
 	private void cyclePowerFactor() {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		double current = inverter.powerFactor();
@@ -245,12 +240,6 @@ public class PvInverterScreen extends PlantScreen {
 		ElectricityNetworking.INSTANCE.sendToServer(SolarControlPayload.of(targetPos, action));
 	}
 
-	private PvInverterBlockEntity inverter() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof PvInverterBlockEntity inverter) return inverter;
-
-		return null;
-	}
 
 	/** What this cabinet's direct-current terminals actually are. */
 	private static String terminalsKey(PvInverterBlockEntity inverter) {
@@ -266,52 +255,22 @@ public class PvInverterScreen extends PlantScreen {
 				: "screen.electricity.pv_inverter.terminals.busbars";
 	}
 
-	@Override
-	protected BlockEntity blockEntity() {
-		return inverter();
-	}
-
 	/** The curtailment setpoint. */
-	private class LimitSlider extends AbstractSliderButton {
-		private boolean beingDragged;
-
+	private class LimitSlider extends SetpointSlider {
 		private LimitSlider(int x, int y, int width, int height, double fraction) {
-			super(x, y, width, height, Component.empty(), Mth.clamp(fraction, 0.0, 1.0));
-			updateMessage();
-		}
-
-		private void syncTo(double fraction) {
-			double clamped = Mth.clamp(fraction, 0.0, 1.0);
-			if (Math.abs(clamped - value) < 1.0e-4) return;
-
-			value = clamped;
-			updateMessage();
+			super(x, y, width, height, fraction);
 		}
 
 		@Override
 		protected void updateMessage() {
-			PvInverterBlockEntity inverter = inverter();
+			PvInverterBlockEntity inverter = machine();
 			double rated = inverter == null ? 1.0 : inverter.spec().acPowerKw();
 			setMessage(Component.translatable("screen.electricity.pv.limit", power(value * rated), fmt("%.0f", value * 100.0)));
 		}
 
 		@Override
-		protected void applyValue() {
-			// nothing until the drag ends, see onRelease
-		}
-
-		@Override
-		public void onClick(double mouseX, double mouseY) {
-			beingDragged = true;
-			super.onClick(mouseX, mouseY);
-		}
-
-		@Override
-		public void onRelease(double mouseX, double mouseY) {
-			super.onRelease(mouseX, mouseY);
-			beingDragged = false;
-
-			PvInverterBlockEntity inverter = inverter();
+		protected void commit() {
+			PvInverterBlockEntity inverter = machine();
 			if (inverter == null) return;
 
 			ElectricityNetworking.INSTANCE.sendToServer(new SolarControlPayload(targetPos,

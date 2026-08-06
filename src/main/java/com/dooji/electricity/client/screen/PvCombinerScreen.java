@@ -5,18 +5,16 @@ import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.CombinerCatalog;
 import java.util.Locale;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 /** The combiner box's panel: how full it is, what it is sending, and what it turned away. */
 @OnlyIn(Dist.CLIENT)
-public class PvCombinerScreen extends PlantScreen {
+public class PvCombinerScreen extends PlantScreen<PvCombinerBlockEntity> {
 	private static final ResourceLocation PANEL = new ResourceLocation(Electricity.MOD_ID, "textures/gui/pv_combiner.png");
 
 	private static final int WIDTH = 288;
@@ -32,20 +30,13 @@ public class PvCombinerScreen extends PlantScreen {
 	private static final int OUTPUT_Y = 114;
 
 	public PvCombinerScreen(BlockPos pos) {
-		super(Component.translatable("screen.electricity.pv_combiner.title"), PANEL, WIDTH, HEIGHT, pos);
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return null;
-
-		return mc.level.getBlockEntity(targetPos) instanceof PvCombinerBlockEntity combiner ? combiner : null;
+		super(Component.translatable("screen.electricity.pv_combiner.title"), PANEL, WIDTH, HEIGHT, pos, PvCombinerBlockEntity.class);
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		if (!(blockEntity() instanceof PvCombinerBlockEntity combiner)) return;
+		PvCombinerBlockEntity combiner = machine();
+		if (combiner == null) return;
 
 		CombinerSpec spec = combiner.spec();
 		if (spec == null) return;

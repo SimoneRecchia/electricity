@@ -12,17 +12,15 @@ import com.dooji.electricity.main.registry.PvModuleCatalog;
 import com.dooji.electricity.main.registry.TrackerCatalog;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
 /** One array's panel: the datasheet, what the light is doing, and the tracker. */
-public class PvArrayScreen extends PlantScreen {
+public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_array.png");
 	private static final int WIDTH = 288;
 	private static final int HEIGHT = 232;
@@ -41,14 +39,14 @@ public class PvArrayScreen extends PlantScreen {
 	private AngleSlider angleSlider;
 
 	public PvArrayScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.pv_array.title"), TEXTURE, WIDTH, HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.pv_array.title"), TEXTURE, WIDTH, HEIGHT, targetPos, PvArrayBlockEntity.class);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 
-		PvArrayBlockEntity array = array();
+		PvArrayBlockEntity array = machine();
 		TrackerSpec tracker = array == null ? null : array.tracker();
 
 		if (tracker != null) {
@@ -63,13 +61,13 @@ public class PvArrayScreen extends PlantScreen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (array() != null && modeButton != null) {
+		if (machine() != null && modeButton != null) {
 			refreshWidgets();
 		}
 	}
 
 	private void refreshWidgets() {
-		PvArrayBlockEntity array = array();
+		PvArrayBlockEntity array = machine();
 		TrackerSpec tracker = array == null ? null : array.tracker();
 		if (tracker == null) return;
 
@@ -81,14 +79,12 @@ public class PvArrayScreen extends PlantScreen {
 		// the slider only makes sense in hand mode
 		// tooltip would: in automatic mode the controller would overwrite anything it was set to
 		angleSlider.active = array.trackerMode() == TrackerMode.MANUAL;
-		if (!angleSlider.beingDragged) {
-			angleSlider.syncTo(fractionOf(tracker, array.manualRotationDeg()));
-		}
+		angleSlider.syncTo(fractionOf(tracker, array.manualRotationDeg()));
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		PvArrayBlockEntity array = array();
+		PvArrayBlockEntity array = machine();
 		if (array == null) return;
 
 		drawNameplate(graphics, array);
@@ -245,37 +241,14 @@ public class PvArrayScreen extends PlantScreen {
 		ElectricityNetworking.INSTANCE.sendToServer(SolarControlPayload.of(targetPos, action));
 	}
 
-	private PvArrayBlockEntity array() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof PvArrayBlockEntity array) return array;
-
-		return null;
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		return array();
-	}
-
 	/** The hand position for the tracker. */
-	private class AngleSlider extends AbstractSliderButton {
-		private boolean beingDragged;
-
+	private class AngleSlider extends SetpointSlider {
 		private AngleSlider(int x, int y, int width, int height, double fraction) {
-			super(x, y, width, height, Component.empty(), Mth.clamp(fraction, 0.0, 1.0));
-			updateMessage();
-		}
-
-		private void syncTo(double fraction) {
-			double clamped = Mth.clamp(fraction, 0.0, 1.0);
-			if (Math.abs(clamped - value) < 1.0e-4) return;
-
-			value = clamped;
-			updateMessage();
+			super(x, y, width, height, fraction);
 		}
 
 		private double degrees() {
-			PvArrayBlockEntity array = array();
+			PvArrayBlockEntity array = machine();
 			TrackerSpec tracker = array == null ? null : array.tracker();
 			if (tracker == null) return 0.0;
 
@@ -288,21 +261,7 @@ public class PvArrayScreen extends PlantScreen {
 		}
 
 		@Override
-		protected void applyValue() {
-			// nothing until the drag ends, see onRelease
-		}
-
-		@Override
-		public void onClick(double mouseX, double mouseY) {
-			beingDragged = true;
-			super.onClick(mouseX, mouseY);
-		}
-
-		@Override
-		public void onRelease(double mouseX, double mouseY) {
-			super.onRelease(mouseX, mouseY);
-			beingDragged = false;
-
+		protected void commit() {
 			ElectricityNetworking.INSTANCE.sendToServer(new SolarControlPayload(targetPos,
 					SolarControlPayload.Action.ARRAY_SET_TRACKER_ANGLE, degrees()));
 		}
