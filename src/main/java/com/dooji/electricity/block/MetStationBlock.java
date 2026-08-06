@@ -57,7 +57,7 @@ public class MetStationBlock extends HorizontalDirectionalBlock implements Entit
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS;
 	}
 

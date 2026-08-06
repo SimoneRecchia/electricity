@@ -1,7 +1,6 @@
 {
   "itemGroup.electricity.main": "Electricity",
   "item.electricity.power_wrench": "Power Wrench",
-  "item.electricity.weather_tablet": "Weather Tablet",
   "item.electricity.circuit_board": "Circuit Board",
   "item.electricity.cpu": "CPU",
   "item.electricity.screen": "Glass Screen",
@@ -12,7 +11,6 @@
   "tooltip.electricity.utility_pole": "Supports up to eight live insulators.",
   "tooltip.electricity.electric_cabin": "One insulator is the input, the other feeds the grid.",
   "tooltip.electricity.power_box": "Converts turbine output into FE and powers nearby Electricity API devices.",
-  "tooltip.electricity.weather_tablet": "Shows storms and wind data.",
   "tooltip.electricity.circuit_board": "Printed board used in every controller.",
   "tooltip.electricity.cpu": "Simple control unit for Electricity builds.",
   "tooltip.electricity.screen": "Front glass for tablets.",

@@ -54,7 +54,9 @@ public class ConductorItem extends Item {
 				return DistExecutor.unsafeCallWhenOn(Dist.CLIENT, () -> () -> WireClientHooks.handleUseOn(context));
 			}
 
-			return Electricity.wireManager.handleWireUse(context);
+			// nothing left for the server to check here: the block it is standing on is already known to be a
+			// fitting, and the connection itself arrives as its own payload
+			return InteractionResult.SUCCESS;
 		}
 
 		return layRun(context);

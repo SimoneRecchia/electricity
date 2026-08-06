@@ -276,7 +276,7 @@ public class LatticeTowerBlock extends Block implements EntityBlock, MachineShel
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return switch (spec.duty()) {
 			case SUSPENSION -> SUSPENSION_CELLS;
 			case TENSION -> TENSION_CELLS;

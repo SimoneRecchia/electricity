@@ -107,7 +107,7 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS;
 	}
 

@@ -44,7 +44,7 @@ MIN_BLOCK = 128
 INHERITED = {'block/plastic2.png'} | {
     'item/%s.png' % name for name in
     ('cab', 'circuit_board', 'cpu', 'insulator', 'metal_casing', 'motor_core', 'power_box', 'screen',
-     'utility_pole', 'weather_tablet')}
+     'utility_pole')}
 
 
 def outputs():

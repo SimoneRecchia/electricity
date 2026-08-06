@@ -52,13 +52,13 @@ public interface MachineShell {
 		}
 	}
 
-	/** Every cell this machine fills, its own first */
-	List<Cell> shellCells();
-
-	/** The same table for one state, for a machine with an optional part. */
-	default List<Cell> shellCells(BlockState state) {
-		return shellCells();
-	}
+	/**
+	 * Every cell this machine fills, its own first.
+	 *
+	 * Takes the state because a machine may grow a part a player can walk into; none of them does today, and
+	 * two methods where one would do meant place and clear could be given different tables.
+	 */
+	List<Cell> shellCells(BlockState state);
 
 	/** Which way this machine's model has been turned. */
 	Direction shellFacing(BlockState state);

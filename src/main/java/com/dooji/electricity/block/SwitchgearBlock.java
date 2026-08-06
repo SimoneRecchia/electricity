@@ -167,7 +167,7 @@ public class SwitchgearBlock extends Block implements EntityBlock, MachineShell 
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return spec.breaksLoad() ? BREAKER_CELLS : DISCONNECTOR_CELLS;
 	}
 

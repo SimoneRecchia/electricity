@@ -127,7 +127,7 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS;
 	}
 

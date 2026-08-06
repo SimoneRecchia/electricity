@@ -160,7 +160,7 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS.get(spec.mounting());
 	}
 

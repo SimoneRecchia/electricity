@@ -1,7 +1,6 @@
 package com.dooji.electricity.main.wire;
 
 import com.dooji.electricity.api.power.ConductorSpec;
-import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
@@ -26,11 +25,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
@@ -39,22 +34,6 @@ public class WireManager {
 	private static final Map<ServerLevel, WireSavedData> SAVED_DATA_CACHE = new ConcurrentHashMap<>();
 	/** The longest span for a connection whose conductor this build does not know. */
 	private static final double MAX_WIRE_DISTANCE = 64.0;
-
-	public InteractionResult handleWireUse(UseOnContext context) {
-		Player player = context.getPlayer();
-		if (player == null) return InteractionResult.FAIL;
-
-		Level level = context.getLevel();
-		// the same reading of the click the client made: a collision cell means the machine it belongs to
-		BlockPos clickedPos = MachineShell.hostOr(level, context.getClickedPos());
-
-		if (level.isClientSide) return InteractionResult.SUCCESS;
-
-		BlockEntity blockEntity = level.getBlockEntity(clickedPos);
-		if (!(blockEntity instanceof InsulatorHost)) return InteractionResult.FAIL;
-
-		return InteractionResult.SUCCESS;
-	}
 
 	public void createWireFromInsulators(ServerPlayer player, CreateWireFromInsulatorsPayload payload) {
 		if (player == null) return;

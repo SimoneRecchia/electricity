@@ -106,11 +106,7 @@ public class PowerBoxBlock extends Block implements EntityBlock, MachineShell {
 		return shellShape(state);
 	}
 
-	@Override
-	public List<Cell> shellCells() {
-		return CELLS;
-	}
-
+	/** A kiosk on the ground is one shape and one bolted to a wall is another. */
 	@Override
 	public List<Cell> shellCells(BlockState state) {
 		return state.getValue(MOUNTED) ? WALL_CELLS : CELLS;

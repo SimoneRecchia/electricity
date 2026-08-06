@@ -143,7 +143,6 @@ public class Electricity {
 	public static final RegistryObject<Item> ELECTRIC_CABIN_ITEM = ITEMS.register("electric_cabin", () -> new TooltipBlockItem(ELECTRIC_CABIN_BLOCK.get(), new Item.Properties(), "tooltip.electricity.electric_cabin"));
 	public static final RegistryObject<Item> POWER_BOX_ITEM = ITEMS.register("power_box", () -> new TooltipBlockItem(POWER_BOX_BLOCK.get(), new Item.Properties(), "tooltip.electricity.power_box"));
 	public static final RegistryObject<Item> WIND_TURBINE_ITEM = ITEMS.register("wind_turbine", () -> new TurbineBlockItem(WIND_TURBINE_BLOCK.get(), new Item.Properties(), TurbineCatalog.C130_40));
-	public static final RegistryObject<Item> WEATHER_TABLET_ITEM = ITEMS.register("weather_tablet", () -> new TooltipItem(new Item.Properties().stacksTo(1), "tooltip.electricity.weather_tablet"));
 	public static final RegistryObject<Item> CIRCUIT_BOARD_ITEM = ITEMS.register("circuit_board", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.circuit_board"));
 	public static final RegistryObject<Item> CPU_ITEM = ITEMS.register("cpu", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.cpu"));
 	public static final RegistryObject<Item> SCREEN_ITEM = ITEMS.register("screen", () -> new TooltipItem(new Item.Properties(), "tooltip.electricity.screen"));

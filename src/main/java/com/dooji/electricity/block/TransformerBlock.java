@@ -111,7 +111,7 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return spec.duty() == TransformerSpec.Duty.MACHINE ? MACHINE_CELLS : SUBSTATION_CELLS;
 	}
 

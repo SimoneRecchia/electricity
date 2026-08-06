@@ -124,11 +124,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		return shellShape(state);
 	}
 
-	@Override
-	public List<Cell> shellCells() {
-		return shellCells(defaultBlockState().setValue(COMBINER, true));
-	}
-
+	/** Which of the three sizes this product is: a container, a wall unit, or the cabinet between them. */
 	@Override
 	public List<Cell> shellCells(BlockState state) {
 		if (spec.acPowerKw() >= CONTAINER_KW) return CELLS;
