@@ -169,6 +169,14 @@ The rules that came out of doing it:
 * **Two hitboxes cannot be the drawn shape, and the checker prints why**: a tracked array sweeps a
   volume as it follows the sun, and the turbine model carries its own tower, which in the world is a
   stack of blocks with their own collision.
+* **A table with no cell of its own has an empty shape, not a solid block.** A lattice tower's origin is the
+  middle of a footprint 3.8 blocks across and there is nothing there; `shellShape`'s fallback was
+  `Shapes.block()`, so every tower in the world had an invisible solid cube standing on the ground inside it.
+  A machine with no own cell is still reached through its shells, which forward a click and a break to it.
+* **A family of machines that share a body share a table.** The three towers are one structure with three
+  heads: sixty-eight of their eighty-two cells are identical, and `over(BODY_CELLS, duty)` lays a duty's own
+  cells over the shared ones. A delta cell *replaces* rather than adds, because `coarse` has already merged
+  that duty's strings into the structure's boxes.
 * **A machine bigger than a block fills the cells round it, and giving them back is not the same question
   as taking them.** `MachineShell.place` may ask `hostOf` whether a cell is its own, because the machine is
   standing there while it asks. `clear` may not: it runs from `onRemove`, and by then the chunk already
@@ -192,6 +200,12 @@ The renderers read them. Renaming one silently breaks something:
 | `flag_shut`, `flag_open` | two plates in one place, one drawn per state. A vacuum breaker has nothing that moves where you can see it, so a flag is all it has to tell you with |
 | `insulator*` | a wire fitting, **named in `ObjDefinitions`** — and a wire is stored against its *index* in that list, so the order cannot change without moving every wire in every existing world. On a switch the index is also the side: `insulator_1..3` line, `insulator_4..6` load, which is what `busOf` splits on |
 
+A machine that carries a fitting extends **`FittedBlockEntity`**, which owns the two arrays, the persistent
+ids, the update packet and the client registration — three block entities repeated all of it byte for byte.
+What a subclass says is where on its own model a wire lands (`landing`, the top of the fitting's box by
+default) and what it does with the power that arrives. Which way the model is turned comes off `MachineShell`,
+which every such machine already is.
+
 And four questions the wires ask of a machine, all on `InsulatorHost`, so adding one is four methods and
 not an `instanceof` chain in eight files:
 
@@ -201,6 +215,11 @@ not an `instanceof` chain in eight files:
 | `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `PowerNetwork` keys a cluster on (position, bus) for it |
 | `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the five conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
 | `fittingType()` | the string a saved wire holds. **Never change one**: every wire in every existing world has it |
+
+Twice now an `instanceof` chain over machine types has silently dropped the machines added after it was
+written: `wireable()` would not let a conductor be clicked onto a tower, and `resolveInsulatorPosition` saved
+the span and then drew nothing. **If you are writing `instanceof` over more than two block entities in the
+wire path, the answer is a method on `InsulatorHost`.**
 
 ## 6. Generate, never hand-edit
 
@@ -218,6 +237,20 @@ back — a 1024-pixel laminate became a 256-pixel one and nothing could tell you
 height; the tube moved and the checker went on measuring the old axis, so it reported a clash that was
 not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
 the renderer does.
+
+**One reader, one writer.** `tools/objlib.py` is the only thing in this repo that parses an OBJ. Six checkers
+had their own parser and CLAUDE.md's own loudest lesson is why that is dangerous — a reader that differs from
+the game proves nothing. What differs legitimately is kept and named: `forge_only()` is the block-model rule,
+`read()` merges the way the mod's own splitter does, `normal` stays None where the file states none (or
+`check_winding` passes vacuously), and nothing is triangulated. Verified by regenerating all twenty-eight
+renders byte for byte.
+
+The same rule on the way out: **a blockstate, a block model, a loot table and a mineable tag are generated
+too.** Twenty-two blockstates were hand-written and one of them had gone wrong — the kiosk has a `mounted` as
+well as a facing, and four `facing=` variant keys named half its states, so Minecraft resolved the other half
+to no model. And seven machines were in no mineable tag, which with `requiresCorrectToolForDrops()` means the
+block breaks into nothing whatever you hit it with. `gen_crafting.MACHINES` owns all of it now, and
+`check_generated_assets` fails on a blockstate no generator writes and on a block model nothing names.
 
 **A part's box and a part's mesh have to be compared, not just declared.** `check_hitboxes.py` skips the
 cables — their shape is per state, not per model file — so nothing checked a cable fitting's own geometry
