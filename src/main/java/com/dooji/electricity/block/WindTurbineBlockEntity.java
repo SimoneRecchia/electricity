@@ -426,10 +426,7 @@ public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost
 		budget.open(cap <= 0.0 ? 0.0 : Math.min(Math.max(0.0, generatedPower) * EnergyBridge.JOULES_PER_KW, cap));
 	}
 
-	/**
-	 * Mirrors Mekanism's Wind Generator, which exposes energy on its front and bottom rather than on every face: cables belong at the foot of the tower.
-	 */
-	/** Where this machine's cables come out: the foot of its tower. */
+	/** Where this machine's cables come out: the foot of its tower, as Mekanism's own wind generator does. */
 	public BlockPos energyOrigin() {
 		return worldPosition.below(getTowerSegments());
 	}
@@ -727,7 +724,6 @@ public class WindTurbineBlockEntity extends BlockEntity implements InsulatorHost
 		level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
 	}
 
-	/** How far the rotor turns in a tick, in degrees, at this wind. */
 	/** How fast the rotor should be turning, in degrees a tick. */
 	private float rotorDegreesPerTick(float windSpeed) {
 		if (isParked()) return 0.0f;

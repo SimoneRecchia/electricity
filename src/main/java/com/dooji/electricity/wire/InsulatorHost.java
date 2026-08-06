@@ -58,4 +58,12 @@ public interface InsulatorHost {
 	/** What the network delivered here, for a machine that shows a reading. */
 	default void deliverPower(double power) {
 	}
+
+	/**
+	 * What is flowing through this machine, in kW: the figure a power wrench reads off it.
+	 *
+	 * Every host already had this method - it is what {@link #deliverPower} stores - but it was not on the
+	 * interface, so the wrench had to name three types and read nothing off the other eight.
+	 */
+	double getCurrentPower();
 }

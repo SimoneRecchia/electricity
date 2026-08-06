@@ -464,6 +464,12 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		return acPowerKw;
 	}
 
+	/** A machine that makes power rather than passing it reads what it is sending out. */
+	@Override
+	public double getCurrentPower() {
+		return acPowerKw;
+	}
+
 	public double dcVoltage() {
 		return dcVoltage;
 	}
@@ -492,7 +498,6 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		return derating;
 	}
 
-	/** Whether the arrays are producing at a voltage this machine cannot track. */
 	/** Direct-current input still free, in amps. */
 	public double stringCurrentHeadroom() {
 		return stringCurrentHeadroom;

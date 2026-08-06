@@ -84,7 +84,6 @@ public record TrackerSpec(
 		return slewDegPerMinute / 60.0 * WorldConditions.SECONDS_PER_DAY_TICK;
 	}
 
-	/** Whether an error of this many degrees is worth starting the motor for. */
 	/** Gust at which the controller stows even though the mean is still under the limit, m/s. */
 	public double gustStowSpeed() {
 		return windStowSpeed * WorldConditions.GUST_TRIP_RATIO;

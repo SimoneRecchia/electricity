@@ -152,6 +152,11 @@ public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 		return FE_TRANSFER_PER_TICK;
 	}
 
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
+	}
+
 	public void setCurrentPower(double power) {
 		this.currentPower = power;
 	}

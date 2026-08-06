@@ -58,17 +58,17 @@ public class PowerNetwork {
 	}
 
 	private void addWireConnection(WireConnection wireConnection) {
-		int startId = wireConnection.getStartInsulatorId();
-		int endId = wireConnection.getEndInsulatorId();
+		int startId = wireConnection.startInsulatorId();
+		int endId = wireConnection.endInsulatorId();
 
-		PowerNode startNode = getOrCreateNode(startId, wireConnection.getStartBlockPos(), wireConnection.getStartBlockType());
-		PowerNode endNode = getOrCreateNode(endId, wireConnection.getEndBlockPos(), wireConnection.getEndBlockType());
+		PowerNode startNode = getOrCreateNode(startId, wireConnection.startBlockPos(), wireConnection.startBlockType());
+		PowerNode endNode = getOrCreateNode(endId, wireConnection.endBlockPos(), wireConnection.endBlockType());
 
 		if (startNode != null && endNode != null) {
 			double distance = calculateDistance(startNode.position, endNode.position);
 			String connectionKey = Math.min(startId, endId) + "_" + Math.max(startId, endId);
 
-			PowerConnection connection = new PowerConnection(startNode, endNode, distance, wireConnection.getStartPowerType(), wireConnection.getEndPowerType());
+			PowerConnection connection = new PowerConnection(startNode, endNode, distance, wireConnection.startPowerType(), wireConnection.endPowerType());
 			powerConnections.put(connectionKey, connection);
 		}
 	}

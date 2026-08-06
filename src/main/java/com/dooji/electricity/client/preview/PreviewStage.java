@@ -159,7 +159,6 @@ public final class PreviewStage {
 		}
 	}
 
-	/** Puts the camera where it can see the stage from one view. */
 	/** Whether this block is a machine that will not seat without a tower under it. */
 	private static boolean needsTower(String block) {
 		for (com.dooji.electricity.api.power.TurbineSpec spec : com.dooji.electricity.main.registry.TurbineCatalog.all()) {

@@ -77,7 +77,6 @@ public class WireRenderer {
 	private static final Conductor PLAIN = new Conductor(WIRE_RADIUS, ACTIVE_WIRE,
 			WirePhysics.DEFLECTION_COEFFICIENT, 1, 0.0);
 
-	/** How a span is drawn, off the conductor it was strung with. */
 	/** The conductor the player is holding, for the span that follows the cursor before it is placed. */
 	private static Conductor previewConductor() {
 		var player = Minecraft.getInstance().player;
@@ -98,7 +97,7 @@ public class WireRenderer {
 	}
 
 	private static Conductor conductorOf(WireConnection connection) {
-		ConductorSpec spec = ConductorCatalog.byPath(connection.getWireType());
+		ConductorSpec spec = ConductorCatalog.byPath(connection.wireType());
 		if (spec == null) return PLAIN;
 
 		int colour = spec.colour();
@@ -119,8 +118,8 @@ public class WireRenderer {
 	}
 
 	private static void renderWire(ClientLevel level, WireConnection connection, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos) {
-		Vec3 startConnectionPoint = WireManagerClient.getWirePosition(level, connection.getStartInsulatorId(), connection.getStartBlockPos());
-		Vec3 endConnectionPoint = WireManagerClient.getWirePosition(level, connection.getEndInsulatorId(), connection.getEndBlockPos());
+		Vec3 startConnectionPoint = WireManagerClient.getWirePosition(level, connection.startInsulatorId(), connection.startBlockPos());
+		Vec3 endConnectionPoint = WireManagerClient.getWirePosition(level, connection.endInsulatorId(), connection.endBlockPos());
 
 		if (startConnectionPoint == null || endConnectionPoint == null) return;
 

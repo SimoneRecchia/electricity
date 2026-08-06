@@ -1,9 +1,9 @@
 package com.dooji.electricity.item;
 
+import com.dooji.electricity.api.Nameplate;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import java.util.List;
-import java.util.Locale;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -31,26 +31,23 @@ public class PvInverterBlockItem extends BlockItem {
 		tooltip.add(Component.literal(InverterCatalog.fullName(spec)).withStyle(ChatFormatting.WHITE));
 
 		tooltip.add(Component.translatable("tooltip.electricity.inverter.nameplate",
-				TurbineBlockItem.formatPower(spec.acPowerKw()),
-				format("%.0f kVA", spec.apparentPowerKva())).withStyle(ChatFormatting.GRAY));
+				Nameplate.rating(spec.acPowerKw()),
+				Nameplate.fmt("%.0f kVA", spec.apparentPowerKva())).withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.inverter.dc",
-				TurbineBlockItem.formatPower(spec.maxDcPowerKw()),
-				format("%.2f", spec.nominalDcAcRatio())).withStyle(ChatFormatting.GRAY));
+				Nameplate.rating(spec.maxDcPowerKw()),
+				Nameplate.fmt("%.2f", spec.nominalDcAcRatio())).withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.inverter.mppt",
 				spec.mpptCount(),
-				format("%.0f", spec.mpptMinVolts()),
-				format("%.0f", spec.mpptMaxVolts()),
-				format("%.0f", spec.startupVolts())).withStyle(ChatFormatting.DARK_GRAY));
+				Nameplate.fmt("%.0f", spec.mpptMinVolts()),
+				Nameplate.fmt("%.0f", spec.mpptMaxVolts()),
+				Nameplate.fmt("%.0f", spec.startupVolts())).withStyle(ChatFormatting.DARK_GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.inverter.efficiency",
-				format("%.1f%%", spec.peakEfficiency() * 100.0),
-				format("%.1f%%", spec.europeanEfficiency() * 100.0)).withStyle(ChatFormatting.DARK_GRAY));
+				Nameplate.fmt("%.1f%%", spec.peakEfficiency() * 100.0),
+				Nameplate.fmt("%.1f%%", spec.europeanEfficiency() * 100.0)).withStyle(ChatFormatting.DARK_GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.inverter.thermal",
-				format("%.0f", spec.derateOnsetC()),
+				Nameplate.fmt("%.0f", spec.derateOnsetC()),
 				Component.translatable("cooling.electricity." + spec.cooling().key()),
-				format("%.0f W", spec.nightWatts())).withStyle(ChatFormatting.DARK_GRAY));
+				Nameplate.fmt("%.0f W", spec.nightWatts())).withStyle(ChatFormatting.DARK_GRAY));
 	}
 
-	private static String format(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
-	}
 }

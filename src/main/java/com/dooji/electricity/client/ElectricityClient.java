@@ -88,9 +88,7 @@ public class ElectricityClient {
 		var level = Minecraft.getInstance().level;
 		if (level == null) return;
 
-		var blockEntity = level.getBlockEntity(payload.blockPos());
 		// the same figure the server delivered, so what a wrench reads on the client is what flowed
-		if (blockEntity instanceof InsulatorHost host) host.deliverPower(payload.power());
-		if (blockEntity instanceof PowerBoxBlockEntity powerBox) powerBox.setCurrentPower(payload.power());
+		if (level.getBlockEntity(payload.blockPos()) instanceof InsulatorHost host) host.deliverPower(payload.power());
 	}
 }

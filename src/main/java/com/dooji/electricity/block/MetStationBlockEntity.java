@@ -29,7 +29,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 
 /** The met mast's instruments, each answering at its own speed. */
 public class MetStationBlockEntity extends BlockEntity {
-	/** Height the snow gauge is mounted at, in metres. */
 	/** How far a mast's on-array instruments reach, in blocks. */
 	private static final int REFERENCE_RADIUS = 12;
 
@@ -139,7 +138,6 @@ public class MetStationBlockEntity extends BlockEntity {
 	}
 
 	/** A first-order lag on a bearing, taken the short way round the compass. */
-	/** A first-order lag on a bearing, taken the short way round the circle. */
 	private static double smoothBearing(double previous, double target, double response) {
 		double delta = ((target - previous + 540.0) % 360.0) - 180.0;
 		double stepped = previous + delta * response;

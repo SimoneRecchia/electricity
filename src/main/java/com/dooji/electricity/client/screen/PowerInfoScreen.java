@@ -1,10 +1,11 @@
 package com.dooji.electricity.client.screen;
 
+import com.dooji.electricity.api.Nameplate;
+import com.dooji.electricity.block.PowerBoxBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.client.render.obj.ObjRaycaster;
+import com.dooji.electricity.wire.InsulatorHost;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -58,29 +59,30 @@ public class PowerInfoScreen extends Screen {
 			return lines;
 		}
 
-		List<Component> powerLines = ObjRaycaster.getPowerDisplayText(blockEntity);
-		if (powerLines != null) {
-			lines.addAll(powerLines);
+		lines.add(blockEntity.getBlockState().getBlock().getName());
+		if (blockEntity instanceof InsulatorHost host) {
+			lines.add(Component.translatable("tooltip.electricity.power.amount", Nameplate.fmt("%.1f", host.getCurrentPower())));
 		} else {
-			lines.add(blockEntity.getBlockState().getBlock().getName());
 			lines.add(Component.translatable("screen.electricity.power_info.no_power_data"));
+		}
+
+		// the kiosk is the one machine that also speaks the mods' own energy unit
+		if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
+			lines.add(Component.translatable("tooltip.electricity.power.fe",
+					powerBox.getForgeEnergyStored(), powerBox.getForgeTransferRate()));
 		}
 
 		if (blockEntity instanceof UtilityPoleBlockEntity pole) {
 			lines.add(Component.translatable("screen.electricity.power_info.offsets",
-					formatNumber("%.2f", pole.getOffsetX()),
-					formatNumber("%.2f", pole.getOffsetY()),
-					formatNumber("%.2f", pole.getOffsetZ())));
+					Nameplate.fmt("%.2f", pole.getOffsetX()),
+					Nameplate.fmt("%.2f", pole.getOffsetY()),
+					Nameplate.fmt("%.2f", pole.getOffsetZ())));
 			lines.add(Component.translatable("screen.electricity.power_info.yaw_pitch",
-					formatNumber("%.1f", Math.toDegrees(pole.getYaw())),
-					formatNumber("%.1f", Math.toDegrees(pole.getPitch()))));
+					Nameplate.fmt("%.1f", Math.toDegrees(pole.getYaw())),
+					Nameplate.fmt("%.1f", Math.toDegrees(pole.getPitch()))));
 		}
 
 		return lines;
-	}
-
-	private static String formatNumber(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
 	}
 
 	@Override

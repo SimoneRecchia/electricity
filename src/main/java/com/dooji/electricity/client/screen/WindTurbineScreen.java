@@ -1,8 +1,8 @@
 package com.dooji.electricity.client.screen;
 
+import com.dooji.electricity.api.Nameplate;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
-import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.registry.TurbineCatalog;
@@ -141,7 +141,7 @@ public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 		double potential = Math.max(produced, turbine.getUncappedPower());
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.power"), leftPos + 8, topPos + 58, LABEL_COLOUR, false);
-		value(graphics, TurbineBlockItem.formatPower(produced) + " / " + TurbineBlockItem.formatPower(rated), 58);
+		value(graphics, Nameplate.rating(produced) + " / " + Nameplate.rating(rated), 58);
 
 		// the potential goes down first so the produced bar sits on top of it: what is left
 		// showing behind is exactly what the machine is giving up
@@ -213,7 +213,7 @@ public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 		protected void updateMessage() {
 			WindTurbineBlockEntity turbine = machine();
 			double rated = turbine == null ? 1.0 : turbine.spec().ratedPowerKw();
-			setMessage(Component.translatable("screen.electricity.wind_turbine.limit", TurbineBlockItem.formatPower(value * rated), fmt("%.0f", value * 100.0)));
+			setMessage(Component.translatable("screen.electricity.wind_turbine.limit", Nameplate.rating(value * rated), fmt("%.0f", value * 100.0)));
 		}
 
 		@Override

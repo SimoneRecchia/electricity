@@ -68,7 +68,6 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private boolean slewing = false;
 	private boolean backtracking = false;
 	private boolean windStowLatched = false;
-	/** The beam the controller actually acts on, W/m2: a rolling mean rather than this tick's reading. */
 	/** What the row is being put away for, and for how much longer after the cause has gone. */
 	private TrackerMode.Stow heldStow = TrackerMode.Stow.NONE;
 	private int stowHoldTicks = 0;

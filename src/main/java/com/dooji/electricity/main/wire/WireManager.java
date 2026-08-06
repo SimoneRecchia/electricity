@@ -118,8 +118,8 @@ public class WireManager {
 	/** Whether these two fittings are already joined, in either order. */
 	private boolean alreadyStrung(ServerLevel level, int first, int second) {
 		for (WireConnection existing : getOrCreateSavedData(level).getAllWireConnections()) {
-			if ((existing.getStartInsulatorId() == first && existing.getEndInsulatorId() == second)
-					|| (existing.getStartInsulatorId() == second && existing.getEndInsulatorId() == first)) {
+			if ((existing.startInsulatorId() == first && existing.endInsulatorId() == second)
+					|| (existing.startInsulatorId() == second && existing.endInsulatorId() == first)) {
 				return true;
 			}
 		}
@@ -259,16 +259,16 @@ public class WireManager {
 
 	/** Gives back exactly what a span was charged, as an item on the ground where it was strung. */
 	private void refund(ServerLevel level, WireConnection connection) {
-		int count = connection.getChargedItems();
+		int count = connection.chargedItems();
 		if (count <= 0) return;
 
-		ConductorSpec spec = ConductorCatalog.byPath(connection.getWireType());
+		ConductorSpec spec = ConductorCatalog.byPath(connection.wireType());
 		if (spec == null) return;
 
 		var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(spec.id());
 		if (item == null) return;
 
-		BlockPos at = connection.getStartBlockPos();
+		BlockPos at = connection.startBlockPos();
 		while (count > 0) {
 			int drop = Math.min(count, 64);
 			net.minecraft.world.level.block.Block.popResource(level, at, new ItemStack(item, drop));
@@ -291,12 +291,12 @@ public class WireManager {
 		}
 
 		public void addWireConnection(WireConnection connection) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			wireConnections.put(key, connection);
 		}
 
 		public void removeWireConnection(WireConnection connection) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			wireConnections.remove(key);
 		}
 
@@ -306,7 +306,7 @@ public class WireManager {
 
 			while (iterator.hasNext()) {
 				WireConnection connection = iterator.next();
-				if (insulatorIds.contains(connection.getStartInsulatorId()) || insulatorIds.contains(connection.getEndInsulatorId())) {
+				if (insulatorIds.contains(connection.startInsulatorId()) || insulatorIds.contains(connection.endInsulatorId())) {
 					iterator.remove();
 					removed.add(connection);
 				}
@@ -324,16 +324,16 @@ public class WireManager {
 			ListTag wiresList = new ListTag();
 			for (WireConnection connection : wireConnections.values()) {
 				CompoundTag wireTag = new CompoundTag();
-				wireTag.putInt("startInsulatorId", connection.getStartInsulatorId());
-				wireTag.putInt("endInsulatorId", connection.getEndInsulatorId());
-				wireTag.putString("wireType", connection.getWireType());
-				wireTag.putLong("startBlockPos", connection.getStartBlockPos().asLong());
-				wireTag.putLong("endBlockPos", connection.getEndBlockPos().asLong());
-				wireTag.putString("startBlockType", connection.getStartBlockType());
-				wireTag.putString("endBlockType", connection.getEndBlockType());
-				wireTag.putString("startPowerType", connection.getStartPowerType());
-				wireTag.putString("endPowerType", connection.getEndPowerType());
-				wireTag.putInt("chargedItems", connection.getChargedItems());
+				wireTag.putInt("startInsulatorId", connection.startInsulatorId());
+				wireTag.putInt("endInsulatorId", connection.endInsulatorId());
+				wireTag.putString("wireType", connection.wireType());
+				wireTag.putLong("startBlockPos", connection.startBlockPos().asLong());
+				wireTag.putLong("endBlockPos", connection.endBlockPos().asLong());
+				wireTag.putString("startBlockType", connection.startBlockType());
+				wireTag.putString("endBlockType", connection.endBlockType());
+				wireTag.putString("startPowerType", connection.startPowerType());
+				wireTag.putString("endPowerType", connection.endPowerType());
+				wireTag.putInt("chargedItems", connection.chargedItems());
 				wiresList.add(wireTag);
 			}
 			tag.put("wires", wiresList);

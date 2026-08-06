@@ -1,6 +1,6 @@
 package com.dooji.electricity.client.screen;
 
-import java.util.Locale;
+import com.dooji.electricity.api.Nameplate;
 import javax.annotation.Nullable;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -189,21 +189,16 @@ public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 		}
 	}
 
+	// Inherited so panel code reads as panel code; the formatting itself is Nameplate's, shared with the labels
 	protected static String fmt(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
+		return Nameplate.fmt(pattern, values);
 	}
 
-	/** Power in the unit an engineer would have used: kW under a megawatt and MW above it. */
 	protected static String power(double kw) {
-		if (Math.abs(kw) >= 1000.0) return fmt("%.2f MW", kw / 1000.0);
-
-		return fmt("%.1f kW", kw);
+		return Nameplate.reading(kw);
 	}
 
-	/** Energy the same way: kWh below a megawatt hour and MWh above. */
 	protected static String energy(double kwh) {
-		if (kwh >= 1000.0) return fmt("%.2f MWh", kwh / 1000.0);
-
-		return fmt("%.1f kWh", kwh);
+		return Nameplate.energy(kwh);
 	}
 }

@@ -1,24 +1,16 @@
 package com.dooji.electricity.client.render.obj;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.ModelFacing;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjTransforms.Transform;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
@@ -114,7 +106,7 @@ public class ObjRaycaster {
 		return buildWorldCenter(partBox, blockPos, blockState, effectiveFacing, transform);
 	}
 
-	public static Vec3 applyYawPitchRotation(Vec3 point, Vec3 center, float yaw, float pitch) {
+	private static Vec3 applyYawPitchRotation(Vec3 point, Vec3 center, float yaw, float pitch) {
 		Vec3 relative = point.subtract(center);
 
 		if (pitch != 0) {
@@ -162,37 +154,6 @@ public class ObjRaycaster {
 		} else if (rayOrigin.z < boxMin.z || rayOrigin.z > boxMax.z) return false;
 
 		return tMax >= tMin && tMax >= 0;
-	}
-
-	public static List<Component> getPowerDisplayText(BlockPos blockPos) {
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return null;
-
-		return getPowerDisplayText(mc.level.getBlockEntity(blockPos));
-	}
-
-	public static List<Component> getPowerDisplayText(BlockEntity blockEntity) {
-		// no turbine branch: a turbine's readings come from its own control panel
-		// text is only reached through PowerInfoScreen
-		if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			return List.of(
-					blockEntity.getBlockState().getBlock().getName(),
-					Component.translatable("tooltip.electricity.power.amount", formatPower(cabin.getCurrentPower())));
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			return List.of(
-					blockEntity.getBlockState().getBlock().getName(),
-					Component.translatable("tooltip.electricity.power.amount", formatPower(pole.getCurrentPower())));
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
-			List<Component> lines = new ArrayList<>();
-			lines.add(blockEntity.getBlockState().getBlock().getName());
-			lines.add(Component.translatable("tooltip.electricity.power.amount", formatPower(powerBox.getCurrentPower())));
-			int feStored = powerBox.getForgeEnergyStored();
-			int feRate = powerBox.getForgeTransferRate();
-			lines.add(Component.translatable("tooltip.electricity.power.fe", feStored, feRate));
-			return lines;
-		}
-
-		return null;
 	}
 
 	public static Vec3 pickAnyGeometry(Vec3 rayOrigin, Vec3 rayDirection, BlockPos blockPos) {
@@ -309,10 +270,6 @@ public class ObjRaycaster {
 
 	private static Vec3 toVec3(Vector3f vector) {
 		return new Vec3(vector.x, vector.y, vector.z);
-	}
-
-	private static String formatPower(double power) {
-		return String.format(Locale.ROOT, "%.1f", power);
 	}
 
 	private record WorldBounds(Vec3 min, Vec3 max) {

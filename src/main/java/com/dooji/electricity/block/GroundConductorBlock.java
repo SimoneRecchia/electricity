@@ -124,12 +124,29 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 			Direction.WEST, Block.box(0.00, 0.00, 6.98, 4.60, 2.03, 9.02));
 
 	private final ConductorSpec spec;
+	/** Every pattern's shape, unioned once: there are sixteen, and getShape is asked every frame. */
+	private final VoxelShape[] shapes;
 
 	public GroundConductorBlock(Properties properties, ConductorSpec spec) {
 		super(properties.sound(SoundType.CHAIN).strength(1.0f, 4.0f).noOcclusion());
 		this.spec = spec;
+		this.shapes = shapes(hubs(), arms());
 		registerDefaultState(defaultBlockState().setValue(NORTH, false).setValue(EAST, false)
 				.setValue(SOUTH, false).setValue(WEST, false));
+	}
+
+	private static VoxelShape[] shapes(Map<Integer, VoxelShape> hubs, Map<Direction, VoxelShape> arms) {
+		VoxelShape[] shapes = new VoxelShape[1 << MASK_ORDER.length];
+		for (int mask = 0; mask < shapes.length; mask++) {
+			VoxelShape shape = hubs.getOrDefault(mask, Shapes.empty());
+			for (int bit = 0; bit < MASK_ORDER.length; bit++) {
+				if ((mask & (1 << bit)) != 0) shape = Shapes.or(shape, arms.get(MASK_ORDER[bit]));
+			}
+
+			shapes[mask] = shape;
+		}
+
+		return shapes;
 	}
 
 	public ConductorSpec spec() {
@@ -170,16 +187,11 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
 		int mask = 0;
-		VoxelShape shape = Shapes.empty();
 		for (int bit = 0; bit < MASK_ORDER.length; bit++) {
-			if (state.getValue(SIDES.get(MASK_ORDER[bit]))) {
-				mask |= 1 << bit;
-				shape = Shapes.or(shape, arms().get(MASK_ORDER[bit]));
-			}
+			if (state.getValue(SIDES.get(MASK_ORDER[bit]))) mask |= 1 << bit;
 		}
 
-		VoxelShape hub = hubs().get(mask);
-		return hub == null ? shape : Shapes.or(shape, hub);
+		return shapes[mask];
 	}
 
 	/** Solid, like the string cable: it is ankle-high, so a player steps onto it rather than through it. */
@@ -217,13 +229,6 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 		return state;
 	}
 
-	/**
-	 * Whether this joins whatever is on that side.
-	 *
-	 * Only to the same conductor, and that is the point of the three being three blocks: a 1 kV street
-	 * bundle does not splice onto a 400 kV transmission phase, and a run that changes conductor halfway is
-	 * a run somebody would have to explain.
-	 */
 	/** Every run carries a fitting, so a span may be anchored to one: see GroundConductorBlockEntity. */
 	@Nullable @Override
 	public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
@@ -241,6 +246,13 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 		super.onRemove(state, level, pos, newState, movedByPiston);
 	}
 
+	/**
+	 * Whether this joins whatever is on that side.
+	 *
+	 * Only to the same conductor, and that is the point of the three being three blocks: a 1 kV street
+	 * bundle does not splice onto a 400 kV transmission phase, and a run that changes conductor halfway is
+	 * a run somebody would have to explain.
+	 */
 	private boolean joins(LevelReader level, BlockPos pos, Direction side) {
 		BlockState there = level.getBlockState(pos.relative(side));
 		return there.getBlock() instanceof GroundConductorBlock other && other.spec.id().equals(spec.id());

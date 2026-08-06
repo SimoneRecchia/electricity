@@ -27,18 +27,18 @@ public class WireManagerClient {
 		clearPendingConnection();
 		if (connections == null) return;
 		for (WireConnection connection : connections) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			WIRE_CONNECTIONS.put(key, connection);
 		}
 	}
 
 	public static void addWireConnection(WireConnection connection) {
-		String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+		String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 		WIRE_CONNECTIONS.put(key, connection);
 	}
 
 	public static void removeWireConnection(WireConnection connection) {
-		String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+		String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 		WIRE_CONNECTIONS.remove(key);
 	}
 

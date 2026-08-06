@@ -1,10 +1,10 @@
 package com.dooji.electricity.item;
 
+import com.dooji.electricity.api.Nameplate;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.TurbineTowerBlock;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import java.util.List;
-import java.util.Locale;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -60,29 +60,18 @@ public class TurbineBlockItem extends BlockItem {
 		}
 
 		tooltip.add(Component.translatable("tooltip.electricity.turbine.nameplate",
-				formatPower(spec.ratedPowerKw()),
-				format("%.0f", spec.rotorDiameterM())).withStyle(ChatFormatting.GRAY));
+				Nameplate.rating(spec.ratedPowerKw()),
+				Nameplate.fmt("%.0f", spec.rotorDiameterM())).withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.turbine.wind",
-				format("%.1f", spec.cutInSpeed()),
-				format("%.1f", spec.ratedSpeed()),
-				format("%.1f", spec.cutOutSpeed())).withStyle(ChatFormatting.GRAY));
+				Nameplate.fmt("%.1f", spec.cutInSpeed()),
+				Nameplate.fmt("%.1f", spec.ratedSpeed()),
+				Nameplate.fmt("%.1f", spec.cutOutSpeed())).withStyle(ChatFormatting.GRAY));
 		tooltip.add(Component.translatable("tooltip.electricity.turbine.tower",
 				spec.minTowerSegments(),
 				spec.maxTowerSegments(),
-				format("%.0f", spec.hubHeightM(spec.minTowerSegments())),
-				format("%.0f", spec.hubHeightM(spec.maxTowerSegments()))).withStyle(ChatFormatting.DARK_GRAY));
+				Nameplate.fmt("%.0f", spec.hubHeightM(spec.minTowerSegments())),
+				Nameplate.fmt("%.0f", spec.hubHeightM(spec.maxTowerSegments()))).withStyle(ChatFormatting.DARK_GRAY));
 	}
 
-	/**
-	 * kW below a megawatt and MW above it, because a catalogue spanning 10 kW to 4 MW reads badly in either unit alone: "4000 kW" and "0.01 MW" are both harder to place at a glance than the unit an engineer would have used.
-	 */
-	public static String formatPower(double kw) {
-		if (kw >= 1000.0) return format("%.1f MW", kw / 1000.0);
 
-		return format("%.0f kW", kw);
-	}
-
-	private static String format(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
-	}
 }
