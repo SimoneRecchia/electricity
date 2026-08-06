@@ -1,67 +1,55 @@
-# Impianto solare da 533 kW — scheda di costruzione
+# Impianto solare da 579 kW — scheda di costruzione
 
-Un impianto fotovoltaico completo, con coordinate esatte: quattro sottocampi, quattro tipi di pannello,
-tre quadri di stringa, due inverter, due trasformatori macchina, interruttore, sezionatore, cabina,
-sottostazione, linea a 400 kV su tralicci, sottostazione di arrivo, tratto MT posato a terra, pali,
-kiosk, palo meteo e quadro di controllo.
+Un impianto fotovoltaico completo: quattro sottocampi, quattro tipi di pannello, due quadri di stringa,
+**quattro inverter** di tre taglie, due trasformatori macchina, interruttore, sezionatore, cabina,
+sottostazione, linea a 400 kV su tralicci, sottostazione di arrivo, tratto MT posato a terra, pali, kiosk,
+palo meteo e quadro di controllo.
 
 Non è un esempio inventato: è generato e **verificato** da
-[tools/gen_example_plant.py](tools/gen_example_plant.py), che prima di scrivere qualsiasi cosa controlla
-che nessuna macchina invada le celle di un'altra, che ogni fila tocchi il cavo della sezione giusta, che
-ogni rete in continua sia un pezzo solo e non ne tocchi un'altra, e che ogni campata stia dentro la
-portata del suo conduttore.
+[tools/gen_example_plant.py](tools/gen_example_plant.py) — che prima di scrivere controlla che nessuna
+macchina invada le celle di un'altra, che ogni fila abbia il cavo su una faccia che accetta davvero, che
+ogni rete in continua sia un pezzo solo e non ne tocchi un'altra, e che ogni campata stia dentro la portata
+del suo conduttore — ed è stato **costruito e letto macchina per macchina** su un server, prima di essere
+scritto qui.
 
-## Costruirlo da solo
+## Il mondo già pronto
 
-Prima genera, e questo non tocca il gioco: funziona sempre, anche senza Minecraft aperto.
+Il mondo `run/impianto` è un **superpiatto Redstone Ready** (deserto, 116 di arenaria su 3 di pietra su
+bedrock, superficie a **y = 55**, quindi si costruisce a **y = 56**) con l'impianto già in piedi, in
+creativa, trucchi attivi, senza mob.
+
+```bash
+./gradlew runServer
+```
+
+e ti colleghi a `localhost`. Compari a **(0, 56, 0)**, con il campo davanti a te verso sud.
+
+## Costruirlo altrove
 
 ```bash
 python3 tools/gen_example_plant.py
 ```
 
-Scrive **due** cose, perché ci sono due modi di avere un mondo.
+Scrive due cose, perché ci sono due modi di avere un mondo.
 
-### A) In un mondo qualsiasi, anche in singleplayer — il datapack
+**A) Un mondo qualsiasi, anche in singleplayer — il datapack.** `build/plant/datapack/` ha una sola
+funzione, a **coordinate relative**: costruisce l'impianto dal blocco su cui stai. Copiala in
+`saves/<mondo>/datapacks/`, entra con i trucchi attivi, `/reload`, poi `/function electricity:plant`.
+Guardati intorno prima: occupa **da 3 blocchi a ovest a 146 a est** e **da 5 a nord a 28 a sud**.
+Nel mondo `run/impianto` il datapack c'è già.
 
-È il modo normale. `build/plant/datapack/` è un datapack con una sola funzione, scritta a **coordinate
-relative**: costruisce l'impianto **partendo dal blocco su cui stai in piedi**.
-
-1. copia la cartella `build/plant/datapack` dentro `saves/<il tuo mondo>/datapacks/`
-   (su Mac: `~/Library/Application Support/minecraft/saves/…`; per il mondo del mod: `run/saves/…`);
-2. entra nel mondo, con i **trucchi attivi** (o da operatore su un server);
-3. mettiti in un posto pianeggiante e libero, guardando dove vuoi che vada il campo;
-4. `/reload`
-5. `/function electricity:plant`
-
-L'impianto compare tutto in un colpo, quindi guardati intorno prima: occupa **da 3 blocchi a ovest di te
-fino a 144 a est** (148 in tutto) e **17 blocchi verso sud**. Il campo solare sono i primi 20 blocchi a est;
-il resto è la linea, che se non hai spazio puoi anche non costruire — l'impianto produce comunque, e la
-lettura si fermerà alla cabina.
-
-### B) Sul server di sviluppo — RCON
-
-Serve solo se stai provando la mod con `./gradlew runServer`. Con il server **avviato**, da un altro
-terminale:
+**B) Il server di sviluppo — RCON.** Con il server avviato:
 
 ```bash
+python3 tools/gen_example_plant.py --at 0 56 8
 python3 tools/rcon.py -f build/plant/plant.txt
 ```
 
-Questo usa coordinate **assolute**, quindi decidile prima:
+RCON è un protocollo da server: in singleplayer non funziona, lì serve il datapack.
 
-```bash
-python3 tools/gen_example_plant.py --at 200 64 200
-```
-
-RCON è un protocollo da server: su un mondo aperto in singleplayer **non funziona** — lì usa il datapack.
-
-### In entrambi i casi: le campate restano da fare
-
-Le **campate** non si possono piazzare con un comando: una campata è salvata contro due isolatori, non
-contro un blocco, e va tirata a mano con la bobina. Sono 16, elencate al §5 con le coordinate.
-
-Ti serviranno **2 bobine di conduttore MT** (8 blocchi cadauna, 9 campate), **6 di AT** (16 blocchi
-cadauna, 5 campate da 20) e **2 di BT**. In creativa prendile dalla scheda del mod.
+**In entrambi i casi le campate restano da fare.** Una campata è salvata contro due isolatori, non contro
+un blocco, e va tirata a mano con la bobina: sono 18, elencate al §4. Ti servono **3 bobine di MT**, **6 di
+AT** e **1 di BT**.
 
 ---
 
@@ -69,222 +57,131 @@ cadauna, 5 campate da 20) e **2 di BT**. In creativa prendile dalla scheda del m
 
 | | |
 |---|---|
-| Moduli in campo | **533,0 kW** in **76 stringhe** |
-| Inverter | **462,0 kW** in alternata (VX-350K + VX-110K) |
-| Rapporto DC/AC | **1,15** — corretto: a mezzogiorno d'estate vedrai `clipping`, ed è come deve essere |
-| Vie fusibilate | 64 (due CB-16 e un CB-32) |
-| Blocchi di cavo | 64 |
-| Campate da tirare | 16 |
-| Comandi di costruzione | 135 |
+| Moduli in campo | **578,7 kW** in **59 stringhe** |
+| Inverter | **582,0 kW** in alternata, su quattro macchine |
+| Rapporto DC/AC | **0,99** |
+| Produzione letta a mezzogiorno | **447,6 kW** |
+| Vie fusibilate nei quadri | 48 (un CB-16 pieno e un CB-32 a metà) |
+| Blocchi di cavo | 52 |
+| Campate da tirare | 18 |
+| Comandi di costruzione | 127 |
 
-Il conto dei moduli, blocco per blocco:
+I quattro sottocampi, ognuno dimensionato sull'inverter che lo raccoglie:
 
-| Prodotto | Pezzi | Stringhe cadauno | kW cadauno | Totale |
-|---|---|---|---|---|
-| **TR-580** inclinazione fissa | 16 | 1 | 10,44 | 167,0 kW |
-| **TR-530** inclinazione fissa (film sottile) | 10 | 3 | 9,54 | 95,4 kW |
-| **HX-700** inseguitore a un asse | 16 | 1 | 9,10 | 145,6 kW |
-| **FT-430** tavolo piatto | 6 | 2 | 18,92 | 113,5 kW |
-| **AE-440** inseguitore a due assi | 2 | 1 | 5,72 | 11,4 kW |
+| # | Prodotto | Blocchi | Stringhe | kW | Quadro | Inverter | DC/AC |
+|---|---|---|---|---|---|---|---|
+| 1 | **TR-580** inclinazione fissa | 32 | 32 | 334,1 | CB-16 + CB-32 | **VX-350K** | 0,95 |
+| 2 | **HX-700** ×12 + **AE-440** ×2 | 14 | 14 | 120,6 | — diretto | **VX-110K** | 1,10 |
+| 3 | **FT-430** tavolo piatto | 6 | 12 | 113,5 | — diretto | **VX-110K** | 1,03 |
+| 4 | **TR-580**, una fila sola | 1 | 1 | 10,4 | — diretto | **VX-10K** | 1,04 |
 
 ---
 
-## 2. Le due cose che decidono tutto il campo, e non si indovinano
+## 2. Le quattro regole che decidono la forma del campo
 
-**Il sole in questo mod sta solo a est o solo a ovest.** Tutta la mattina è a est, tutto il pomeriggio a
-ovest, e non passa mai per sud. Quindi:
+Nessuna è indovinabile, e ognuna è costata un tentativo sbagliato prima di essere scritta qui.
 
-* una fila a **inclinazione fissa** va orientata **a est o a ovest**, e basta. Una fila orientata a nord o
-  a sud sta a 90° dal sole tutto il giorno: la sua inclinazione non guadagna niente e rende meno di un
-  tavolo piatto.
-* **metà delle file a est e metà a ovest** è quello che appiattisce la curva della giornata — mattina da
-  una metà, pomeriggio dall'altra. È come sono disposte tutte le file di questo impianto.
-* una fila **su inseguitore ignora completamente il suo orientamento**: si gira lei verso il sole. Puoi
-  posarla come vuoi.
+**1. Il sole sta solo a est o solo a ovest.** Tutta la mattina a est, tutto il pomeriggio a ovest, mai a
+sud. Una fila a inclinazione fissa va quindi orientata **a est o a ovest**; a nord o a sud sta a 90° dal
+sole tutto il giorno e rende meno di un tavolo piatto. Metà delle file guardano da una parte e metà
+dall'altra: è quello che appiattisce la curva della giornata. Una fila **su inseguitore ignora
+l'orientamento**: si gira lei.
 
-**L'ombreggiamento fra file non dipende da quanto le distanzi.** È una proprietà del prodotto (il suo
-rapporto di copertura del suolo), quindi le file possono stare attaccate. Quello che invece **ombreggia
-davvero è qualsiasi cosa stia a est o a ovest di una fila**, perché è lì che sta il sole: un armadio, un
-albero, un muro. Per questo su questo impianto **ogni armadio sta a nord del campo che serve**, e le
-estremità est e ovest delle file sono libere.
+**2. Una fila prende il cavo su un asse solo.** Una fila **fissa** lo prende sulla faccia che *guarda* —
+quindi un blocco di file fisse è una **spina nord-sud con le file ai due lati**, quelle a est della spina
+girate a ovest e viceversa. Una fila **su inseguitore** lo prende a nord o a sud qualunque cosa guardi —
+quindi un blocco di inseguitori è una **spina est-ovest con una fila sopra e una sotto**. Al contrario il
+campo sembra cablato e non porta niente.
+
+**3. Un inverter ha un numero di stringhe, non solo dei kW.** Il VX-350K ne prende 32: tre quadri da sedici
+fanno 48 e il terzo lo rifiuta — resta pieno e nessuno lo raccoglie. E oltre alle stringhe c'è un tetto di
+corrente e di potenza continua: se lo superi accetta le file **più vicine** e lascia fuori le altre, in
+silenzio. Ogni sottocampo qui è tagliato sugli ingressi del suo inverter.
+
+**4. Un quadro di stringa vuole un inverter con i morsetti per la dorsale**, e i due inverter di stringa
+non li hanno: solo il **VX-350K** e il **VC-2500K**. Un CB-16 davanti a un VX-110K resta pieno e scollegato.
+Per questo i sottocampi 2, 3 e 4 vanno **diretti**, senza quadro: è esattamente cosa vuol dire "inverter di
+stringa".
+
+E una quinta, sulla tensione: il **TR-530** (film sottile) fa tre stringhe da 999 V a fila. Il VX-10K si
+ferma a 980 e le rifiuta tutte — **una sola stringa fuori finestra ferma l'inverter intero**. Vuole il
+cabinet 500–1500 V e tre vie per fila, e per questo su questo impianto non c'è.
+
+**Cosa ombreggia davvero:** non la distanza fra le file (quella dipende dal prodotto, non da come le
+disponi) ma **qualsiasi cosa stia a est o a ovest di una fila**, perché è lì che sta il sole. Per questo
+tutti gli armadi di questo impianto stanno **a nord** del campo che servono.
 
 ---
 
 ## 3. La mappa
 
-Coordinate relative all'origine che passi con `--at`. X cresce verso **est**, Z verso **sud**.
-Tutto sta a quota Y+0, cioè appoggiato per terra.
+Coordinate del mondo `run/impianto`: lo spawn è (0, 56, 0), X cresce verso **est**, Z verso **sud**.
 
 ```
-        x=-3   x=0 ────────────── x=8   x=9    x=10..12  x=15   x=18   x=22  x=25      x=29
-        ┌────┐
- z=0    │    │  ████████ 8 × TR-580 (facing=east)
- z=1    │    │  ──────── cavo SC-6 ────────────► [CB-16]══dorsale══╗
- z=2    │    │  ████████ 8 × TR-580 (facing=west)                  ║        [ctrl]
- z=3    │    │                                                     ║
- z=4    │mast│  █████    5 × TR-530 (facing=east)                  ║
- z=5    │    │  ──────── cavo SC-6 ────────────► [CB-32]══dorsale══╬══► [VX-350K] ─► [TX-A] ─► [INT] ─► [SEZ] ─┐
- z=6    │    │  █████    5 × TR-530 (facing=west)                  ║                                            │
- z=7    └────┘                                                     ║                                            │
- z=8            ████████ 8 × HX-700 (inseguitori)                  ║                                            ▼
- z=9            ──────── cavo SC-6 ────────────► [CB-16]══dorsale══╝                                        [CABINA]
- z=10           ████████ 8 × HX-700 (inseguitori)                                                               │
- z=11                                                                                                           │
- z=14           ███ 3 × FT-430 (east)   █ AE-440                                                                │
- z=15           ──────── cavo SC-6 ─────────────────────────────► [VX-110K] ─► [TX-B] ─────────────────────────►┘
- z=16           ███ 3 × FT-430 (west)   █ AE-440
+ z=1    [palo meteo]                        (3,56,4)
+ z=3                                        [QUADRO DI CONTROLLO] (20,56,3)
+ z=6    ══dorsale DT-240══════════════════► [VX-350K] ► [TX-A] ► [INT] ► [SEZ] ► [CABINA] ► [TX SOTTOST.]
+ z=7    [CB-16]         [CB-32]                 (17)     (20)    (24)    (27)     (31)         (36)
+ z=8..15  ████ spina ████    ████ spina ████
+          x=0  x=1   x=2     x=5  x=6   x=7      32 × TR-580, sedici per quadro
+ z=19   ███████ 6 × HX-700 + 1 × AE-440  (x=0..6)
+ z=20   ─────── cavo SC-6 ──────────────► [VX-110K inseguitori] (9,56,20)
+ z=21   ███████ 6 × HX-700 + 1 × AE-440
+ z=24   ███ 3 × FT-430 (east)  |  x=1 spina |  ███ 3 × FT-430 (west)
+ z=25   [TR-580 singolo] (5,56,25) ─ spina x=6 ─► [VX-10K] (6,56,27)
+ z=28   [VX-110K tavoli piani] (1,56,28)          [TX-B] (16,56,28)
 ```
 
-E la linea, tutta sulla riga z=10:
+La linea, tutta sulla riga **z=6**:
 
 ```
- x=34          x=42          x=62          x=82          x=102         x=110        x=114..118   x=122   x=136   x=144
-[TX SOTTOST.] [TERMINALE] ─ [SOSPENS. 1] ─ [SOSPENS. 2] ─ [TERMINALE] [TX ARRIVO] ══MT posato══ [PALO] ─ [PALO] ─ [KIOSK]
-      │            └──────── 400 kV, campate da 20 blocchi ────────┘        │
-      └── MT dalla cabina                                                   └── MT in uscita
+ x=36          x=44          x=64          x=84          x=104        x=112        x=116..120  x=124  x=138  x=146
+[TX SOTTOST.] [TERMINALE] ─ [SOSPENS. 1] ─ [SOSPENS. 2] ─ [TERMINALE] [TX ARRIVO] ══MT posato══ [PALO] [PALO] [KIOSK]
+                  └────────── 400 kV, campate da 20 blocchi ────────┘
 ```
 
 ---
 
-## 4. L'elenco dei blocchi, con le coordinate
-
-### Sottocampo 1 — 16 × TR-580 → CB-16 (167 kW, 16 stringhe: il quadro è pieno)
-
-| Cosa | Dove | Stato |
-|---|---|---|
-| 8 × `pv_tilt_580` | (0..7, 0) | `facing=east` |
-| cavo `dc_string_cable` | (0..8, 1) | la spina: le file sopra e sotto la toccano |
-| 8 × `pv_tilt_580` | (0..7, 2) | `facing=west` |
-| `pv_combiner_16` | (9, 1) | `facing=west` |
-
-### Sottocampo 2 — 10 × TR-530 → CB-32 (95 kW, 30 stringhe su 32 vie)
-
-| Cosa | Dove | Stato |
-|---|---|---|
-| 5 × `pv_tilt_530` | (0..4, 4) | `facing=east` |
-| cavo `dc_string_cable` | (0..8, 5) | |
-| 5 × `pv_tilt_530` | (0..4, 6) | `facing=west` |
-| `pv_combiner_32` | (9, 5) | `facing=west` |
-
-### Sottocampo 3 — 16 × HX-700 → CB-16 (146 kW, 16 stringhe)
-
-| Cosa | Dove | Stato |
-|---|---|---|
-| 8 × `pv_track_700` | (0..7, 8) | orientamento indifferente: si girano da sole |
-| cavo `dc_string_cable` | (0..8, 9) | |
-| 8 × `pv_track_700` | (0..7, 10) | |
-| `pv_combiner_16` | (9, 9) | `facing=west` |
-
-### La dorsale e l'inverter centrale
-
-| Cosa | Dove |
-|---|---|
-| `dc_trunk_cable` | (10..12, 1), (10..12, 5), (10..12, 9), (12, 1..9), (12..14, 5) |
-| `inverter_350` (VX-350K) | (15, 5) `facing=west` |
-| `tx_machine` (TX-A) | (18, 5) `facing=west` |
-
-I tre quadri stanno tutti sulla stessa dorsale: è **una** rete in continua, ed è così che si alimenta un
-inverter centrale. 408 kW di moduli su 352 kW di inverter.
-
-### Sottocampo 4 — l'altra topologia: 6 × FT-430 + 2 × AE-440 → VX-110K, senza quadro
-
-| Cosa | Dove | Stato |
-|---|---|---|
-| 3 × `pv_flat_430` | (0..2, 14) | `facing=east` |
-| 1 × `pv_dual_440` | (4, 14) | |
-| cavo `dc_string_cable` | (0..14, 15) | |
-| 3 × `pv_flat_430` | (0..2, 16) | `facing=west` |
-| 1 × `pv_dual_440` | (4, 16) | |
-| `inverter_110` (VX-110K) | (15, 15) `facing=west` |
-| `tx_machine` (TX-B) | (18, 15) `facing=west` |
-
-Questa è una **seconda rete in continua**, separata dalla prima: le stringhe vanno direttamente
-all'inverter, senza quadro, che è come si fa un tetto o un piccolo impianto a terra. 125 kW su 110 kW.
-
-### La sezione di media tensione
-
-| Cosa | Dove | Stato |
-|---|---|---|
-| `mv_breaker` (interruttore) | (22, 5) | `facing=west`, `open=false` |
-| `mv_disconnector` (sezionatore) | (25, 5) | `facing=west`, `open=false` |
-| `electric_cabin` (cabina) | (29, 10) | `facing=west` — occupa z 9..11 e 3 blocchi in altezza |
-
-### La sottostazione e la linea
-
-| Cosa | Dove | Note |
-|---|---|---|
-| `tx_substation` | (34, 10) | occupa 3×3 e 2 di altezza |
-| `lattice_terminal` | (42, 10) | traliccio di partenza: regge tutto il tiro |
-| `lattice_suspension` | (62, 10) | 5×5 di impronta, 12 di altezza |
-| `lattice_suspension` | (82, 10) | |
-| `lattice_terminal` | (102, 10) | traliccio di arrivo |
-
-### La discesa
-
-| Cosa | Dove | Note |
-|---|---|---|
-| `tx_substation` | (110, 10) | **la sottostazione di arrivo** — vedi il §6 |
-| `mv_conductor_run` | (114..118, 10) | tratto MT posato a terra |
-| `utility_pole` | (122, 10) | |
-| `utility_pole` | (136, 10) | |
-| `power_box` (kiosk) | (144, 10) | `mounted=false` — dà FE |
-
-### Misura e controllo
-
-| Cosa | Dove | Note |
-|---|---|---|
-| `met_station` (palo meteo) | (−3, 5) | **3,2 blocchi** dalla fila più vicina: dentro i 12 che gli servono |
-| `plant_controller` | (18, 1) | **5,0** blocchi dal VX-350K e **14,3** dal VX-110K: dentro i 64 |
-
----
-
-## 5. Le 16 campate, in ordine
+## 4. Le 18 campate, in ordine
 
 Bobina in mano, click destro sul primo isolatore, click destro sul secondo.
 
 | # | Conduttore | Da | A | Blocchi |
 |---|---|---|---|---|
-| 1 | MT | VX-350K, isolatore sul tetto (15, 5) | TX-A, isolatore basso (18, 5) | 3 |
-| 2 | MT | VX-110K, isolatore sul tetto (15, 15) | TX-B, isolatore basso (18, 15) | 3 |
-| 3 | MT | TX-A, isolatore alto (18, 5) | interruttore, lato linea (22, 5) | 4 |
-| 4 | MT | TX-B, isolatore alto (18, 15) | interruttore, lato linea (22, 5) | 11 |
-| 5 | MT | interruttore, lato carico (22, 5) | sezionatore, lato linea (25, 5) | 3 |
-| 6 | MT | sezionatore, lato carico (25, 5) | cabina, ingresso (29, 10) | 6 |
-| 7 | MT | cabina, uscita (29, 10) | TX sottostazione, isolatore basso (34, 10) | 5 |
-| 8 | **AT** | TX sottostazione, isolatore alto (34, 10) | traliccio terminale (42, 10) | 8 |
-| 9 | **AT** | traliccio terminale (42, 10) | sospensione 1 (62, 10) | 20 |
-| 10 | **AT** | sospensione 1 (62, 10) | sospensione 2 (82, 10) | 20 |
-| 11 | **AT** | sospensione 2 (82, 10) | traliccio terminale arrivo (102, 10) | 20 |
-| 12 | **AT** | traliccio terminale arrivo (102, 10) | TX arrivo, isolatore alto (110, 10) | 8 |
-| 13 | MT | TX arrivo, isolatore basso (110, 10) | tratto MT posato, primo blocco (114, 10) | 4 |
-| 14 | MT | tratto MT posato, ultimo blocco (118, 10) | palo 1 (122, 10) | 4 |
-| 15 | MT | palo 1 (122, 10) | palo 2 (136, 10) | 14 |
-| 16 | **BT** | palo 2 (136, 10) | kiosk (144, 10) | 8 |
+| 1 | MT | inverter VX-350K (tetto) (17, 56, 6) | TX macchina A (isolatore basso) (20, 56, 6) | 3 |
+| 2 | MT | inverter VX-110K inseguitori (tetto) (9, 56, 20) | TX macchina B (isolatore basso) (16, 56, 28) | 11 |
+| 3 | MT | inverter VX-110K tavoli piani (tetto) (1, 56, 28) | TX macchina B (isolatore basso) (16, 56, 28) | 15 |
+| 4 | MT | inverter VX-10K film sottile (tetto) (6, 56, 27) | TX macchina B (isolatore basso) (16, 56, 28) | 10 |
+| 5 | MT | TX macchina A (isolatore alto) (20, 56, 6) | interruttore (lato linea) (24, 56, 6) | 4 |
+| 6 | MT | TX macchina B (isolatore alto) (16, 56, 28) | interruttore (lato linea) (24, 56, 6) | 23 |
+| 7 | MT | interruttore (lato carico) (24, 56, 6) | sezionatore (lato linea) (27, 56, 6) | 3 |
+| 8 | MT | sezionatore (lato carico) (27, 56, 6) | cabina (ingresso) (31, 56, 6) | 4 |
+| 9 | MT | cabina (uscita) (31, 56, 6) | TX sottostazione (isolatore basso) (36, 56, 6) | 5 |
+| 10 | **AT** | TX sottostazione (isolatore alto) (36, 56, 6) | traliccio terminale partenza (44, 56, 6) | 8 |
+| 11 | **AT** | traliccio terminale partenza (44, 56, 6) | traliccio sospensione 1 (64, 56, 6) | 20 |
+| 12 | **AT** | traliccio sospensione 1 (64, 56, 6) | traliccio sospensione 2 (84, 56, 6) | 20 |
+| 13 | **AT** | traliccio sospensione 2 (84, 56, 6) | traliccio terminale arrivo (104, 56, 6) | 20 |
+| 14 | **AT** | traliccio terminale arrivo (104, 56, 6) | TX arrivo (isolatore alto) (112, 56, 6) | 8 |
+| 15 | MT | TX arrivo (isolatore basso) (112, 56, 6) | tratto MT posato (primo blocco) (116, 56, 6) | 4 |
+| 16 | MT | tratto MT posato (ultimo blocco) (120, 56, 6) | palo 1 (124, 56, 6) | 4 |
+| 17 | MT | palo 1 (124, 56, 6) | palo 2 (138, 56, 6) | 14 |
+| 18 | **BT** | palo 2 (138, 56, 6) | kiosk (146, 56, 6) | 8 |
 
 Le tre fasi dei tralicci vanno tirate una per una fra gli isolatori corrispondenti: non incrociarle.
-Le campate 9, 10 e 11 sono da 20 blocchi contro un massimo di 160: c'è tutto il margine per allungare la
-linea quanto vuoi.
-
-Bobine che servono: **MT** 8 blocchi a bobina, **AT** 16, **BT** 4.
+Le campate da 20 blocchi hanno un massimo di 160, quindi la linea si può allungare quanto vuoi.
 
 ---
 
-## 6. Perché serve una seconda sottostazione, e non un palo
+## 5. Perché serve una seconda sottostazione, e non un palo
 
-È la cosa che sorprende, e non è un difetto: è la conseguenza delle classi di tensione.
+Un **traliccio accetta solo conduttore di trasmissione**. Un **palo lo rifiuta**. Quindi **non esiste
+nessun conduttore che si possa tirare fra un traliccio e un palo** — vale anche fra traliccio e cabina.
 
-Un **traliccio accetta solo conduttore di trasmissione**. Un **palo rifiuta la trasmissione**. Quindi
-**non esiste nessun conduttore che si possa tirare fra un traliccio e un palo**: nessuna delle tre bobine
-va bene per entrambe le estremità, e il gioco ti dirà *"Match the conductor to the voltage"* qualunque cosa
-tu abbia in mano. Vale anche fra traliccio e cabina.
-
-Per scendere da una linea a 400 kV serve quello che serve nella realtà: **una sottostazione di arrivo**.
-Il traliccio terminale entra sui **tre isolatori alti** del trasformatore, e dai **tre bassi** esce media
-tensione. E da un trasformatore da sottostazione la media tensione può andare solo verso un traliccio (che
-la rifiuta) o verso un **tratto posato a terra** — quindi il tratto MT posato non è un vezzo, è l'unica
-uscita. Da lì si arriva al palo, e dal palo al kiosk in bassa tensione.
-
-In sintesi, la catena valida:
+Per scendere da 400 kV serve quello che serve nella realtà: una **sottostazione di arrivo**. Il traliccio
+terminale entra sui **tre isolatori alti** del trasformatore, e dai **tre bassi** esce media tensione. E da
+un trasformatore da sottostazione la MT può andare solo verso un traliccio (che la rifiuta) o verso un
+**tratto posato a terra** — quindi il tratto MT posato non è un vezzo, è l'unica uscita. Da lì al palo, e
+dal palo al kiosk in bassa tensione.
 
 ```
 traliccio ──AT──► TX arrivo (isolatori alti)
@@ -293,44 +190,38 @@ traliccio ──AT──► TX arrivo (isolatori alti)
 
 ---
 
-## 7. La messa in servizio, in ordine, con quello che devi leggere
+## 6. La messa in servizio, con quello che devi leggere
 
-Chiave inglese in mano, e leggi in questo ordine. Se un passo non torna, il guasto è lì e non a valle.
+Chiave inglese in mano, in questo ordine. Se un passo non torna, il guasto è lì e non a valle.
+Le letture qui sotto sono quelle **misurate davvero** su questo impianto a mezzogiorno.
 
-1. **Una fila qualsiasi.** Deve dire `Wired`. La riga delle condizioni deve dare temperatura di cella e
-   angolo di incidenza plausibili. Se dice `Not wired`, il cavo SC-6 non la tocca.
-2. **CB-16 nord.** Deve dire **16 vie su 16**, stato `chiuso`. Se dice `vuoto`, la spina non arriva.
-3. **CB-32 centro.** **30 vie su 32**.
-4. **CB-16 sud.** **16 su 16**.
-5. **VX-350K.** Deve elencare **3 quadri collegati** e **62 stringhe**, e il rapporto DC/AC ≈ **1,16**.
-   A mezzogiorno d'estate `clipping`: giusto così.
-6. **VX-110K.** **14 stringhe**, nessun quadro, DC/AC ≈ **1,14**.
-7. **TX-A e TX-B** (click destro a mano vuota): rapporto, potenza che passa e perdite.
-8. **Interruttore.** Chiuso. Prova ad aprirlo: si apre, e la potenza a valle va a zero. Richiudilo.
-9. **Sezionatore.** Con l'impianto in produzione prova ad aprirlo: **rifiuta**, e ti spiega perché. Apri
-   prima l'interruttore, poi il sezionatore: adesso si apre e la gola d'aria si vede da fuori. Questa è la
-   manovra vera, ed è l'unico punto dell'impianto dove l'ordine conta.
-10. **Cabina, sottostazione, tralicci, TX di arrivo, pali:** la potenza letta deve scendere un po' a ogni
-    passo — quello che manca è nelle perdite. Uno **zero** dove a monte non c'era è la campata che manca.
-11. **Kiosk.** Deve accumulare FE.
-12. **Palo meteo.** La riga in fondo deve dire che gli strumenti del piano sono sulla fila, non del palo.
-13. **Quadro di controllo.** Deve dire **2 unità** e **462,0 kW** di potenza installata. Poi:
-    * `watching only`: barra blu, non comanda niente;
-    * `holding a setpoint` al 50 %: barra ambra, e i due inverter si trovano limitati a metà della **loro**
-      targa — 176 kW e 55 kW, non 231 e 231. Il riferimento è ripartito in proporzione;
-    * `following redstone`: attacca una leva e guarda l'impianto seguirla;
-    * appoggia un **comparatore**: legge quanto è carico l'impianto, da 0 a 15.
+| # | Macchina | Dove | Deve dire |
+|---|---|---|---|
+| 1 | una fila TR-580 | (0, 56, 8) | `Wired`, e una potenza disponibile intorno a 10 kW |
+| 2 | CB-16 | (1, 56, 7) | **16 vie su 16**, stato `chiuso` |
+| 3 | CB-32 | (6, 56, 7) | **16 vie su 32** |
+| 4 | VX-350K | (17, 56, 6) | **2 quadri**, **32 stringhe**, ~**250 kW** |
+| 5 | VX-110K inseguitori | (9, 56, 20) | **14 stringhe**, nessun quadro, ~**98 kW** |
+| 6 | VX-110K tavoli piani | (1, 56, 28) | **12 stringhe**, ~**91 kW** |
+| 7 | VX-10K | (6, 56, 27) | **1 stringa**, ~**8,6 kW** |
+| 8 | TX-A e TX-B | (20, 56, 6) e (16, 56, 28) | rapporto, potenza e perdite (click destro a mano vuota) |
+| 9 | interruttore | (24, 56, 6) | si apre e si chiude a mano vuota, e a valle va a zero |
+| 10 | sezionatore | (27, 56, 6) | **rifiuta** di aprirsi sotto carico. Apri prima l'interruttore |
+| 11 | cabina → tralicci → pali | z=6 | la potenza scende un po' a ogni passo: quello che manca sono le perdite |
+| 12 | kiosk | (146, 56, 6) | accumula FE |
+| 13 | palo meteo | (3, 56, 4) | gli strumenti del piano sono **sulla fila**, non del palo |
+| 14 | quadro di controllo | (20, 56, 3) | **4 unità**, **582,0 kW** installati |
+
+Il quadro di controllo, provato su questo impianto: messo a **200 kW** ha dato ai quattro inverter
+**120,96 / 37,80 / 37,80 / 3,44 kW** — cioè il 34,4 % della targa di ciascuno. Il riferimento è ripartito
+in proporzione, non diviso in parti uguali.
 
 ---
 
-## 8. Cosa provare, una volta che gira
+## 7. Cosa provare, una volta che gira
 
-* **Isola un quadro** (click destro a mano vuota sul CB-32): il VX-350K perde 30 stringhe e 95 kW, e il suo
-  rapporto DC/AC scende. Richiudi.
-* **Metti un blocco alto tre metri a est di una fila** e guarda `beam` scendere nella riga delle perdite
-  al mattino, e tornare al pomeriggio. È l'ombra, tracciata per davvero.
-* **Confronta il palo meteo con l'inverter** in una giornata di pioggia: l'irraggiamento crolla, la
-  resistenza di isolamento dell'inverter crolla con lui, e la potenza segue.
-* **Curtailment dal comparatore:** metti una leva e un comparatore sul quadro di controllo, e usa il
-  segnale per accendere qualcosa quando l'impianto supera il 60 % di carico.
-* **Nevica:** le file su inseguitore vanno in bandiera da sole e il pannello dice perché.
+* **Isola il CB-32** (click destro a mano vuota): il VX-350K perde 16 stringhe e ~125 kW. Richiudi.
+* **Metti un blocco alto a est di una fila** e guarda `beam` scendere al mattino e tornare al pomeriggio.
+* **Aspetta il tramonto:** le file girate a ovest tengono mentre quelle a est sono già a zero.
+* **Comparatore sul quadro di controllo:** legge quanto è carico l'impianto, da 0 a 15.
+* **`following redstone`:** una leva sul quadro e tutto l'impianto la segue.

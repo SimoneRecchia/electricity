@@ -37,6 +37,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_hitboxes                                                            # noqa: E402
 
 OUT = os.path.join('build', 'plant', 'plant.txt')
+DATAPACK = os.path.join('build', 'plant', 'datapack')
+# The pack format 1.20.1 reads.  A pack that states the wrong one is refused with no explanation in game.
+PACK_FORMAT = 15
 PACK = os.path.join('build', 'plant', 'datapack')
 # The namespace and name the function is called by: /function electricity:plant
 FUNCTION = ('electricity', 'plant')
@@ -45,6 +48,16 @@ BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'blo
 
 STRING = 'electricity:dc_string_cable'
 TRUNK = 'electricity:dc_trunk_cable'
+
+# Which machines a gauge may end on.  A cable side pointing at one of these is drawn connected and is what
+# DcNetwork's walk steps through; a laid conductor has no such rule, because it meets a machine by span.
+TERMINATES = {
+    STRING: ('array', 'combiner', 'inverter'),
+    TRUNK: ('combiner', 'inverter'),
+}
+
+# The products that turn: they meet a cable on the north or south face whatever they are facing.
+TRACKED = ('pv_track_700', 'pv_dual_440')
 
 
 # ------------------------------------------------------------------ what the catalogues say
@@ -147,10 +160,12 @@ class Plant:
         self.runs = {}          # (x, y, z) -> gauge
         self.spans = []         # (conductor, from label, from pos, to label, to pos)
         self.groups = {}        # (x, y, z) -> which direct-current network the cable belongs to
+        self.terminals = {}     # (x, y, z) -> which kind of machine stands there
         self.notes = []
 
     def machine(self, kind, block, pos, **state):
         self.machines.append((kind, block, pos, state))
+        self.terminals[pos] = kind
         return pos
 
     def run(self, gauge, points, group):
@@ -200,13 +215,21 @@ class Plant:
             if cell in taken:
                 out.append('a %s run at %s is inside %s' % (gauge.split(':')[1], cell, taken[cell][0]))
 
-        # every array has to touch a string run, or its inverter will never find it
-        for kind, block, (x, y, z), _ in self.machines:
+        # A row meets a cable on one axis only, and which axis is not the same for the two kinds: a fixed
+        # row takes it on the face it *faces* (and, once its leads are fitted, the opposite one), a tracked
+        # row always on north or south.  A spine on the wrong axis leaves a field that looks wired and
+        # carries nothing - which is exactly what the first draft of this layout did.
+        for kind, block, (x, y, z), state in self.machines:
             if kind != 'array':
                 continue
-            beside = [(x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1)]
-            if not any(self.runs.get(p) == STRING for p in beside):
-                out.append('%s at %s touches no string cable' % (block, (x, y, z)))
+
+            tracked = block.split(':')[1] in TRACKED
+            faces = ({(x, y, z - 1), (x, y, z + 1)} if tracked
+                     else {(x + 1, y, z), (x - 1, y, z)} if state.get('facing') in ('east', 'west')
+                     else {(x, y, z - 1), (x, y, z + 1)})
+            if not any(self.runs.get(p) == STRING for p in faces):
+                out.append('%s at %s has no string cable on a face it takes one (%s)'
+                           % (block, (x, y, z), 'north or south' if tracked else 'its facing axis'))
 
         # each network has to be one piece - a gap is a plant that reads as two - and no two of them may
         # touch, because two that touch are one, and then a box sees strings that are not its own
@@ -270,12 +293,14 @@ class Plant:
         return out
 
     def commands(self):
-        """The runs first and the machines after, which is what makes the cables join up.
+        """Every side of every cable, computed here, because nothing in the world will compute it.
 
-        setblock does not run a block's own placement rule, so a cable put down beside another cable does
-        not connect to it: the neighbour is told, the new block is not.  The sides between two cables are
-        computed here, and every side facing a machine is left to the machine - which fixes it when it
-        lands, because that is a neighbour update the cable does get.
+        setblock does not run a block's own placement rule *and does not send a shape update either* - it
+        sets the state with UPDATE_CLIENTS only.  So a cable put down by command connects to nothing: not to
+        the cable beside it, and not to the machine beside it when the machine lands afterwards.  Both have
+        to be written into the state, and a run that misses the second looks perfect and carries nothing -
+        the walk starts at the machine's own neighbours, so it leaves the box happily and then never reaches
+        an array, because reaching one means a cable side that points at it.
         """
         out = []
         for (x, y, z), gauge in sorted(self.runs.items()):
@@ -283,7 +308,8 @@ class Plant:
             for name, step in (('north', (0, 0, -1)), ('south', (0, 0, 1)),
                                ('east', (1, 0, 0)), ('west', (-1, 0, 0))):
                 beside = (x + step[0], y, z + step[2])
-                joined = self.runs.get(beside) == gauge
+                joined = self.runs.get(beside) == gauge or TERMINATES.get(gauge, ()).__contains__(
+                        self.terminals.get(beside))
                 # a cable's sides are a RedstoneSide; a laid conductor's are plain booleans
                 sides.append('%s=%s' % (name, ('side' if joined else 'none') if 'cable' in gauge
                                         else ('true' if joined else 'false')))
@@ -299,87 +325,119 @@ class Plant:
 # ------------------------------------------------------------------ the site
 
 def build(origin):
-    """A 533 kW plant on four sub-fields, out to a 400 kV line, with everything a real one has."""
+    """A 596 kW plant on four sub-fields, out to a 400 kV line, with everything a real one has.
+
+    Two constraints shape it, and both are the mod's own:
+
+    A row meets a cable on one axis only.  A **fixed** row takes it on the face it faces - and it has to face
+    east or west, because that is where the sun is - so a block of fixed rows is a north-south spine with
+    rows down either side.  A **tracked** row takes it on north or south whatever it faces, so a block of
+    trackers is an east-west spine with a row each side.  Get that backwards and the field looks wired and
+    carries nothing.
+
+    And an inverter has a **string count** as well as a rating.  A VX-350K takes 32 strings; three boxes of
+    sixteen is 48, and it simply refuses the third - the box goes on saying it is full and nobody collects
+    it.  Each sub-field here is sized to one inverter's inputs, which is also why the flat tables and the
+    thin-film row go straight in with no box at all: twelve strings and three.
+    """
     ox, oy, oz = origin
     p = Plant()
 
     def at(x, z):
         return (ox + x, oy, oz + z)
 
-    # ---- sub-field 1: sixteen fixed-tilt rows, one string each, east and west of the spine
-    for i in range(8):
-        p.machine('array', 'electricity:' + ARRAYS['TR_580']['block'], at(i, 0), facing='east')
-        p.machine('array', 'electricity:' + ARRAYS['TR_580']['block'], at(i, 2), facing='west')
-    p.run(STRING, (at(0, 1), at(8, 1)), 'stringhe TR-580')
+    def fixed(product, spine_x, rows, first_z, both=True):
+        """A block of fixed rows: facing east to the west of the spine, facing west to the east of it."""
+        for i in range(rows):
+            p.machine('array', 'electricity:' + ARRAYS[product]['block'], at(spine_x - 1, first_z + i),
+                      facing='east', harnessed='true')
+            if both:
+                p.machine('array', 'electricity:' + ARRAYS[product]['block'], at(spine_x + 1, first_z + i),
+                          facing='west', harnessed='true')
 
-    # ---- sub-field 2: ten thin-film rows, three strings each
-    for i in range(5):
-        p.machine('array', 'electricity:' + ARRAYS['TR_530']['block'], at(i, 4), facing='east')
-        p.machine('array', 'electricity:' + ARRAYS['TR_530']['block'], at(i, 6), facing='west')
-    p.run(STRING, (at(0, 5), at(8, 5)), 'stringhe TR-530')
+    # ---- sub-field 1: thirty-two fixed-tilt rows in two blocks, one string each, sixteen to a box.  Both
+    # boxes go on one trunk to the big inverter: 32 strings, which is exactly what it takes.
+    for spine_x, box in ((1, 'CB_16'), (6, 'CB_32')):
+        fixed('TR_580', spine_x, 8, 0)
+        p.run(STRING, (at(spine_x, 0), at(spine_x, 7)), 'stringhe TR-580 x%d' % spine_x)
+        p.machine('combiner', 'electricity:' + COMBINERS[box]['block'], at(spine_x, -1), facing='north',
+                  isolated='false')
 
-    # ---- sub-field 3: sixteen single-axis trackers.  Facing is cosmetic: a tracked row turns itself
-    for i in range(8):
-        p.machine('array', 'electricity:' + ARRAYS['HX_700']['block'], at(i, 8), facing='north')
-        p.machine('array', 'electricity:' + ARRAYS['HX_700']['block'], at(i, 10), facing='north')
-    p.run(STRING, (at(0, 9), at(8, 9)), 'stringhe HX-700')
+    p.run(TRUNK, (at(1, -2), at(16, -2)), 'dorsale')
+    inverter_a = p.machine('inverter', 'electricity:' + INVERTERS['VX_350']['block'], at(17, -2), facing='south')
 
-    # ---- the three string boxes, north of their own field, and the trunk that joins them
-    boxes = [('CB_16', 1, 'CB-16 nord'), ('CB_32', 5, 'CB-32 centro'), ('CB_16', 9, 'CB-16 sud')]
-    for spec, z, _ in boxes:
-        p.machine('combiner', 'electricity:' + COMBINERS[spec]['block'], at(9, z), facing='west', isolated='false')
-        p.run(TRUNK, (at(10, z), at(12, z)), 'dorsale')
-    p.run(TRUNK, (at(12, 1), at(12, 9)), 'dorsale')
-    p.run(TRUNK, (at(12, 5), at(14, 5)), 'dorsale')
+    # ---- sub-field 2: the tracked rows, which take their cable on the other axis.  Fourteen single-axis
+    # and two dual-axis: sixteen strings, one box, one string inverter.
+    for i in range(6):
+        for z in (11, 13):
+            p.machine('array', 'electricity:' + ARRAYS['HX_700']['block'], at(i, z), facing='north',
+                      harnessed='true')
+    for z in (11, 13):
+        p.machine('array', 'electricity:' + ARRAYS['AE_440']['block'], at(6, z), facing='north',
+                  harnessed='true')
+    # Straight in, with no box: a *string* inverter has no trunk terminals at all - only the VX-350K and the
+    # central VC-2500K do - so a combiner in front of one would sit there full and uncollected.  Sixteen
+    # strings against eighteen inputs is what a string inverter is for.
+    p.run(STRING, (at(0, 12), at(8, 12)), 'stringhe HX-700 e AE-440')
+    inverter_b = p.machine('inverter', 'electricity:' + INVERTERS['VX_110']['block'], at(9, 12), facing='west')
 
-    # ---- the central inverter, and its transformer beside it
-    inverter_a = p.machine('inverter', 'electricity:' + INVERTERS['VX_350']['block'], at(15, 5), facing='west')
-    tx_a = p.machine('tx_machine', 'electricity:tx_machine', at(18, 5), facing='west')
+    # ---- sub-field 3: six flat tables straight into a string inverter, no box between them, which is what
+    # a roof or a small ground mount is.  Twelve strings against eighteen inputs.
+    # No thin film here, and that is a decision the cabinet makes: three TR-530 strings sit at 999 V, which
+    # is inside this window by half a volt and outside the small cabinet's altogether, and one string out of
+    # window stops the whole inverter.  The product wants the 500-1500 V cabinet and three ways a row.
+    fixed('FT_430', 1, 3, 16)
+    p.run(STRING, (at(1, 16), at(1, 19)), 'stringhe FT-430')
+    inverter_c = p.machine('inverter', 'electricity:' + INVERTERS['VX_110']['block'], at(1, 20), facing='south')
 
-    # ---- sub-field 4: the other topology - eight flat tables and two dual-axis rows straight into a
-    # string inverter, no box between them, which is what a roof or a small ground mount is
-    for i in range(3):
-        p.machine('array', 'electricity:' + ARRAYS['FT_430']['block'], at(i, 14), facing='east')
-        p.machine('array', 'electricity:' + ARRAYS['FT_430']['block'], at(i, 16), facing='west')
-    p.machine('array', 'electricity:' + ARRAYS['AE_440']['block'], at(4, 14), facing='north')
-    p.machine('array', 'electricity:' + ARRAYS['AE_440']['block'], at(4, 16), facing='north')
-    p.run(STRING, (at(0, 15), at(14, 15)), 'stringhe FT-430 e AE-440')
-    inverter_b = p.machine('inverter', 'electricity:' + INVERTERS['VX_110']['block'], at(15, 15), facing='west')
-    tx_b = p.machine('tx_machine', 'electricity:tx_machine', at(18, 15), facing='west')
+    # ---- sub-field 4: one row on the smallest cabinet there is - 10.4 kW against 10, which is the ratio a
+    # shop roof actually has.  A fixed-tilt row and not the thin film: eighteen modules in series sit at
+    # 783 V and this cabinet's tracker stops at 980, while three thin-film strings sit at 999 and it
+    # refuses them - out of window, and the panel says so.
+    fixed('TR_580', 6, 1, 17, both=False)
+    p.run(STRING, (at(6, 17), at(6, 18)), 'stringhe TR-580 tetto')
+    inverter_d = p.machine('inverter', 'electricity:' + INVERTERS['VX_10']['block'], at(6, 19), facing='south')
 
-    # ---- the medium-voltage bay: breaker, then disconnector, then the cabin that collects both inverters
-    breaker = p.machine('breaker', 'electricity:mv_breaker', at(22, 5), facing='west', open='false')
-    disconnector = p.machine('disconnector', 'electricity:mv_disconnector', at(25, 5), facing='west', open='false')
-    cabin = p.machine('cabin', 'electricity:electric_cabin', at(29, 10), facing='west')
+    # ---- the two machine transformers: the big cabinet on its own, the three small ones on the other
+    tx_a = p.machine('tx_machine', 'electricity:tx_machine', at(20, -2), facing='south')
+    tx_b = p.machine('tx_machine', 'electricity:tx_machine', at(16, 20), facing='south')
+
+    # ---- the medium-voltage bay, north of the field: breaker, then disconnector, then the cabin
+    breaker = p.machine('breaker', 'electricity:mv_breaker', at(24, -2), facing='south', open='false')
+    disconnector = p.machine('disconnector', 'electricity:mv_disconnector', at(27, -2), facing='south', open='false')
+    cabin = p.machine('cabin', 'electricity:electric_cabin', at(31, -2), facing='south')
 
     # ---- the substation, three cells across, and the line that leaves it
-    substation = p.machine('tx_substation', 'electricity:tx_substation', at(34, 10), facing='west')
-    towers = [('terminale partenza', p.machine('tower', 'electricity:lattice_terminal', at(42, 10), facing='west'))]
-    for i, x in enumerate((62, 82)):
+    substation = p.machine('tx_substation', 'electricity:tx_substation', at(36, -2), facing='south')
+    towers = [('terminale partenza', p.machine('tower', 'electricity:lattice_terminal', at(44, -2), facing='south'))]
+    for i, x in enumerate((64, 84)):
         towers.append(('sospensione %d' % (i + 1),
-                       p.machine('tower', 'electricity:lattice_suspension', at(x, 10), facing='west')))
-    towers.append(('terminale arrivo', p.machine('tower', 'electricity:lattice_terminal', at(102, 10), facing='west')))
+                       p.machine('tower', 'electricity:lattice_suspension', at(x, -2), facing='south')))
+    towers.append(('terminale arrivo', p.machine('tower', 'electricity:lattice_terminal', at(104, -2), facing='south')))
 
     # ---- and the way down.  A 400 kV tower takes nothing but transmission conductor and a pole refuses
     # it, so there is no span that joins the two: coming off the line means a second substation transformer,
     # the line in on its upper bushings and medium voltage out of its lower ones - a receiving substation,
     # which is what a real one is.  From there a laid run, because that is the only thing its own feeds list
     # will send medium voltage to, and a laid run reaches a pole.
-    arrival = p.machine('tx_substation', 'electricity:tx_substation', at(110, 10), facing='west')
-    p.laid('electricity:mv_conductor_run', (at(114, 10), at(118, 10)), 'uscita MT della sottostazione di arrivo')
-    poles = [p.machine('pole', 'electricity:utility_pole', at(122, 10), facing='west'),
-             p.machine('pole', 'electricity:utility_pole', at(136, 10), facing='west')]
-    kiosk = p.machine('kiosk', 'electricity:power_box', at(144, 10), facing='west', mounted='false')
+    arrival = p.machine('tx_substation', 'electricity:tx_substation', at(112, -2), facing='south')
+    p.laid('electricity:mv_conductor_run', (at(116, -2), at(120, -2)), 'uscita MT della sottostazione di arrivo')
+    poles = [p.machine('pole', 'electricity:utility_pole', at(124, -2), facing='south'),
+             p.machine('pole', 'electricity:utility_pole', at(138, -2), facing='south')]
+    kiosk = p.machine('kiosk', 'electricity:power_box', at(146, -2), facing='south', mounted='false')
 
-    # ---- what measures and what commands.  The mast has to be within twelve blocks of a row to take it
-    # as its reference; the cabinet within sixty-four of every machine it dispatches.
-    mast = p.machine('mast', 'electricity:met_station', at(-3, 5), facing='north')
-    controller = p.machine('controller', 'electricity:plant_controller', at(18, 1), facing='west')
+    # ---- what measures and what commands.  The mast has to be within twelve blocks of a row to take it as
+    # its reference; the cabinet within sixty-four of every machine it dispatches.  Both stand clear of any
+    # row's east-west line, because that is the line the sun comes down.
+    mast = p.machine('mast', 'electricity:met_station', at(3, -4), facing='north')
+    controller = p.machine('controller', 'electricity:plant_controller', at(20, -5), facing='south')
 
     # ---- the spans, which a player strings by hand: a conductor apart is the point of them
     mv = 'AAAC_228'
     p.span(mv, 'inverter VX-350K (tetto)', inverter_a, 'TX macchina A (isolatore basso)', tx_a)
-    p.span(mv, 'inverter VX-110K (tetto)', inverter_b, 'TX macchina B (isolatore basso)', tx_b)
+    for name, machine in (('VX-110K inseguitori', inverter_b), ('VX-110K tavoli piani', inverter_c),
+                          ('VX-10K film sottile', inverter_d)):
+        p.span(mv, 'inverter %s (tetto)' % name, machine, 'TX macchina B (isolatore basso)', tx_b)
     p.span(mv, 'TX macchina A (isolatore alto)', tx_a, 'interruttore (lato linea)', breaker)
     p.span(mv, 'TX macchina B (isolatore alto)', tx_b, 'interruttore (lato linea)', breaker)
     p.span(mv, 'interruttore (lato carico)', breaker, 'sezionatore (lato linea)', disconnector)
@@ -397,7 +455,7 @@ def build(origin):
 
     p.notes.append(('mast', mast))
     p.notes.append(('controller', controller))
-    p.notes.append(('inverters', (inverter_a, inverter_b)))
+    p.notes.append(('inverters', (inverter_a, inverter_b, inverter_c, inverter_d)))
     return p
 
 
@@ -418,6 +476,36 @@ def summary(p):
     ac = sum(counted.get('electricity:' + spec['block'], 0) * spec['kw'] for spec in INVERTERS.values())
     ways = sum(counted.get('electricity:' + spec['block'], 0) * spec['ways'] for spec in COMBINERS.values())
     return dc, ac, strings, ways, counted
+
+
+def write_datapack(p, origin):
+    """The same commands at ~ ~ ~, so the plant is built from wherever the player is standing.
+
+    RCON is a server protocol and a single-player world has no server to talk to, so this is the only way
+    into a world somebody is actually playing.  Relative coordinates rather than the origin the command
+    file uses: a datapack cannot know where it will be run.
+    """
+    functions = os.path.join(DATAPACK, 'data', 'electricity', 'functions')
+    os.makedirs(functions, exist_ok=True)
+    write(os.path.join(DATAPACK, 'pack.mcmeta'),
+          '{\n  "pack": {\n    "pack_format": %d,\n'
+          '    "description": "Electricity - impianto solare da 533 kW: /function electricity:plant"\n'
+          '  }\n}\n' % PACK_FORMAT)
+
+    lines = ['# generated by tools/gen_example_plant.py - do not edit by hand',
+             '# built from the block the command is run at: %d east, %d south, and 3 west of you'
+             % (144, 16)]
+    for command in p.commands():
+        head, x, y, z, rest = command.split(' ', 4)
+        lines.append('%s ~%d ~%d ~%d %s' % (head, int(x) - origin[0], int(y) - origin[1],
+                                            int(z) - origin[2], rest))
+    write(os.path.join(functions, 'plant.mcfunction'), '\n'.join(lines) + '\n')
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(text)
 
 
 def main():
@@ -472,6 +560,9 @@ def main():
         f.write('# /function %s:%s builds the plant from the block you are standing on\n' % (namespace, name))
         f.write('\n'.join(p.relative(origin)) + '\n')
     print('%s: /function %s:%s, relative to whoever runs it' % (PACK, namespace, name))
+
+    write_datapack(p, origin)
+    print('%s: the same plant, at ~ ~ ~, for /function electricity:plant' % DATAPACK)
 
     print('\nthe spans, which a player strings by hand with the reel in hand:')
     for conductor, name_a, a, name_b, b in p.spans:
