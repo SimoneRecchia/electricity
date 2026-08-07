@@ -1,43 +1,21 @@
 package com.dooji.electricity.client.screen;
 
+import com.dooji.electricity.api.Nameplate;
 import com.dooji.electricity.api.power.TurbineSpec;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
-import com.dooji.electricity.item.TurbineBlockItem;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.registry.TurbineCatalog;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
-/**
- * The control panel at the foot of a wind turbine.
- *
- * Deliberately short on readings. The machine reports about fifty signals through
- * its ComputerCraft peripheral and none of them belong here: standing at a turbine
- * you want to know what it is, what it is doing right now, and why it is not doing
- * more. The gearbox oil temperature is a question for a monitor watching a whole
- * site, not for the panel on the tower.
- *
- * There is no menu behind it and no slots, because nothing goes inside a turbine.
- * Nor does it change the tower: height is built by hand, block by block, so the panel
- * only reports it - and prices the next block, which is the one thing about the tower
- * worth knowing while standing at it. Everything shown is read from the client's copy
- * of the block entity, all of which arrives in its update tag already, so the panel
- * needs no traffic of its own in that direction. It only sends the three commands.
- *
- * The bevel, the bar geometry, the six colours and the label-and-value rhythm come from
- * {@link PlantScreen}, which is shared with the three photovoltaic panels so that all four
- * read alike rather than each having to be learned.
- */
-public class WindTurbineScreen extends PlantScreen {
+/** The control panel at the foot of a wind turbine. */
+public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/wind_turbine.png");
 	// 240 wide rather than the vanilla 176: the nameplate lines are the longest thing
 	// here and at 200 the cut-out speed ran off the right edge
@@ -53,14 +31,14 @@ public class WindTurbineScreen extends PlantScreen {
 	private LimitSlider limitSlider;
 
 	public WindTurbineScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.wind_turbine.title"), TEXTURE, IMAGE_WIDTH, IMAGE_HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.wind_turbine.title"), TEXTURE, IMAGE_WIDTH, IMAGE_HEIGHT, targetPos, WindTurbineBlockEntity.class);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		double limitFraction = turbine == null ? 1.0 : turbine.getActivePowerLimit() / turbine.spec().ratedPowerKw();
 		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 139, 218, 20, limitFraction));
 
@@ -75,26 +53,19 @@ public class WindTurbineScreen extends PlantScreen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (turbine() != null) {
+		if (machine() != null) {
 			refreshWidgets();
 		}
 	}
 
-	/**
-	 * Keeps the buttons telling the truth.
-	 *
-	 * Their labels and enabled state come from the turbine rather than from what was
-	 * clicked, so a machine stopped by a computer or by redstone while the panel is open
-	 * shows it, and the tower buttons grey out at the ends of the range its model is sold
-	 * on instead of sending commands the server would refuse.
-	 */
+	/** Keeps the buttons telling the truth. */
 	private void refreshWidgets() {
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		if (turbine == null) return;
 
 		TurbineSpec spec = turbine.spec();
 		stopButton.setMessage(Component.translatable(turbine.isStoppedByPlayer() ? "screen.electricity.wind_turbine.start" : "screen.electricity.wind_turbine.stop"));
-		// the label is one word so it fits the button; what the word means goes in the
+		// the label is one word so it fits the button
 		// tooltip rather than being squeezed in beside it
 		String mode = turbine.getRedstoneMode().name().toLowerCase(Locale.ROOT);
 		redstoneButton.setMessage(Component.translatable("screen.electricity.wind_turbine.redstone",
@@ -103,14 +74,12 @@ public class WindTurbineScreen extends PlantScreen {
 
 		// while a drag is in progress the handle is the player's, not the machine's:
 		// overwriting it from the synced setpoint would fight the mouse
-		if (!limitSlider.beingDragged) {
-			limitSlider.syncTo(turbine.getActivePowerLimit() / spec.ratedPowerKw());
-		}
+		limitSlider.syncTo(turbine.getActivePowerLimit() / spec.ratedPowerKw());
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		WindTurbineBlockEntity turbine = turbine();
+		WindTurbineBlockEntity turbine = machine();
 		if (turbine == null) return;
 
 		drawNameplate(graphics, turbine);
@@ -137,14 +106,7 @@ public class WindTurbineScreen extends PlantScreen {
 		separator(graphics, 40);
 	}
 
-	/**
-	 * Why the machine is or is not running.
-	 *
-	 * The reason matters more than the fact. A turbine sitting at zero output is the one
-	 * thing a player cannot diagnose from outside, and there are four different causes -
-	 * a gale, a computer, a redstone signal, or their own hand on the brake - which look
-	 * identical from the ground.
-	 */
+	/** Why the machine is or is not running. */
 	private void drawStatus(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		String key;
 		int colour;
@@ -171,12 +133,7 @@ public class WindTurbineScreen extends PlantScreen {
 		state(graphics, Component.translatable(key), colour, 46);
 	}
 
-	/**
-	 * Produced, and what the wind was offering before anything got in the way.
-	 *
-	 * Drawn as one bar with the potential behind the actual, so curtailment is visible as
-	 * a gap rather than having to be inferred from two numbers.
-	 */
+	/** Produced, and what the wind was offering before anything got in the way. */
 	private void drawPower(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
 		double rated = spec.ratedPowerKw();
@@ -184,7 +141,7 @@ public class WindTurbineScreen extends PlantScreen {
 		double potential = Math.max(produced, turbine.getUncappedPower());
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.power"), leftPos + 8, topPos + 58, LABEL_COLOUR, false);
-		value(graphics, TurbineBlockItem.formatPower(produced) + " / " + TurbineBlockItem.formatPower(rated), 58);
+		value(graphics, Nameplate.rating(produced) + " / " + Nameplate.rating(rated), 58);
 
 		// the potential goes down first so the produced bar sits on top of it: what is left
 		// showing behind is exactly what the machine is giving up
@@ -195,21 +152,11 @@ public class WindTurbineScreen extends PlantScreen {
 		notch(graphics, POWER_BAR_Y, barWidth(turbine.getActivePowerLimit() / rated), 0xFF202020);
 	}
 
-	/**
-	 * The wind, against the thresholds of this particular machine.
-	 *
-	 * The zones are the whole point: a bare number cannot tell a player that 2 m/s is
-	 * below cut-in and therefore hopeless, while 23 is above the storm onset and therefore
-	 * being deliberately thrown away. The scale runs to the cut-out, so the same gauge
-	 * reads correctly for every model in the catalogue.
-	 */
+	/** The wind, against the thresholds of this particular machine. */
 	private void drawWind(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
 		double scale = spec.cutOutSpeed();
 		// the mean, not the instantaneous wind: this is the figure the machine supervises on and
-		// the one a wind report quotes, and a needle chasing every gust would be unreadable. The
-		// gust gets its own mark below, because it is what explains a shutdown in wind that looks
-		// well short of the cut-out
 		double wind = turbine.getMeanWindSpeed();
 
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.wind"), leftPos + 8, topPos + 86, LABEL_COLOUR, false);
@@ -231,26 +178,15 @@ public class WindTurbineScreen extends PlantScreen {
 		separator(graphics, 112);
 	}
 
-	/**
-	 * The tower, in segments and in the hub height they add up to.
-	 *
-	 * Both numbers are shown because they are the same fact in the two units the player
-	 * needs: segments are what it costs, metres are what it earns.
-	 */
+	/** The tower, in segments and in the hub height they add up to. */
 	private void drawTower(GuiGraphics graphics, WindTurbineBlockEntity turbine) {
 		TurbineSpec spec = turbine.spec();
-		// the hub height this adds up to is already on the nameplate line, and repeating it
+		// the hub height this adds up to is already on the nameplate line
 		// here is what ran the string under the tower buttons
 		graphics.drawString(font, Component.translatable("screen.electricity.wind_turbine.tower",
 				turbine.getTowerSegments(), spec.maxTowerSegments()), leftPos + 8, topPos + 117, LABEL_COLOUR, false);
 
-		// what one more block of tower would be worth, so the climb is a decision rather than
-		// a gamble.
-		//
-		// The exponent comes from the server with the rest of the machine's state, because it is
-		// a property of the ground this tower stands on and the air over it tonight: the same
-		// block is worth two percent on a beach and eight in a forest, and a figure baked in
-		// here would have told every player the same lie.
+		// what one more block of tower would be worth
 		int segments = turbine.getTowerSegments();
 		if (segments < spec.maxTowerSegments()) {
 			double here = turbine.getReportedPowerKw();
@@ -263,68 +199,26 @@ public class WindTurbineScreen extends PlantScreen {
 		}
 	}
 
-	private WindTurbineBlockEntity turbine() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof WindTurbineBlockEntity turbine) return turbine;
-
-		return null;
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		return turbine();
-	}
-
 	private void send(TurbineControlPayload.Action action) {
 		ElectricityNetworking.INSTANCE.sendToServer(TurbineControlPayload.of(targetPos, action));
 	}
 
-	/**
-	 * The curtailment setpoint.
-	 *
-	 * Sends on release rather than on every pixel of travel, because dragging across the
-	 * whole range would otherwise be a hundred packets and a hundred block updates for one
-	 * decision.
-	 */
-	private class LimitSlider extends AbstractSliderButton {
-		private boolean beingDragged;
-
+	/** The curtailment setpoint. */
+	private class LimitSlider extends SetpointSlider {
 		private LimitSlider(int x, int y, int width, int height, double fraction) {
-			super(x, y, width, height, Component.empty(), Mth.clamp(fraction, 0.0, 1.0));
-			updateMessage();
-		}
-
-		private void syncTo(double fraction) {
-			double clamped = Mth.clamp(fraction, 0.0, 1.0);
-			if (Math.abs(clamped - value) < 1.0e-4) return;
-
-			value = clamped;
-			updateMessage();
+			super(x, y, width, height, fraction);
 		}
 
 		@Override
 		protected void updateMessage() {
-			WindTurbineBlockEntity turbine = turbine();
+			WindTurbineBlockEntity turbine = machine();
 			double rated = turbine == null ? 1.0 : turbine.spec().ratedPowerKw();
-			setMessage(Component.translatable("screen.electricity.wind_turbine.limit", TurbineBlockItem.formatPower(value * rated), fmt("%.0f", value * 100.0)));
+			setMessage(Component.translatable("screen.electricity.wind_turbine.limit", Nameplate.rating(value * rated), fmt("%.0f", value * 100.0)));
 		}
 
 		@Override
-		protected void applyValue() {
-			// nothing until the drag ends, see onRelease
-		}
-
-		@Override
-		public void onClick(double mouseX, double mouseY) {
-			beingDragged = true;
-			super.onClick(mouseX, mouseY);
-		}
-
-		@Override
-		public void onRelease(double mouseX, double mouseY) {
-			super.onRelease(mouseX, mouseY);
-			beingDragged = false;
-			WindTurbineBlockEntity turbine = turbine();
+		protected void commit() {
+			WindTurbineBlockEntity turbine = machine();
 			if (turbine == null) return;
 
 			ElectricityNetworking.INSTANCE.sendToServer(new TurbineControlPayload(targetPos, TurbineControlPayload.Action.SET_POWER_LIMIT, value * turbine.spec().ratedPowerKw()));

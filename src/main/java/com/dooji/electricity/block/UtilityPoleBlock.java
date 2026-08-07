@@ -33,81 +33,48 @@ import net.minecraftforge.fml.DistExecutor;
 public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell {
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/**
-	 * The facing utility_pole.obj was modelled at, as far as the cells need to care.
-	 *
-	 * East, the same as the other inherited models - but see {@link #rotation}: this model is mirrored
-	 * rather than merely turned, so the turn it actually takes is half a turn from east for east and west.
-	 * That difference cannot show in the cells, because the pole's geometry and the table below are both
-	 * unchanged by a half turn: mast, arms and every insulator on them.
-	 */
-	public static final Direction AUTHORED = Direction.EAST;
-
-	/**
-	 * How far to turn this model to face a given way, which is the one mapping in the mod that
-	 * {@link ModelFacing} cannot give.
-	 *
-	 * The pole's geometry is mirrored, not turned: north and south come out swapped against the quarter
-	 * turns from {@link #AUTHORED}, so it keeps a table of its own. Said once, here, and read by both the
-	 * renderer and the block entity that hangs the wires - they had a copy each, and a copy each is how
-	 * the collision came to disagree with the model in the first place.
-	 */
-	public static float rotation(Direction facing) {
-		return switch (facing) {
-			case EAST -> 180.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 0.0f;
-			default -> 90.0f;
-		};
-	}
+	/** The facing utility_pole.obj is modelled at. */
+	public static final Direction AUTHORED = Direction.NORTH;
 
 	/**
 	 * The whole pole as collision, cell by cell, cut from utility_pole.obj.
-	 *
-	 * A cube was both too big and in mostly the wrong place: the mast is 0.494 of a block across and six
-	 * blocks tall, so the one block a player could not walk through was the place the pole barely fills,
-	 * and the five above it - the whole of the pole - were air.
-	 *
-	 * The mast is here as the 7.92 pixels it actually is, up to the 2.92 pixels of it that reach the
-	 * seventh block. So are the two crossarms, which are three pixels thick and reach four blocks across,
-	 * and the eight insulators standing on them, which are 2.2 across. That is a change of mind: the arms
-	 * were left out when a cell of collision meant a whole cell, because an invisible floor in the sky
-	 * four blocks wide is worse than no floor at all. A three-pixel plate where the plate is drawn is not
-	 * that - it is the arm, and a player can still walk under it.
-	 *
-	 * Written by {@code tools/check_hitboxes.py --java}, in the model's own frame, facing
-	 * {@link #AUTHORED}.
+	  *
+	 * Written by {@code tools/check_hitboxes.py --java}, in the model's own frame, facing {@link #AUTHORED}.
 	 */
 	private static final List<Cell> CELLS = List.of(
-			new Cell(0, 0, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
-			new Cell(0, 1, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
-			new Cell(0, 2, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
-			new Cell(0, 3, 0, Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96)),
-			new Cell(0, 4, 0, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
-					Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96))),
-			new Cell(0, 4, -1, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
-					Block.box(6.91, 14.48, 10.27, 9.09, 16.00, 12.45))),
-			new Cell(0, 4, 1, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 16.00),
-					Block.box(6.91, 14.48, 3.55, 9.09, 16.00, 5.73))),
-			new Cell(0, 4, -2, Shapes.or(Block.box(3.10, 11.51, 6.62, 12.90, 14.51, 16.00),
-					Block.box(6.91, 14.48, 13.93, 9.09, 16.00, 16.00))),
-			new Cell(0, 4, 2, Shapes.or(Block.box(3.10, 11.51, 0.00, 12.90, 14.51, 9.38),
-					Block.box(6.91, 14.48, 0.00, 9.09, 16.00, 2.07))),
-			new Cell(0, 5, 0, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
-					Block.box(4.04, 0.00, 4.04, 11.96, 16.00, 11.96))),
-			new Cell(0, 5, -1, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
-					Block.box(6.91, 0.00, 10.27, 9.09, 2.49, 12.45),
-					Block.box(6.91, 13.65, 3.83, 9.09, 16.00, 6.01),
-					Block.box(6.91, 13.65, 13.07, 9.09, 16.00, 15.25))),
-			new Cell(0, 5, 1, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 16.00),
-					Block.box(6.91, 0.00, 3.55, 9.09, 2.49, 5.73),
-					Block.box(6.91, 13.65, 0.75, 9.09, 16.00, 2.93),
-					Block.box(6.91, 13.65, 9.99, 9.09, 16.00, 12.17))),
-			new Cell(0, 5, -2, Shapes.or(Block.box(3.10, 10.70, 13.16, 12.90, 13.70, 16.00),
-					Block.box(6.91, 0.00, 13.93, 9.09, 2.49, 16.00))),
-			new Cell(0, 5, 2, Shapes.or(Block.box(3.10, 10.70, 0.00, 12.90, 13.70, 2.84),
-					Block.box(6.91, 0.00, 0.00, 9.09, 2.49, 2.07))),
-			new Cell(0, 6, 0, Block.box(4.04, 0.00, 4.04, 11.96, 2.92, 11.96)));
+			new Cell(0, 0, 0, Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27)),
+			new Cell(0, 1, 0, Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27)),
+			new Cell(0, 2, 0, Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27)),
+			new Cell(0, 3, 0, Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27)),
+			new Cell(0, 4, 0, Shapes.or(Block.box(0.00, 4.25, 6.25, 16.00, 14.99, 9.75),
+					Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27))),
+			new Cell(-1, 4, 0, Shapes.or(Block.box(0.00, 14.61, 6.67, 0.37, 16.00, 9.33),
+					Block.box(0.00, 4.25, 6.25, 16.00, 14.99, 9.75),
+					Block.box(10.03, 14.61, 6.67, 12.69, 16.00, 9.33))),
+			new Cell(1, 4, 0, Shapes.or(Block.box(0.00, 4.25, 6.25, 16.00, 14.99, 9.75),
+					Block.box(3.31, 14.61, 6.67, 5.97, 16.00, 9.33),
+					Block.box(15.63, 14.61, 6.67, 16.00, 16.00, 9.33))),
+			new Cell(-2, 4, 0, Shapes.or(Block.box(6.62, 4.25, 6.25, 16.00, 14.99, 9.75),
+					Block.box(13.71, 14.61, 6.67, 16.00, 16.00, 9.33))),
+			new Cell(2, 4, 0, Shapes.or(Block.box(0.00, 14.61, 6.67, 2.29, 16.00, 9.33),
+					Block.box(0.00, 4.25, 6.25, 9.38, 14.99, 9.75))),
+			new Cell(0, 5, 0, Shapes.or(Block.box(0.00, 3.46, 6.25, 16.00, 14.19, 9.75),
+					Block.box(2.88, 0.00, 3.73, 13.26, 16.00, 12.27))),
+			new Cell(-1, 5, 0, Shapes.or(Block.box(0.00, 0.00, 6.67, 0.37, 1.38, 9.33),
+					Block.box(0.00, 3.46, 6.25, 16.00, 14.19, 9.75),
+					Block.box(3.63, 13.81, 6.67, 6.29, 16.00, 9.33),
+					Block.box(10.03, 0.00, 6.67, 12.69, 1.38, 9.33),
+					Block.box(12.83, 13.81, 6.67, 15.49, 16.00, 9.33))),
+			new Cell(1, 5, 0, Shapes.or(Block.box(0.00, 3.46, 6.25, 16.00, 14.19, 9.75),
+					Block.box(0.51, 13.81, 6.67, 3.17, 16.00, 9.33),
+					Block.box(3.31, 0.00, 6.67, 5.97, 1.38, 9.33),
+					Block.box(9.71, 13.81, 6.67, 12.37, 16.00, 9.33),
+					Block.box(15.63, 0.00, 6.67, 16.00, 1.38, 9.33))),
+			new Cell(-2, 5, 0, Shapes.or(Block.box(13.17, 3.46, 6.25, 16.00, 14.19, 9.75),
+					Block.box(13.71, 0.00, 6.67, 16.00, 1.38, 9.33))),
+			new Cell(2, 5, 0, Shapes.or(Block.box(0.00, 0.00, 6.67, 2.29, 1.38, 9.33),
+					Block.box(0.00, 3.46, 6.25, 2.83, 14.19, 9.75))),
+			new Cell(0, 6, 0, Block.box(2.88, 0.00, 3.73, 13.26, 4.24, 12.27)));
 
 	public UtilityPoleBlock(Properties properties) {
 		super(properties);
@@ -139,13 +106,7 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 		return new UtilityPoleBlockEntity(pos, state);
 	}
 
-	/**
-	 * A pole has nothing of its own to tick, and this is not for it.
-	 *
-	 * It is here so that a pole planted before the mast had any collision gets it: six blocks of steel
-	 * with one block of collision at the bottom does not fix itself, because it was placed long ago and
-	 * placement is the only other thing that fills the cells.
-	 */
+	/** A pole has nothing of its own to tick */
 	@Nullable @Override
 	public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
 		return (lvl, pos, blockState, blockEntity) -> MachineShell.heal(lvl, pos, blockState);
@@ -158,6 +119,10 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+		// see SwitchgearBlock.use: an empty hand opens the panel, anything else is the item's click - or a
+		// conductor aimed at an insulator on this pole's own cell opens the offsets screen and strings nothing.
+		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+
 		if (level.isClientSide) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> UtilityPoleClientHooks.openConfigScreen(pos));
 			return InteractionResult.SUCCESS;
@@ -166,7 +131,7 @@ public class UtilityPoleBlock extends Block implements EntityBlock, MachineShell
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS;
 	}
 

@@ -1,69 +1,37 @@
 #!/usr/bin/env python3
-"""Proves the tracker models cannot self-intersect at any angle.
+"""Proves a tracker cannot hit itself at any angle.
 
     python3 tools/check_pv_clearance.py
 
-Reads the generated OBJ files and exits non-zero if any fixed part lies where a moving
-part will sweep.  Worth having as a script rather than as a careful read of the geometry,
-because the failure mode is invisible until somebody stands in front of a tracker at four
-in the afternoon: the first version of these models had the slew drive at the tube's
-height, where the modules passed through it twice a day, and the yoke arms ending exactly
-where the modules began.
-
-How it can prove anything
--------------------------
-Both drives turn about an axis, so every moving part sweeps a *body of revolution* about
-that axis - an annulus in the plane normal to it, at an unchanged coordinate along it.  A
-fixed part is therefore safe if either
-
-  * its coordinate along the axis never meets the moving part's, or
-  * its distance from the axis is wholly inside the annulus's hole, or wholly outside
-    its rim.
-
-Each test assumes a full turn, which is stricter than the sixty or eighty degrees the
-drives actually reach, so a pass is proof rather than evidence.
-
-The dual-axis frame has two axes and its elevation group is nested inside its azimuth
-group, so it gets three comparisons: elevation against azimuth in the azimuth's own
-frame, azimuth against the fixed pedestal about the vertical, and elevation against the
-pedestal - where the only thing that saves it is that the pedestal is a body of
-revolution, so all that matters is how close to the vertical axis the frame can reach.
-
-The one intersection allowed is a bearing: a cylinder turning about its own axis inside a
-housing sweeps nothing, however much geometry the two share.
+Everything that moves sweeps a body of revolution about its axis, so a fixed part is safe if it never
+meets that annulus.  Assumes a full turn, which is stricter than the drives reach.
 """
 
 import math
 import os
+import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import check_hitboxes                                                            # noqa: E402
+import objlib                                                                    # noqa: E402
+
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
+ARRAY_BLOCK = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block',
+                           'PvArrayBlock.java')
 EPS = 1.0e-4
 
-# Where each tracker's drives pivot, matching what the renderer measures off the model's
-# own groups.  Restated here rather than measured so that a model whose pivot moved would
-# fail this check rather than quietly pass a different one.
-PIVOTS = {'pv_track': 0.62, 'pv_dual': 0.7475}
-# Radius of the dual axis's pedestal, which is a body of revolution about the vertical.
-PEDESTAL_RADIUS = 0.085
+# Which pivot marker each tracker turns its row about.  Read out of the model, not restated here: a copy
+# of the figure went stale the moment the torque tube moved and this checker then measured the wrong axis.
+PIVOTS = {'pv_track': 'pivot_tube', 'pv_dual': 'pivot_elevation'}
+# Radius of the widest part of the dual axis's pedestal
+PEDESTAL_RADIUS = 0.062
 
 
 def read_faces(path):
-    """Every face of every object in an OBJ, keyed by object name."""
-    objects, current, verts = {}, None, []
-    for line in open(path):
-        if line.startswith('v '):
-            verts.append(tuple(float(v) for v in line.split()[1:4]))
-        elif line.startswith('o '):
-            # accumulated rather than assigned: a part whose faces are not all the same
-            # material is written as one section per material under the same name, so the
-            # same 'o' line appears more than once and assigning would test only the last
-            current = line.split(None, 1)[1].strip()
-            objects.setdefault(current, [])
-        elif line.startswith('f ') and current is not None:
-            objects[current].append([verts[int(t.split('/')[0]) - 1] for t in line.split()[1:]])
-
-    return objects
+    """Every face of every object in an OBJ, keyed by object name.  Merged, not replaced - see objlib."""
+    return objlib.polygons(objlib.read(path))
 
 
 def span(face, axis):
@@ -113,21 +81,48 @@ def worst_overlap(fixed_faces, moving_faces, along, plane, centre):
 
 
 def reaches_vertical_axis(faces, pivot_y):
-    """Closest a group turning about z, then about y, can bring itself to the vertical axis.
-
-    Turning about z can put a point's x on the axis but cannot change its z, and turning
-    about y afterwards cannot change its distance from the vertical axis - so the answer
-    is the smallest |z| in the group. The y band it can reach is the pivot plus and minus
-    its own radius.
-    """
+    """Closest a group turning about z, then about y, can bring itself to the vertical axis."""
     closest = min(min(abs(point[2]) for point in face) for face in faces)
     radius = max(annulus(face, (0, 1), (0.0, pivot_y))[1] for face in faces)
     return closest, (pivot_y - radius, pivot_y + radius)
 
 
+def pivot_height(objects, group):
+    """Where a ``pivot_*`` marker sits: the renderer measures the same hinge off the same group."""
+    faces = objects[group]
+    return sum(point[1] for face in faces for point in face) / sum(len(face) for face in faces)
+
+
+# Which table in PvArrayBlock holds each tracker's collision.  Its floor is the one figure in the Java that
+# no other check watches: too high and a player walks in under the row it is meant to stop them at.
+SWEPT = {'pv_track': 'TRACK_CELLS', 'pv_dual': 'DUAL_CELLS'}
+
+
+def declared_floor(name):
+    """The lowest y the tracker's collision starts at in PvArrayBlock, in blocks.
+
+    The whole table, not one named shape: the two are a single box from the floor now, and a box that
+    *contains* the sweep is the proposition - it used to have to start exactly where the sweep reached,
+    which only held while the pier had a box of its own underneath.
+    """
+    # Read with check_hitboxes' own paren-balanced reader rather than a second regex: this one stopped at
+    # the first blank line, so a table that ever grows one would have been read short and silently.
+    table = check_hitboxes.scoped(open(ARRAY_BLOCK).read(), SWEPT[name])
+    floors = [float(box.split(',')[1]) for box in re.findall(r'Block\.box\(([^)]*)\)', table)]
+    return min(floors) / 16.0 if floors else None
+
+
+def swept_floor(moving, pivot_y):
+    """How low the turning parts can ever reach: the pivot less the furthest any of them is from it."""
+    radius = max(annulus(face, (0, 1), (0.0, pivot_y))[1]
+                 for group, faces in moving.items() if not group.startswith('rotate_azimuth')
+                 for face in faces)
+    return pivot_y - radius
+
+
 def check(name):
-    pivot_y = PIVOTS[name]
     objects = read_faces(os.path.join(MODELS, name, name + '.obj'))
+    pivot_y = pivot_height(objects, PIVOTS[name])
     fixed = {k: v for k, v in objects.items() if not k.startswith('rotate_')}
     moving = {k: v for k, v in objects.items() if k.startswith('rotate_')}
 
@@ -149,7 +144,7 @@ def check(name):
 
             problems.append('%s sweeps through %s by %.4f' % (moving_name, fixed_name, depth))
 
-    # the azimuth collar turns about the vertical, so its invariant is y and its annulus is
+    # the azimuth collar turns about the vertical
     # in the horizontal plane
     for moving_name, moving_faces in sorted(moving.items()):
         if not moving_name.startswith('rotate_azimuth'):
@@ -173,6 +168,13 @@ def check(name):
               % (closest, PEDESTAL_RADIUS, ', and their heights overlap' if overlaps_y else ''))
         if overlaps_y and closest < PEDESTAL_RADIUS - EPS:
             problems.append('the elevation frame sweeps into the pedestal')
+
+    floor, declared = swept_floor(moving, pivot_y), declared_floor(name)
+    print('  swept    the turning parts reach down to %.2f px, and %s starts at %s'
+          % (floor * 16.0, SWEPT[name], '%.2f' % (declared * 16.0) if declared is not None else 'none'))
+    if declared is None or declared > floor + 0.01 / 16.0:
+        problems.append('%s starts above where the sweep reaches, so a player gets in under the row'
+                        % SWEPT[name])
 
     for problem in problems:
         print('  CLASH    %s' % problem)

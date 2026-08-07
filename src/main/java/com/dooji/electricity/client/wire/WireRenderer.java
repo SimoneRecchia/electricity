@@ -1,11 +1,11 @@
 package com.dooji.electricity.client.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
+import com.dooji.electricity.api.power.ConductorSpec;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.main.registry.ConductorCatalog;
 import com.dooji.electricity.main.wire.WireConnection;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -30,14 +30,14 @@ import net.minecraftforge.fml.common.Mod;
 
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class WireRenderer {
+	/** What a span looks like when this build does not know its conductor. */
 	private static final WireStyle ACTIVE_WIRE = new WireStyle(0, 0, 0, 255);
 	private static final int FULL_BRIGHT = 15728880;
 	private static final double MIN_LENGTH = 0.1;
 	private static final double WIRE_RADIUS = 0.025;
+	/** How round a wire is, straight or sagging: it is the same wire, so it is one figure. */
 	private static final int WIRE_SIDES = 12;
-	private static final int DEFLECTION_SIDES = 8;
 	private static final double DEFLECTION_STEP = 0.25;
-	private static final double SEGMENT_UNIT = 0.1;
 	private static final ResourceLocation WIRE_TEXTURE = new ResourceLocation("minecraft", "block/black_wool");
 
 	private record WireStyle(int red, int green, int blue, int alpha) {
@@ -70,13 +70,60 @@ public class WireRenderer {
 		bufferSource.endBatch();
 	}
 
+	/** The three drawing figures a conductor contributes: how thick, what colour, and how many wires. */
+	private record Conductor(double radius, WireStyle style, double sag, int count, double spacing) {
+	}
+
+	private static final Conductor PLAIN = new Conductor(WIRE_RADIUS, ACTIVE_WIRE,
+			WirePhysics.DEFLECTION_COEFFICIENT, 1, 0.0);
+
+	/** The conductor the player is holding, for the span that follows the cursor before it is placed. */
+	private static Conductor previewConductor() {
+		var player = Minecraft.getInstance().player;
+		if (player != null) {
+			for (var stack : new net.minecraft.world.item.ItemStack[]{player.getMainHandItem(),
+					player.getOffhandItem()}) {
+				if (stack.getItem() instanceof ConductorItem conductor) {
+					int colour = conductor.spec().colour();
+					return new Conductor(conductor.spec().radius(),
+							new WireStyle((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF, 255),
+							conductor.spec().sag(), conductor.spec().subConductors(),
+							conductor.spec().bundleSpacing());
+				}
+			}
+		}
+
+		return PLAIN;
+	}
+
+	private static Conductor conductorOf(WireConnection connection) {
+		ConductorSpec spec = ConductorCatalog.byPath(connection.wireType());
+		if (spec == null) return PLAIN;
+
+		int colour = spec.colour();
+		return new Conductor(spec.radius(),
+				new WireStyle((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF, 255),
+				spec.sag(), spec.subConductors(), spec.bundleSpacing());
+	}
+
+	/** Where each wire of a bundle sits */
+	private static double[][] bundle(int count, double spacing) {
+		double half = spacing * 0.5;
+		return switch (count) {
+			case 2 -> new double[][]{{-half, 0.0}, {half, 0.0}};
+			case 3 -> new double[][]{{-half, -half * 0.58}, {half, -half * 0.58}, {0.0, half * 1.15}};
+			case 4 -> new double[][]{{-half, -half}, {half, -half}, {half, half}, {-half, half}};
+			default -> new double[][]{{0.0, 0.0}};
+		};
+	}
+
 	private static void renderWire(ClientLevel level, WireConnection connection, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos) {
-		Vec3 startConnectionPoint = WireManagerClient.getWirePosition(level, connection.getStartInsulatorId(), connection.getStartBlockPos());
-		Vec3 endConnectionPoint = WireManagerClient.getWirePosition(level, connection.getEndInsulatorId(), connection.getEndBlockPos());
+		Vec3 startConnectionPoint = WireManagerClient.getWirePosition(level, connection.startInsulatorId(), connection.startBlockPos());
+		Vec3 endConnectionPoint = WireManagerClient.getWirePosition(level, connection.endInsulatorId(), connection.endBlockPos());
 
 		if (startConnectionPoint == null || endConnectionPoint == null) return;
 
-		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, ACTIVE_WIRE);
+		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, conductorOf(connection));
 	}
 
 	private static void renderWirePreview(Minecraft minecraft, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos) {
@@ -87,30 +134,36 @@ public class WireRenderer {
 		Vec3 endConnectionPoint = resolvePreviewEndpoint(minecraft, startConnectionPoint);
 		if (endConnectionPoint == null) return;
 
-		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, ACTIVE_WIRE);
+		renderWireSpan(startConnectionPoint, endConnectionPoint, cameraPos, poseStack, bufferSource, FULL_BRIGHT, previewConductor());
 	}
 
-	private static void renderWireSpan(Vec3 start, Vec3 end, Vec3 cameraPos, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style) {
+	private static void renderWireSpan(Vec3 start, Vec3 end, Vec3 cameraPos, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor) {
 		if (start == null || end == null) return;
 
 		Vec3 span = end.subtract(start);
 		if (span.lengthSqr() < MIN_LENGTH * MIN_LENGTH) return;
 
-		poseStack.pushPose();
-		Vec3 viewStart = start.subtract(cameraPos);
-		poseStack.translate(viewStart.x, viewStart.y, viewStart.z);
-
 		TextureAtlasSprite sprite = getWireSprite();
-		if (WirePhysics.shouldUseDeflection(start, end)) {
-			renderDeflectedSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, style, sprite);
-		} else {
-			renderStraightSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, style, sprite);
-		}
+		// One pass a sub-conductor, offset across the span and above it. The offsets are applied inside
+		for (double[] offset : bundle(conductor.count(), conductor.spacing())) {
+			poseStack.pushPose();
+			Vec3 viewStart = start.subtract(cameraPos);
+			poseStack.translate(viewStart.x, viewStart.y, viewStart.z);
 
-		poseStack.popPose();
+			if (WirePhysics.shouldUseDeflection(start, end)) {
+				renderDeflectedSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, conductor,
+						sprite, offset);
+			} else {
+				renderStraightSpan(Vec3.ZERO, span, poseStack, bufferSource, packedLight, conductor,
+						sprite, offset);
+			}
+
+			poseStack.popPose();
+		}
 	}
 
-	private static void renderStraightSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style, TextureAtlasSprite sprite) {
+	private static void renderStraightSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor, TextureAtlasSprite sprite,
+			double[] offset) {
 		Vec3 direction = endVec.subtract(startVec);
 		double distance = direction.length();
 		if (distance < MIN_LENGTH) return;
@@ -122,19 +175,21 @@ public class WireRenderer {
 		double pitch = Math.toDegrees(Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)));
 		poseStack.mulPose(Axis.YP.rotationDegrees((float) yaw));
 		poseStack.mulPose(Axis.XP.rotationDegrees((float) pitch));
+		poseStack.translate(offset[0], offset[1], 0.0);
 		poseStack.scale(1.0f, 1.0f, (float) distance);
 
 		VertexConsumer consumer = bufferSource.getBuffer(RenderType.solid());
-		emitCylinder(consumer, poseStack, packedLight, style, WIRE_RADIUS, WIRE_SIDES, sprite);
+		emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), sprite);
 
 		poseStack.popPose();
 	}
 
-	private static void renderDeflectedSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, WireStyle style, TextureAtlasSprite sprite) {
+	private static void renderDeflectedSpan(Vec3 startVec, Vec3 endVec, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, Conductor conductor, TextureAtlasSprite sprite,
+			double[] offset) {
 		Vec3 direction = endVec.subtract(startVec);
 		double lx = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
 		if (lx < MIN_LENGTH) {
-			renderStraightSpan(startVec, endVec, poseStack, bufferSource, packedLight, style, sprite);
+			renderStraightSpan(startVec, endVec, poseStack, bufferSource, packedLight, conductor, sprite, offset);
 			return;
 		}
 
@@ -145,7 +200,10 @@ public class WireRenderer {
 		poseStack.mulPose(Axis.YP.rotationDegrees((float) yaw));
 
 		double ly = direction.y;
-		double alpha = WirePhysics.DEFLECTION_COEFFICIENT * (1.0 + WirePhysics.LENGTH_COEFFICIENT * lx);
+		poseStack.translate(offset[0], offset[1], 0.0);
+		// How far the span dips, which is the conductor's own figure: a street bundle is hung slack and
+		// sags twice as far as a transmission bundle tensioned to a fifth of its breaking load.
+		double alpha = conductor.sag() * (1.0 + WirePhysics.LENGTH_COEFFICIENT * lx);
 		double a = lx > 0.0 ? (lx - ly / (alpha * lx)) / 2.0 : 0.0;
 
 		VertexConsumer consumer = bufferSource.getBuffer(RenderType.solid());
@@ -165,10 +223,10 @@ public class WireRenderer {
 
 			poseStack.pushPose();
 			poseStack.translate(0, startY, x);
-			poseStack.mulPose(Axis.XP.rotationDegrees(pitchC + 90.0f));
-			poseStack.scale(1.0f, (float) (actualSegmentDistance / SEGMENT_UNIT), 1.0f);
+			poseStack.mulPose(Axis.XP.rotationDegrees(pitchC));
+			poseStack.scale(1.0f, 1.0f, (float) actualSegmentDistance);
 
-			emitCylinderSegment(consumer, poseStack, packedLight, style, WIRE_RADIUS, DEFLECTION_SIDES, sprite);
+			emitCylinder(consumer, poseStack, packedLight, conductor.style(), conductor.radius(), sprite);
 
 			poseStack.popPose();
 			x = nextX;
@@ -177,15 +235,21 @@ public class WireRenderer {
 		poseStack.popPose();
 	}
 
-	private static void emitCylinder(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, int segments, TextureAtlasSprite sprite) {
+	/**
+	 * One wire, a unit length of it, along +z.
+	 *
+	 * Both spans are made of these: a straight one is yawed and pitched onto the span and stretched to its
+	 * whole length, a sagging one is a chain of them, each pitched to the slope of the curve at its own step.
+	 */
+	private static void emitCylinder(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, TextureAtlasSprite sprite) {
 		var pose = poseStack.last();
 		float u0 = sprite.getU(0);
 		float u1 = sprite.getU(16);
 		float v0 = sprite.getV(0);
 		float v1 = sprite.getV(16);
-		for (int i = 0; i < segments; i++) {
-			double angle1 = (2 * Math.PI * i) / segments;
-			double angle2 = (2 * Math.PI * (i + 1)) / segments;
+		for (int i = 0; i < WIRE_SIDES; i++) {
+			double angle1 = (2 * Math.PI * i) / WIRE_SIDES;
+			double angle2 = (2 * Math.PI * (i + 1)) / WIRE_SIDES;
 
 			double x1 = Math.cos(angle1) * wireRadius;
 			double y1 = Math.sin(angle1) * wireRadius;
@@ -208,40 +272,6 @@ public class WireRenderer {
 
 			consumer.vertex(pose.pose(), (float) x2, (float) y2, 0).color(style.red, style.green, style.blue, style.alpha).uv(u1, v0).overlayCoords(0, 10).uv2(packedLight)
 					.normal(pose.normal(), nx2, ny2, 0).endVertex();
-		}
-	}
-
-	private static void emitCylinderSegment(VertexConsumer consumer, PoseStack poseStack, int packedLight, WireStyle style, double wireRadius, int segments, TextureAtlasSprite sprite) {
-		var pose = poseStack.last();
-		float u0 = sprite.getU(0);
-		float u1 = sprite.getU(16);
-		float v0 = sprite.getV(0);
-		float v1 = sprite.getV(16);
-		for (int i = 0; i < segments; i++) {
-			double angle1 = (2 * Math.PI * i) / segments;
-			double angle2 = (2 * Math.PI * (i + 1)) / segments;
-
-			double x1 = Math.cos(angle1) * wireRadius;
-			double z1 = Math.sin(angle1) * wireRadius;
-			double x2 = Math.cos(angle2) * wireRadius;
-			double z2 = Math.sin(angle2) * wireRadius;
-
-			float nx1 = (float) (x1 / wireRadius);
-			float nz1 = (float) (z1 / wireRadius);
-			float nx2 = (float) (x2 / wireRadius);
-			float nz2 = (float) (z2 / wireRadius);
-
-			consumer.vertex(pose.pose(), (float) x1, 0, (float) z1).color(style.red, style.green, style.blue, style.alpha).uv(u0, v0).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx1, 0, nz1).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x1, (float) SEGMENT_UNIT, (float) z1).color(style.red, style.green, style.blue, style.alpha).uv(u0, v1).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx1, 0, nz1).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x2, (float) SEGMENT_UNIT, (float) z2).color(style.red, style.green, style.blue, style.alpha).uv(u1, v1).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx2, 0, nz2).endVertex();
-
-			consumer.vertex(pose.pose(), (float) x2, 0, (float) z2).color(style.red, style.green, style.blue, style.alpha).uv(u1, v0).overlayCoords(0, 10).uv2(packedLight)
-					.normal(pose.normal(), nx2, 0, nz2).endVertex();
 		}
 	}
 
@@ -275,7 +305,6 @@ public class WireRenderer {
 	}
 
 	private static boolean isWireAttachable(BlockEntity blockEntity) {
-		return blockEntity instanceof UtilityPoleBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof PowerBoxBlockEntity
-				|| blockEntity instanceof WindTurbineBlockEntity;
+		return blockEntity instanceof InsulatorHost;
 	}
 }

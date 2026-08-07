@@ -8,37 +8,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 
-/**
- * A tower coming down, over about a second and a half.
- *
- * Minecraft has no structural physics to lose, so a tower that has been built past what
- * it can hold cannot actually buckle. What it can do is fail visibly: the fracture that
- * would run down a real tower is drawn with the crack overlay a block wears while it is
- * being mined, starting at the top and rippling to the foot, and each block shatters
- * when its cracks finish. Ten blocks are cracking at any moment at different depths, so
- * what a player sees is a break travelling down the steel rather than a stack of blocks
- * winking out.
- *
- * Advanced from the server tick rather than by ticking the tower's block entities: a
- * collapse lasts a second and towers stand for days, so paying a tick per block for the
- * whole life of every tower to animate its last moment would be the wrong trade. Nothing
- * here is persisted - a collapse interrupted by a server stopping simply leaves the tower
- * standing, which is a better failure than half a tower saved mid-crack.
- */
+/** A tower coming down, over about a second and a half. */
 public final class TowerCollapse {
 	/** Crack stages a block shows before it breaks, the same ten a pickaxe draws. */
 	private static final int STAGES = 10;
-	/** Ticks each crack stage is held. One, so a block takes half a second to shatter. */
+	/** Ticks each crack stage is held. */
 	private static final int TICKS_PER_STAGE = 1;
 	/** Ticks between one block starting to crack and the next one down starting. */
 	private static final int RIPPLE_TICKS = 1;
-	/**
-	 * Where the ids handed to {@code destroyBlockProgress} start.
-	 *
-	 * That call keys its overlay by breaker id, one position each, so every block cracking
-	 * at once needs an id of its own. Entity ids count up from small numbers, so starting
-	 * high keeps a collapse from erasing the cracks of a player mining nearby.
-	 */
+	/** Where the ids handed to {@code destroyBlockProgress} start. */
 	private static final int BREAKER_ID_BASE = 0x40000000;
 
 	private static final List<TowerCollapse> ACTIVE = new ArrayList<>();
@@ -55,12 +33,7 @@ public final class TowerCollapse {
 		this.firstBreakerId = firstBreakerId;
 	}
 
-	/**
-	 * Starts a tower failing, from its foot upward.
-	 *
-	 * Ignored if that tower is already coming down, so standing on a collapsing tower or
-	 * stacking onto one does not restart the animation or double the sound.
-	 */
+	/** Starts a tower failing, from its foot upward. */
 	public static void begin(ServerLevel level, BlockPos foot, int height) {
 		if (height <= 0) return;
 
@@ -85,7 +58,7 @@ public final class TowerCollapse {
 		level.playSound(null, top, SoundEvents.IRON_GOLEM_DAMAGE, SoundSource.BLOCKS, 1.2f, 0.6f);
 	}
 
-	/** Advances every collapse in progress. Call once per server tick. */
+	/** Advances every collapse in progress. */
 	public static void tickAll() {
 		Iterator<TowerCollapse> collapses = ACTIVE.iterator();
 		while (collapses.hasNext()) {

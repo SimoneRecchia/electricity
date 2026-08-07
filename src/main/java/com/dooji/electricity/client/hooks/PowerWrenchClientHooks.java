@@ -1,25 +1,30 @@
 package com.dooji.electricity.client.hooks;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.MachineShell;
 import com.dooji.electricity.block.MetStationBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
+import com.dooji.electricity.block.PlantControllerBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.TurbineTowerBlock;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.screen.MetStationScreen;
+import com.dooji.electricity.client.screen.PlantControllerScreen;
 import com.dooji.electricity.client.screen.PowerInfoScreen;
 import com.dooji.electricity.client.screen.PvArrayScreen;
 import com.dooji.electricity.client.screen.PvCombinerScreen;
 import com.dooji.electricity.client.screen.PvInverterScreen;
 import com.dooji.electricity.client.screen.WindTurbineScreen;
+import com.dooji.electricity.main.Electricity;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -34,9 +39,27 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.registries.ForgeRegistries;
 
 @OnlyIn(Dist.CLIENT)
 public final class PowerWrenchClientHooks {
+	/**
+	 * Which panel a machine gets.  A machine with none gets the plain readout, which is all there is to say
+	 * about a pole or a junction box - so adding a panel is a line here rather than a branch in a chain.
+	 */
+	private static final Map<Class<?>, Function<BlockPos, Screen>> PANELS = panels();
+
+	private static Map<Class<?>, Function<BlockPos, Screen>> panels() {
+		Map<Class<?>, Function<BlockPos, Screen>> out = new LinkedHashMap<>();
+		out.put(WindTurbineBlockEntity.class, WindTurbineScreen::new);
+		out.put(PvInverterBlockEntity.class, PvInverterScreen::new);
+		out.put(PvArrayBlockEntity.class, PvArrayScreen::new);
+		out.put(PvCombinerBlockEntity.class, PvCombinerScreen::new);
+		out.put(MetStationBlockEntity.class, MetStationScreen::new);
+		out.put(PlantControllerBlockEntity.class, PlantControllerScreen::new);
+		return out;
+	}
+
 	private PowerWrenchClientHooks() {
 	}
 
@@ -62,23 +85,15 @@ public final class PowerWrenchClientHooks {
 
 		target = resolveTarget(mc, target);
 
-		// four machines have control panels of their own; everything else still gets the plain
-		// readout, which is all there is to say about a pole or a junction box
 		BlockEntity blockEntity = mc.level.getBlockEntity(target);
-		if (blockEntity instanceof WindTurbineBlockEntity) {
-			mc.setScreen(new WindTurbineScreen(target));
-		} else if (blockEntity instanceof PvInverterBlockEntity) {
-			mc.setScreen(new PvInverterScreen(target));
-		} else if (blockEntity instanceof PvArrayBlockEntity) {
-			mc.setScreen(new PvArrayScreen(target));
-		} else if (blockEntity instanceof PvCombinerBlockEntity) {
-			mc.setScreen(new PvCombinerScreen(target));
-		} else if (blockEntity instanceof MetStationBlockEntity) {
-			mc.setScreen(new MetStationScreen(target));
-		} else {
-			mc.setScreen(new PowerInfoScreen(target));
+		for (var panel : PANELS.entrySet()) {
+			if (panel.getKey().isInstance(blockEntity)) {
+				mc.setScreen(panel.getValue().apply(target));
+				return true;
+			}
 		}
 
+		mc.setScreen(new PowerInfoScreen(target));
 		return true;
 	}
 
@@ -101,8 +116,7 @@ public final class PowerWrenchClientHooks {
 					Vec3 centerEstimate = Vec3.atCenterOf(cursor);
 					if (eyePosition.distanceToSqr(centerEstimate) > maxDistance) continue;
 
-					BlockEntity blockEntity = mc.level.getBlockEntity(cursor);
-					if (!isElectricBlock(blockEntity)) continue;
+					if (!isMachine(mc.level, cursor)) continue;
 
 					Vec3 hitPoint = ObjRaycaster.pickAnyGeometry(eyePosition, lookDirection, cursor);
 					if (hitPoint == null) continue;
@@ -121,13 +135,7 @@ public final class PowerWrenchClientHooks {
 		return result;
 	}
 
-	/**
-	 * Whether the machine's own geometry is what the player can see, rather than something in front of it.
-	 *
-	 * A machine's collision cells count as the machine. They are what stands between the eye and the wall
-	 * of a cabin at head height - the cabin's own block is at its feet - so without this a wrench worked
-	 * on the bottom metre of a machine and nowhere else.
-	 */
+	/** Whether the machine's own geometry is what the player can see */
 	private static boolean hasLineOfSight(Minecraft mc, Player player, Vec3 start, Vec3 end, BlockPos targetPos) {
 		if (mc.level == null) return false;
 		ClipContext context = new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player);
@@ -136,33 +144,19 @@ public final class PowerWrenchClientHooks {
 		return MachineShell.hostOr(mc.level, hitResult.getBlockPos()).equals(targetPos);
 	}
 
-	/**
-	 * One of this mod's blocks under the crosshair, found by ordinary picking.
-	 *
-	 * A fallback for the blocks the geometry scan above cannot help with, and there are two kinds.
-	 * A turbine tower has no block entity for that scan to find at all. And the photovoltaic blocks
-	 * have real collision that vanilla picking already resolves exactly - a flat array in particular
-	 * is three pixels tall and a ray march at that grazing angle is a poor way to find it when the
-	 * crosshair is already on it.
-	 */
+	/** One of this mod's blocks under the crosshair, found by ordinary picking. */
 	@Nullable
 	private static BlockPos solidBlockUnderCursor(Minecraft mc) {
 		if (mc.level == null || !(mc.hitResult instanceof BlockHitResult hit)) return null;
 
 		BlockPos pos = MachineShell.hostOr(mc.level, hit.getBlockPos());
 		if (mc.level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock) return pos;
-		if (isElectricBlock(mc.level.getBlockEntity(pos))) return pos;
+		if (isMachine(mc.level, pos)) return pos;
 
 		return null;
 	}
 
-	/**
-	 * The block a wrench click should act on.
-	 *
-	 * A tower carries no block entity of its own, and the panel it belongs to is at the top
-	 * of it - often out of reach. Walking up from the hit block means the wrench works
-	 * anywhere on the structure, which is where a player standing at the foot will use it.
-	 */
+	/** The block a wrench click should act on. */
 	private static BlockPos resolveTarget(Minecraft mc, BlockPos hit) {
 		if (mc.level == null) return hit;
 		if (!(mc.level.getBlockState(hit).getBlock() instanceof TurbineTowerBlock)) return hit;
@@ -171,9 +165,17 @@ public final class PowerWrenchClientHooks {
 		return turbine != null ? turbine : hit;
 	}
 
-	private static boolean isElectricBlock(BlockEntity blockEntity) {
-		return blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof UtilityPoleBlockEntity
-				|| blockEntity instanceof PowerBoxBlockEntity || blockEntity instanceof PvInverterBlockEntity || blockEntity instanceof PvArrayBlockEntity
-				|| blockEntity instanceof MetStationBlockEntity || blockEntity instanceof PvCombinerBlockEntity;
+	/**
+	 * One of this mod's machines: a block entity whose block is registered under this namespace.
+	 *
+	 * It used to be eight block entities named one by one, and the mod has thirteen - so a transformer, a
+	 * switch, a lattice tower and a ground run could not be pointed at with the wrench at all, although each
+	 * of them already answered {@code getCurrentPower()}.  Asking the registry cannot go stale.
+	 */
+	private static boolean isMachine(Level level, BlockPos pos) {
+		if (level.getBlockEntity(pos) == null) return false;
+
+		ResourceLocation id = ForgeRegistries.BLOCKS.getKey(level.getBlockState(pos).getBlock());
+		return id != null && Electricity.MOD_ID.equals(id.getNamespace());
 	}
 }

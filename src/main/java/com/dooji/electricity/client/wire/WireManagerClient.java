@@ -1,10 +1,7 @@
 package com.dooji.electricity.client.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.main.wire.WireConnection;
+import com.dooji.electricity.wire.InsulatorHost;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
@@ -30,18 +27,18 @@ public class WireManagerClient {
 		clearPendingConnection();
 		if (connections == null) return;
 		for (WireConnection connection : connections) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			WIRE_CONNECTIONS.put(key, connection);
 		}
 	}
 
 	public static void addWireConnection(WireConnection connection) {
-		String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+		String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 		WIRE_CONNECTIONS.put(key, connection);
 	}
 
 	public static void removeWireConnection(WireConnection connection) {
-		String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+		String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 		WIRE_CONNECTIONS.remove(key);
 	}
 
@@ -115,29 +112,21 @@ public class WireManagerClient {
 		}
 	}
 
+	/**
+	 * Where one end of a span is, asked of the machine that carries the fitting.
+	 *
+	 * This was an {@code instanceof} chain over the pole, the cabin, the kiosk and the turbine, with the same
+	 * loop written out four times - so a span to a lattice tower, a transformer, a switch, an inverter or a
+	 * ground-laid run resolved to null and <b>was never drawn</b>. The server had saved it and the wire simply
+	 * did not appear. {@link InsulatorHost} is the one definition of "a wire can hang here", and it is the
+	 * same lesson as WireInteractionEvents.wireable.
+	 */
 	private static Vec3 resolveInsulatorPosition(BlockEntity blockEntity, int insulatorId) {
-		if (blockEntity == null) return null;
+		if (!(blockEntity instanceof InsulatorHost host)) return null;
 
-		if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			int[] ids = pole.getInsulatorIds();
-			for (int i = 0; i < ids.length; i++) {
-				if (ids[i] == insulatorId) return pole.getWirePosition(i);
-			}
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			int[] ids = cabin.getInsulatorIds();
-			for (int i = 0; i < ids.length; i++) {
-				if (ids[i] == insulatorId) return cabin.getWirePosition(i);
-			}
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
-			int[] ids = powerBox.getInsulatorIds();
-			for (int i = 0; i < ids.length; i++) {
-				if (ids[i] == insulatorId) return powerBox.getWirePosition(i);
-			}
-		} else if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			int[] ids = turbine.getInsulatorIds();
-			for (int i = 0; i < ids.length; i++) {
-				if (ids[i] == insulatorId) return turbine.getWirePosition(i);
-			}
+		int[] ids = host.getInsulatorIds();
+		for (int index = 0; index < ids.length; index++) {
+			if (ids[index] == insulatorId) return host.getWirePosition(index);
 		}
 
 		return null;

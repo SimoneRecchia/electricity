@@ -7,31 +7,14 @@ import com.dooji.electricity.main.network.payloads.SolarControlPayload;
 import com.dooji.electricity.main.registry.InverterCatalog;
 import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
-/**
- * The inverter's panel: the plant, as its own control room would show it.
- *
- * <h2>What it is trying to answer</h2>
- *
- * One question, and it is the question every photovoltaic plant operator asks first: why is it not making
- * more? There are five answers and they look identical from outside - the sun is not out, the array is
- * offering more than the machine can pass, the air is too hot, somebody set a limit, or somebody stopped
- * it. So the two bars are drawn with what was *available* behind what was *delivered*, which turns every
- * one of those into a visible gap rather than a number to compare against another number.
- *
- * The DC bar behind the AC bar is the same idea one layer down. When the machine is clipping, the DC bar
- * shows the array's offer running past the point the operating point was pulled back to - which is what
- * clipping physically is, and it is the only place in the game a player can see it happen.
- */
-public class PvInverterScreen extends PlantScreen {
+/** The inverter's panel: the plant */
+public class PvInverterScreen extends PlantScreen<PvInverterBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/pv_inverter.png");
 	private static final int WIDTH = 288;
 	private static final int HEIGHT = 252;
@@ -48,18 +31,18 @@ public class PvInverterScreen extends PlantScreen {
 	private Button powerFactorButton;
 	private LimitSlider limitSlider;
 
-	/** The power factors the button steps through: unity, and the two ends real grid codes ask for. */
+	/** The power factors the button steps through: unity */
 	private static final double[] POWER_FACTORS = {1.0, 0.95, 0.90, 0.85, 0.80};
 
 	public PvInverterScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.pv_inverter.title"), TEXTURE, WIDTH, HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.pv_inverter.title"), TEXTURE, WIDTH, HEIGHT, targetPos, PvInverterBlockEntity.class);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		double limitFraction = inverter == null ? 1.0 : inverter.getActivePowerLimit() / inverter.spec().acPowerKw();
 		limitSlider = addRenderableWidget(new LimitSlider(leftPos + 11, topPos + 200, WIDTH - 22, 20, limitFraction));
 
@@ -77,19 +60,14 @@ public class PvInverterScreen extends PlantScreen {
 	@Override
 	public void tick() {
 		super.tick();
-		if (inverter() != null) {
+		if (machine() != null) {
 			refreshWidgets();
 		}
 	}
 
-	/**
-	 * Keeps the buttons telling the truth.
-	 *
-	 * Their labels come from the machine rather than from what was last clicked, so a plant stopped by a
-	 * computer or by redstone while the panel is open shows it.
-	 */
+	/** Keeps the buttons telling the truth. */
 	private void refreshWidgets() {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		stopButton.setMessage(Component.translatable(inverter.isStoppedByPlayer()
@@ -104,14 +82,12 @@ public class PvInverterScreen extends PlantScreen {
 		powerFactorButton.setTooltip(Tooltip.create(Component.translatable("screen.electricity.pv_inverter.pf.tip")));
 
 		// while a drag is in progress the handle is the player's, not the machine's
-		if (!limitSlider.beingDragged) {
-			limitSlider.syncTo(inverter.getActivePowerLimit() / inverter.spec().acPowerKw());
-		}
+		limitSlider.syncTo(inverter.getActivePowerLimit() / inverter.spec().acPowerKw());
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		drawNameplate(graphics, inverter);
@@ -137,13 +113,7 @@ public class PvInverterScreen extends PlantScreen {
 		separator(graphics, FIRST_SEPARATOR_Y);
 	}
 
-	/**
-	 * Why the plant is or is not making what it could.
-	 *
-	 * The order is the order an operator would want to be told: a stop first, because that is somebody's
-	 * decision and cancels everything below it; then the heat, because that is the one a bigger inverter
-	 * would not have fixed; then clipping, which is expected; then a setpoint; then simply night.
-	 */
+	/** Why the plant is or is not making what it could. */
 	private void drawState(GuiGraphics graphics, PvInverterBlockEntity inverter) {
 		String key;
 		int colour;
@@ -186,13 +156,7 @@ public class PvInverterScreen extends PlantScreen {
 		state(graphics, Component.translatable(key), colour, 46);
 	}
 
-	/**
-	 * Alternating current out, against what the machine could have passed.
-	 *
-	 * The ghost behind is the array's offer converted at full efficiency, so the gap between the two bars
-	 * is exactly what is being thrown away - to clipping, to heat, or to a setpoint. The notch is the
-	 * setpoint itself, drawn on the scale it limits.
-	 */
+	/** Alternating current out, against what the machine could have passed. */
 	private void drawPower(GuiGraphics graphics, PvInverterBlockEntity inverter) {
 		InverterSpec spec = inverter.spec();
 		double rated = spec.acPowerKw();
@@ -207,13 +171,7 @@ public class PvInverterScreen extends PlantScreen {
 		notch(graphics, AC_BAR_Y, barWidth(inverter.getActivePowerLimit() / rated), 0xFF202020);
 	}
 
-	/**
-	 * The direct current side, on the machine's own input rating.
-	 *
-	 * Two bars again, and the gap here is the one that says clipping rather than anything else: the ghost
-	 * is what the modules would give at their maximum power point and the filled bar is what the inverter
-	 * has actually pulled them down to.
-	 */
+	/** The direct current side, on the machine's own input rating. */
 	private void drawDc(GuiGraphics graphics, PvInverterBlockEntity inverter) {
 		InverterSpec spec = inverter.spec();
 		double scale = spec.maxDcPowerKw();
@@ -227,13 +185,7 @@ public class PvInverterScreen extends PlantScreen {
 		notch(graphics, DC_BAR_Y, barWidth(spec.acPowerKw() / scale), 0xFF202020);
 	}
 
-	/**
-	 * The cabinet, against the two temperatures that matter to it.
-	 *
-	 * Zones rather than a bare number, because a bare number cannot say that 44 degrees is fine and 46 is
-	 * costing output. The scale runs to the machine's own maximum, so the same gauge reads correctly for a
-	 * wall-mounted 10 kW machine and a container-sized central one.
-	 */
+	/** The cabinet, against the two temperatures that matter to it. */
 	private void drawThermal(GuiGraphics graphics, PvInverterBlockEntity inverter) {
 		InverterSpec spec = inverter.spec();
 		double scale = spec.maxAmbientC();
@@ -267,7 +219,7 @@ public class PvInverterScreen extends PlantScreen {
 	}
 
 	private void cyclePowerFactor() {
-		PvInverterBlockEntity inverter = inverter();
+		PvInverterBlockEntity inverter = machine();
 		if (inverter == null) return;
 
 		double current = inverter.powerFactor();
@@ -288,21 +240,8 @@ public class PvInverterScreen extends PlantScreen {
 		ElectricityNetworking.INSTANCE.sendToServer(SolarControlPayload.of(targetPos, action));
 	}
 
-	private PvInverterBlockEntity inverter() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof PvInverterBlockEntity inverter) return inverter;
 
-		return null;
-	}
-
-	/**
-	 * What this cabinet's direct-current terminals actually are.
-	 *
-	 * The one thing a player cannot see from outside and has to know before laying a single metre of
-	 * cable: a machine with plug terminals takes strings, a machine with busbars takes a combiner's
-	 * trunk, and the central one takes no string at all until a box is fitted into it. It used to be
-	 * knowable only by trying, and a click that appears to do nothing is the worst answer available.
-	 */
+	/** What this cabinet's direct-current terminals actually are. */
 	private static String terminalsKey(PvInverterBlockEntity inverter) {
 		InverterSpec spec = inverter.spec();
 		if (spec.stringTerminals()) {
@@ -316,57 +255,22 @@ public class PvInverterScreen extends PlantScreen {
 				: "screen.electricity.pv_inverter.terminals.busbars";
 	}
 
-	@Override
-	protected BlockEntity blockEntity() {
-		return inverter();
-	}
-
-	/**
-	 * The curtailment setpoint.
-	 *
-	 * Sends on release rather than on every pixel of travel, because dragging across the whole range would
-	 * otherwise be a hundred packets and a hundred block updates for one decision.
-	 */
-	private class LimitSlider extends AbstractSliderButton {
-		private boolean beingDragged;
-
+	/** The curtailment setpoint. */
+	private class LimitSlider extends SetpointSlider {
 		private LimitSlider(int x, int y, int width, int height, double fraction) {
-			super(x, y, width, height, Component.empty(), Mth.clamp(fraction, 0.0, 1.0));
-			updateMessage();
-		}
-
-		private void syncTo(double fraction) {
-			double clamped = Mth.clamp(fraction, 0.0, 1.0);
-			if (Math.abs(clamped - value) < 1.0e-4) return;
-
-			value = clamped;
-			updateMessage();
+			super(x, y, width, height, fraction);
 		}
 
 		@Override
 		protected void updateMessage() {
-			PvInverterBlockEntity inverter = inverter();
+			PvInverterBlockEntity inverter = machine();
 			double rated = inverter == null ? 1.0 : inverter.spec().acPowerKw();
 			setMessage(Component.translatable("screen.electricity.pv.limit", power(value * rated), fmt("%.0f", value * 100.0)));
 		}
 
 		@Override
-		protected void applyValue() {
-			// nothing until the drag ends, see onRelease
-		}
-
-		@Override
-		public void onClick(double mouseX, double mouseY) {
-			beingDragged = true;
-			super.onClick(mouseX, mouseY);
-		}
-
-		@Override
-		public void onRelease(double mouseX, double mouseY) {
-			super.onRelease(mouseX, mouseY);
-			beingDragged = false;
-
-			PvInverterBlockEntity inverter = inverter();
+		protected void commit() {
+			PvInverterBlockEntity inverter = machine();
 			if (inverter == null) return;
 
 			ElectricityNetworking.INSTANCE.sendToServer(new SolarControlPayload(targetPos,

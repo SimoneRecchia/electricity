@@ -1,15 +1,23 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "MIM",
     "PWP",
     "MIM"
   ],
   "key": {
-    "M": { "item": "electricity:metal_casing" },
-    "I": { "item": "electricity:insulator" },
-    "P": { "item": "electricity:circuit_board" },
-    "W": { "item": "electricity:wire" }
+    "M": {
+      "item": "electricity:metal_casing"
+    },
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "P": {
+      "item": "electricity:circuit_board"
+    },
+    "W": {
+      "item": "electricity:busbar"
+    }
   },
   "result": {
     "item": "electricity:electric_cabin"

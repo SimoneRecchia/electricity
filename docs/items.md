@@ -21,7 +21,6 @@ graph LR
   POLE -->|wire| CAB[Electric cabin]
   CAB -->|wire| BOX[Power box]
   BOX -->|Forge Energy| ANY[Any FE machine]
-  BOX --> LAMP[Electric lamp]
   T[Wind turbine] -->|on a tower| TOWER[Turbine tower]
   T -->|insulator + wire| POLE
   MET[Met station] -.->|irradiance, wind, temperature| A
@@ -54,7 +53,6 @@ air and module temperature, wind, snow — and one mast serves a whole plant.
 | Power Wrench | right-click any machine to read it: nameplate, state, what it is connected to |
 | Wire | joins two insulators, which is how the AC side is built |
 | Weather Tablet | storms and wind, in the hand |
-| Electricity Workbench | the only bench that crafts the mod's components. The gate between iron and a power station |
 
 ### Direct current
 

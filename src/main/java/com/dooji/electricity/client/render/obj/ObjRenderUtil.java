@@ -1,11 +1,12 @@
 package com.dooji.electricity.client.render.obj;
 
+import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.client.render.obj.ObjTransforms.Transform;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -21,29 +22,26 @@ public final class ObjRenderUtil {
 	private ObjRenderUtil() {
 	}
 
-	public static boolean withAlignedPose(BlockEntity entity, PoseStack poseStack, MultiBufferSource bufferSource, Vec3 cameraPos, double maxDistanceSq,
-			Function<BlockState, Direction> facingExtractor, FacingRotationFunction rotationFunction, ObjRenderAction action) {
-		if (entity == null || action == null) return false;
-
+	/** Puts one machine's own frame on the stack - turned onto its facing, then by whatever it carries - and draws it. */
+	public static void withAlignedPose(BlockEntity entity, PoseStack poseStack, Vec3 cameraPos, double maxDistanceSq,
+			Function<BlockState, Direction> facingExtractor, Direction authored, BiConsumer<ObjRenderContext, PoseStack> action) {
 		var level = entity.getLevel();
-		if (level == null) return false;
+		if (level == null) return;
 
 		BlockPos pos = entity.getBlockPos();
-		if (cameraPos.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > maxDistanceSq) {
-			return false;
-		}
+		if (cameraPos.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > maxDistanceSq) return;
 
 		BlockState blockState = entity.getBlockState();
 		var block = blockState.getBlock();
-		if (!ObjBlockRegistry.hasModel(block)) return false;
+		if (!ObjBlockRegistry.hasModel(block)) return;
 
 		ResourceLocation modelLocation = ObjBlockRegistry.getModelLocation(block);
 		ObjModel model = ObjLoader.getModel(modelLocation);
-		if (model == null) return false;
+		if (model == null) return;
 
 		ResourceLocation texture = ObjBlockRegistry.getTextureLocation(block);
 		Direction facing = facingExtractor != null ? facingExtractor.apply(blockState) : null;
-		float facingRotation = facing != null && rotationFunction != null ? rotationFunction.rotation(facing) : 0.0f;
+		float facingRotation = facing == null || authored == null ? 0.0f : ModelFacing.degrees(authored, facing);
 		Transform transform = ObjTransforms.resolve(entity);
 		int packedLight = LevelRenderer.getLightColor(level, pos);
 
@@ -63,8 +61,7 @@ public final class ObjRenderUtil {
 			poseStack.mulPose(Axis.XP.rotationDegrees(transform.pitch()));
 		}
 
-		action.render(new ObjRenderContext(model, texture, packedLight), poseStack, bufferSource);
+		action.accept(new ObjRenderContext(model, texture, packedLight), poseStack);
 		poseStack.popPose();
-		return true;
 	}
 }

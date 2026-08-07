@@ -1,26 +1,25 @@
 package com.dooji.electricity.client;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.block.ElectricCabinRenderer;
 import com.dooji.electricity.client.render.block.MetStationRenderer;
+import com.dooji.electricity.client.render.block.SwitchgearRenderer;
+import com.dooji.electricity.client.render.block.LatticeTowerRenderer;
+import com.dooji.electricity.client.render.block.PlantControllerRenderer;
 import com.dooji.electricity.client.render.block.PowerBoxRenderer;
+import com.dooji.electricity.client.render.block.TransformerRenderer;
 import com.dooji.electricity.client.render.block.PvArrayRenderer;
 import com.dooji.electricity.client.render.block.PvCombinerRenderer;
 import com.dooji.electricity.client.render.block.PvInverterRenderer;
 import com.dooji.electricity.client.render.block.UtilityPoleRenderer;
 import com.dooji.electricity.client.render.block.WindTurbineRenderer;
-import com.dooji.electricity.client.screen.WorkbenchScreen;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.main.Electricity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -43,18 +42,21 @@ public class ElectricityClient {
 		MinecraftForge.EVENT_BUS.addListener(ElectricityClient::onClientDisconnect);
 
 		setupRenderers();
-		event.enqueueWork(() -> MenuScreens.register(Electricity.WORKBENCH_MENU.get(), WorkbenchScreen::new));
 	}
 
 	private static void setupRenderers() {
 		UtilityPoleRenderer.init();
 		ElectricCabinRenderer.init();
 		PowerBoxRenderer.init();
+		LatticeTowerRenderer.init();
+		TransformerRenderer.init();
 		WindTurbineRenderer.init();
 		PvArrayRenderer.init();
 		PvInverterRenderer.init();
 		PvCombinerRenderer.init();
 		MetStationRenderer.init();
+		PlantControllerRenderer.init();
+		SwitchgearRenderer.init();
 	}
 
 	private static void onClientDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
@@ -87,15 +89,7 @@ public class ElectricityClient {
 		var level = Minecraft.getInstance().level;
 		if (level == null) return;
 
-		var blockEntity = level.getBlockEntity(payload.blockPos());
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			turbine.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			cabin.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			pole.setCurrentPower(payload.power());
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
-			powerBox.setCurrentPower(payload.power());
-		}
+		// the same figure the server delivered, so what a wrench reads on the client is what flowed
+		if (level.getBlockEntity(payload.blockPos()) instanceof InsulatorHost host) host.deliverPower(payload.power());
 	}
 }

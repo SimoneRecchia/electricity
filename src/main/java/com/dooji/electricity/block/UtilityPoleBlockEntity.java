@@ -3,9 +3,12 @@ package com.dooji.electricity.block;
 import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
+import com.dooji.electricity.wire.InsulatorHost;
+import com.dooji.electricity.wire.InsulatorPartHelper;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -26,7 +29,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class UtilityPoleBlockEntity extends BlockEntity {
+public class UtilityPoleBlockEntity extends BlockEntity implements InsulatorHost {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 	private float offsetX = 0.0f;
@@ -97,71 +100,52 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 	}
 
 	private Vec3 calculateOrientedInsulatorCenter(String insulatorGroup) {
-		try {
-			Vector3f localCenter = ObjBoundingBoxRegistry.getCenterSafe(getBlockState().getBlock(), insulatorGroup);
-			if (localCenter == null) return null;
+		// the top of the porcelain, which is where a pin insulator's groove is and where the tie holds the
+		// conductor - the box's centre put every span halfway down the shed stack
+		Vector3f top = ObjBoundingBoxRegistry.getTopSafe(getBlockState().getBlock(), insulatorGroup);
+		if (top == null) return null;
 
-			Vector3f facingRotated = applyFacingRotation(localCenter);
-			facingRotated.add(-offsetX, offsetY, -offsetZ);
-
-			Vector3f rotatedCenter = applyYawPitchRotation(facingRotated, yaw, pitch);
-
-			Vec3 worldPos = new Vec3(rotatedCenter.x, rotatedCenter.y, rotatedCenter.z);
-			worldPos = worldPos.add(Vec3.atLowerCornerOf(getBlockPos())).add(0.5, 0, 0.5);
-
-			return worldPos;
-		} catch (Exception e) {
-			return null;
-		}
+		// the same quarter turn the renderer poses the model by and the cells are turned by
+		Vec3 turned = ModelFacing.turned(new Vec3(top), UtilityPoleBlock.AUTHORED,
+				getBlockState().getValue(UtilityPoleBlock.FACING));
+		return leaned(turned.add(-offsetX, offsetY, -offsetZ))
+				.add(Vec3.atLowerCornerOf(getBlockPos())).add(0.5, 0, 0.5);
 	}
 
-	private Vector3f applyFacingRotation(Vector3f point) {
-		Vector3f result = new Vector3f(point);
-		var facing = getBlockState().getValue(UtilityPoleBlock.FACING);
-
-		float facingRotation = switch (facing) {
-			case EAST -> 180.0f;
-			case SOUTH -> 270.0f;
-			case WEST -> 0.0f;
-			default -> 90.0f;
-		};
-
-		if (facingRotation != 0) {
-			float cosYaw = (float) Math.cos(Math.toRadians(facingRotation));
-			float sinYaw = (float) Math.sin(Math.toRadians(facingRotation));
-			float x = result.x * cosYaw + result.z * sinYaw;
-			float z = -result.x * sinYaw + result.z * cosYaw;
-			result.x = x;
-			result.z = z;
-		}
-
-		return result;
+	/** The lean the player has dialled into this pole: pitch about x, then yaw about y, both in radians. */
+	private Vec3 leaned(Vec3 point) {
+		return point.xRot(pitch).yRot(yaw);
 	}
 
-	private Vector3f applyYawPitchRotation(Vector3f point, float yawRadians, float pitchRadians) {
-		Vector3f result = new Vector3f(point);
-
-		if (pitchRadians != 0) {
-			float cosPitch = (float) Math.cos(-pitchRadians);
-			float sinPitch = (float) Math.sin(-pitchRadians);
-			float y = result.y * cosPitch - result.z * sinPitch;
-			float z = result.y * sinPitch + result.z * cosPitch;
-			result.y = y;
-			result.z = z;
-		}
-
-		if (yawRadians != 0) {
-			float cosYaw = (float) Math.cos(yawRadians);
-			float sinYaw = (float) Math.sin(yawRadians);
-			float x = result.x * cosYaw + result.z * sinYaw;
-			float z = -result.x * sinYaw + result.z * cosYaw;
-			result.x = x;
-			result.z = z;
-		}
-
-		return result;
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_UTILITY_POLE;
 	}
 
+	/**
+	 * A street bundle or a medium-voltage line, which is what a pole is built to carry.
+	 *
+	 * Not transmission: a 400 kV quad bundle is 1.7 m between sub-conductors and needs 3.5 m of clearance to
+	 * the ground. That goes on a tower, and this is the rule that says so.
+	 */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() != ConductorSpec.VoltageClass.HIGH;
+	}
+
+	/** A pole carries a line on to the next pole, to a kiosk, or into a run laid on the ground. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof UtilityPoleBlockEntity || other instanceof PowerBoxBlockEntity
+				|| other instanceof GroundConductorBlockEntity;
+	}
+
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
+	}
+
+	@Override
 	public Vec3 getWirePosition(int index) {
 		if (index >= 0 && index < wirePositions.length) return wirePositions[index];
 		return Vec3.atCenterOf(getBlockPos());
@@ -173,11 +157,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	public void setOffsetX(float offsetX) {
 		this.offsetX = offsetX;
-		updateWirePositions();
-		setChanged();
-		if (level != null) {
-			level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-		}
+		geometryMoved();
 	}
 
 	public float getOffsetY() {
@@ -186,11 +166,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	public void setOffsetY(float offsetY) {
 		this.offsetY = offsetY;
-		updateWirePositions();
-		setChanged();
-		if (level != null) {
-			level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-		}
+		geometryMoved();
 	}
 
 	public float getOffsetZ() {
@@ -199,11 +175,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	public void setOffsetZ(float offsetZ) {
 		this.offsetZ = offsetZ;
-		updateWirePositions();
-		setChanged();
-		if (level != null) {
-			level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-		}
+		geometryMoved();
 	}
 
 	public float getYaw() {
@@ -212,11 +184,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	public void setYaw(float yaw) {
 		this.yaw = yaw;
-		updateWirePositions();
-		setChanged();
-		if (level != null) {
-			level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-		}
+		geometryMoved();
 	}
 
 	public float getPitch() {
@@ -233,15 +201,16 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 
 	public void setPitch(float pitch) {
 		this.pitch = pitch;
-		updateWirePositions();
+		geometryMoved();
+	}
+
+	/** Every dialled-in figure moves the fittings, so the wires are re-measured and the client told. */
+	private void geometryMoved() {
+		initializeWirePositions();
 		setChanged();
 		if (level != null) {
 			level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
 		}
-	}
-
-	private void updateWirePositions() {
-		initializeWirePositions();
 	}
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
@@ -284,7 +253,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 			generateInsulatorIds();
 		}
 
-		updateWirePositions();
+		initializeWirePositions();
 	}
 
 	@Override
@@ -325,7 +294,7 @@ public class UtilityPoleBlockEntity extends BlockEntity {
 			}
 		}
 
-		updateWirePositions();
+		initializeWirePositions();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
 			InsulatorLookup.register(this);
 			WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());

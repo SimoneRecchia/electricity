@@ -5,28 +5,16 @@ import com.dooji.electricity.block.PvCombinerBlockEntity;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.registry.CombinerCatalog;
 import java.util.Locale;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
-/**
- * The combiner box's panel: how full it is, what it is sending, and what it turned away.
- *
- * Shorter than the other panels because a combiner box is switchgear rather than a machine - it makes
- * nothing, decides nothing, and the only question anybody asks of one is whether the group behind it is
- * on. Which is why the state line is the largest thing on it.
- *
- * The refusal line is the one that earns its place. A box that has left a row out has done so for one of
- * four reasons off its own datasheet, and three of them are invisible from outside: a player who has run
- * the cable correctly and got nothing needs to be told it is the fuses and not the wiring.
- */
+/** The combiner box's panel: how full it is, what it is sending, and what it turned away. */
 @OnlyIn(Dist.CLIENT)
-public class PvCombinerScreen extends PlantScreen {
+public class PvCombinerScreen extends PlantScreen<PvCombinerBlockEntity> {
 	private static final ResourceLocation PANEL = new ResourceLocation(Electricity.MOD_ID, "textures/gui/pv_combiner.png");
 
 	private static final int WIDTH = 288;
@@ -34,13 +22,7 @@ public class PvCombinerScreen extends PlantScreen {
 	private static final int WAYS_BAR_Y = 72;
 	private static final int SEPARATOR_Y = 40;
 	private static final int SECOND_SEPARATOR_Y = 88;
-	/**
-	 * Baseline of each line of text, and they are constants for one reason.
-	 *
-	 * The state line and the ways row were both written at 48 and drew straight through each other -
-	 * a collision no amount of measuring the *width* of a string will catch, and one that read as a
-	 * corrupted panel rather than as a mistake. Named, spaced ten apart, and now checked.
-	 */
+	/** Baseline of each line of text, and they are constants for one reason. */
 	private static final int STATE_Y = 46;
 	private static final int WAYS_Y = 60;
 	private static final int BUS_Y = 94;
@@ -48,20 +30,13 @@ public class PvCombinerScreen extends PlantScreen {
 	private static final int OUTPUT_Y = 114;
 
 	public PvCombinerScreen(BlockPos pos) {
-		super(Component.translatable("screen.electricity.pv_combiner.title"), PANEL, WIDTH, HEIGHT, pos);
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return null;
-
-		return mc.level.getBlockEntity(targetPos) instanceof PvCombinerBlockEntity combiner ? combiner : null;
+		super(Component.translatable("screen.electricity.pv_combiner.title"), PANEL, WIDTH, HEIGHT, pos, PvCombinerBlockEntity.class);
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		if (!(blockEntity() instanceof PvCombinerBlockEntity combiner)) return;
+		PvCombinerBlockEntity combiner = machine();
+		if (combiner == null) return;
 
 		CombinerSpec spec = combiner.spec();
 		if (spec == null) return;
@@ -87,12 +62,7 @@ public class PvCombinerScreen extends PlantScreen {
 				: "screen.electricity.pv_combiner.unwired"), OUTPUT_Y);
 	}
 
-	/**
-	 * The one line worth reading at a glance, in the order the answers matter.
-	 *
-	 * Isolated first, because that is a thing a player did on purpose and every other reading follows
-	 * from it. Then no inverter, then the refusal, then plain running.
-	 */
+	/** The one line worth reading at a glance, in the order the answers matter. */
 	private void drawState(GuiGraphics graphics, PvCombinerBlockEntity combiner) {
 		if (combiner.isolated()) {
 			state(graphics, Component.translatable("screen.electricity.pv_combiner.state.isolated"), AMBER, STATE_Y);

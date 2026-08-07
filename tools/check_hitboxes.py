@@ -1,61 +1,47 @@
 #!/usr/bin/env python3
-"""Collision cut from the model, and the two ways it goes wrong.
+"""Collision cut from the model, against what the block declares.
 
-    python3 tools/check_hitboxes.py           # what the Java declares against what the models draw
-    python3 tools/check_hitboxes.py --java    # the same tables, ready to paste into the blocks
+    python3 tools/check_hitboxes.py           # compare
+    python3 tools/check_hitboxes.py --java    # print the tables, ready to paste
 
-Why a script rather than a look
--------------------------------
-Because one of these faults is invisible until you walk into it and the other is invisible until you
-walk into nothing. An electric cabin is drawn a block wide, two and a bit deep and two and a half
-tall; a utility pole is six tall with four-block arms. Collide with either as though it were a stack of
-whole cubes and you get both faults at once: a player stands a third of a block out past the eave, on
-air, and bumps into thin air beside the door.
+The model is the authority: every group a machine draws, clipped to each cell it reaches into.
 
-So the model is the authority. A machine's collision is cut from its own geometry - every group it
-draws, clipped to each block cell it reaches into - and this is what says the Java and the OBJ still
-agree, to a hundredth of a pixel.
+Tables to know about.  MOVING is what gets no collision (markers, moving parts, cable stubs).  MIN_OWN
+and MIN_CLAIM are the thresholds - a box in the machine's own cell is free, claiming the cell next door
+costs the player that cell.  SWEPT and ELSEWHERE are what is not compared, and why.  MODEL_TABLE scopes
+the search when a block derives other shapes from one table.  RECTANGLES is what a machine's collision is
+made of.
 
-What is left out of a body, and why
------------------------------------
-``pivot_`` and ``rotate_`` groups. A pivot is one point, a marker for the renderer to turn something
-about. A rotate group is a part that moves - a tracker's panel, an inverter's fan, an anemometer's cups
-- and a block's collision cannot move with it, so a moving part gets none of its own and its machine
-keeps a shape big enough for wherever the part can swing to. Those machines are listed in ``SWEPT``.
-
-How small is too small
-----------------------
-Two thresholds, and what separates them is what a box costs. A box inside the machine's own block is
-free, so a pixel of thickness is enough to keep it. Claiming the cell next door costs the player that
-whole cell - it becomes a block they can no longer build in - so a cell is only claimed when the
-machine puts at least ``MIN_CLAIM`` pixels of itself into it. Once a cell is claimed the cheap
-threshold applies inside it, which is deliberate: an insulator standing on a claimed crossarm should
-not have its bottom pixel and a half cut off and float.
-
-Under the claim threshold a machine keeps its edge to itself. A cabin's roof overhangs the cell beside
-it by nine tenths of a pixel and a power box's plinth hangs one and seven tenths below its own block;
-taking a cubic metre of the world away for either would cost more than the ledge it saves.
+There is no table for a machine whose *collision* changes with its state, and that is a decision: the
+inverter used to need one, to prove its direct-current compartment could be taken back out of the shape,
+and now that the cabinet is one rectangle the compartment is 0.6 px of its front face.  A machine that
+grows a part a player can walk into would need it again.
 """
 
 import collections
 import glob
+import math
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import objlib                                                                    # noqa: E402
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'electricity', 'models')
 BLOCKS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'block')
 RENDERERS = os.path.join('src', 'main', 'java', 'com', 'dooji', 'electricity', 'client', 'render', 'block')
 
-# Groups that are a marker or a moving part rather than a body.
-MOVING = ('pivot_', 'rotate_')
+# Groups that are a marker, a moving part, or something that is only sometimes there.
+# 'flag_' is a breaker's position indicator: two plates in one place, one drawn per state, and both far
+# under MIN_OWN anyway.
+MOVING = ('pivot_', 'rotate_', 'harness', 'entry', 'flag_')
 
-# Everything below is in pixels, the sixteenths the game itself is authored in.
-# How thick a box has to be in every axis to be collision at all, in the machine's own cell and in one
-# it would have to claim.
-MIN_OWN = 1.0
+# Everything below is in pixels
+MIN_OWN = 0.25
 MIN_CLAIM = 2.0
-# A gap this small is a seam in the model rather than a step, and the two boxes are merged. The cabin's
+# A gap this small is a seam in the model rather than a step, and the two boxes are merged.
 # roof sits two thousandths of a block above its body, which is a thirtieth of a pixel.
 SEAM = 0.1
 # What counts as the same number, once the tables have been rounded for printing.
@@ -67,11 +53,39 @@ BLOCK_CLASS = {
     'power_box': 'PowerBoxBlock',
     'electric_cabin': 'ElectricCabinBlock',
     'met_station': 'MetStationBlock',
+    'plant_controller': 'PlantControllerBlock',
     'wind_turbine': 'WindTurbineBlock',
     'pv_array': 'PvArrayBlock',
     'pv_inverter': 'PvInverterBlock',
     'pv_combiner': 'PvCombinerBlock',
+    'tx_machine': 'TransformerBlock',
+    'tx_substation': 'TransformerBlock',
+    'mv_disconnector': 'SwitchgearBlock',
+    'mv_breaker': 'SwitchgearBlock',
 }
+
+# One block class, several models: which constant in its file holds the table cut from this one.
+MODEL_TABLE = {
+    # the inverter declares one table and derives its two smaller sizes by scaling it, so the derived
+    'pv_inverter': 'CELLS',
+    # and the kiosk, for the same reason: its wall-mounted shape is derived from CELLS in code
+    'power_box': 'CELLS',
+    'pv_flat': 'FLAT_CELLS',
+    'pv_tilt': 'TILT_CELLS',
+    'pv_track': 'TRACK_CELLS',
+    'pv_dual': 'DUAL_CELLS',
+    'electric_cab': 'CELLS',
+    # one block class, two machines: a table each, told apart by name
+    'tx_machine': 'MACHINE_CELLS',
+    'tx_substation': 'SUBSTATION_CELLS',
+    # one block class, two switches, and what the two collide as is not the same shape
+    'mv_disconnector': 'DISCONNECTOR_CELLS',
+    'mv_breaker': 'BREAKER_CELLS',
+}
+
+# Machines with no facing at all, and why. Nothing about them can be turned wrongly. Empty as it stands:
+# every machine in the mod is placed facing somewhere.
+NO_FACING = {}
 
 # One model, several products: the directory name is not the block's name.
 MODEL_BLOCK = {
@@ -83,13 +97,14 @@ MODEL_BLOCK = {
     'pv_dual': 'pv_array',
 }
 
-# Machines whose collision is a volume rather than a shape, and why. Their tables are printed for
-# reference and not compared: a shape cut from where the geometry happens to be authored would be wrong
-# a second later.
+# Models whose collision is a volume rather than a shape, and why.
 SWEPT = {
-    'pv_array':
-        'the panel tracks the sun, so its collision has to be the volume it sweeps rather than the '
-        'place it was drawn',
+    'pv_track':
+        'the panel tracks the sun about its torque tube, so its collision has to cover the volume it '
+        'sweeps rather than the place it was authored - a shape cut from the flat position would let '
+        'a player fall through the row every afternoon',
+    'pv_dual':
+        'the frame turns about two axes, so the same holds and in one more direction',
     'wind_turbine':
         'the model carries its own tower, which in the world is a stack of turbine_tower blocks with '
         'their own collision, and a hundred metres of turning rotor above it that nothing should be '
@@ -97,34 +112,190 @@ SWEPT = {
 }
 
 
+# What a machine's collision is *made of*: one rectangle per part of the object, each the union of the model
+# groups it covers.  A hitbox is what a player points at and walks into, not a drawing of the machine - an
+# inverter is a sheet-steel cabinet, and a cabinet is a rectangle.  Cut from every group instead, and sliced
+# wherever it sloped, a fixed-tilt array came out as twenty-three boxes of staircase.
+#
+# Every group a model draws has to appear here exactly once, or this file fails: a part added to a model is
+# then a decision about its collision rather than a silent extra box.
+# A porcelain fitting is the exception to the merging: **every insulator, bushing and arrester gets a
+# rectangle of its own**, cut to it. It is the part of a machine a player aims at - a wire is hung on one
+# by pointing at it - and swept into the roof rectangle beside its neighbours it became a slab of air
+# with the fittings somewhere inside. That is also why the model splits them one group apiece.
+RECTANGLES = {
+    'pv_inverter': (
+        # the cabinet, its plinth and everything let into its faces are one box; the roof fittings the
+        # only thing that stands clear of it
+        ('cabinet', ('plinth', 'cabinet', 'hood', 'door', 'display', 'grille', 'section', 'blank',
+                     'fan_guard')),
+        ('roof', ('hardware',)),
+        ('insulator', ('insulator',)),
+    ),
+    # The three the object has: what it stands on, what holds it up, and the box itself.  Merging the post
+    # into the enclosure would put a wall of air beside a column a player walks past.
+    'pv_combiner': (
+        ('base', ('base',)),
+        ('post', ('post',)),
+        ('enclosure', ('enclosure', 'door', 'glands')),
+    ),
+    'power_box': (
+        ('cabinet', ('plinth', 'body', 'hood', 'door', 'vent', 'conduit')),
+        ('top', ('hardware',)),
+        ('insulator', ('insulator',)),
+    ),
+    # One box each: a ballasted table is 2.5 px tall in all and a fixed rack 8.5, so there is no gap under
+    # either that a player could have been in.  Two boxes bought nothing but a second box.
+    'pv_flat': (
+        ('table', ('ballast', 'frame', 'modules')),
+    ),
+    'pv_tilt': (
+        ('rack', ('piers', 'purlin_0', 'purlin_1', 'rails', 'modules')),
+    ),
+    # The enclosure is one rectangle - a cabinet is a cabinet, and the door and everything let into it are
+    # 2 px of its own face.  The antenna is its own, because it is 16 mm across on a bracket at one end of a
+    # 400 mm roof: swept into the cabinet's box it would be a slab of air over the other end of it.
+    'plant_controller': (
+        ('cabinet', ('plinth', 'cabinet', 'door', 'rail', 'glands')),
+        ('antenna', ('antenna',)),
+    ),
+    'met_mast': (
+        ('mast', ('mast', 'logger', 'anemometer')),
+        ('boom', ('boom', 'pyranometer', 'diffuse', 'albedometer', 'shield', 'snow')),
+    ),
+    'tx_machine': (
+        ('tank', ('plinth', 'tank', 'cover', 'cablebox', 'nameplate', 'fittings', 'earth')),
+        ('bushing_1', ('bushing_1', 'flange_1')),
+        ('bushing_2', ('bushing_2', 'flange_2')),
+        ('bushing_3', ('bushing_3', 'flange_3')),
+    ),
+    'tx_substation': (
+        ('bund', ('bund', 'rails')),
+        ('tank', ('tank', 'cover', 'radiator', 'tapchanger', 'nameplate')),
+        ('top', ('conservator', 'relay')),
+        ('bushing_1', ('bushing_1', 'flange_1')),
+        ('bushing_2', ('bushing_2', 'flange_2')),
+        ('bushing_3', ('bushing_3', 'flange_3')),
+        ('bushing_4', ('bushing_4', 'flange_4')),
+        ('bushing_5', ('bushing_5', 'flange_5')),
+        ('bushing_6', ('bushing_6', 'flange_6')),
+    ),
+    'electric_cab': (
+        ('plinth', ('plinth',)),
+        ('body', ('body', 'door', 'vent', 'signage')),
+        ('roof', ('roof', 'hardware')),
+        # a column apiece: the two bushings and the three arresters are five separate porcelain stacks on
+        # the roof, and one box round the lot of them is a wall across it
+        ('insulator_input', ('insulator_input',)),
+        ('insulator_output', ('insulator_output',)),
+        ('arrester_1', ('arrester_1',)),
+        ('arrester_2', ('arrester_2',)),
+        ('arrester_3', ('arrester_3',)),
+    ),
+    # A disconnector is a frame, six posts and the shaft that gangs them.  The shaft is its own rectangle
+    # because it is 0.4 wide and 0.03 thick over the top of the posts: swept into the frame it would be a
+    # solid block from the ground to the blades.
+    'mv_disconnector': (
+        ('frame', ('pad', 'frame', 'earth')),
+        ('shaft', ('shaft',)),
+        ('insulator_1', ('insulator_1',)),
+        ('insulator_2', ('insulator_2',)),
+        ('insulator_3', ('insulator_3',)),
+        ('insulator_4', ('insulator_4',)),
+        ('insulator_5', ('insulator_5',)),
+        ('insulator_6', ('insulator_6',)),
+    ),
+    # And a breaker is a box with three poles standing on it, which is one rectangle: the poles cover nearly
+    # all of the box's own footprint, so a second box would be air.  The bushings stick out past it.
+    'mv_breaker': (
+        ('cabinet', ('pad', 'cabinet', 'door', 'earth', 'pole_1', 'pole_2', 'pole_3')),
+        ('insulator_1', ('insulator_1',)),
+        ('insulator_2', ('insulator_2',)),
+        ('insulator_3', ('insulator_3',)),
+        ('insulator_4', ('insulator_4',)),
+        ('insulator_5', ('insulator_5',)),
+        ('insulator_6', ('insulator_6',)),
+    ),
+    'utility_pole': (
+        # the steps are what a player climbs, and they are within a pixel of the shaft either side of it
+        ('shaft', ('shaft', 'earth', 'plate',
+                   'step_0', 'step_1', 'step_2', 'step_3', 'step_4', 'step_5', 'step_6')),
+        ('arm_lower', ('arm_lower',)),
+        ('arm_upper', ('arm_upper',)),
+        # the pin goes with the insulator it carries: the spindle is what stands it off the arm
+        ('insulator_1', ('insulator_1', 'pin_1')),
+        ('insulator_2', ('insulator_2', 'pin_2')),
+        ('insulator_3', ('insulator_3', 'pin_3')),
+        ('insulator_4', ('insulator_4', 'pin_4')),
+        ('insulator_5', ('insulator_5', 'pin_5')),
+        ('insulator_6', ('insulator_6', 'pin_6')),
+        ('insulator_7', ('insulator_7', 'pin_7')),
+        ('insulator_8', ('insulator_8', 'pin_8')),
+    ),
+}
+
+
+# Models whose tables are printed somewhere else, so this file would only disagree with itself.
+ELSEWHERE = {
+    'dc_string_cable': 'printed by tools/gen_cable_models.py --java, per connection pattern',
+    # A lattice is mostly air. Cut from every group it draws, its diagonals sweep 308 of the 400 cells in
+    # its bounding volume - a tower you cannot walk into and three hundred shell blocks a placement. So
+    # gen_tower_models authors the collision from the legs, the crossarms, the peak and the footings, and
+    # prints it: 78 cells, and between the braces you can walk.
+    'lattice_suspension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    'lattice_tension': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    'lattice_terminal': 'printed by tools/gen_tower_models.py --java, authored from the structure',
+    # Ground-laid conductor, for the same reason the string cable is here: a piece per connection pattern,
+    # so the tables are keyed by pattern and printed by the generator that draws them - which also proves
+    # GroundConductorBlock still declares them.
+    'abc_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
+    'mv_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
+    'hv_conductor_run': 'printed by tools/gen_conductor_models.py --java, per connection pattern',
+}
+
+
 def obj_groups(path):
-    """Every object in an OBJ with its own bounding box."""
-    verts = []
-    groups = collections.OrderedDict()
-    current = 'none'
-    for line in open(path):
-        if line.startswith('v '):
-            verts.append(tuple(float(v) for v in line.split()[1:4]))
-        elif line.startswith('o '):
-            current = line.split(None, 1)[1].strip()
-        elif line.startswith('f '):
-            box = groups.setdefault(current, [[9.0] * 3, [-9.0] * 3])
-            for index in (int(f.split('/')[0]) for f in line.split()[1:]):
-                point = verts[index - 1]
-                for axis in range(3):
-                    box[0][axis] = min(box[0][axis], point[axis])
-                    box[1][axis] = max(box[1][axis], point[axis])
-
-    return groups
+    """Every object in an OBJ with the polygons it is made of.  Merged, not replaced - see objlib."""
+    return objlib.polygons(objlib.read(path))
 
 
-def body(groups):
-    """The groups that stand still, in pixels from the block's own corner."""
+def bounds(faces):
+    """The bounding box of a list of polygons."""
+    lo = [9.0] * 3
+    hi = [-9.0] * 3
+    for face in faces:
+        for point in face:
+            for axis in range(3):
+                lo[axis] = min(lo[axis], point[axis])
+                hi[axis] = max(hi[axis], point[axis])
+
+    return lo, hi
+
+
+def body(groups, model):
+    """The object's parts as one box each, in pixels from the block's own corner.
+
+    RECTANGLES says which model groups make up each part; a model not named there keeps a box per group,
+    which is what the swept ones and the towers want since nothing compares theirs anyway.
+    """
+    still = {name: faces for name, faces in groups.items() if not name.startswith(MOVING)}
+    plan = RECTANGLES.get(model) or tuple((name, (name,)) for name in still)
+
+    named = [g for _, members in plan for g in members]
+    missing = [g for g in named if g not in still]
+    loose = [g for g in still if g not in named]
+    if missing or loose:
+        raise SystemExit(
+            'check_hitboxes: RECTANGLES for %s names %s, which the model does not draw%s'
+            % (model, ', '.join(missing) or 'nothing',
+               ', and leaves %s in no rectangle' % ', '.join(loose) if loose else '')
+            if missing else
+            'check_hitboxes: RECTANGLES for %s leaves %s in no rectangle - decide which box it belongs to'
+            % (model, ', '.join(loose)))
+
     kept = []
-    for name, (lo, hi) in groups.items():
-        if name.startswith(MOVING):
-            continue
-
+    for name, members in plan:
+        lo, hi = bounds([face for g in members for face in still[g]])
         kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
                      tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
 
@@ -241,6 +412,23 @@ def java(cells):
     return '\n'.join(lines)
 
 
+def scoped(text, constant):
+    """Just the initialiser of one named constant, so a file with four tables can be read one at a time."""
+    if constant is None:
+        return text
+
+    match = re.search(r'%s\s*=\s*List\.of\(' % re.escape(constant), text)
+    if match is None:
+        return ''
+
+    depth, index = 1, match.end()
+    while depth and index < len(text):
+        depth += {'(': 1, ')': -1}.get(text[index], 0)
+        index += 1
+
+    return text[match.end():index - 1]
+
+
 def declared(text):
     """The cells a block's own table declares, read back out of the Java."""
     out = {}
@@ -290,22 +478,13 @@ def show(box):
 # in the mod is worked out from.
 FACING_ORDER = {'SOUTH': 0, 'WEST': 1, 'NORTH': 2, 'EAST': 3}
 
-# Machines whose parts are not a quarter turn of an authored facing, and why. Their mappings are checked
-# modulo half a turn, which is all a model symmetric about both horizontal axes can express.
-MIRRORED = {
-    'utility_pole':
-        'the pole model is mirrored rather than turned, so its renderer and its wire anchors come out '
-        'half a turn from east for east and west - which neither the geometry nor the cells can show',
-}
-
-
 def turn(authored, facing):
-    """The angle the geometry is turned by to face this way, the way every renderer here works it out."""
+    """The angle the geometry is turned by to face this way"""
     return ((FACING_ORDER[authored] - FACING_ORDER[facing]) % 4) * 90
 
 
 def implied(mapping):
-    """The facing a table of angles says the geometry was modelled at, or None if it is not a turn of one."""
+    """The facing a table of angles says the geometry was modelled at"""
     for authored in FACING_ORDER:
         if all(turn(authored, facing) == angle for facing, angle in mapping.items()):
             return authored
@@ -330,14 +509,11 @@ def authored(java):
 
 
 def facing_faults(name, block, java):
-    """Everything that has to agree about which way a machine's geometry was modelled, and whether it does.
-
-    The fault this catches happened: the renderer knew the cabin's model faces east, the collision assumed
-    north, and so a cabin's cells stood at a right angle to the cabin for as long as they existed. Three
-    places hold this one fact - the renderer that turns the model, the block entity that turns the wire
-    anchors, and the cells - so the block declares it and the others have to be reading the same thing.
-    """
+    """Everything that has to agree about which way a machine's geometry was modelled, and whether it does."""
     faults = []
+    if name in NO_FACING:
+        return []
+
     said = authored(java)
     if said is None:
         return ['no AUTHORED on the block, so nothing reading its model knows which way it faces']
@@ -346,7 +522,7 @@ def facing_faults(name, block, java):
     renderer = os.path.join(RENDERERS, block.replace('Block', 'Renderer') + '.java')
     if os.path.exists(renderer):
         text = open(renderer).read()
-        if ('%s.AUTHORED' % block) not in text and name not in MIRRORED:
+        if ('%s.AUTHORED' % block) not in text:
             faults.append('the renderer works the authored facing out for itself rather than reading '
                           '%s.AUTHORED, so the two can drift apart' % block)
 
@@ -355,14 +531,9 @@ def facing_faults(name, block, java):
         mapping = anchor_turns(open(entity).read())
         if mapping is not None:
             implies = implied(mapping)
-            allowed = [authored_name] if name not in MIRRORED else [authored_name, None]
-            if implies not in allowed:
+            if implies != authored_name:
                 faults.append('the wire anchors are turned as though the model faced %s, and the block '
                               'says %s' % (implies or 'no facing at all', authored_name))
-            elif implies is None and any(turn(authored_name, facing) % 180 != angle % 180
-                                        for facing, angle in mapping.items()):
-                faults.append('the wire anchors are turned more than half a turn from %s, which the '
-                              'model cannot hide' % authored_name)
 
     return faults
 
@@ -388,29 +559,33 @@ def main():
     hand_written = []
     for path in sorted(glob.glob(os.path.join(MODELS, '*', '*.obj'))):
         directory = os.path.basename(os.path.dirname(path))
+        if directory in ELSEWHERE:
+            continue
+
         name = MODEL_BLOCK.get(directory, directory)
         block = BLOCK_CLASS.get(name)
         if block is None:
             print('%-16s no block class known, skipped' % name)
             continue
 
-        cells = claimed(pieces(body(obj_groups(path))))
-        java = open(os.path.join(BLOCKS, block + '.java')).read()
+        groups = obj_groups(path)
+        cells = claimed(pieces(body(groups, directory)))
+        source = open(os.path.join(BLOCKS, block + '.java')).read()
         print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
             os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),
-            authored(java) or 'nowhere in particular'))
+            authored(source) or 'nowhere in particular'))
         if printing:
             print(java(cells))
 
-        if name in SWEPT:
-            print('    not compared: %s' % SWEPT[name])
+        if directory in SWEPT:
+            print('    not compared: %s' % SWEPT[directory])
             continue
 
-        for fault in facing_faults(name, block, java):
+        for fault in facing_faults(name, block, source):
             faults += 1
             print('    %s' % fault)
 
-        have = declared(java)
+        have = declared(scoped(source, MODEL_TABLE.get(directory)))
         if not have:
             outside = [cell for cell in cells if cell != (0, 0, 0)]
             if outside:

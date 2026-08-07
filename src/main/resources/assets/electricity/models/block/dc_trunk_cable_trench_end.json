@@ -1,0 +1,18 @@
+{
+  "loader": "forge:obj",
+  "model": "electricity:models/dc_trunk_cable/dc_trunk_cable_trench_end.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
+  "textures": {
+    "core": "electricity:block/dc_trunk_core",
+    "shrink": "electricity:block/dc_trunk_shrink",
+    "lug": "electricity:block/dc_trunk_lug",
+    "cleat": "electricity:block/dc_cleat",
+    "gland": "electricity:block/dc_gland",
+    "jbox": "electricity:block/dc_jbox",
+    "jbox_side": "electricity:block/dc_jbox_side",
+    "trench": "electricity:block/dc_trench",
+    "particle": "electricity:block/dc_trunk_core"
+  }
+}

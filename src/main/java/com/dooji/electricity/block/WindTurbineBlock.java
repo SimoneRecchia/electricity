@@ -29,34 +29,19 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class WindTurbineBlock extends Block implements EntityBlock {
 	/**
 	 * The facing wind_turbine.obj was modelled at: an inherited model, and it faces south.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.SOUTH;
 
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-	/** Nacelle height in the authored model, in blocks, at the scale the C130 draws it. */
+	/** Nacelle height in the authored model, in blocks */
 	private static final double NACELLE_HEIGHT = 0.95;
-	/**
-	 * Distance from the tower axis to the nacelle's farthest corner, in blocks at C130 scale.
-	 *
-	 * The nacelle is nearly two and a half blocks deep and swings with the yaw, so this is the
-	 * radius it sweeps rather than its width. On the larger machines it is wider than the block
-	 * it lives in and gets clipped to it; on the smaller ones it is what makes the shape narrow.
-	 */
+	/** Distance from the tower axis to the nacelle's farthest corner, in blocks at C130 scale. */
 	private static final double NACELLE_REACH = 1.575;
 
-	/**
-	 * Which machine this block is.
-	 *
-	 * One block per model rather than one block storing a model id, because the models
-	 * differ by more than numbers: each needs its own recipe, its own item and its own
-	 * entry in a recipe viewer, and a player shopping for a turbine is choosing between
-	 * products rather than configuring one. The block entity reads the spec back off the
-	 * block, so nothing about a placed turbine has to be persisted to know what it is.
-	 */
+	/** Which machine this block is. */
 	private final TurbineSpec spec;
 	private final VoxelShape shape;
 
@@ -67,19 +52,7 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 		this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
 	}
 
-	/**
-	 * The nacelle, rather than the whole block it lives in.
-	 *
-	 * This was a full cube, which is the one collision in the structure that really is the block's
-	 * maximum extent - and on anything but the largest machine that is mostly empty air. An SW-10's
-	 * nacelle is a quarter of a block tall, so a cube left three quarters of a block of invisible
-	 * floor to stand on above it.
-	 *
-	 * Height is the nacelle's own. Width is the radius it sweeps as the machine yaws, not its
-	 * breadth, because it is two and a half blocks deep and turns to face the wind: on the larger
-	 * machines that sweep is wider than the block and clips to it, which is honest, since the
-	 * nacelle genuinely overhangs its own block there.
-	 */
+	/** The nacelle, rather than the whole block it lives in. */
 	private static VoxelShape nacelleShape(TurbineSpec spec) {
 		double scale = spec.nacelleRenderScale();
 		double half = Math.min(0.5, NACELLE_REACH * scale);
@@ -107,19 +80,7 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 		return shape;
 	}
 
-	/**
-	 * A machine sits on a tower, at a height that tower is certified for.
-	 *
-	 * Both ends of the range are enforced, and the range is the manufacturer's rather than
-	 * something invented: real turbines are sold on specific tower heights, a V90 on 80,
-	 * 95 or 105 metres and not on whatever is to hand. The low end is also physics - the
-	 * blades would be in the ground - and the published minimum is at or above the tip
-	 * clearance for every machine in the catalogue, so one check covers both.
-	 *
-	 * A small rotor on a tall tower would be merely uneconomic rather than impossible, but
-	 * it is refused too: a 10 kW nacelle a hundred metres up looks wrong, and the certified
-	 * range is the honest reason to say no.
-	 */
+	/** A machine sits on a tower */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
 		return spec.acceptsTowerHeight(TurbineTowerBlock.countBelow(level, pos));
@@ -157,14 +118,7 @@ public class WindTurbineBlock extends Block implements EntityBlock {
 		};
 	}
 
-	/**
-	 * Tells the tower's foot that its machine arrived or left.
-	 *
-	 * The foot answers capability queries on the machine's behalf, and it can be thirteen
-	 * blocks away - far outside the neighbour updates that placing or breaking this block
-	 * sends. Without this a cable already sitting at the tower base would keep the empty
-	 * answer it got before the machine existed.
-	 */
+	/** Tells the tower's foot that its machine arrived or left. */
 	private static void refreshTowerFoot(Level level, BlockPos pos) {
 		if (level.isClientSide()) return;
 

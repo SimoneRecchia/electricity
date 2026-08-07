@@ -1,13 +1,9 @@
 package com.dooji.electricity.wire;
 
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
+import com.dooji.electricity.main.registry.ObjDefinitions;
 import javax.annotation.Nullable;
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
-import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -20,29 +16,37 @@ public final class InsulatorPartHelper {
 	public static final String TYPE_POWER_BOX = "power_box";
 	/** The photovoltaic plant's one connection to the grid. */
 	public static final String TYPE_PV_INVERTER = "pv_inverter";
+	/** A lattice transmission tower, in any of its three duties. */
+	public static final String TYPE_LATTICE_TOWER = "lattice_tower";
+	/** A transformer, of either duty. */
+	public static final String TYPE_TRANSFORMER = "transformer";
+	/** A length of conductor laid on the ground, which offers one fitting. */
+	public static final String TYPE_GROUND_CONDUCTOR = "ground_conductor";
+	/** A switch in a line, of either kind: a disconnector or a circuit breaker. */
+	public static final String TYPE_SWITCHGEAR = "switchgear";
 
-	private static final String[] UTILITY_POLE_PARTS = {"insulator_1_Material.023", "insulator_2_Material.009", "insulator_3_Material.016", "insulator_4_Material.001", "insulator_5_Material.051",
-			"insulator_6_Material.037", "insulator_7_Material.030", "insulator_8_Material.058"};
+	/** The part names a device's insulators are drawn as, read off the model's own definition. */
+	private static List<String> parts(BlockEntity entity) {
+		ObjBlockDefinition definition = ObjDefinitions.get(entity.getBlockState().getBlock());
+		if (definition != null && !definition.insulators().isEmpty()) return definition.insulators();
 
-	private static final String[] ELECTRIC_CABIN_PARTS = {"insulator_input_Material.065", "insulatoroutput_Material.044"};
+		// A machine with no OBJ definition can still have fittings: a ground-laid conductor is drawn by a
+		// block model rather than by the mod's renderer, so it has no definition to name a group in, and its
+		// one fitting is named for it here. Without this its insulator resolves to nothing and no span can
+		// be anchored to it.
+		if (entity instanceof InsulatorHost host) {
+			List<String> named = new java.util.ArrayList<>();
+			for (int i = 0; i < host.getInsulatorIds().length; i++) named.add(host.fittingType() + "_" + (i + 1));
+			return List.copyOf(named);
+		}
 
-	private static final String[] POWER_BOX_PARTS = {"insulator_Material"};
-
-	private static final String[] WIND_TURBINE_PARTS = {"insulator_Plastic"};
-
-	private static final String[] PV_INVERTER_PARTS = {"insulator_instrument"};
+		return List.of();
+	}
 
 	private InsulatorPartHelper() {
 	}
 
-	/**
-	 * Which group of a model an insulator is drawn as, by index.
-	 *
-	 * The model's own list, in the order it declares them, which is why nothing here restates a part
-	 * name: a device with four insulators has four entries and the fourth is index three. Null for an
-	 * index the model does not have, which happens while a device is being built and its arrays have
-	 * been sized before its definition has loaded.
-	 */
+	/** Which group of a model an insulator is drawn as, by index. */
 	@Nullable
 	public static String insulatorName(@Nullable ObjBlockDefinition definition, int index) {
 		if (definition == null || index < 0 || index >= definition.insulators().size()) return null;
@@ -51,52 +55,32 @@ public final class InsulatorPartHelper {
 	}
 
 	public static Optional<Insulator> resolve(BlockEntity entity, String partName) {
-		if (entity instanceof UtilityPoleBlockEntity pole) {
-			return mapFromArray(TYPE_UTILITY_POLE, partName, UTILITY_POLE_PARTS, pole.getInsulatorIds(), pole::getWirePosition);
-		} else if (entity instanceof ElectricCabinBlockEntity cabin) {
-			return mapFromArray(TYPE_ELECTRIC_CABIN, partName, ELECTRIC_CABIN_PARTS, cabin.getInsulatorIds(), cabin::getWirePosition);
-		} else if (entity instanceof PowerBoxBlockEntity powerBox) {
-			return mapFromArray(TYPE_POWER_BOX, partName, POWER_BOX_PARTS, powerBox.getInsulatorIds(), powerBox::getWirePosition);
-		} else if (entity instanceof WindTurbineBlockEntity turbine) {
-			return mapFromArray(TYPE_WIND_TURBINE, partName, WIND_TURBINE_PARTS, turbine.getInsulatorIds(), turbine::getWirePosition);
-		} else if (entity instanceof PvInverterBlockEntity inverter) {
-			return mapFromArray(TYPE_PV_INVERTER, partName, PV_INVERTER_PARTS, inverter.getInsulatorIds(), inverter::getWirePosition);
-		}
+		if (!(entity instanceof InsulatorHost host)) return Optional.empty();
 
-		return Optional.empty();
+		return mapFromArray(host.fittingType(), partName, parts(entity), host.getInsulatorIds(), host::getWirePosition);
 	}
 
 	public static Optional<Insulator> resolve(BlockEntity entity, int insulatorId) {
-		if (entity instanceof UtilityPoleBlockEntity pole) {
-			return mapFromId(TYPE_UTILITY_POLE, insulatorId, UTILITY_POLE_PARTS, pole.getInsulatorIds(), pole::getWirePosition);
-		} else if (entity instanceof ElectricCabinBlockEntity cabin) {
-			return mapFromId(TYPE_ELECTRIC_CABIN, insulatorId, ELECTRIC_CABIN_PARTS, cabin.getInsulatorIds(), cabin::getWirePosition);
-		} else if (entity instanceof PowerBoxBlockEntity powerBox) {
-			return mapFromId(TYPE_POWER_BOX, insulatorId, POWER_BOX_PARTS, powerBox.getInsulatorIds(), powerBox::getWirePosition);
-		} else if (entity instanceof WindTurbineBlockEntity turbine) {
-			return mapFromId(TYPE_WIND_TURBINE, insulatorId, WIND_TURBINE_PARTS, turbine.getInsulatorIds(), turbine::getWirePosition);
-		} else if (entity instanceof PvInverterBlockEntity inverter) {
-			return mapFromId(TYPE_PV_INVERTER, insulatorId, PV_INVERTER_PARTS, inverter.getInsulatorIds(), inverter::getWirePosition);
-		}
+		if (!(entity instanceof InsulatorHost host)) return Optional.empty();
 
-		return Optional.empty();
+		return mapFromId(host.fittingType(), insulatorId, parts(entity), host.getInsulatorIds(), host::getWirePosition);
 	}
 
-	private static Optional<Insulator> mapFromArray(String blockType, String partName, String[] parts, int[] insulatorIds, PositionResolver resolver) {
+	private static Optional<Insulator> mapFromArray(String blockType, String partName, List<String> parts, int[] insulatorIds, PositionResolver resolver) {
 		if (partName == null) return Optional.empty();
 
-		int index = indexOf(parts, partName);
+		int index = parts.indexOf(partName);
 		if (index < 0 || index >= insulatorIds.length) return Optional.empty();
 
 		int insulatorId = insulatorIds[index];
-		return Optional.of(new Insulator(blockType, insulatorId, index, parts[index], resolver.resolve(index)));
+		return Optional.of(new Insulator(blockType, insulatorId, index, parts.get(index), resolver.resolve(index)));
 	}
 
-	private static Optional<Insulator> mapFromId(String blockType, int targetId, String[] partNames, int[] insulatorIds, PositionResolver resolver) {
+	private static Optional<Insulator> mapFromId(String blockType, int targetId, List<String> partNames, int[] insulatorIds, PositionResolver resolver) {
 		for (int i = 0; i < insulatorIds.length; i++) {
 			if (insulatorIds[i] == targetId && targetId >= 0) {
 				Vec3 anchor = resolver.resolve(i);
-				String partName = partNames != null && i < partNames.length ? partNames[i] : null;
+				String partName = i < partNames.size() ? partNames.get(i) : null;
 				return Optional.of(new Insulator(blockType, targetId, i, partName, anchor));
 			}
 		}
@@ -104,39 +88,12 @@ public final class InsulatorPartHelper {
 		return Optional.empty();
 	}
 
-	private static int indexOf(String[] parts, String partName) {
-		for (int i = 0; i < parts.length; i++) {
-			if (Objects.equals(parts[i], partName)) return i;
-		}
-
-		return -1;
-	}
-
 	public static String determinePowerType(BlockEntity entity, String partName) {
-		// a generator's one fitting is an output, whichever kind of generator it is
-		if (entity instanceof WindTurbineBlockEntity || entity instanceof PvInverterBlockEntity) return "output";
-		if (entity instanceof ElectricCabinBlockEntity) {
-			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("output")) return "output";
-			if (partName != null && partName.toLowerCase(Locale.ROOT).contains("input")) return "input";
-		}
-
-		return "bidirectional";
+		return entity instanceof InsulatorHost host ? host.powerType(partName) : "bidirectional";
 	}
 
 	public static String getBlockType(BlockEntity entity) {
-		if (entity instanceof WindTurbineBlockEntity) {
-			return TYPE_WIND_TURBINE;
-		} else if (entity instanceof ElectricCabinBlockEntity) {
-			return TYPE_ELECTRIC_CABIN;
-		} else if (entity instanceof UtilityPoleBlockEntity) {
-			return TYPE_UTILITY_POLE;
-		} else if (entity instanceof PowerBoxBlockEntity) {
-			return TYPE_POWER_BOX;
-		} else if (entity instanceof PvInverterBlockEntity) {
-			return TYPE_PV_INVERTER;
-		}
-
-		return "unknown";
+		return entity instanceof InsulatorHost host ? host.fittingType() : "unknown";
 	}
 
 	public static boolean matchesReportedType(BlockEntity entity, String reportedType) {

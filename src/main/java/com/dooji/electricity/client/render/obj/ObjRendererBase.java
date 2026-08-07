@@ -2,6 +2,7 @@ package com.dooji.electricity.client.render.obj;
 
 import com.dooji.electricity.block.ModelFacing;
 import com.dooji.electricity.block.DcCableBlock;
+import com.dooji.electricity.client.TrackedBlockEntities;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -12,7 +13,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
@@ -21,61 +24,93 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
 // OBJ pipeline code will be migrated to Renderix
 public abstract class ObjRendererBase {
+	/**
+	 * The pass every machine renderer makes: every loaded machine of one type, each posed onto its own facing
+	 * and drawn whole, then the buffers of whatever has left the screen released.
+	 *
+	 * Returns the positions it drew, so a renderer keeping an interpolated angle per position can forget the
+	 * same ones through {@link #cleanupAngles}.
+	 */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, cache,
+				(entity, context, pose, projection) -> renderGrouped(context.model(), pose, projection, context.texture(),
+						context.packedLight(), entity.getBlockPos(), cache));
+	}
+
+	/** The same, for a machine with something that moves, or a part that is only drawn sometimes. */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache, Drawing<T> drawing) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, cache, entity -> true, drawing);
+	}
+
+	/** The same, where only some of the loaded machines of the type are drawn at all. */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache,
+			Predicate<T> when, Drawing<T> drawing) {
+		Set<BlockPos> seen = new HashSet<>();
+		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return seen;
+
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.level == null) return seen;
+
+		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
+		for (T entity : TrackedBlockEntities.ofType(type)) {
+			if (!when.test(entity)) continue;
+
+			seen.add(entity.getBlockPos());
+			ObjRenderUtil.withAlignedPose(entity, event.getPoseStack(), cameraPos, maxDistanceSq, facing, authored,
+					(context, pose) -> drawing.draw(entity, context, pose, event.getProjectionMatrix()));
+		}
+
+		cleanupCache(cache, seen);
+		return seen;
+	}
+
+	/** What a renderer does with one machine, once the pose of its block is on the stack. */
+	protected interface Drawing<T extends BlockEntity> {
+		void draw(T entity, ObjRenderContext context, PoseStack pose, Matrix4f projection);
+	}
+
 	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
 		renderGrouped(model, poseStack, projectionMatrix, texture, packedLight, pos, cache, groupName -> true);
 	}
 
-	/**
-	 * The same, with a say in which groups are drawn.
-	 *
-	 * For the parts of a model that are there only sometimes: an array grows a junction box and a set of
-	 * leads when a reel of cable is worked into it, and the alternative to leaving a group out is a second
-	 * model that differs from the first by one box.
-	 */
+	/** The same, with a say in which groups are drawn. */
 	protected static void renderGrouped(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache, Predicate<String> draw) {
-		Map<ResourceLocation, List<GroupBuffer>> byTexture = new HashMap<>();
-		for (Map.Entry<String, ObjModel.ObjGroup> groupEntry : model.groups.entrySet()) {
-			String groupName = groupEntry.getKey();
-			if (!draw.test(groupName)) continue;
-
-			ObjModel.ObjGroup group = groupEntry.getValue();
-			GroupBuffer buffer = bufferFor(pos, groupName, group, model, texture, packedLight, cache);
-			if (buffer == null) continue;
-			byTexture.computeIfAbsent(buffer.texture, t -> new ArrayList<>()).add(buffer.withPose(poseStack.last().pose()));
-		}
-
-		for (Map.Entry<ResourceLocation, List<GroupBuffer>> textureEntry : byTexture.entrySet()) {
-			RenderType type = RenderType.entityCutoutNoCull(textureEntry.getKey());
-			type.setupRenderState();
-
-			RenderSystem.setShader(GameRenderer::getRendertypeEntityCutoutNoCullShader);
-			ShaderInstance shader = GameRenderer.getRendertypeEntityCutoutNoCullShader();
-
-			for (GroupBuffer buffer : textureEntry.getValue()) {
-				buffer.buffer.bind();
-				buffer.buffer.drawWithShader(buffer.modelMatrix, projectionMatrix, shader);
-			}
-
-			VertexBuffer.unbind();
-			type.clearRenderState();
-		}
+		Matrix4f pose = poseStack.last().pose();
+		draw(model, groupName -> draw.test(groupName) ? pose : null, projectionMatrix, texture, packedLight, pos, cache);
 	}
 
+	/** Each group under its own matrix, for a machine with something that moves. */
 	protected static void renderGrouped(ObjModel model, Map<String, Matrix4f> poses, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+		draw(model, poses::get, projectionMatrix, texture, packedLight, pos, cache);
+	}
+
+	/**
+	 * One pass over a model: every group that has a matrix, batched by texture and drawn.
+	 *
+	 * Batched because a machine's groups share two or three textures between them, and setting the render
+	 * state is the expensive part - not the draw.
+	 */
+	private static void draw(ObjModel model, Function<String, Matrix4f> poseOf, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
 		Map<ResourceLocation, List<GroupBuffer>> byTexture = new HashMap<>();
 		for (Map.Entry<String, ObjModel.ObjGroup> groupEntry : model.groups.entrySet()) {
 			String groupName = groupEntry.getKey();
-			ObjModel.ObjGroup group = groupEntry.getValue();
-			Matrix4f pose = poses.get(groupName);
+			Matrix4f pose = poseOf.apply(groupName);
 			if (pose == null) continue;
-			GroupBuffer buffer = bufferFor(pos, groupName, group, model, texture, packedLight, cache);
+
+			GroupBuffer buffer = bufferFor(pos, groupName, groupEntry.getValue(), model, texture, packedLight, cache);
 			if (buffer == null) continue;
+
 			byTexture.computeIfAbsent(buffer.texture, t -> new ArrayList<>()).add(buffer.withPose(pose));
 		}
 
@@ -96,19 +131,7 @@ public abstract class ObjRendererBase {
 		}
 	}
 
-	/**
-	 * The cable entries a machine should draw: one per side a run has actually been laid against.
-	 *
-	 * Four groups in the model, one per side, and this decides which of them get a pose. That is the
-	 * whole answer to a cable that stopped a pixel short of the machine over open ground: the machine
-	 * grows the last stretch itself, from its own middle out to the edge the copper arrives at, at the
-	 * cross-section a laid run has - so the two meet with no seam and nothing to see through.
-	 *
-	 * The names are model-space, because that is what the model is authored in and the block's facing has
-	 * already turned it - so the world direction the copper arrives from is read back into the model's own
-	 * frame to find the group that will end up pointing at it. Which way the model faces is the machine's
-	 * to say, exactly as it is for the pose: this used to assume north, and the assumption was invisible.
-	 */
+	/** The cable entries a machine should draw: one per side a run has actually been laid against. */
 	protected static Set<String> cableEntries(BlockGetter level, BlockPos pos, Direction authored, Direction facing, String prefix) {
 		Set<String> live = new HashSet<>();
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
@@ -120,12 +143,7 @@ public abstract class ObjRendererBase {
 		return live;
 	}
 
-	/**
-	 * Whether a run of cable reaches this machine from one direction.
-	 *
-	 * The three positions a run can reach from, which are the three dust reaches from: alongside, a step
-	 * up, and a step down. The cable itself is asked, so this cannot drift from what the plant counts.
-	 */
+	/** Whether a run of cable reaches this machine from one direction. */
 	protected static boolean cableArrives(BlockGetter level, BlockPos pos, Direction direction) {
 		BlockPos beside = pos.relative(direction);
 		for (BlockPos candidate : new BlockPos[]{beside, beside.above(), beside.below()}) {
@@ -136,12 +154,7 @@ public abstract class ObjRendererBase {
 		return false;
 	}
 
-	/**
-	 * Whether one group should be drawn, given which entries are live.
-	 *
-	 * Anything that is not part of an entry is drawn as usual; an entry is drawn only for the side it
-	 * belongs to.
-	 */
+	/** Whether one group should be drawn, given which entries are live. */
 	protected static boolean entryVisible(String groupName, String prefix, Set<String> live) {
 		for (Direction direction : Direction.Plane.HORIZONTAL) {
 			String entry = prefix + "_" + direction.getName();
@@ -151,48 +164,12 @@ public abstract class ObjRendererBase {
 		return true;
 	}
 
-	/**
-	 * Where a moving part turns, from the marker the model carries for it.
-	 *
-	 * This used to take the centre of the rotating group's own bounding box, which is exact for anything
-	 * symmetric about its axis - a torque tube, an elevation frame - and wrong for everything else. Three
-	 * anemometer cups at 120 degrees have a box centre nowhere near the mast, so they turned about a
-	 * point beside it and wobbled; a wind vane's box centre sits out by its tail.
-	 *
-	 * A pivot is a property of the design, so the generator emits it as a zero-size {@code pivot_*}
-	 * object and this reads that. No pose is ever built for those groups, so they draw nothing.
-	 *
-	 * The fallback keeps a model with a renamed marker visibly wrong rather than invisible, which is the
-	 * easier failure to notice.
-	 */
-	/**
-	 * The turn a model authored facing one way takes to face another, as the function a pose needs.
-	 *
-	 * Every renderer here had its own copy of this as a four-case switch, and seven of the eight were the
-	 * same three lines with the cases in a different order. What actually differs between them is one fact
-	 * - which way the geometry was modelled - and each machine's block declares that as its own
-	 * {@code AUTHORED}, so a renderer passes that and keeps no arithmetic at all.
-	 *
-	 * The arithmetic is {@link ModelFacing}, because the pose is not the only thing that needs it: the wire
-	 * anchors and the collision cells turn by the same quarter turns, and they run on a dedicated server
-	 * where nothing in this package exists. The one machine that cannot use this is the utility pole, whose
-	 * model is mirrored rather than turned; it passes its own table instead.
-	 */
-	protected static FacingRotationFunction turnedFrom(Direction authored) {
-		return facing -> ModelFacing.degrees(authored, facing);
-	}
-
+	/** Where a moving part turns: the marker the model carries for it, or a figure to fall back on. */
 	protected static Vec3 pivot(ObjModel model, String name, Vec3 fallback) {
 		return groupCentre(model, "pivot_" + name, fallback);
 	}
 
-	/**
-	 * Centre of every group whose name starts with a prefix, taken together.
-	 *
-	 * Every match rather than the first, and that is not fussiness - the group map is a HashMap, so
-	 * "the first" is whatever order the hash happened to produce, and a bound that moved between runs
-	 * would be a genuinely nasty thing to debug.
-	 */
+	/** Centre of every group whose name starts with a prefix, taken together. */
 	protected static Vec3 groupCentre(ObjModel model, String prefix, Vec3 fallback) {
 		float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, minZ = Float.MAX_VALUE;
 		float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
@@ -216,13 +193,7 @@ public abstract class ObjRendererBase {
 		return found ? new Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0) : fallback;
 	}
 
-	/**
-	 * Forgets the interpolated angle of anything no longer on screen.
-	 *
-	 * The angle caches carry a machine's drawn position between frames, which is what makes a rotor or a
-	 * frame walk towards its target instead of snapping to it. They have to be emptied on the same terms
-	 * as the buffers, or a client that walks past a field of trackers keeps every one of them for ever.
-	 */
+	/** Forgets the interpolated angle of anything no longer on screen. */
 	protected static void cleanupAngles(Map<BlockPos, Float> cache, Set<BlockPos> seen) {
 		if (cache.isEmpty() || seen.isEmpty()) return;
 

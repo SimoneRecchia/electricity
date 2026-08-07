@@ -13,16 +13,7 @@ import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.util.LazyOptional;
 
-/**
- * The only class in this mod that names a Mekanism type. It is reached solely
- * from EnergyBridge, and only once that class has confirmed Mekanism is loaded,
- * so the JVM never has to resolve mekanism.* on a pack without it.
- *
- * IStrictEnergyHandler is annotated @AutoRegisterCapability, so Forge registers
- * the capability on our behalf and we can look it up with our own token. That
- * matters because Mekanism's own Capabilities class lives in its src/main and is
- * not shipped in the published api jar.
- */
+/** The only class in this mod that names a Mekanism type. */
 public final class MekanismEnergyBridge {
 	private static final Capability<IStrictEnergyHandler> STRICT_ENERGY = CapabilityManager.get(new CapabilityToken<>() {
 	});
@@ -60,9 +51,7 @@ public final class MekanismEnergyBridge {
 	}
 
 	/**
-	 * Presents a per-tick budget as a single output-only energy container, which is
-	 * how Mekanism's own generators expose themselves: external handlers may
-	 * extract, nothing may insert.
+	 * Presents a per-tick budget as a single output-only energy container, which is how Mekanism's own generators expose themselves: external handlers may extract, nothing may insert.
 	 */
 	private static final class BudgetEnergyHandler implements IStrictEnergyHandler {
 		private final IEnergyBudget budget;

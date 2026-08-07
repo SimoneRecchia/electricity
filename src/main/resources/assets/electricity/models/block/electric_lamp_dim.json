@@ -1,6 +1,0 @@
-{
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "electricity:block/electric_lamp_dim"
-  }
-}

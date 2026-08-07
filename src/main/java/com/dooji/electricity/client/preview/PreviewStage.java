@@ -19,52 +19,17 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-/**
- * Renders a machine with the game's own renderer, from the angles worth looking at, straight to PNG.
- *
- * <h2>Why the game has to be the one doing it</h2>
- *
- * Nothing off the shelf can draw these machines. The tools that exist - minecraft-render, deepslate,
- * Blockbench and the browser viewers - all read *vanilla JSON block models*, and almost nothing in this
- * mod is one. An array is an OBJ drawn by Java with a matrix per group, a set of groups that appear only
- * when a reel of cable has been worked in, a tracker angle computed from the sun, and a per-product
- * scale. A renderer that does not run that Java draws a different object.
- *
- * So this drives the game. It builds a stage, steps a camera round it, and calls the same
- * {@link Screenshot} the F2 key does - which means what comes out is exactly what a player sees, textures
- * and lighting and all.
- *
- * <h2>Two ways in</h2>
- *
- * {@code /preview <block> [pair]} in a world, for one machine now. Or the system property
- * {@code -Delectricity.preview=<ids|all>} which fires once on world load and renders a whole catalogue
- * unattended - which is what makes this usable from a terminal rather than only from a chair.
- *
- * {@code pair} puts a second machine behind the subject and a run of cable in front of it, because half
- * the questions worth asking are about what happens where two of them meet.
- *
- * <h2>Why it is a state machine and not a loop</h2>
- *
- * A screenshot has to be taken *after* a frame has been drawn, and a command runs before one. So each
- * step waits its turn on the client tick: place, settle, shoot, turn, settle, shoot. Trying to do it in
- * one call gives you a picture of wherever the camera was before.
- */
+/** Renders a machine with the game's own renderer, from the angles worth looking at, straight to PNG. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class PreviewStage {
 	/** Where the stage is built, well away from anything a player has made. */
 	private static final int STAGE_X = 512;
 	private static final int STAGE_Z = 512;
 	private static final int STAGE_Y = 96;
-	/** Half-width of the floor. Big enough that a 13-block rotor has ground under it. */
+	/** Half-width of the floor. */
 	private static final int FLOOR = 10;
 
-	/**
-	 * The views, and why these ones.
-	 *
-	 * Front and side are how a machine is seen in a row; the three-quarter is how a player nearly always
-	 * sees it; plan settles a layout question no other angle can; and the low one is the eye level of
-	 * somebody walking past, which is where anything floating or sunk shows up.
-	 */
+	/** The views, and why these ones. */
 	private record View(String name, float yaw, float pitch, double distance, double height) {
 	}
 
@@ -75,7 +40,7 @@ public final class PreviewStage {
 			new View("plan", 45.0f, 88.0f, 3.0, 13.0),
 			new View("low", 20.0f, -4.0f, 5.0, 0.4));
 
-	/** What is left to do, one client tick each. */
+	/** What is left to do */
 	private static final Deque<Runnable> STEPS = new ArrayDeque<>();
 	private static boolean armed = System.getProperty("electricity.preview") != null;
 
@@ -101,12 +66,7 @@ public final class PreviewStage {
 		event.getDispatcher().register(command);
 	}
 
-	/**
-	 * Fires the unattended run, once, after the world is up.
-	 *
-	 * On the first tick with a player and a level rather than on any of the load events, because the
-	 * chunk the stage is built in has to exist before anything can be put in it.
-	 */
+	/** Fires the unattended run, once */
 	@SubscribeEvent
 	public static void onClientTick(TickEvent.ClientTickEvent event) {
 		if (event.phase != TickEvent.Phase.END) return;
@@ -123,7 +83,7 @@ public final class PreviewStage {
 		if (!STEPS.isEmpty()) STEPS.poll().run();
 	}
 
-	/** Which machines a property value names. {@code all} is every block the mod registers a model for. */
+	/** Which machines a property value names. */
 	private static List<String> subjects(String wanted) {
 		if (!"all".equalsIgnoreCase(wanted)) {
 			return List.of(wanted.split(","));
@@ -176,7 +136,7 @@ public final class PreviewStage {
 		});
 	}
 
-	/** Clears the stage, lays a floor, and puts the subject on it. */
+	/** Clears the stage, lays a floor */
 	private static void stage(String block, boolean pair) {
 		int x = STAGE_X;
 		int y = STAGE_Y;
@@ -185,7 +145,7 @@ public final class PreviewStage {
 		run("fill %d %d %d %d %d %d minecraft:smooth_stone".formatted(x - FLOOR, y - 1, z - FLOOR, x + FLOOR, y - 1, z + FLOOR));
 
 		if (needsTower(block)) {
-			// a machine that needs a tower gets one, because it will not seat without it
+			// a machine that needs a tower gets one
 			run("fill %d %d %d %d %d %d electricity:turbine_tower".formatted(x, y, z, x, y + 5, z));
 			run("setblock %d %d %d %s".formatted(x, y + 6, z, block));
 		} else {
@@ -199,14 +159,6 @@ public final class PreviewStage {
 		}
 	}
 
-	/**
-	 * Puts the camera where it can see the stage from one view.
-	 *
-	 * A yaw of theta looks along {@code (-sin theta, ., cos theta)} in this game, so a camera that is to
-	 * look *at* the middle from a distance stands at the middle minus that, which is the one bit of this
-	 * worth getting right: a sign the wrong way round points the camera at the horizon behind the machine
-	 * and the pictures come out empty.
-	 */
 	/** Whether this block is a machine that will not seat without a tower under it. */
 	private static boolean needsTower(String block) {
 		for (com.dooji.electricity.api.power.TurbineSpec spec : com.dooji.electricity.main.registry.TurbineCatalog.all()) {

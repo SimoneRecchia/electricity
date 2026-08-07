@@ -1,12 +1,12 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "WWW",
+    "BBB",
     " n "
   ],
   "key": {
-    "W": {
-      "item": "electricity:wire"
+    "B": {
+      "item": "electricity:busbar"
     },
     "n": {
       "item": "minecraft:iron_nugget"

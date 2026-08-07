@@ -1,10 +1,6 @@
 package com.dooji.electricity.client.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,18 +57,6 @@ public final class InsulatorLookup {
 	}
 
 	private static int[] extractIds(BlockEntity blockEntity) {
-		if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			return pole.getInsulatorIds();
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			return cabin.getInsulatorIds();
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
-			return powerBox.getInsulatorIds();
-		} else if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			return turbine.getInsulatorIds();
-		} else if (blockEntity instanceof PvInverterBlockEntity inverter) {
-			return inverter.getInsulatorIds();
-		}
-
-		return null;
+		return blockEntity instanceof InsulatorHost host ? host.getInsulatorIds() : null;
 	}
 }

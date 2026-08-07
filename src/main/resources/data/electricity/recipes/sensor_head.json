@@ -1,18 +1,18 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     " A ",
-    "CWC"
+    "CBC"
   ],
   "key": {
     "A": {
       "item": "electricity:tempered_glass"
     },
+    "B": {
+      "item": "electricity:busbar"
+    },
     "C": {
       "item": "electricity:circuit_board"
-    },
-    "W": {
-      "item": "electricity:wire"
     }
   },
   "result": {

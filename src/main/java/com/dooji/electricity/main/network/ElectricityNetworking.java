@@ -1,5 +1,6 @@
 package com.dooji.electricity.main.network;
 
+import com.dooji.electricity.block.PlantControllerBlockEntity;
 import com.dooji.electricity.block.PvArrayBlockEntity;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.UtilityPoleBlockEntity;
@@ -8,12 +9,17 @@ import com.dooji.electricity.client.ElectricityClient;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.PowerUpdatePayload;
+import com.dooji.electricity.main.network.payloads.PlantControlPayload;
 import com.dooji.electricity.main.network.payloads.SolarControlPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.TurbineControlPayload;
 import com.dooji.electricity.main.network.payloads.UpdateUtilityPoleConfigPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -28,143 +34,84 @@ public class ElectricityNetworking {
 	private static final String PROTOCOL_VERSION = "1";
 	public static final ResourceLocation NETWORK_CHANNEL = ResourceLocation.tryBuild(Electricity.MOD_ID, "main");
 	public static SimpleChannel INSTANCE;
-	/** Six blocks from the tower, which is where a player stands to work a panel. */
+	/** Six blocks from the machine, which is where a player stands to work a panel. */
 	private static final double MAX_CONTROL_DISTANCE_SQ = 36.0;
 
+	/**
+	 * The channel, and every message on it.
+	 *
+	 * The order is the wire protocol: each message's id is its position here, so a message may be added at
+	 * the end but never moved.
+	 */
 	public static void init() {
 		INSTANCE = NetworkRegistry.ChannelBuilder.named(NETWORK_CHANNEL).networkProtocolVersion(() -> PROTOCOL_VERSION).clientAcceptedVersions(v -> true).serverAcceptedVersions(v -> true)
 				.simpleChannel();
 
 		int id = 0;
 
-		INSTANCE.messageBuilder(SyncWiresPayload.class, id++, NetworkDirection.PLAY_TO_CLIENT).encoder(SyncWiresPayload::write).decoder(SyncWiresPayload::read)
+		toClient(id++, SyncWiresPayload.class, SyncWiresPayload::write, SyncWiresPayload::read,
+				ElectricityClient::handleSyncPacket);
+
+		panelCommand(id++, UpdateUtilityPoleConfigPayload.class, UpdateUtilityPoleConfigPayload::write,
+				UpdateUtilityPoleConfigPayload::read, UpdateUtilityPoleConfigPayload::blockPos, (player, msg) -> {
+					if (player.serverLevel().getBlockEntity(msg.blockPos()) instanceof UtilityPoleBlockEntity pole) {
+						pole.setOffsetX(msg.offsetX());
+						pole.setOffsetY(msg.offsetY());
+						pole.setOffsetZ(msg.offsetZ());
+						pole.setYaw(msg.yaw());
+						pole.setPitch(msg.pitch());
+					}
+				});
+
+		clientRequest(id++, CreateWireFromInsulatorsPayload.class, CreateWireFromInsulatorsPayload::write,
+				CreateWireFromInsulatorsPayload::read, Electricity.wireManager::createWireFromInsulators);
+
+		panelCommand(id++, TurbineControlPayload.class, TurbineControlPayload::write, TurbineControlPayload::read,
+				TurbineControlPayload::blockPos, (player, msg) -> {
+					if (player.serverLevel().getBlockEntity(msg.blockPos()) instanceof WindTurbineBlockEntity turbine) {
+						applyTurbineControl(turbine, msg);
+					}
+				});
+
+		panelCommand(id++, SolarControlPayload.class, SolarControlPayload::write, SolarControlPayload::read,
+				SolarControlPayload::blockPos, (player, msg) -> {
+					var machine = player.serverLevel().getBlockEntity(msg.blockPos());
+					if (machine instanceof PvInverterBlockEntity inverter) {
+						applyInverterControl(inverter, msg);
+					} else if (machine instanceof PvArrayBlockEntity array) {
+						applyArrayControl(array, msg);
+					}
+				});
+
+		toClient(id++, WireConnectionPayload.class, WireConnectionPayload::write, WireConnectionPayload::read,
+				ElectricityClient::handleWireConnectionPacket);
+
+		toClient(id++, PowerUpdatePayload.class, PowerUpdatePayload::write, PowerUpdatePayload::read,
+				ElectricityClient::handlePowerUpdatePacket);
+
+		panelCommand(id++, PlantControlPayload.class, PlantControlPayload::write, PlantControlPayload::read,
+				PlantControlPayload::blockPos, (player, msg) -> {
+					if (player.serverLevel().getBlockEntity(msg.blockPos()) instanceof PlantControllerBlockEntity controller) {
+						applyPlantControl(controller, msg);
+					}
+				});
+	}
+
+	private static void applyPlantControl(PlantControllerBlockEntity controller, PlantControlPayload msg) {
+		switch (msg.action()) {
+			case CYCLE_MODE -> controller.setMode(controller.getMode().next());
+			case SET_SETPOINT -> controller.setSetpointKw(msg.value());
+		}
+	}
+
+	/** A reading the server sends out and the client draws: nothing to check but the side it arrived on. */
+	private static <T> void toClient(int id, Class<T> type, BiConsumer<T, FriendlyByteBuf> encoder,
+			Function<FriendlyByteBuf, T> decoder, Consumer<T> handler) {
+		INSTANCE.messageBuilder(type, id, NetworkDirection.PLAY_TO_CLIENT).encoder(encoder).decoder(decoder)
 				.consumerNetworkThread((msg, contextSupplier) -> {
 					var context = contextSupplier.get();
-
 					if (context.getDirection().getReceptionSide().isClient()) {
-						context.enqueueWork(() -> ElectricityClient.handleSyncPacket(msg));
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(UpdateUtilityPoleConfigPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(UpdateUtilityPoleConfigPayload::write)
-				.decoder(UpdateUtilityPoleConfigPayload::read).consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isServer()) {
-						context.enqueueWork(() -> {
-							var player = context.getSender();
-							if (player == null) return;
-
-							var world = player.serverLevel();
-							var pos = msg.blockPos();
-
-							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
-							if (!world.mayInteract(player, pos)) return;
-
-							if (world.getBlockEntity(pos) instanceof UtilityPoleBlockEntity blockEntity) {
-								blockEntity.setOffsetX(msg.offsetX());
-								blockEntity.setOffsetY(msg.offsetY());
-								blockEntity.setOffsetZ(msg.offsetZ());
-								blockEntity.setYaw(msg.yaw());
-								blockEntity.setPitch(msg.pitch());
-							}
-						});
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(CreateWireFromInsulatorsPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(CreateWireFromInsulatorsPayload::write)
-				.decoder(CreateWireFromInsulatorsPayload::read).consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isServer()) {
-						context.enqueueWork(() -> {
-							var player = context.getSender();
-							if (player == null) return;
-
-							Electricity.wireManager.createWireFromInsulators(player, msg);
-						});
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(TurbineControlPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(TurbineControlPayload::write).decoder(TurbineControlPayload::read)
-				.consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isServer()) {
-						context.enqueueWork(() -> {
-							var player = context.getSender();
-							if (player == null) return;
-
-							var world = player.serverLevel();
-							var pos = msg.blockPos();
-
-							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
-							if (!world.mayInteract(player, pos)) return;
-
-							if (world.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) {
-								if (!withinReach(player, turbine)) return;
-
-								applyTurbineControl(turbine, msg);
-							}
-						});
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(SolarControlPayload.class, id++, NetworkDirection.PLAY_TO_SERVER).encoder(SolarControlPayload::write).decoder(SolarControlPayload::read)
-				.consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isServer()) {
-						context.enqueueWork(() -> {
-							var player = context.getSender();
-							if (player == null) return;
-
-							var world = player.serverLevel();
-							var pos = msg.blockPos();
-
-							if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return;
-							if (!world.mayInteract(player, pos)) return;
-							// a plain distance check, unlike the turbine's: an array and an inverter are one
-							// block each, so there is no structure to stand anywhere along
-							if (player.distanceToSqr(Vec3.atCenterOf(pos)) > MAX_CONTROL_DISTANCE_SQ) return;
-
-							var blockEntity = world.getBlockEntity(pos);
-							if (blockEntity instanceof PvInverterBlockEntity inverter) {
-								applyInverterControl(inverter, msg);
-							} else if (blockEntity instanceof PvArrayBlockEntity array) {
-								applyArrayControl(array, msg);
-							}
-						});
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(WireConnectionPayload.class, id++, NetworkDirection.PLAY_TO_CLIENT).encoder(WireConnectionPayload::write).decoder(WireConnectionPayload::read)
-				.consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isClient()) {
-						context.enqueueWork(() -> ElectricityClient.handleWireConnectionPacket(msg));
-					}
-
-					context.setPacketHandled(true);
-				}).add();
-
-		INSTANCE.messageBuilder(PowerUpdatePayload.class, id++, NetworkDirection.PLAY_TO_CLIENT).encoder(PowerUpdatePayload::write).decoder(PowerUpdatePayload::read)
-				.consumerNetworkThread((msg, contextSupplier) -> {
-					var context = contextSupplier.get();
-
-					if (context.getDirection().getReceptionSide().isClient()) {
-						context.enqueueWork(() -> ElectricityClient.handlePowerUpdatePacket(msg));
+						context.enqueueWork(() -> handler.accept(msg));
 					}
 
 					context.setPacketHandled(true);
@@ -172,35 +119,58 @@ public class ElectricityNetworking {
 	}
 
 	/**
-	 * Whether the player is close enough to the machine to be working its panel.
+	 * A command from a machine's panel, taken only if the player could be standing at that machine.
 	 *
-	 * Measured to the nearest point of the tower rather than to the machine, because the
-	 * machine is at the top of its tower and the panel is worked from the ground. Measuring
-	 * to the nacelle put a player at the foot of a C130 thirteen blocks away and silently
-	 * discarded every command they gave it.
-	 *
-	 * So the reference point slides up and down the tower to meet the player: it is the
-	 * horizontal distance to the column, plus whatever vertical distance remains once they
-	 * are past either end. Standing anywhere along the structure counts as standing at it,
-	 * which is the whole intent, while still stopping a crafted packet from shutting down
-	 * turbines from across the world.
+	 * One guard for all of them, because they were three with three different subsets of it: the pole's
+	 * offsets had no distance bound at all, so a client that asked could re-pose any pole in a loaded chunk.
 	 */
-	private static boolean withinReach(ServerPlayer player, WindTurbineBlockEntity turbine) {
-		BlockPos pos = turbine.getBlockPos();
+	private static <T> void panelCommand(int id, Class<T> type, BiConsumer<T, FriendlyByteBuf> encoder,
+			Function<FriendlyByteBuf, T> decoder, Function<T, BlockPos> target, BiConsumer<ServerPlayer, T> handler) {
+		clientRequest(id, type, encoder, decoder, (player, msg) -> {
+			if (atThePanel(player, target.apply(msg))) handler.accept(player, msg);
+		});
+	}
+
+	/**
+	 * A request that checks its own targets, so only the sender is established here.
+	 *
+	 * The one of these is stringing a span, and it has no reach bound on purpose: its two ends are a
+	 * conductor's length apart by design, and the far one may be a fitting eleven blocks up a tower reached
+	 * through a shell cell. {@link com.dooji.electricity.main.wire.WireManager} validates both ends itself,
+	 * reads the conductor off the player's hand rather than the packet, and asks each fitting whether it
+	 * takes that class.
+	 */
+	private static <T> void clientRequest(int id, Class<T> type, BiConsumer<T, FriendlyByteBuf> encoder,
+			Function<FriendlyByteBuf, T> decoder, BiConsumer<ServerPlayer, T> handler) {
+		INSTANCE.messageBuilder(type, id, NetworkDirection.PLAY_TO_SERVER).encoder(encoder).decoder(decoder)
+				.consumerNetworkThread((msg, contextSupplier) -> {
+					var context = contextSupplier.get();
+					if (context.getDirection().getReceptionSide().isServer()) {
+						context.enqueueWork(() -> {
+							ServerPlayer player = context.getSender();
+							if (player != null) handler.accept(player, msg);
+						});
+					}
+
+					context.setPacketHandled(true);
+				}).add();
+	}
+
+	/** Whether the player is where they would have to be to work the machine at this position. */
+	private static boolean atThePanel(ServerPlayer player, BlockPos pos) {
+		ServerLevel world = player.serverLevel();
+		if (!world.hasChunkAt(pos) || !world.getWorldBorder().isWithinBounds(pos)) return false;
+		if (!world.mayInteract(player, pos)) return false;
+
+		// A machine taller than its own block is worked from anywhere along it: a turbine's panel is at the
+		// foot of a tower that stands up to eleven blocks under the nacelle's own block.
+		double foot = world.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine
+				? pos.getY() - turbine.getTowerSegments() : pos.getY();
 		Vec3 axis = Vec3.atCenterOf(pos);
-		double foot = pos.getY() - turbine.getTowerSegments();
-		double nearestY = Mth.clamp(player.getY(), foot, pos.getY() + 1.0);
-
-		return player.distanceToSqr(axis.x, nearestY, axis.z) <= MAX_CONTROL_DISTANCE_SQ;
+		return player.distanceToSqr(axis.x, Mth.clamp(player.getY(), foot, pos.getY() + 1.0), axis.z) <= MAX_CONTROL_DISTANCE_SQ;
 	}
 
-	/**
-	 * Applies one panel command.
-	 *
-	 * Nothing here trusts the payload's number: the block entity's own setter clamps the
-	 * curtailment setpoint to the machine's nameplate, so the worst a crafted packet
-	 * achieves is a setting the player could have dialled in by hand anyway.
-	 */
+	/** Applies one panel command. */
 	private static void applyTurbineControl(WindTurbineBlockEntity turbine, TurbineControlPayload msg) {
 		switch (msg.action()) {
 			case TOGGLE_RUNNING -> turbine.setStoppedByPlayer(!turbine.isStoppedByPlayer());
@@ -209,13 +179,7 @@ public class ElectricityNetworking {
 		}
 	}
 
-	/**
-	 * Applies one command from an inverter's panel.
-	 *
-	 * The array actions are ignored rather than rejected, which is the right way round: one payload
-	 * serves both node kinds, and a command aimed at a tracker arriving at a cabinet is a mistake in the
-	 * client rather than an attack.
-	 */
+	/** Applies one command from an inverter's panel. */
 	private static void applyInverterControl(PvInverterBlockEntity inverter, SolarControlPayload msg) {
 		switch (msg.action()) {
 			case INVERTER_TOGGLE_RUNNING -> inverter.setStoppedByPlayer(!inverter.isStoppedByPlayer());
@@ -227,7 +191,7 @@ public class ElectricityNetworking {
 		}
 	}
 
-	/** Applies one command from an array's panel. Nothing here is trusted; the setters clamp. */
+	/** Applies one command from an array's panel. */
 	private static void applyArrayControl(PvArrayBlockEntity array, SolarControlPayload msg) {
 		switch (msg.action()) {
 			case ARRAY_CYCLE_TRACKER_MODE -> array.setTrackerMode(array.trackerMode().next());

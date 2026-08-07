@@ -23,27 +23,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * A reel of direct-current cable.
- *
- * Three things a player can do with it, in the order the click is tested:
- *
- * <ol>
- * <li><b>Plug it into a machine.</b> Right-clicking an array works a set of leads into it - that is
- *     what {@link DcTerminal#withCableFitted} answers - and until that is done the array's strings go
- *     nowhere, because a string with no leads on it is not connected to anything. The machine grows a
- *     junction box to show it.</li>
- * <li><b>Dig it in.</b> Sneak on the top of ground a shovel would move and the cable takes that
- *     block's place: the spoil comes back as an item, the run is drawn flush in its sand bedding, and
- *     it is walked over rather than tripped in. It also loses a fifth of its rating, because a trench
- *     is a worse place to shed heat than moving air.</li>
- * <li><b>Lay it on top.</b> Anything else, and it goes down like redstone.</li>
- * </ol>
- *
- * The order matters and this is the order it has to be. A click on an array has to be a plug rather
- * than a placement, or the one interaction a player will reach for most would put a cable on the roof
- * of the machine instead of into it.
- */
+/** A reel of direct-current cable. */
 public class DcCableItem extends BlockItem {
 	private final DcCableSpec spec;
 
@@ -80,14 +60,7 @@ public class DcCableItem extends BlockItem {
 		return InteractionResult.sidedSuccess(level.isClientSide);
 	}
 
-	/**
-	 * Whether this click is a trench rather than a surface run.
-	 *
-	 * Ground a shovel would move, hit on its top face, while sneaking. Shovel-workable is the right
-	 * test and not a list of block names: it is exactly the set of things a real crew digs a trench
-	 * through with a machine rather than a breaker, and it comes with the datapack rather than being
-	 * restated here.
-	 */
+	/** Whether this click is a trench rather than a surface run. */
 	private boolean trenchable(UseOnContext context, BlockState target) {
 		Player player = context.getPlayer();
 		return player != null && player.isSecondaryUseActive()
@@ -100,7 +73,7 @@ public class DcCableItem extends BlockItem {
 		Level level = context.getLevel();
 		if (!level.isClientSide) {
 			Player player = context.getPlayer();
-			// the spoil, because a trench is dug rather than conjured - and in creative nothing is
+			// the spoil, because a trench is dug rather than conjured
 			// carried either way
 			if (player == null || !player.isCreative()) Block.dropResources(ground, level, pos);
 

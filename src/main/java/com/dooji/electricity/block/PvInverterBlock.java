@@ -4,6 +4,8 @@ import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.main.Electricity;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,53 +24,51 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * The cabinet a photovoltaic plant actually is.
- *
- * A field of modules is not a power station until something turns their direct current into
- * alternating current at grid voltage, holds a power factor, and reports what it is doing. That is
- * this block: the generator as far as the rest of the mod is concerned, the node a computer talks to,
- * and the thing that clips.
- *
- * <h2>Size</h2>
- *
- * Four products spanning a factor of two hundred and fifty in nameplate, drawn at three sizes,
- * because that is roughly how the real ones scale: a residential machine hangs on a wall, a
- * commercial one stands about as tall as a person, and a central inverter is a shipping container
- * with a transformer next to it. The door faces the way it was placed, because a technician has to be
- * able to open it.
- */
-public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+/** The cabinet a photovoltaic plant actually is. */
+public class PvInverterBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing pv_inverter.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/**
-	 * A combiner box fitted inside the cabinet, giving it fused string terminals it did not have.
-	 *
-	 * A real option on a real product: a central inverter's direct-current section is a factory-fitted
-	 * combiner, and the *virtual central* arrangement - boxes spread through the field, machines together
-	 * at one end - is the other way of solving the same problem. So both are here, and this is the first.
-	 *
-	 * A block state rather than block entity data because a cable has to know whether the machine takes
-	 * strings while a chunk is being meshed. Which box it is lives in the block entity, since that only
-	 * decides how many strings, not whether any.
-	 */
+	/** A combiner box fitted inside the cabinet, giving it fused string terminals it did not have. */
 	public static final BooleanProperty COMBINER = BooleanProperty.create("combiner");
 
-	/** A wall-mounted residential machine: shallow, and not much taller than it is wide. */
-	private static final VoxelShape SMALL_SHAPE = Block.box(2.0, 0.0, 4.0, 14.0, 12.0, 12.0);
-	/** A commercial cabinet standing on the ground. */
-	private static final VoxelShape MEDIUM_SHAPE = Block.box(1.0, 0.0, 3.0, 15.0, 16.0, 13.0);
-	/** A central inverter, which is a container rather than a cabinet. */
-	private static final VoxelShape LARGE_SHAPE = Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 16.0);
+	/** The machine as collision, cut from pv_inverter.obj at the size it is drawn. */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Block.box(0.48, 0.00, 2.05, 15.52, 16.00, 12.96)));
+
+	/** The same table at the other two sizes the renderer draws. */
+	private static final List<Cell> CABINET_CELLS = scaledCells(0.92);
+	private static final List<Cell> WALL_CELLS = scaledCells(0.62);
+
+	// The direct-current compartment used to be subtracted from each table, so an inverter without one had
+	// its collision notched. Against a cabinet drawn as one rectangle that notch is 0.6 px of the front
+	// face, which no player can feel - so the shape no longer depends on whether the compartment is fitted.
+
+	private static List<Cell> scaledCells(double factor) {
+		List<Cell> out = new ArrayList<>();
+		for (Cell cell : CELLS) {
+			VoxelShape scaled = Shapes.empty();
+			for (AABB box : cell.shape(0).toAabbs()) {
+				scaled = Shapes.or(scaled, Shapes.box(
+						0.5 + (box.minX - 0.5) * factor, box.minY * factor, 0.5 + (box.minZ - 0.5) * factor,
+						0.5 + (box.maxX - 0.5) * factor, box.maxY * factor, 0.5 + (box.maxZ - 0.5) * factor));
+			}
+
+			// every cell of this machine is its own
+			out.add(new Cell(0, 0, 0, scaled));
+		}
+
+		return List.copyOf(out);
+	}
 
 	/** Nameplate above which a machine is drawn as a container rather than a cabinet, in kW. */
 	private static final double CONTAINER_KW = 1000.0;
@@ -92,14 +92,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		builder.add(FACING, COMBINER);
 	}
 
-	/**
-	 * Which gauge lands on this machine, off its own datasheet.
-	 *
-	 * The distinction a real catalogue makes and this one now makes too: a residential or commercial
-	 * machine has plug connectors, so strings go straight in and a combiner's trunk has nowhere to go. A
-	 * utility string machine has both. A central machine has bare busbars, so it takes a trunk and cannot
-	 * take a string at all - which is why it needs combiner boxes rather than merely liking them.
-	 */
+	/** Which gauge lands on this machine, off its own datasheet. */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		if (cable.trunk()) return spec.trunkTerminals();
@@ -107,13 +100,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		return spec.stringTerminals() || state.getValue(COMBINER);
 	}
 
-	/**
-	 * Whether a combiner box can be worked into this cabinet, and the state it takes when it is.
-	 *
-	 * Only a machine that has no fused string terminals of its own, which is the central one. Refusing it
-	 * on the others is not pedantry: a string inverter's terminals *are* its fuses, so a box inside one
-	 * would be a second set of fuses in series with the first, and no vendor sells that.
-	 */
+	/** Whether a combiner box can be worked into this cabinet */
 	@Nullable
 	public BlockState withCombinerFitted(BlockState state) {
 		if (spec.stringTerminals() || state.getValue(COMBINER)) return null;
@@ -134,10 +121,26 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		if (spec.acPowerKw() >= CONTAINER_KW) return LARGE_SHAPE;
-		if (spec.acPowerKw() <= WALL_KW) return SMALL_SHAPE;
+		return shellShape(state);
+	}
 
-		return MEDIUM_SHAPE;
+	/** Which of the three sizes this product is: a container, a wall unit, or the cabinet between them. */
+	@Override
+	public List<Cell> shellCells(BlockState state) {
+		if (spec.acPowerKw() >= CONTAINER_KW) return CELLS;
+		if (spec.acPowerKw() <= WALL_KW) return WALL_CELLS;
+
+		return CABINET_CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Nullable
@@ -156,13 +159,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		};
 	}
 
-	/**
-	 * Takes the cabinet out of the plant when it is actually broken.
-	 *
-	 * This and not the block entity's own removal, which also happens every time the chunk unloads: the
-	 * plant reaches into other chunks here, and reaching out of an unloading chunk is what stops a world
-	 * from ever finishing its save.
-	 */
+	/** Takes the cabinet out of the plant when it is actually broken. */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {

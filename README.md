@@ -15,11 +15,16 @@ that talk to Mekanism and answer to ComputerCraft.
 
 > [!NOTE]
 > This is a **fork** of [dooji2/electricity](https://github.com/dooji2/electricity).
-> The grid simulation, the weather model, the blocks and the art are all dooji's work.
-> What this fork adds is everything under [Integrations](#integrations): the turbine
-> now feeds other mods' energy networks, reports itself as a ComputerCraft peripheral
-> with 63 plant signals, and can be stopped and curtailed — and the placeholder solar
-> panel has become a photovoltaic plant with arrays, inverters, trackers and a met mast.
+> The grid simulation, the weather model and the blocks are dooji's work, as are the
+> turbine and the electric cabin — the two models everything else here was measured
+> against. What this fork adds is everything under [Integrations](#integrations): the
+> turbine now feeds other mods' energy networks, reports itself as a ComputerCraft
+> peripheral with 63 plant signals, and can be stopped and curtailed; the placeholder
+> solar panel has become a photovoltaic plant with arrays, inverters, trackers and a met
+> mast; and every other placeable has been redrawn to the turbine's own level of detail,
+> with its collision cut from its own geometry.
+>
+> → [The models, the textures and the hitboxes](docs/model-audit.md)
 
 ---
 
@@ -34,7 +39,7 @@ flowchart LR
     C -->|wire| P1["Utility Pole"]
     P1 -->|wire| P2["Utility Pole"]
     P2 -->|wire| B["Power Box<br/><i>distributes in a radius</i>"]
-    B -.->|power field| L["💡 Electric Lamp"]
+    B -.->|power field| L["Any Forge Energy machine<br/><i>in the radius</i>"]
     W -->|Joules / Forge Energy| M["🔌 Mekanism cable,<br/>or any FE machine"]
     style W fill:#2d6a4f,stroke:#95d5b2,color:#fff
     style M fill:#5a189a,stroke:#c77dff,color:#fff
@@ -138,21 +143,19 @@ and rain washes a tilted array clean and a flat one only partly.
 | 📦 | **Electric Cabin** | Collects from generators and passes it to utility poles. Two insulators: **left is output, right is input**. |
 | 🗼 | **Utility Pole** | Carries power across distance. Eight insulators, configurable. |
 | 🔋 | **Power Box** | Distributes within a radius, and bridges to Forge Energy. |
-| 💡 | **Electric Lamp** | Example consumer. Has wear, burns out, reacts to power quality. |
 | 🔧 | **Power Wrench** | Opens a live diagnostics panel on any electric block. |
 | 🧵 | **Wire** | Right-click one insulator, then another. |
-| 🛠️ | **Electric Workbench** | Crafts every component below. |
 | ☀️ | **Photovoltaic Arrays** | Six products from a flat 18 kW table to a dual-axis tracker, on four mountings, built from six real module datasheets. Produce nothing without an inverter, because an open-circuit string does not — and not every string fits every inverter's tracking window. |
 | 🔌 | **Inverters** | Four machines from 10 kW to 2.5 MW. Clip when the array offers too much, derate when the air is hot, hold a power factor, and draw a watt overnight like the real ones. |
 | 📡 | **Meteorological Mast** | Nine instruments: global, diffuse and plane-of-array irradiance, albedo, air and module temperature, wind, and snow. Each answers at its own instrument's speed. |
 | 📡 | **Weather Tablet** | Weather intensity map. Not functional yet. |
 
-Components — Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core — are all
-made at the Electric Workbench. Recipes are visible in-game; use JEI or the workbench UI.
+Components — Circuit Board, CPU, Screen, Insulator, Metal Casing, Motor Core — and every
+part above them are made at a normal crafting table. Recipes are visible in-game; use JEI.
 
 ## Getting started
 
-1. Craft an **Electric Workbench** at a crafting table, then the components at it.
+1. Craft the components you need at a crafting table: everything in the mod is made at one.
 2. Stack **Turbine Towers** to the height you want and seat a **Wind Turbine** on top.
    Each machine is sold on a range of tower heights and refuses to mount outside it.
    Below its cut-in wind — 3 to 4 m/s — it produces nothing. High ground is worth more
@@ -161,7 +164,7 @@ made at the Electric Workbench. Recipes are visible in-game; use JEI or the work
    insulator of an **Electric Cabin**.
 4. Cabin's **left** insulator → a **Utility Pole** → more poles → the **Power Box**
    (its insulator is underneath).
-5. Place **Electric Lamps** inside the Power Box's radius.
+5. Anything that takes Forge Energy inside the Power Box's radius is now fed.
 
 → [Step-by-step guide](docs/getting-started.md)
 

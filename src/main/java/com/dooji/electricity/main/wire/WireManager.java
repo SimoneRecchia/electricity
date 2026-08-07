@@ -1,15 +1,13 @@
 package com.dooji.electricity.main.wire;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.MachineShell;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
+import com.dooji.electricity.api.power.ConductorSpec;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
 import com.dooji.electricity.main.network.payloads.SyncWiresPayload;
 import com.dooji.electricity.main.network.payloads.WireConnectionPayload;
+import com.dooji.electricity.item.ConductorItem;
+import com.dooji.electricity.main.registry.ConductorCatalog;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,37 +25,15 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 
 public class WireManager {
 	private static final Map<ServerLevel, WireSavedData> SAVED_DATA_CACHE = new ConcurrentHashMap<>();
+	/** The longest span for a connection whose conductor this build does not know. */
 	private static final double MAX_WIRE_DISTANCE = 64.0;
-	private static final double MAX_WIRE_DISTANCE_SQ = MAX_WIRE_DISTANCE * MAX_WIRE_DISTANCE;
-
-	public InteractionResult handleWireUse(UseOnContext context) {
-		Player player = context.getPlayer();
-		if (player == null) return InteractionResult.FAIL;
-
-		Level level = context.getLevel();
-		// the same reading of the click the client made: a collision cell means the machine it belongs to
-		BlockPos clickedPos = MachineShell.hostOr(level, context.getClickedPos());
-
-		if (level.isClientSide) return InteractionResult.SUCCESS;
-
-		BlockEntity blockEntity = level.getBlockEntity(clickedPos);
-		if (!(blockEntity instanceof UtilityPoleBlockEntity || blockEntity instanceof ElectricCabinBlockEntity || blockEntity instanceof PowerBoxBlockEntity
-				|| blockEntity instanceof WindTurbineBlockEntity || blockEntity instanceof PvInverterBlockEntity)) {
-			return InteractionResult.FAIL;
-		}
-
-		return InteractionResult.SUCCESS;
-	}
 
 	public void createWireFromInsulators(ServerPlayer player, CreateWireFromInsulatorsPayload payload) {
 		if (player == null) return;
@@ -87,20 +63,109 @@ public class WireManager {
 		}
 
 		double spanDistanceSq = startAnchor.distanceToSqr(endAnchor);
-		if (spanDistanceSq > MAX_WIRE_DISTANCE_SQ) {
-			notifyPlayer(player, Component.translatable("message.electricity.wire.too_far", String.format("%.1f", Math.sqrt(spanDistanceSq)), MAX_WIRE_DISTANCE));
-			return;
-		}
 
 		String startPowerType = sanitizePowerType(startEntity, startInsulator.get().partName(), payload.startPowerType());
 		String endPowerType = sanitizePowerType(endEntity, endInsulator.get().partName(), payload.endPowerType());
 
-		WireConnection connection = new WireConnection(startInsulator.get().insulatorId(), endInsulator.get().insulatorId(), "default", payload.startBlockPos(), payload.endBlockPos(),
-				startInsulator.get().blockType(), endInsulator.get().blockType(), startPowerType, endPowerType);
+		// A span that is already there is not strung again.
+		if (alreadyStrung(level, startInsulator.get().insulatorId(), endInsulator.get().insulatorId())) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.already_connected"));
+			return;
+		}
+
+		// Which conductor this is, read off the player's own hand rather than sent from the client: a
+		// client that lies about it gets whatever it is actually holding.
+		ConductorSpec spec = heldConductor(player);
+
+		// And whether both fittings will take it at all. Five conductors that anything accepts are five
+		// conductors that look interchangeable; a tower takes transmission, a pole takes a street bundle or a
+		// medium-voltage line, and a kiosk takes the bundle. Each fitting says for itself.
+		if (spec != null && !(accepts(startEntity, startInsulator.get().index(), spec)
+				&& accepts(endEntity, endInsulator.get().index(), spec))) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.wrong_class",
+					Component.translatable("item.electricity." + spec.id().getPath())));
+			return;
+		}
+
+		double span = Math.sqrt(spanDistanceSq);
+		double limit = spec == null ? MAX_WIRE_DISTANCE : spec.maxSpan();
+		if (span > limit) {
+			notifyPlayer(player, Component.translatable("message.electricity.wire.too_far",
+					String.format("%.1f", span), (int) limit));
+			return;
+		}
+
+		// The charge, and it is the last thing before the connection is saved on purpose: everything that
+		int charged = 0;
+		if (spec != null && !player.isCreative()) {
+			charged = spec.cost(span);
+			if (!takeConductor(player, spec, charged)) {
+				notifyPlayer(player, Component.translatable("message.electricity.wire.not_enough",
+						charged, Component.translatable("item.electricity." + spec.id().getPath())));
+				return;
+			}
+		}
+
+		WireConnection connection = new WireConnection(startInsulator.get().insulatorId(), endInsulator.get().insulatorId(),
+				spec == null ? "default" : spec.id().getPath(), payload.startBlockPos(), payload.endBlockPos(),
+				startInsulator.get().blockType(), endInsulator.get().blockType(), startPowerType, endPowerType, charged);
 
 		saveWireConnection(level, connection);
 		broadcastWireCreation(level, connection);
 		notifyPlayer(player, Component.translatable("message.electricity.wire.connected", startInsulator.get().insulatorId(), endInsulator.get().insulatorId()));
+	}
+
+	/** Whether these two fittings are already joined, in either order. */
+	private boolean alreadyStrung(ServerLevel level, int first, int second) {
+		for (WireConnection existing : getOrCreateSavedData(level).getAllWireConnections()) {
+			if ((existing.startInsulatorId() == first && existing.endInsulatorId() == second)
+					|| (existing.startInsulatorId() == second && existing.endInsulatorId() == first)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** Whether one fitting will take this conductor: a class per fitting, not one rule for the mod. */
+	private static boolean accepts(BlockEntity entity, int index, ConductorSpec spec) {
+		return !(entity instanceof InsulatorHost host) || host.takesConductor(spec, index);
+	}
+
+	/** The conductor in the player's hand, or null if they are holding the old plain wire or nothing. */
+	@javax.annotation.Nullable
+	private static ConductorSpec heldConductor(ServerPlayer player) {
+		for (ItemStack stack : new ItemStack[]{player.getMainHandItem(), player.getOffhandItem()}) {
+			if (stack.getItem() instanceof ConductorItem conductor) return conductor.spec();
+		}
+
+		return null;
+	}
+
+	/** Takes the conductor out of the player's inventory */
+	private static boolean takeConductor(ServerPlayer player, ConductorSpec spec, int wanted) {
+		int held = 0;
+		for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+			ItemStack stack = player.getInventory().getItem(slot);
+			if (stack.getItem() instanceof ConductorItem conductor && conductor.spec().id().equals(spec.id())) {
+				held += stack.getCount();
+			}
+		}
+
+		if (held < wanted) return false;
+
+		int left = wanted;
+		for (int slot = 0; slot < player.getInventory().getContainerSize() && left > 0; slot++) {
+			ItemStack stack = player.getInventory().getItem(slot);
+			if (!(stack.getItem() instanceof ConductorItem conductor)
+					|| !conductor.spec().id().equals(spec.id())) continue;
+
+			int take = Math.min(left, stack.getCount());
+			stack.shrink(take);
+			left -= take;
+		}
+
+		return true;
 	}
 
 	private void saveWireConnection(ServerLevel level, WireConnection connection) {
@@ -188,6 +253,26 @@ public class WireManager {
 		savedData.setDirty();
 		for (WireConnection connection : removedConnections) {
 			broadcastWireRemoval(level, connection);
+			refund(level, connection);
+		}
+	}
+
+	/** Gives back exactly what a span was charged, as an item on the ground where it was strung. */
+	private void refund(ServerLevel level, WireConnection connection) {
+		int count = connection.chargedItems();
+		if (count <= 0) return;
+
+		ConductorSpec spec = ConductorCatalog.byPath(connection.wireType());
+		if (spec == null) return;
+
+		var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(spec.id());
+		if (item == null) return;
+
+		BlockPos at = connection.startBlockPos();
+		while (count > 0) {
+			int drop = Math.min(count, 64);
+			net.minecraft.world.level.block.Block.popResource(level, at, new ItemStack(item, drop));
+			count -= drop;
 		}
 	}
 
@@ -206,12 +291,12 @@ public class WireManager {
 		}
 
 		public void addWireConnection(WireConnection connection) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			wireConnections.put(key, connection);
 		}
 
 		public void removeWireConnection(WireConnection connection) {
-			String key = connection.getStartInsulatorId() + "_" + connection.getEndInsulatorId();
+			String key = connection.startInsulatorId() + "_" + connection.endInsulatorId();
 			wireConnections.remove(key);
 		}
 
@@ -221,7 +306,7 @@ public class WireManager {
 
 			while (iterator.hasNext()) {
 				WireConnection connection = iterator.next();
-				if (insulatorIds.contains(connection.getStartInsulatorId()) || insulatorIds.contains(connection.getEndInsulatorId())) {
+				if (insulatorIds.contains(connection.startInsulatorId()) || insulatorIds.contains(connection.endInsulatorId())) {
 					iterator.remove();
 					removed.add(connection);
 				}
@@ -239,15 +324,16 @@ public class WireManager {
 			ListTag wiresList = new ListTag();
 			for (WireConnection connection : wireConnections.values()) {
 				CompoundTag wireTag = new CompoundTag();
-				wireTag.putInt("startInsulatorId", connection.getStartInsulatorId());
-				wireTag.putInt("endInsulatorId", connection.getEndInsulatorId());
-				wireTag.putString("wireType", connection.getWireType());
-				wireTag.putLong("startBlockPos", connection.getStartBlockPos().asLong());
-				wireTag.putLong("endBlockPos", connection.getEndBlockPos().asLong());
-				wireTag.putString("startBlockType", connection.getStartBlockType());
-				wireTag.putString("endBlockType", connection.getEndBlockType());
-				wireTag.putString("startPowerType", connection.getStartPowerType());
-				wireTag.putString("endPowerType", connection.getEndPowerType());
+				wireTag.putInt("startInsulatorId", connection.startInsulatorId());
+				wireTag.putInt("endInsulatorId", connection.endInsulatorId());
+				wireTag.putString("wireType", connection.wireType());
+				wireTag.putLong("startBlockPos", connection.startBlockPos().asLong());
+				wireTag.putLong("endBlockPos", connection.endBlockPos().asLong());
+				wireTag.putString("startBlockType", connection.startBlockType());
+				wireTag.putString("endBlockType", connection.endBlockType());
+				wireTag.putString("startPowerType", connection.startPowerType());
+				wireTag.putString("endPowerType", connection.endPowerType());
+				wireTag.putInt("chargedItems", connection.chargedItems());
 				wiresList.add(wireTag);
 			}
 			tag.put("wires", wiresList);
@@ -271,7 +357,8 @@ public class WireManager {
 				String startPowerType = wireTag.getString("startPowerType");
 				String endPowerType = wireTag.getString("endPowerType");
 
-				WireConnection connection = new WireConnection(startInsulatorId, endInsulatorId, wireType, startBlockPos, endBlockPos, startBlockType, endBlockType, startPowerType, endPowerType);
+				WireConnection connection = new WireConnection(startInsulatorId, endInsulatorId, wireType, startBlockPos, endBlockPos, startBlockType, endBlockType, startPowerType, endPowerType,
+						wireTag.getInt("chargedItems"));
 				String key = startInsulatorId + "_" + endInsulatorId;
 				wireConnections.put(key, connection);
 			}

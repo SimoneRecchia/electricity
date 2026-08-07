@@ -2,17 +2,7 @@ package com.dooji.electricity.api.power;
 
 import java.util.Map;
 
-/**
- * The tags a wind turbine's SCADA publishes, and what kind of number each one is.
- *
- * Names only: the snapshot, the builder and the three kinds live in {@link Telemetry}, because the
- * photovoltaic plant needed exactly the same machinery and a second copy of it would have been a
- * second place for the rounding and the boolean coercion to drift.
- *
- * What is here is what is specific to a turbine - about fifty signal names taken from what a real
- * machine's controller publishes, sorted into the three kinds so a program can tell an instrument
- * reading from an invented one at runtime.
- */
+/** The tags a wind turbine's SCADA publishes */
 public final class TurbineTelemetry {
 	// measured
 	public static final String WIND_SPEED = "windSpeed";
@@ -101,8 +91,7 @@ public final class TurbineTelemetry {
 	}
 
 	/**
-	 * @return whether {@code tag} is measured, derived or simulated, or null when the tag is not one
-	 *         this mod reports.
+	 * @return whether {@code tag} is measured, derived or simulated, or null when the tag is not one this mod reports.
 	 */
 	public static Telemetry.Kind kind(String tag) {
 		return KINDS.get(tag);

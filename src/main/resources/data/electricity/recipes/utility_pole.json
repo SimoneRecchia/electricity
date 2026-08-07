@@ -1,13 +1,17 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
     "III",
     " S ",
     " S "
   ],
   "key": {
-    "I": { "item": "electricity:insulator" },
-    "S": { "item": "minecraft:stone" }
+    "I": {
+      "item": "electricity:insulator"
+    },
+    "S": {
+      "item": "minecraft:stone"
+    }
   },
   "result": {
     "item": "electricity:utility_pole",

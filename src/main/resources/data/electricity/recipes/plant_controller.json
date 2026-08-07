@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "ScS",
+    "bEb",
+    "PQP"
+  ],
+  "key": {
+    "E": {
+      "item": "electricity:enclosure"
+    },
+    "P": {
+      "item": "electricity:steel_plate"
+    },
+    "Q": {
+      "item": "electricity:load_break_switch"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    },
+    "b": {
+      "item": "electricity:control_board"
+    },
+    "c": {
+      "item": "minecraft:copper_ingot"
+    }
+  },
+  "result": {
+    "item": "electricity:plant_controller"
+  }
+}

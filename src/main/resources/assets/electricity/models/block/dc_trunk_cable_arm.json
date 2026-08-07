@@ -1,70 +1,18 @@
 {
-  "parent": "block/block",
-  "ambientocclusion": false,
+  "loader": "forge:obj",
+  "model": "electricity:models/dc_trunk_cable/dc_trunk_cable_arm.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
   "textures": {
-    "particle": "#cable",
-    "cable": "electricity:block/dc_trunk_line"
-  },
-  "elements": [
-    {
-      "from": [
-        7.0,
-        0.0,
-        0.0
-      ],
-      "to": [
-        9.0,
-        1.0,
-        7.0
-      ],
-      "faces": {
-        "up": {
-          "uv": [
-            7.0,
-            0.0,
-            9.0,
-            7.0
-          ],
-          "texture": "#cable"
-        },
-        "north": {
-          "uv": [
-            7.0,
-            15.0,
-            9.0,
-            16.0
-          ],
-          "texture": "#cable",
-          "cullface": "north"
-        },
-        "south": {
-          "uv": [
-            7.0,
-            15.0,
-            9.0,
-            16.0
-          ],
-          "texture": "#cable"
-        },
-        "west": {
-          "uv": [
-            0.0,
-            15.0,
-            7.0,
-            16.0
-          ],
-          "texture": "#cable"
-        },
-        "east": {
-          "uv": [
-            0.0,
-            15.0,
-            7.0,
-            16.0
-          ],
-          "texture": "#cable"
-        }
-      }
-    }
-  ]
+    "core": "electricity:block/dc_trunk_core",
+    "shrink": "electricity:block/dc_trunk_shrink",
+    "lug": "electricity:block/dc_trunk_lug",
+    "cleat": "electricity:block/dc_cleat",
+    "gland": "electricity:block/dc_gland",
+    "jbox": "electricity:block/dc_jbox",
+    "jbox_side": "electricity:block/dc_jbox_side",
+    "trench": "electricity:block/dc_trench",
+    "particle": "electricity:block/dc_trunk_core"
+  }
 }

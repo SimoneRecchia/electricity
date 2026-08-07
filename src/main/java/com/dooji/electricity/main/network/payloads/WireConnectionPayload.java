@@ -25,14 +25,14 @@ public static final ResourceLocation ID = new ResourceLocation("electricity", "w
 	}
 
 	public static void writeConnection(FriendlyByteBuf buf, WireConnection connection) {
-		buf.writeInt(connection.getStartInsulatorId());
-		buf.writeInt(connection.getEndInsulatorId());
-		buf.writeUtf(connection.getWireType());
-		buf.writeBlockPos(connection.getStartBlockPos());
-		buf.writeBlockPos(connection.getEndBlockPos());
-		buf.writeUtf(connection.getStartBlockType());
-		buf.writeUtf(connection.getEndBlockType());
-		buf.writeUtf(connection.getStartPowerType());
-		buf.writeUtf(connection.getEndPowerType());
+		buf.writeInt(connection.startInsulatorId());
+		buf.writeInt(connection.endInsulatorId());
+		buf.writeUtf(connection.wireType());
+		buf.writeBlockPos(connection.startBlockPos());
+		buf.writeBlockPos(connection.endBlockPos());
+		buf.writeUtf(connection.startBlockType());
+		buf.writeUtf(connection.endBlockType());
+		buf.writeUtf(connection.startPowerType());
+		buf.writeUtf(connection.endPowerType());
 	}
 }

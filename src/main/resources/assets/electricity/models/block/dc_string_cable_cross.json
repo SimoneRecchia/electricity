@@ -1,0 +1,21 @@
+{
+  "loader": "forge:obj",
+  "model": "electricity:models/dc_string_cable/dc_string_cable_cross.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
+  "textures": {
+    "core": "electricity:block/dc_core",
+    "cleat": "electricity:block/dc_cleat",
+    "tie": "electricity:block/dc_tie",
+    "plug_plus": "electricity:block/dc_connector_plus",
+    "plug_minus": "electricity:block/dc_connector_minus",
+    "joint_plus": "electricity:block/dc_joint_plus",
+    "joint_minus": "electricity:block/dc_joint_minus",
+    "gland": "electricity:block/dc_gland",
+    "jbox": "electricity:block/dc_jbox",
+    "jbox_side": "electricity:block/dc_jbox_side",
+    "trench": "electricity:block/dc_trench",
+    "particle": "electricity:block/dc_core"
+  }
+}

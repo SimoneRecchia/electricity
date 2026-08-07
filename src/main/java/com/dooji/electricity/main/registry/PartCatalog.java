@@ -4,48 +4,20 @@ import java.util.List;
 
 /**
  * The parts a machine is made of, in the order they are made.
- *
- * <h2>Why there are so many of them</h2>
- *
- * Because of how these things are really built. A photovoltaic module is not a crafting step: it is
- * quartz sand reduced to silicon, cast into an ingot, sawn into wafers, doped and printed into cells,
- * strung, laminated between glass and film, framed, and given a junction box with three bypass diodes in
- * it. An inverter is power semiconductor modules on a busbar, a DC-link of film capacitors, magnetics, a
- * control board and a sheet-steel enclosure. A turbine is blades of glass fibre over a spar, a main
- * bearing, a gearbox or none, a generator, a yaw drive, a pitch drive and a converter cabinet.
- *
- * So the tree is deep on purpose, and every part in it is a thing that exists. Nothing here is a
- * "component" or a "widget": each one is named for what it is, and its recipe is what it is made from.
- *
- * <h2>What a tier means</h2>
- *
- * {@link Tier#RAW} parts are made at a vanilla bench or in a furnace, because a player has to be able to
- * start. Everything above that is made at the mod's own workbench, which is therefore the gate between
- * "I have iron and quartz" and "I am building a power station".
- *
- * <h2>What is not here</h2>
- *
- * Nothing placeable and nothing usable. Every entry is an input to something else and does nothing in a
- * hand - which is the whole point of a support part, and why they all share one plain item type.
+  *
+ * {@link Tier#RAW} is what a player can make straight out of the ground: steel, copper bar, wafers.
  */
 public final class PartCatalog {
 	public enum Tier {
-		/** Made at a vanilla crafting table or in a furnace: the way into the tree. */
+		/** Made out of ore and stock: the way into the tree. */
 		RAW,
-		/** Made at the workbench from raw parts: the pieces a machine is assembled from. */
+		/** Made from raw parts: the pieces a machine is assembled from. */
 		COMPONENT,
-		/** Made at the workbench from components: an assembly that goes straight into a machine. */
+		/** Made from components: an assembly that goes straight into a machine. */
 		ASSEMBLY
 	}
 
-	/**
-	 * One part.
-	 *
-	 * @param id the registry path, which is also the texture and recipe name
-	 * @param name the English name, written into the language file
-	 * @param tooltip one line saying what it is for, which for a part nobody can use is the only way to
-	 *     tell what it belongs to
-	 */
+	/** One part. */
 	public record Part(String id, Tier tier, String name, String tooltip) {
 	}
 

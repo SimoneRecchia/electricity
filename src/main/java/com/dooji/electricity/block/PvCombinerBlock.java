@@ -2,6 +2,7 @@ package com.dooji.electricity.block;
 
 import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.api.power.DcCableSpec;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,38 +26,27 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * A direct-current combiner box on its post.
- *
- * The least glamorous object on a solar farm and one of the two that make a large one possible. Strings
- * arrive at it on string cable, each through its own pair of fuses; one heavy pair leaves it for the
- * cabinet. What it buys is the difference between sixteen long thin runs and one long thick one, which
- * is a real percent or two of the plant's output, and fuses for a central inverter that has none.
- *
- * <h2>The switch</h2>
- *
- * {@link #ISOLATED} is the output load-break switch, and an empty hand on the box throws it - which is
- * exactly what a hand does to one, and is why it needs no panel control. Open, the group is off the
- * inverter and safe to work on, and the arrays behind it go to standby with the operating point at zero.
- * That is what isolating a combiner does on a real plant, and it is the only maintenance action in this
- * mod that a player can perform with their hands.
- */
-public class PvCombinerBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal {
+/** A direct-current combiner box on its post. */
+public class PvCombinerBlock extends HorizontalDirectionalBlock implements EntityBlock, DcTerminal, MachineShell {
 	/**
 	 * The facing pv_combiner.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
 	/** The output load-break switch, open. */
 	public static final BooleanProperty ISOLATED = BooleanProperty.create("isolated");
 
-	/** An enclosure on a post: narrow, shallow, and standing about waist high on the mod's scale. */
-	private static final VoxelShape SHAPE = Block.box(4.0, 0.0, 6.0, 12.0, 13.0, 10.0);
+	/** The box as collision, cut from pv_combiner.obj and turned with the block. */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(4.24, 4.86, 6.00, 12.14, 12.80, 9.60),
+					Block.box(5.72, 0.00, 5.72, 10.28, 1.60, 10.28),
+					Block.box(7.46, 0.48, 7.46, 8.54, 11.36, 9.68))));
+
 
 	private final CombinerSpec spec;
 
@@ -83,27 +73,31 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
 	}
 
-	/**
-	 * Both gauges land here, and that is the whole point of the object.
-	 *
-	 * Strings in on the thin cable, one pair out on the thick one. It is the only block in the mod that
-	 * takes both, because it is the only one whose job is to turn many of the first into one of the
-	 * second.
-	 */
+	@Override
+	public List<Cell> shellCells(BlockState state) {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
+	}
+
+	/** Both gauges land here, and that is the whole point of the object. */
 	@Override
 	public boolean acceptsCable(BlockState state, DcCableSpec cable, Direction side) {
 		return true;
 	}
 
-	/**
-	 * An empty hand throws the switch.
-	 *
-	 * Anything else falls through, so a reel of cable clicked at the box still lays cable and the wrench
-	 * still opens the panel. A player with a full hand cannot throw a switch either.
-	 */
+	/** An empty hand throws the switch. */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
 		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
@@ -135,13 +129,7 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 		};
 	}
 
-	/**
-	 * Lets the arrays go when the box is actually broken.
-	 *
-	 * Here rather than in the block entity's own removal, for the same reason the inverter does it here:
-	 * the block entity is also removed every time its chunk unloads, and reaching into another chunk
-	 * while one is unloading is what stops a world from ever finishing its save.
-	 */
+	/** Lets the arrays go when the box is actually broken. */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
 		if (!state.is(newState.getBlock()) && !level.isClientSide

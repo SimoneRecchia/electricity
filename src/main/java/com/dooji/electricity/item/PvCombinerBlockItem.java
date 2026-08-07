@@ -22,18 +22,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * A combiner box, which goes on a post in the field or inside a cabinet.
- *
- * Both are real, which is what makes this item worth two behaviours. A field combiner on a post at the
- * end of a group of rows is the ordinary case, and it is what happens when the box is placed like any
- * other block. Right-clicking a cabinet with it instead fits the box *inside* the machine as its
- * direct-current section, which is a factory option on every central inverter sold - and is the only way
- * to bring a string straight into one, because a central machine's own terminals are bare busbars.
- *
- * A string inverter refuses it and says why. Its terminals already *are* its fuses, so a box inside one
- * would be a second set in series with the first, and nobody sells that.
- */
+/** A combiner box, which goes on a post in the field or inside a cabinet. */
 public class PvCombinerBlockItem extends BlockItem {
 	private final CombinerSpec spec;
 
@@ -65,7 +54,7 @@ public class PvCombinerBlockItem extends BlockItem {
 		Level level = context.getLevel();
 		if (!level.isClientSide) {
 			level.setBlock(pos, fitted, Block.UPDATE_ALL);
-			// the block entity survives a state change on the same block, so which box it is can be
+			// the block entity survives a state change on the same block
 			// recorded straight after: the state says there is one and this says which
 			if (level.getBlockEntity(pos) instanceof PvInverterBlockEntity inverter) {
 				inverter.fitCombiner(spec);

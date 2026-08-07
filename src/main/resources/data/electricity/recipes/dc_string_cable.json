@@ -1,15 +1,15 @@
 {
-  "type": "electricity:workbench",
+  "type": "minecraft:crafting_shaped",
   "pattern": [
-    "WWW",
+    "BBB",
     "FFF"
   ],
   "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
     "F": {
       "item": "electricity:resin"
-    },
-    "W": {
-      "item": "electricity:wire"
     }
   },
   "result": {

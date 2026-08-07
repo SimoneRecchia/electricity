@@ -7,32 +7,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.entity.BlockEntity;
 
-/**
- * The met mast's panel: nine instrument readings and what is reading them.
- *
- * <h2>Why it is laid out as a list rather than as gauges</h2>
- *
- * Because a met display is a list. There is nothing to control here and nothing with a nameplate to be
- * measured against - a pyranometer reading 640 W/m2 is not 58% of anything - so bars would be inventing a
- * scale to put a number on. What an operator does with a mast is read two numbers next to each other and
- * notice that they disagree, which wants columns.
- *
- * The pairs are deliberate and each one is a check on something:
- *
- * <ul>
- * <li><b>Global against plane-of-array</b> - the same sky through two mountings. Equal when the reference
- *     array is lying flat, and the gap is what its tilt or its tracker is worth.</li>
- * <li><b>Plane-of-array against the reference cell</b> - the same plane through two instruments. The cell
- *     reads lower whenever the light is red, because it only sees what the modules see.</li>
- * <li><b>Diffuse fraction against clearness index</b> - two ways of saying how much sky there is. One near
- *     1 and the other near 0.2 is a heavy overcast; the reverse is impossible and would mean a fault.</li>
- * <li><b>Snow distance against snow height</b> - what the gauge measures and what was worked out from it.
- *     A distance that stops matching the height is how a real plant finds out the transducer has iced up.</li>
- * </ul>
- */
-public class MetStationScreen extends PlantScreen {
+/** The met mast's panel: nine instrument readings and what is reading them. */
+public class MetStationScreen extends PlantScreen<MetStationBlockEntity> {
 	private static final ResourceLocation TEXTURE = new ResourceLocation("electricity", "textures/gui/met_station.png");
 	private static final int WIDTH = 288;
 	private static final int HEIGHT = 208;
@@ -40,16 +17,7 @@ public class MetStationScreen extends PlantScreen {
 	private static final int FIRST_SEPARATOR_Y = 20;
 	private static final int SECOND_SEPARATOR_Y = 176;
 
-	/**
-	 * The two columns, and where each one's value is right-aligned to.
-	 *
-	 * A hundred and thirty each, which is not a round number chosen for looks: it is what the widest
-	 * label and the widest value in each column actually measure, plus a gap. At ninety-eight the labels
-	 * drew straight through their own values - "Plane of array" and a four-digit irradiance came out as
-	 * "Plane of arr@yW/m²" - and nothing reported it, because a collision between two strings is a
-	 * property of the font rather than of the code. {@code tools/check_gui_fits.py} measures the real
-	 * glyphs against these numbers now.
-	 */
+	/** The two columns, and where each one's value is right-aligned to. */
 	private static final int LEFT_LABEL_X = 10;
 	private static final int LEFT_VALUE_X = 140;
 	private static final int RIGHT_LABEL_X = 148;
@@ -58,12 +26,12 @@ public class MetStationScreen extends PlantScreen {
 	private static final int ROW_HEIGHT = 11;
 
 	public MetStationScreen(BlockPos targetPos) {
-		super(Component.translatable("screen.electricity.met_station.title"), TEXTURE, WIDTH, HEIGHT, targetPos);
+		super(Component.translatable("screen.electricity.met_station.title"), TEXTURE, WIDTH, HEIGHT, targetPos, MetStationBlockEntity.class);
 	}
 
 	@Override
 	protected void drawPanel(GuiGraphics graphics) {
-		MetStationBlockEntity station = station();
+		MetStationBlockEntity station = machine();
 		if (station == null) return;
 
 		graphics.drawString(font, Component.translatable("screen.electricity.met_station.title"), leftPos + MARGIN, topPos + 6, VALUE_COLOUR, false);
@@ -100,10 +68,8 @@ public class MetStationScreen extends PlantScreen {
 
 	/**
 	 * What is doing the reading, with each instrument's class beside it.
-	 *
-	 * The class is not decoration: a Class A pyranometer is what a utility power purchase agreement demands
-	 * and a Class C one is what a rooftop gets, and a performance test written against the wrong one is not
-	 * worth having. Showing it here is the same instinct as printing the IEC class on a turbine's panel.
+	  *
+	 * Showing it here is the same instinct as printing the IEC class on a turbine's panel.
 	 */
 	private void drawInstrumentList(GuiGraphics graphics, int firstRow) {
 		int y = topPos + FIRST_ROW_Y + firstRow * ROW_HEIGHT + 4;
@@ -119,7 +85,7 @@ public class MetStationScreen extends PlantScreen {
 		}
 	}
 
-	/** Which array the two on-array instruments are fitted to, and the footnote saying which those are. */
+	/** Which array the two on-array instruments are fitted to */
 	private void drawReference(GuiGraphics graphics, MetStationBlockEntity station) {
 		separator(graphics, SECOND_SEPARATOR_Y);
 
@@ -135,17 +101,5 @@ public class MetStationScreen extends PlantScreen {
 			graphics.drawString(font, line, leftPos + MARGIN, y, FAINT_COLOUR, false);
 			y += 10;
 		}
-	}
-
-	private MetStationBlockEntity station() {
-		if (minecraft == null || minecraft.level == null) return null;
-		if (minecraft.level.getBlockEntity(targetPos) instanceof MetStationBlockEntity station) return station;
-
-		return null;
-	}
-
-	@Override
-	protected BlockEntity blockEntity() {
-		return station();
 	}
 }

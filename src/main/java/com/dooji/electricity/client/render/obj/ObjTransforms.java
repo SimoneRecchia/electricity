@@ -18,13 +18,6 @@ public final class ObjTransforms {
 	public static Transform resolve(BlockEntity blockEntity) {
 		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
 			// The model is authored from the foot of the tower up, and the machine is the top
-			// block of the structure, so everything it draws belongs one whole tower lower than
-			// the block it lives in.
-			//
-			// It lives here rather than in the renderer because ObjRaycaster resolves the same
-			// transform to place an interactive part's hitbox. With the offset applied only while
-			// drawing, the wire fitting was visible at the tower's foot and clickable up beside
-			// the nacelle - a wire could be seen but not grabbed.
 			return new Transform(0f, -turbine.getTowerSegments(), 0f, 0f, 0f);
 		}
 

@@ -1,8 +1,9 @@
 {
-  "variants": {
-    "facing=north": { "model": "electricity:block/stone_particle" },
-    "facing=south": { "model": "electricity:block/stone_particle" },
-    "facing=west": { "model": "electricity:block/stone_particle" },
-    "facing=east": { "model": "electricity:block/stone_particle" }
-  }
+  "multipart": [
+    {
+      "apply": {
+        "model": "electricity:block/stone_particle"
+      }
+    }
+  ]
 }

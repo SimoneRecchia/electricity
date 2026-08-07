@@ -1,27 +1,20 @@
 package com.dooji.electricity.client.render.block;
 
-import com.dooji.electricity.api.power.CombinerSpec;
 import com.dooji.electricity.block.PvCombinerBlock;
 import com.dooji.electricity.block.PvCombinerBlockEntity;
-import com.dooji.electricity.client.TrackedBlockEntities;
 import com.dooji.electricity.client.render.obj.ObjBlockRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
-import com.dooji.electricity.client.render.obj.ObjRenderUtil;
+import com.dooji.electricity.client.render.obj.ObjRenderContext;
 import com.dooji.electricity.client.render.obj.ObjRendererBase;
 import com.dooji.electricity.main.Electricity;
-import com.dooji.electricity.main.registry.CombinerCatalog;
-import com.dooji.electricity.main.registry.ObjBlockDefinition;
-import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -31,17 +24,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
 
-/**
- * Draws the combiner boxes, and throws their switches.
- *
- * The handle is the only moving part and it is the reason this class exists rather than a static model:
- * a load-break switch reads at a distance, so a player walking a field can see which group of rows is
- * isolated without opening anything. It swings rather than snapping, because a real one is a heavy thing
- * with a spring in it and an instant flip would be missed entirely.
- *
- * All three products share one model. The difference between a six-way box and a thirty-two way box is
- * the label on the door and the count on the panel, which is also all it is in a catalogue.
- */
+/** Draws the combiner boxes, and throws their switches. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Electricity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvCombinerRenderer extends ObjRendererBase {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
@@ -55,27 +38,12 @@ public class PvCombinerRenderer extends ObjRendererBase {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		if (mc.level == null) return;
-
-		Vec3 cameraPos = mc.gameRenderer.getMainCamera().getPosition();
-		HashSet<BlockPos> seen = new HashSet<>();
-
-		for (PvCombinerBlockEntity combiner : TrackedBlockEntities.ofType(PvCombinerBlockEntity.class)) {
-			seen.add(combiner.getBlockPos());
-			ObjRenderUtil.withAlignedPose(combiner, event.getPoseStack(), mc.renderBuffers().bufferSource(), cameraPos, MAX_RENDER_DISTANCE_SQ,
-					state -> state.getValue(PvCombinerBlock.FACING), turnedFrom(PvCombinerBlock.AUTHORED),
-					(context, pose, buffers) -> render(context.model(), pose, event.getProjectionMatrix(), context.texture(), context.packedLight(), combiner));
-		}
-
-		cleanupCache(BUFFER_CACHE, seen);
-		cleanupAngles(HANDLE_ANGLE, seen);
+		cleanupAngles(HANDLE_ANGLE, drawAll(event, PvCombinerBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
+				state -> state.getValue(PvCombinerBlock.FACING), PvCombinerBlock.AUTHORED, BUFFER_CACHE, PvCombinerRenderer::render));
 	}
 
-	private static void render(ObjModel model, PoseStack poseStack, Matrix4f projectionMatrix, ResourceLocation texture, int packedLight,
-			PvCombinerBlockEntity combiner) {
+	private static void render(PvCombinerBlockEntity combiner, ObjRenderContext context, PoseStack poseStack, Matrix4f projection) {
+		ObjModel model = context.model();
 		Vec3 spindle = pivot(model, "handle", new Vec3(0.15, 0.50, -0.115));
 		float angle = advanceHandle(combiner.getBlockPos(), combiner.isolated());
 		Direction facing = combiner.getBlockState().getValue(PvCombinerBlock.FACING);
@@ -99,7 +67,7 @@ public class PvCombinerRenderer extends ObjRendererBase {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projectionMatrix, texture, packedLight, combiner.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), combiner.getBlockPos(), BUFFER_CACHE);
 	}
 
 	/** Walks the handle towards where the switch is, so it swings instead of teleporting. */
@@ -116,12 +84,6 @@ public class PvCombinerRenderer extends ObjRendererBase {
 	}
 
 	public static void init() {
-		for (CombinerSpec spec : CombinerCatalog.all()) {
-			ObjBlockDefinition definition = ObjDefinitions.get(Electricity.PV_COMBINER_BLOCKS.get(spec.id()).get());
-			if (definition == null) continue;
-
-			ObjBlockRegistry.register(definition);
-		}
+		ObjBlockRegistry.registerAll(Electricity.PV_COMBINER_BLOCKS);
 	}
-
 }

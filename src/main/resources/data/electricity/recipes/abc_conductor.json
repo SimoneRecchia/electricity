@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BBB",
+    "FFF",
+    "SSS"
+  ],
+  "key": {
+    "B": {
+      "item": "electricity:busbar"
+    },
+    "F": {
+      "item": "electricity:resin"
+    },
+    "S": {
+      "item": "electricity:steel_section"
+    }
+  },
+  "result": {
+    "item": "electricity:abc_conductor",
+    "count": 8
+  }
+}

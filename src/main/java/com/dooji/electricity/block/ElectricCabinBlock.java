@@ -27,50 +27,37 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 	public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
 	/**
-	 * The facing cab.obj was modelled at, which is not north.
+	 * The facing cab.obj is modelled at.
 	 *
-	 * An inherited model, and it faces east. Declared here because two things have to agree about it - the
-	 * renderer, which turns the geometry, and the cells below, which turn with it - and when only the
-	 * renderer knew, the cabin's collision stood at a right angle to the cabin.
+	 * North now, like every model the mod generates for itself. Changing this and the asset together turns
+	 * nothing in the world: the renderer poses by quarters(AUTHORED, facing), so a cabin placed facing north
+	 * still has its doors north. What it does change is the frame CELLS is written in, which is regenerated.
 	 */
-	public static final Direction AUTHORED = Direction.EAST;
+	public static final Direction AUTHORED = Direction.NORTH;
 
 	/**
 	 * The whole cabin as collision, cell by cell, cut from cab.obj rather than guessed.
-	 *
-	 * The machine stands in nine cells and exactly one of them used to be solid. The numbers, in the
-	 * block's own coordinates: the body runs x -0.009 to 1.009 and z -0.604 to 1.604 and is 2.358 tall;
-	 * the roof over it is wider, x -0.054 to 1.054 and z -0.657 to 1.657, and stops at 2.627; the two
-	 * insulators stand on the roof and reach 3.001.
-	 *
-	 * So most of these cells hold a piece of a box rather than a box. The four beside the body are filled
-	 * to 6.34 pixels because that is exactly how far the body reaches into them, the roof stops at 10.03
-	 * because that is where the steel stops, and above the roof there is nothing but the two insulators,
-	 * which are 3.4 pixels across and get 3.4 pixels of collision. A whole cell anywhere here, or a slab
-	 * rounded to the nearest eight pixels, is a third of a block of air the player cannot walk through.
-	 *
-	 * Written by {@code tools/check_hitboxes.py --java}, which also fails the build's check if the model
-	 * and this table ever drift apart. In the model's own frame, facing {@link #AUTHORED}, and turned with
-	 * the geometry.
-	 *
-	 * What is left out is what is thinner than a pixel: the roof's 0.054 overhang past the block beside
-	 * it, and the door leaf standing 0.05 past the east wall. Claiming a cell for either would cost the
-	 * player a cubic metre of the world for nine tenths of a pixel of ledge.
+	  *
+	 * In the model's own frame, facing {@link #AUTHORED}, and turned with the geometry.
 	 */
 	private static final List<Cell> CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.block()),
-			new Cell(0, 0, -1, Block.box(0.00, 0.00, 6.34, 16.00, 16.00, 16.00)),
-			new Cell(0, 0, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 9.66)),
+			new Cell(0, 0, -1, Shapes.or(Block.box(0.00, 0.00, 4.88, 16.00, 2.56, 16.00),
+					Block.box(0.00, 2.27, 4.51, 16.00, 16.00, 16.00))),
+			new Cell(0, 0, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 11.12)),
 			new Cell(0, 1, 0, Shapes.block()),
-			new Cell(0, 1, -1, Block.box(0.00, 0.00, 6.34, 16.00, 16.00, 16.00)),
-			new Cell(0, 1, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 9.66)),
-			new Cell(0, 2, 0, Block.box(0.00, 0.00, 0.00, 16.00, 10.03, 16.00)),
-			new Cell(0, 2, -1, Shapes.or(Block.box(0.00, 0.00, 6.34, 16.00, 5.73, 16.00),
-					Block.box(0.00, 5.77, 5.48, 16.00, 10.03, 16.00),
-					Block.box(5.88, 9.70, 11.54, 9.31, 16.00, 14.97))),
-			new Cell(0, 2, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 5.73, 9.66),
-					Block.box(0.00, 5.77, 0.00, 16.00, 10.03, 10.52),
-					Block.box(3.80, 9.70, 3.21, 7.23, 16.00, 6.64))));
+			new Cell(0, 1, -1, Block.box(0.00, 0.00, 4.51, 16.00, 16.00, 16.00)),
+			new Cell(0, 1, 1, Block.box(0.00, 0.00, 0.00, 16.00, 16.00, 11.10)),
+			new Cell(0, 2, 0, Block.box(0.00, 0.00, 0.00, 16.00, 12.50, 16.00)),
+			new Cell(0, 2, -1, Shapes.or(Block.box(0.00, 0.00, 4.51, 16.00, 8.80, 16.00),
+					Block.box(0.00, 8.35, 4.64, 16.00, 12.50, 16.00),
+					Block.box(6.67, 12.51, 11.15, 9.33, 14.58, 13.81))),
+			new Cell(0, 2, 1, Shapes.or(Block.box(0.00, 0.00, 0.00, 16.00, 8.80, 11.10),
+					Block.box(0.00, 8.35, 0.00, 16.00, 12.50, 11.36),
+					Block.box(2.37, 11.62, 7.49, 4.03, 16.00, 9.31),
+					Block.box(6.67, 12.51, 2.19, 9.33, 14.58, 4.85),
+					Block.box(7.17, 11.62, 7.49, 8.83, 16.00, 9.31),
+					Block.box(11.97, 11.62, 7.49, 13.63, 16.00, 9.31))));
 
 	public ElectricCabinBlock(Properties properties) {
 		super(properties);
@@ -113,14 +100,14 @@ public class ElectricCabinBlock extends Block implements EntityBlock, MachineShe
 			if (blockEntity instanceof ElectricCabinBlockEntity electricCabin) {
 				electricCabin.tick();
 				// and the cells, because a cabin placed before they existed has none: the collision was
-				// one cube under three blocks of steel, and nothing else would ever go back and fix it
+				// one cube under three blocks of steel
 				MachineShell.heal(lvl, pos, blockState);
 			}
 		};
 	}
 
 	@Override
-	public List<Cell> shellCells() {
+	public List<Cell> shellCells(BlockState state) {
 		return CELLS;
 	}
 

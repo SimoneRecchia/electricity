@@ -16,32 +16,24 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import java.util.List;
 
-/**
- * A meteorological mast: seven instruments on one bus.
- *
- * Everything a photovoltaic plant measures about the sky rather than about itself. IEC 61724 asks for
- * one or two of these for a whole plant rather than one per array, because the sky is the same across a
- * site - so this is a single block that a plant has one of, not a component every array carries.
- *
- * The two instruments that belong to the array rather than to the sky are still read through here,
- * because that is where the readings are wanted: the mast finds the nearest array and takes its
- * plane-of-array irradiance and its back-of-module temperature from it. That is exactly how a real
- * plant is wired - a tilted pyranometer and a resistance thermometer out on the racking, cabled back
- * to the same data logger the mast instruments are on.
- */
-public class MetStationBlock extends HorizontalDirectionalBlock implements EntityBlock {
+/** A meteorological mast: seven instruments on one bus. */
+public class MetStationBlock extends HorizontalDirectionalBlock implements EntityBlock, MachineShell {
 	/**
 	 * The facing met_mast.obj was modelled at: one of the mod's own models, so it faces north like the rest of them.
-	 *
-	 * Declared here because more than one thing has to agree about it - the renderer turns the model
-	 * by it, and whatever else reads the geometry turns with it. See {@link ModelFacing}.
+	  *
+	 * See {@link ModelFacing}.
 	 */
 	public static final Direction AUTHORED = Direction.NORTH;
 
-	/** A mast with a boom: thin, and tall enough that the anemometer is clear of the array. */
-	private static final VoxelShape SHAPE = Block.box(6.0, 0.0, 6.0, 10.0, 16.0, 10.0);
+	/** The mast as collision, cut from met_mast.obj and turned with the block. */
+	private static final List<Cell> CELLS = List.of(
+			new Cell(0, 0, 0, Shapes.or(Block.box(6.16, 0.00, 6.16, 9.84, 16.00, 9.84),
+					Block.box(7.07, 2.75, 2.56, 8.93, 7.65, 15.61))));
+
 
 	public MetStationBlock(Properties properties) {
 		super(properties.sound(SoundType.METAL));
@@ -61,7 +53,22 @@ public class MetStationBlock extends HorizontalDirectionalBlock implements Entit
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		return shellShape(state);
+	}
+
+	@Override
+	public List<Cell> shellCells(BlockState state) {
+		return CELLS;
+	}
+
+	@Override
+	public Direction shellFacing(BlockState state) {
+		return state.getValue(FACING);
+	}
+
+	@Override
+	public Direction shellAuthored() {
+		return AUTHORED;
 	}
 
 	@Nullable

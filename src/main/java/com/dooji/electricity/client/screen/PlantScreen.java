@@ -1,6 +1,7 @@
 package com.dooji.electricity.client.screen;
 
-import java.util.Locale;
+import com.dooji.electricity.api.Nameplate;
+import javax.annotation.Nullable;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -10,34 +11,13 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
- * What every machine's control panel in this mod has in common.
+ * What every machine's control panel in this mod has in common, over the machine it is open on.
  *
- * Four panels now - a turbine, an array, an inverter and a met mast - and they have to read alike or a
- * player has to learn each one separately. A shared base is how that is guaranteed rather than
- * remembered: the same bevel, the same bar geometry, the same six colours meaning the same six things,
- * the same left-label-right-value rhythm, and the same behaviour when the machine the panel is open on
- * is broken while somebody is looking at it.
- *
- * The bar coordinates are the ones cut into the background textures by
- * {@code tools/gen_pv_textures.py}, and the well positions are that script's declared layout. If a bar
- * moves in one place it has to move in the other, which is what the comment at the top of that file is
- * there to say.
- *
- * <h2>What a panel is for</h2>
- *
- * Deliberately not everything. These machines report between fifteen and ninety-six signals through
- * their peripherals and almost none of them belong here: standing at a machine you want to know what it
- * is, what it is doing right now, and why it is not doing more. An insulation resistance is a question
- * for a monitor watching a whole site.
+ * The type parameter is there so a panel says which machine it belongs to once: every one of them used to
+ * carry the same three-line instanceof lookup and then hand it back through an abstract accessor.
  */
-public abstract class PlantScreen extends Screen {
-	/**
-	 * Side of the sheet the panel textures are drawn into.
-	 *
-	 * Not the two hundred and fifty-six a vanilla GUI assumes, because a panel with two columns of a
-	 * label and a right-aligned value needs to be wider than that - so the size has to be passed to the
-	 * blit rather than left to the overload that guesses it. The generator writes this same figure.
-	 */
+public abstract class PlantScreen<T extends BlockEntity> extends Screen {
+	/** Side of the sheet the panel textures are drawn into. */
 	protected static final int PANEL_SHEET = 512;
 
 	protected static final int MARGIN = 8;
@@ -64,18 +44,25 @@ public abstract class PlantScreen extends Screen {
 	protected static final int VIOLET = 0xFF7E6BA8;
 
 	private final ResourceLocation texture;
+	private final Class<T> machineType;
 	protected final int imageWidth;
 	protected final int imageHeight;
-	/** Total pixels a bar spans. Named apart from {@link #barWidth(double)} so the two cannot be misread. */
+	/**
+	 * Total pixels a bar spans.
+	  *
+	 * Named apart from {@link #barWidth(double)} so the two cannot be misread.
+	 */
 	protected final int barSpan;
 	protected final BlockPos targetPos;
 
 	protected int leftPos;
 	protected int topPos;
 
-	protected PlantScreen(Component title, ResourceLocation texture, int imageWidth, int imageHeight, BlockPos targetPos) {
+	protected PlantScreen(Component title, ResourceLocation texture, int imageWidth, int imageHeight, BlockPos targetPos,
+			Class<T> machineType) {
 		super(title);
 		this.texture = texture;
+		this.machineType = machineType;
 		this.imageWidth = imageWidth;
 		this.imageHeight = imageHeight;
 		// the wells are inset twelve pixels either side, so the bar's width follows the panel's rather
@@ -90,16 +77,20 @@ public abstract class PlantScreen extends Screen {
 		topPos = (height - imageHeight) / 2;
 	}
 
-	/**
-	 * Closes the panel when the machine it belongs to stops existing.
-	 *
-	 * A player can break the block they are standing at, and a panel left open on a hole would draw
-	 * whatever it last read for ever.
-	 */
+	/** The machine this panel is open on, or null if it has gone. */
+	@Nullable
+	protected final T machine() {
+		if (minecraft == null || minecraft.level == null) return null;
+
+		BlockEntity entity = minecraft.level.getBlockEntity(targetPos);
+		return machineType.isInstance(entity) ? machineType.cast(entity) : null;
+	}
+
+	/** Closes the panel when the machine it belongs to stops existing. */
 	@Override
 	public void tick() {
 		super.tick();
-		if (blockEntity() == null) {
+		if (machine() == null) {
 			onClose();
 		}
 	}
@@ -109,18 +100,15 @@ public abstract class PlantScreen extends Screen {
 		renderBackground(graphics);
 		graphics.blit(texture, leftPos, topPos, 0, 0, imageWidth, imageHeight, PANEL_SHEET, PANEL_SHEET);
 
-		if (blockEntity() != null) {
+		if (machine() != null) {
 			drawPanel(graphics);
 		}
 
 		super.render(graphics, mouseX, mouseY, partialTick);
 	}
 
-	/** Everything inside the panel. Only called when the machine is still there. */
+	/** Everything inside the panel. */
 	protected abstract void drawPanel(GuiGraphics graphics);
-
-	/** The machine this panel is open on, or null if it has gone. */
-	protected abstract BlockEntity blockEntity();
 
 	@Override
 	public boolean isPauseScreen() {
@@ -151,13 +139,7 @@ public abstract class PlantScreen extends Screen {
 		graphics.fill(leftPos + 11, topPos + y, leftPos + imageWidth - 11, topPos + y + 1, SEPARATOR_COLOUR);
 	}
 
-	/**
-	 * The state of the machine: a coloured square and a line saying why.
-	 *
-	 * The reason matters more than the fact, on every machine in this mod. A plant sitting at zero output
-	 * is the one thing a player cannot diagnose from outside, and there are half a dozen different causes
-	 * which look identical from the ground.
-	 */
+	/** The state of the machine: a coloured square and a line saying why. */
 	protected void state(GuiGraphics graphics, Component text, int colour, int y) {
 		graphics.fill(leftPos + MARGIN, topPos + y + 1, leftPos + MARGIN + 4, topPos + y + 5, colour);
 		graphics.drawString(font, text, leftPos + MARGIN + 8, topPos + y, VALUE_COLOUR, false);
@@ -194,13 +176,7 @@ public abstract class PlantScreen extends Screen {
 		graphics.fill(leftPos + BAR_X + at, topPos + y - 1, leftPos + BAR_X + at + 1, topPos + y + BAR_HEIGHT + 1, colour);
 	}
 
-	/**
-	 * A bar built from parts that add up, drawn left to right.
-	 *
-	 * What the plane-of-array gauge wants: the beam, the sky and the ground stacked in one bar, because
-	 * the interesting thing about them is their proportion and reading three numbers to work that out is
-	 * exactly what a chart is for.
-	 */
+	/** A bar built from parts that add up, drawn left to right. */
 	protected void stackedBar(GuiGraphics graphics, int y, double[] fractions, int[] colours) {
 		int cursor = 0;
 		for (int i = 0; i < fractions.length && i < colours.length; i++) {
@@ -213,26 +189,16 @@ public abstract class PlantScreen extends Screen {
 		}
 	}
 
+	// Inherited so panel code reads as panel code; the formatting itself is Nameplate's, shared with the labels
 	protected static String fmt(String pattern, Object... values) {
-		return String.format(Locale.ROOT, pattern, values);
+		return Nameplate.fmt(pattern, values);
 	}
 
-	/**
-	 * Power in the unit an engineer would have used: kW under a megawatt and MW above it.
-	 *
-	 * A catalogue spanning 10 kW to 4 MW reads badly in either unit alone - "4000 kW" and "0.01 MW" are
-	 * both harder to place at a glance.
-	 */
 	protected static String power(double kw) {
-		if (Math.abs(kw) >= 1000.0) return fmt("%.2f MW", kw / 1000.0);
-
-		return fmt("%.1f kW", kw);
+		return Nameplate.reading(kw);
 	}
 
-	/** Energy the same way: kWh below a megawatt hour and MWh above. */
 	protected static String energy(double kwh) {
-		if (kwh >= 1000.0) return fmt("%.2f MWh", kwh / 1000.0);
-
-		return fmt("%.1f kWh", kwh);
+		return Nameplate.energy(kwh);
 	}
 }

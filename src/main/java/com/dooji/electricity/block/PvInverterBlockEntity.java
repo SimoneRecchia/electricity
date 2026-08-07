@@ -1,6 +1,6 @@
 package com.dooji.electricity.block;
 
-import com.dooji.electricity.api.power.IEnergyBudget;
+import com.dooji.electricity.api.power.Dispatchable;
 import com.dooji.electricity.api.power.InverterSpec;
 import com.dooji.electricity.api.power.PvArraySpec;
 import com.dooji.electricity.api.power.PvModuleSpec;
@@ -12,6 +12,7 @@ import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
 import com.dooji.electricity.compat.energy.EnergyBridge;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.api.power.CombinerSpec;
@@ -24,6 +25,7 @@ import com.dooji.electricity.main.weather.GlobalWeatherManager;
 import com.dooji.electricity.power.SolarTelemetrySimulator;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
+import com.dooji.electricity.wire.InsulatorHost;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -51,60 +53,18 @@ import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-/**
- * The inverter: the whole electrical side of a photovoltaic plant, in one block.
- *
- * <h2>What it does each tick</h2>
- *
- * Gathers the direct current its arrays are offering, decides how much of it to take, converts it,
- * and reports. The deciding is where all the interesting behaviour is, and it is four separate limits
- * that look identical from outside and have completely different answers:
- *
- * <ul>
- * <li><b>Input capacity</b> - the machine has a finite number of maximum power point trackers and a
- *     finite number of string terminals on each. Arrays beyond that are simply not wired in, and
- *     say so.</li>
- * <li><b>Clipping</b> - the array is offering more than the nameplate can pass, so the operating
- *     point comes off the peak. Not a fault: it is what a DC-to-AC ratio above one buys, and every
- *     utility plant in the world is built to do it for a few hours of the best days.</li>
- * <li><b>Derating</b> - the air is too hot to run at nameplate without cooking the semiconductors, so
- *     the machine backs off. Looks exactly like clipping on a trend and is cured by shade rather than
- *     by a bigger inverter.</li>
- * <li><b>Curtailment</b> - somebody, or something, asked for less. A setpoint from a computer, a
- *     redstone signal, or a hand on the stop button.</li>
- * </ul>
- *
- * <h2>Why it draws power at night</h2>
- *
- * Because real ones do, and it is one of those details that makes a trend recognisable: a plant's
- * meter reads slightly negative between sunset and sunrise, because the controller, the
- * communications and the insulation monitoring all have to stay alive. A watt on a residential
- * machine and a hundred on a central one.
- */
-public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget {
-	/**
-	 * How often the plant is surveyed for arrays again, in ticks.
-	 *
-	 * Two seconds. Frequent enough that an array cabled to a running inverter comes online while the
-	 * player is still standing there, and rare enough that following the copper costs nothing - the walk
-	 * only ever visits cable, so a plant of a hundred arrays is a few hundred block states rather than
-	 * the several thousand a radius used to read.
-	 */
+/** The inverter: the whole electrical side of a photovoltaic plant, in one block. */
+public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost, Dispatchable {
+	/** How often the plant is surveyed for arrays again, in ticks. */
 	private static final int RESCAN_TICKS = 40;
 	/** Ticks in a day, for the energy counters that reset with it. */
 	private static final long TICKS_PER_DAY = 24000L;
 
 	private final List<BlockPos> arrays = new ArrayList<>();
-	/**
-	 * The combiner boxes wired to this cabinet on trunk cable.
-	 *
-	 * A second list rather than one of collectors, because the two are gathered from different networks
-	 * and counted against the same limits: an array brings its own strings and a box brings the strings
-	 * behind it, and both fill the same terminals.
-	 */
+	/** The combiner boxes wired to this cabinet on trunk cable. */
 	private final List<BlockPos> combiners = new ArrayList<>();
 	private int rescanCountdown = 0;
-	/** The box fitted inside the cabinet, if any. Its ways are what a busbar machine's string inputs become. */
+	/** The box fitted inside the cabinet, if any. */
 	private CombinerSpec integrated = null;
 
 	private double availableDcKw = 0.0;
@@ -117,23 +77,10 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	private double efficiency = 0.0;
 	private boolean clipping = false;
 	private boolean derating = false;
-	/**
-	 * The strings are lit but at a voltage this machine cannot track.
-	 *
-	 * Worth publishing separately from plain standby, because it is the one silent mismatch a player
-	 * can make and not diagnose: a central inverter is designed around one string length, so putting
-	 * flat tables of twenty-two modules in front of one leaves it waiting for a voltage that will
-	 * never arrive. The panel names the window rather than leaving it at "standby".
-	 */
+	/** The strings are lit but at a voltage this machine cannot track. */
 	private boolean stringsOutOfWindow = false;
 	private int stringsConnected = 0;
-	/**
-	 * Direct-current input the machine has left, in amps.
-	 *
-	 * Published because it is the number that explains a refusal. An array that will not come online
-	 * when there are terminals free is an array whose current would not fit, and without this the panel
-	 * can only say "not wired in" and leave the player counting holes.
-	 */
+	/** Direct-current input the machine has left, in amps. */
 	private double stringCurrentHeadroom = 0.0;
 
 	private double energyTodayKwh = 0.0;
@@ -152,13 +99,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 	private final ClientSync clientSync = new ClientSync();
 
-	/**
-	 * The wire fitting on top of the cabinet.
-	 *
-	 * One, because an inverter has one alternating-current output and a plant joins the grid at exactly
-	 * one place. The arrays behind it are wired with direct-current cable that is not drawn, which is
-	 * also how a real plant looks: the only overhead line on a solar farm is the one leaving it.
-	 */
+	/** The wire fitting on top of the cabinet. */
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
@@ -175,7 +116,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		generateInsulatorIds();
 	}
 
-	/** Which machine this is. Read off the block, so there is no saved model id to migrate. */
+	/** Which machine this is. */
 	public InverterSpec spec() {
 		if (getBlockState().getBlock() instanceof PvInverterBlock inverter) return inverter.spec();
 
@@ -228,13 +169,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return insulatorIds.clone();
 	}
 
-	/**
-	 * Where the fitting is in the world, with the cabinet's own scale applied.
-	 *
-	 * The scale is the part that would otherwise go wrong: the model is authored at the commercial
-	 * cabinet's size and drawn smaller for the residential machine, so a fitting placed from the raw
-	 * geometry would float above a small one and a wire would attach to nothing.
-	 */
+	/** Where the fitting is in the world, with the cabinet's own scale applied. */
 	public Vec3 calculateOrientedInsulatorCenter(int index) {
 		ensureArraySizes();
 		if (index < 0 || index >= wirePositions.length) return null;
@@ -252,13 +187,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(ModelFacing.turned(local, PvInverterBlock.AUTHORED, getBlockState().getValue(PvInverterBlock.FACING)));
 	}
 
-	/**
-	 * How large this machine is drawn, restated from the renderer.
-	 *
-	 * Stated twice because the renderer is client-only and this runs on a dedicated server too, which is
-	 * the same reason the turbine restates its tower offset in two places. Both copies are one line and
-	 * both say they are a copy, which is the least bad of the arrangements available.
-	 */
+	/** How large this machine is drawn, restated from the renderer. */
 	private static double renderScale(InverterSpec spec) {
 		if (spec.acPowerKw() >= 1000.0) return 1.0;
 		if (spec.acPowerKw() <= 30.0) return 0.62;
@@ -303,15 +232,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		clientSync.throttled(this);
 	}
 
-	/**
-	 * Works out what the plant is doing and pushes the operating point back to the arrays.
-	 *
-	 * The order is forced by the physics. The arrays cannot know what they are delivering until the
-	 * inverter has decided how much it can take, and the inverter cannot decide until it knows what is
-	 * on offer - so the offer is gathered first, the decision is made once, and the answer is handed
-	 * back as a fraction of the maximum power point. That fraction is what makes clipping show up in
-	 * the arrays' own current readings rather than only in the inverter's output.
-	 */
+	/** Works out what the plant is doing and pushes the operating point back to the arrays. */
 	private void gatherAndConvert(ServerLevel serverLevel, InverterSpec spec) {
 		availableDcKw = 0.0;
 		double highestStringVoltage = 0.0;
@@ -353,10 +274,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		boolean allowed = isRunning();
 		// below the startup voltage there is nothing to track: the strings are lit but not lit enough,
-		// which is why a real plant sits at exactly zero for a few minutes after sunrise rather than
-		// producing a trickle. Above the window there is nothing to track either, and a real machine
-		// locks out rather than tracking an input it cannot regulate - which is the failure mode a
-		// string designed for a warmer site than it was built on actually has, on the coldest morning
 		boolean trackable = highestStringVoltage >= spec.startupVolts() && spec.withinMpptWindow(highestStringVoltage);
 		stringsOutOfWindow = availableDcKw > 0.0 && highestStringVoltage > 0.0 && !trackable;
 		boolean awake = allowed && trackable && availableDcKw > 0.0;
@@ -366,10 +283,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		if (!awake) {
 			dcPowerKw = 0.0;
-			// the night draw, reported as a negative output. It is there whether the machine is stopped or
-			// merely waiting for the strings to come up, because what is drawing it is the controller and
-			// the controller is on either way - which is exactly why a real plant's meter reads negative
-			// overnight and why a stopped inverter is not a free inverter
+			// the night draw, reported as a negative output.
 			acPowerKw = -spec.nightDrawKw();
 			efficiency = 0.0;
 			clipping = false;
@@ -389,9 +303,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 
 		clipping = spec.clipping(availableDcKw, ceiling);
 		double wantedAc = spec.acPowerFromDcKw(availableDcKw, ceiling);
-		// the direct current the machine actually pulls: what it needs to make that output. When it is
-		// clipping this is less than the array could give, which is the maximum power point tracker
-		// stepping off the peak
+		// the direct current the machine actually pulls: what it needs to make that output.
 		efficiency = availableDcKw <= 0.0 ? 0.0 : Math.max(0.01, spec.efficiencyAt(wantedAc / spec.acPowerKw()));
 		dcPowerKw = Math.min(availableDcKw, wantedAc / efficiency);
 		acPowerKw = wantedAc;
@@ -401,7 +313,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			array.setMpptFraction(fraction);
 		}
 
-		// the boxes get the same fraction and hand it on to their own strings, so a clipping cabinet is
+		// the boxes get the same fraction and hand it on to their own strings
 		// visible in the current reading of every module behind every box
 		for (PvCombinerBlockEntity box : liveBoxes) {
 			box.setMpptFraction(fraction);
@@ -412,32 +324,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		cabinetTempC = spec.cabinetTemperature(ambientTempC, acPowerKw / spec.acPowerKw());
 	}
 
-	/**
-	 * Finds the arrays this inverter is wired to, by following the cable.
-	 *
-	 * This used to sweep a radius, which is not a connection - it is a coincidence. Now an array counts
-	 * if and only if a continuous run of string cable reaches from this cabinet to a set of leads on it,
-	 * which is what "wired to" means, and the run's length goes on to cost what a length of copper
-	 * costs.
-	 *
-	 * Shortest run first, so when the machine runs out of terminals it is the far arrays that are left
-	 * over - which is both the sensible answer and what a designer would have done. An array with nowhere
-	 * to plug in is a real situation with a real answer, and the answer is another inverter.
-	 *
-	 * A machine with no fused string terminals of its own gets nothing here however much cable is laid to
-	 * it. That is the central inverter, and it is not a limitation of the game: strings need fuses, a
-	 * central machine has busbars, and what fills the gap is a combiner box.
-	 */
+	/** Finds the arrays this inverter is wired to, by following the cable. */
 	private void rescan(ServerLevel serverLevel, InverterSpec spec) {
 		releaseArrays();
 		arrays.clear();
 		combiners.clear();
 		stringsConnected = 0;
 
-		// two limits, and which one binds depends on what the modules are. The terminal count is the
-		// holes in the machine; the current limit is the copper behind them, and a designer usually
-		// meets that one first - eighteen strings of a 210 mm cell module carry three hundred amps into
-		// a machine whose nine trackers will take two hundred and thirty-four between them
+		// two limits, and which one binds depends on what the modules are.
 		double currentCeiling = spec.mpptCount() * spec.maxCurrentPerMppt();
 		double currentConnected = 0.0;
 		double dcConnected = 0.0;
@@ -454,7 +348,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			if (stringsConnected + strings > stringInputs(spec)) continue;
 			if (currentConnected + current > currentCeiling) continue;
 			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;
-			// and the fitted box's own four, when the terminals a string is going into are its
+			// and the fitted box's own four
 			if (integrated != null
 					&& integrated.accepts(wanted, stringsConnected, currentConnected, integrated.outputAmps()) != CombinerSpec.Refusal.NONE) {
 				continue;
@@ -468,7 +362,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 			dcConnected += wanted.dcPowerKw();
 		}
 
-		// then the boxes, on the other cable. Their strings fill the same terminals, because that is what
+		// then the boxes, on the other cable.
 		// a terminal count on a central machine means: strings arriving through combiner boxes
 		for (DcNetwork.Reach reach : reachableCombiners(serverLevel, spec)) {
 			PvCombinerBlockEntity box = LoadedBlockEntities.find(serverLevel, reach.pos(), PvCombinerBlockEntity.class);
@@ -488,19 +382,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		stringCurrentHeadroom = currentCeiling - currentConnected;
 	}
 
-	/**
-	 * String terminals the machine has to offer.
-	 *
-	 * Its own, unless it has none and a box has been fitted - in which case it has the box's, which is
-	 * the difference between a central inverter with a direct-current section and one without.
-	 */
+	/** String terminals the machine has to offer. */
 	private int stringInputs(InverterSpec spec) {
 		if (spec.stringTerminals() || integrated == null) return spec.stringInputs();
 
 		return Math.min(spec.stringInputs(), integrated.fusedInputs());
 	}
 
-	/** Every set of leads a run of string cable reaches from this cabinet, shortest run first. */
+	/** Every set of leads a run of string cable reaches from this cabinet */
 	private List<DcNetwork.Reach> reachableArrays(ServerLevel serverLevel, InverterSpec spec) {
 		if (!spec.stringTerminals() && integrated == null) return List.of();
 
@@ -508,7 +397,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				ElectricityServerConfig.maxCableRun());
 	}
 
-	/** Every combiner box a run of trunk cable reaches, shortest run first. */
+	/** Every combiner box a run of trunk cable reaches */
 	private List<DcNetwork.Reach> reachableCombiners(ServerLevel serverLevel, InverterSpec spec) {
 		if (!spec.trunkTerminals()) return List.of();
 
@@ -522,12 +411,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return integrated;
 	}
 
-	/**
-	 * Records the box a player has just worked into the cabinet.
-	 *
-	 * The block state already says there is one - a cable has to be able to see that while a chunk is
-	 * being meshed - and this is which one, because that decides how many strings rather than whether any.
-	 */
+	/** Records the box a player has just worked into the cabinet. */
 	public void fitCombiner(CombinerSpec spec) {
 		integrated = spec;
 		rescanCountdown = 0;
@@ -535,18 +419,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		ClientSync.now(this);
 	}
 
-	/**
-	 * Runs the energy meters.
-	 *
-	 * Two counters, because both are on a real plant's front page and they answer different questions:
-	 * today's tells an operator whether the weather has been kind, and the lifetime figure is what the
-	 * plant is paid against. Today's resets when the day rolls over rather than on a timer, so it
-	 * agrees with the sun.
-	 *
-	 * Only production is counted, not the night draw. That is the convention a generation meter uses -
-	 * it is a one-way meter - and it is why a plant's reported yield and its net export differ by a few
-	 * kilowatt hours a year.
-	 */
+	/** Runs the energy meters. */
 	private void accumulateEnergy(ServerLevel serverLevel) {
 		long day = serverLevel.getDayTime() / TICKS_PER_DAY;
 		if (lastDay != day) {
@@ -562,7 +435,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		energyLifetimeKwh += kwh;
 	}
 
-	/** The latest published snapshot. Safe to read from any thread; never null. */
+	/** The latest published snapshot. */
 	public Telemetry.Snapshot getTelemetry() {
 		return telemetry;
 	}
@@ -586,8 +459,14 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return dcPowerKw;
 	}
 
-	/** Active power at the terminals, kW. Negative overnight, which is what the machine's own supply costs. */
+	/** Active power at the terminals, kW. */
 	public double acPowerKw() {
+		return acPowerKw;
+	}
+
+	/** A machine that makes power rather than passing it reads what it is sending out. */
+	@Override
+	public double getCurrentPower() {
 		return acPowerKw;
 	}
 
@@ -619,7 +498,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return derating;
 	}
 
-	/** Whether the arrays are producing at a voltage this machine cannot track. */
 	/** Direct-current input still free, in amps. */
 	public double stringCurrentHeadroom() {
 		return stringCurrentHeadroom;
@@ -633,7 +511,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return arrays.size();
 	}
 
-	/** Where the arrays this inverter is wired to are. A copy, because callers arrive off other threads. */
+	/** Where the arrays this inverter is wired to are. */
 	public List<BlockPos> arrayPositions() {
 		return List.copyOf(arrays);
 	}
@@ -707,6 +585,12 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return redstone.mode();
 	}
 
+	@Override
+	public double getNameplateKw() {
+		return spec().acPowerKw();
+	}
+
+	@Override
 	public double getActivePowerLimit() {
 		return activePowerLimitKw;
 	}
@@ -739,14 +623,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		onControlChanged();
 	}
 
-	/**
-	 * Sets the power factor the machine is asked to hold.
-	 *
-	 * Clamped to what the machine can do, which is 0.8 either side of unity on everything in the
-	 * catalogue. Asking for a deep power factor at full output is asking for more apparent power than
-	 * the machine has, and the answer is that active power gives way - which is what a grid operator
-	 * requesting reactive support is actually buying.
-	 */
+	/** Sets the power factor the machine is asked to hold. */
 	public void setPowerFactor(double factor) {
 		double clamped = Mth.clamp(Math.abs(factor), spec().minPowerFactor(), 1.0);
 		if (powerFactorSetpoint == clamped) return;
@@ -770,31 +647,17 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		return side == null || energyFaces().contains(side);
 	}
 
-	/** Gross production this tick in Joules, before anything claims it. */
+	/** Gross production this tick in Joules */
 	public double getGrossJoulesPerTick() {
 		return Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW;
 	}
 
-	/**
-	 * What the wire network may carry away this tick, in kW.
-	 *
-	 * Everything produced, less whatever another mod's cables already claimed. The subtraction is what
-	 * stops the same Joule being spent twice, because the wire network reads a generator without ever
-	 * debiting it - the same arrangement the turbines are under.
-	 */
+	/** What the wire network may carry away this tick, in kW. */
 	public double getGeneratedPower() {
 		return Math.max(0.0, acPowerKw - budget.claimed() / EnergyBridge.JOULES_PER_KW);
 	}
 
-	/**
-	 * Whether this generator is putting a disturbance onto the network.
-	 *
-	 * Never, and that is worth stating rather than leaving as an unimplemented method. A turbine surges
-	 * because a gust arrives at a rotor with tonnes of inertia and a gearbox behind it; an inverter has no
-	 * moving parts at all and its whole purpose is to hold a clean waveform whatever the array does. A
-	 * cloud crossing a solar plant is a smooth ramp rather than a shock, which is one of the few things
-	 * photovoltaics are unambiguously better at than rotating machines.
-	 */
+	/** Whether this generator is putting a disturbance onto the network. */
 	public boolean isSurging() {
 		return false;
 	}
@@ -843,7 +706,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);
 
-		// the meters are real accumulated state and have to survive a reload; everything else is a
+		// the meters are real accumulated state and have to survive a reload
 		// reading, written only so a freshly loaded chunk shows a number rather than a zero
 		tag.putDouble("energyToday", energyTodayKwh);
 		tag.putDouble("energyLifetime", energyLifetimeKwh);
@@ -876,9 +739,6 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		tag.put("arrays", positions);
 
 		// an entry is empty whenever the insulator's bounding box could not be found, and on a dedicated
-		// server that is always: every method that fills ObjBoundingBoxRegistry is client-only, so it is
-		// permanently empty there. A placeholder keeps the list index-aligned with the array, which is
-		// what the cabin and the power box already do
 		ListTag wires = new ListTag();
 		for (Vec3 pos : wirePositions) {
 			CompoundTag entry = new CompoundTag();
@@ -1018,13 +878,7 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 		}
 	}
 
-	/**
-	 * Tells the arrays this inverter is letting them go.
-	 *
-	 * Called when the cabinet is broken and before every rescan, and deliberately not when its chunk
-	 * unloads: an unloading block entity must not reach into another chunk, and an array does not need
-	 * telling anyway, because a claim it stops hearing about lapses on its own.
-	 */
+	/** Tells the arrays this inverter is letting them go. */
 	void releaseArrays() {
 		for (BlockPos pos : arrays) {
 			PvArrayBlockEntity array = LoadedBlockEntities.find(level, pos, PvArrayBlockEntity.class);
@@ -1039,5 +893,33 @@ public class PvInverterBlockEntity extends BlockEntity implements IEnergyBudget 
 				box.releaseClaim(worldPosition);
 			}
 		}
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_PV_INVERTER;
+	}
+
+	/** A generator, like a turbine. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return other instanceof ElectricCabinBlockEntity || other instanceof PvInverterBlockEntity
+				|| other instanceof TransformerBlockEntity;
+	}
+
+	/** An inverter's output goes to the plant's collector network, which is 33 kV. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() == ConductorSpec.VoltageClass.MEDIUM;
+	}
+
+	@Override
+	public String powerType(String partName) {
+		return "output";
+	}
+
+	/** Nothing to tell it: an inverter's reading is what it makes, not what reaches it. */
+	@Override
+	public void deliverPower(double power) {
 	}
 }

@@ -1,8 +1,7 @@
 package com.dooji.electricity.main.power;
 
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
 import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.block.PvInverterBlockEntity;
 import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.api.power.PowerDeliveryEvent;
@@ -22,7 +21,7 @@ public class PowerNetwork {
 	private final ServerLevel level;
 	private final Map<Integer, PowerNode> powerNodes = new HashMap<>();
 	private final Map<String, PowerConnection> powerConnections = new HashMap<>();
-	private final Map<BlockPos, List<PowerNode>> nodesByPosition = new HashMap<>();
+	private final Map<Bus, List<PowerNode>> nodesByBus = new HashMap<>();
 	private final WireManager wireManager;
 	private final Map<BlockPos, Double> lastSyncedPower = new HashMap<>();
 	private final Set<Integer> surgeImpactedNodes = new HashSet<>();
@@ -44,7 +43,7 @@ public class PowerNetwork {
 	private void clearNetwork() {
 		powerNodes.clear();
 		powerConnections.clear();
-		nodesByPosition.clear();
+		nodesByBus.clear();
 		surgeImpactedNodes.clear();
 		generatorEvents.clear();
 	}
@@ -59,17 +58,17 @@ public class PowerNetwork {
 	}
 
 	private void addWireConnection(WireConnection wireConnection) {
-		int startId = wireConnection.getStartInsulatorId();
-		int endId = wireConnection.getEndInsulatorId();
+		int startId = wireConnection.startInsulatorId();
+		int endId = wireConnection.endInsulatorId();
 
-		PowerNode startNode = getOrCreateNode(startId, wireConnection.getStartBlockPos(), wireConnection.getStartBlockType());
-		PowerNode endNode = getOrCreateNode(endId, wireConnection.getEndBlockPos(), wireConnection.getEndBlockType());
+		PowerNode startNode = getOrCreateNode(startId, wireConnection.startBlockPos(), wireConnection.startBlockType());
+		PowerNode endNode = getOrCreateNode(endId, wireConnection.endBlockPos(), wireConnection.endBlockType());
 
 		if (startNode != null && endNode != null) {
 			double distance = calculateDistance(startNode.position, endNode.position);
 			String connectionKey = Math.min(startId, endId) + "_" + Math.max(startId, endId);
 
-			PowerConnection connection = new PowerConnection(startNode, endNode, distance, wireConnection.getStartPowerType(), wireConnection.getEndPowerType());
+			PowerConnection connection = new PowerConnection(startNode, endNode, distance, wireConnection.startPowerType(), wireConnection.endPowerType());
 			powerConnections.put(connectionKey, connection);
 		}
 	}
@@ -85,18 +84,8 @@ public class PowerNetwork {
 			return null;
 		}
 
-		boolean typeMatches = false;
-		if ("wind_turbine".equals(blockType) && blockEntity instanceof WindTurbineBlockEntity) {
-			typeMatches = true;
-		} else if ("electric_cabin".equals(blockType) && blockEntity instanceof ElectricCabinBlockEntity) {
-			typeMatches = true;
-		} else if ("utility_pole".equals(blockType) && blockEntity instanceof UtilityPoleBlockEntity) {
-			typeMatches = true;
-		} else if ("power_box".equals(blockType) && blockEntity instanceof PowerBoxBlockEntity) {
-			typeMatches = true;
-		} else if ("pv_inverter".equals(blockType) && blockEntity instanceof PvInverterBlockEntity) {
-			typeMatches = true;
-		}
+		// what the connection was saved against has to still be what is standing there
+		boolean typeMatches = blockEntity instanceof InsulatorHost host && host.fittingType().equals(blockType);
 
 		if (!typeMatches) {
 			LOGGER.warn("Block type mismatch at {} - client reported {} but server found {}", blockPos, blockType, blockEntity.getClass().getSimpleName());
@@ -104,9 +93,12 @@ public class PowerNetwork {
 			return null;
 		}
 
-		PowerNode node = new PowerNode(insulatorId, immutablePos, blockEntity);
+		// Which bus the fitting is on, not just which block it is on: a switch says its two sides are two
+		// buses when it is open, and a cluster is what power crosses for free.
+		int bus = blockEntity instanceof InsulatorHost host ? host.busOf(indexOf(host, insulatorId)) : 0;
+		PowerNode node = new PowerNode(insulatorId, immutablePos, new Bus(immutablePos, bus), blockEntity);
 		powerNodes.put(insulatorId, node);
-		nodesByPosition.computeIfAbsent(immutablePos, pos -> new ArrayList<>()).add(node);
+		nodesByBus.computeIfAbsent(node.bus, key -> new ArrayList<>()).add(node);
 		return node;
 	}
 
@@ -130,8 +122,6 @@ public class PowerNetwork {
 			if (generatedPower <= 0) continue;
 
 			// only a turbine can put a disturbance on the network: an inverter has no rotor for a gust to
-			// hit and holds a clean waveform whatever the sun is doing, so a solar plant contributes
-			// generation without contributing surges
 			PowerDeliveryEvent generatorEvent = node.blockEntity instanceof WindTurbineBlockEntity turbine
 					? createGeneratorEvent(turbine)
 					: PowerDeliveryEvent.none();
@@ -164,7 +154,7 @@ public class PowerNetwork {
 		boolean localSurge = surgeActive || startNode.hasLocalSurge();
 		PowerDeliveryEvent currentEvent = incomingEvent;
 
-		List<PowerNode> clusterNodes = nodesByPosition.getOrDefault(startNode.position, Collections.singletonList(startNode));
+		List<PowerNode> clusterNodes = nodesByBus.getOrDefault(startNode.bus, Collections.singletonList(startNode));
 		if (isClusterVisited(clusterNodes, visited)) return distribution;
 
 		Set<Integer> clusterIds = new HashSet<>();
@@ -182,11 +172,11 @@ public class PowerNetwork {
 		List<ClusterConnection> externalConnections = collectExternalConnections(clusterNodes, clusterIds);
 		if (externalConnections.isEmpty()) return distribution;
 
-		Map<BlockPos, TargetGroup> targetGroups = groupConnectionsByTarget(externalConnections);
+		Map<Bus, TargetGroup> targetGroups = groupConnectionsByTarget(externalConnections);
 		if (targetGroups.isEmpty()) return distribution;
 		List<TargetGroup> viableGroups = new ArrayList<>();
 		for (TargetGroup group : targetGroups.values()) {
-			if (!isClusterVisited(group.targetNode.position, visited)) {
+			if (!isClusterVisited(group.targetNode.bus, visited)) {
 				viableGroups.add(group);
 			}
 		}
@@ -225,16 +215,12 @@ public class PowerNetwork {
 			return new PowerDeliveryEvent(state.severity, nextRemaining, state.disconnect, state.brownout);
 		}
 
-		// asked of the machine rather than of the weather. The turbine has already sampled the
-		// wind at its own hub over its own ground, and re-sampling here at the nacelle's block
-		// would have described a met mast standing thirteen blocks up in mid-air instead
+		// asked of the machine rather than of the weather.
 		double turbulence = turbine.getTurbulenceIntensity();
 		double windSpeed = turbine.getMeanWindSpeed();
 		var random = level.getRandom();
 
 		// both thresholds moved onto real turbulence intensity. 0.14 is where a site stops being
-		// smooth and 0.24 is genuinely rough air; the old 0.25 and 0.75 belonged to a scale that
-		// ran to 1.0, and on this one the second of them could never have been reached at all
 		double gustFactor = Mth.clamp((windSpeed - 8.0) / 12.0, 0.0, 1.0);
 		double baseSeverity = Math.max(0.0, (turbulence - 0.14) * 1.7 + gustFactor * 0.4);
 		double severity = Math.max(0.0, baseSeverity + random.nextDouble() * 0.05);
@@ -301,50 +287,56 @@ public class PowerNetwork {
 		return connections;
 	}
 
-	private Map<BlockPos, TargetGroup> groupConnectionsByTarget(List<ClusterConnection> connections) {
-		Map<BlockPos, TargetGroup> groups = new HashMap<>();
+	private Map<Bus, TargetGroup> groupConnectionsByTarget(List<ClusterConnection> connections) {
+		Map<Bus, TargetGroup> groups = new HashMap<>();
 
 		for (ClusterConnection clusterConnection : connections) {
 			PowerNode targetNode = clusterConnection.connection.getOtherNode(clusterConnection.sourceNode);
-			BlockPos targetPos = targetNode.position;
-
-			TargetGroup group = groups.computeIfAbsent(targetPos, pos -> new TargetGroup(targetNode));
+			TargetGroup group = groups.computeIfAbsent(targetNode.bus, bus -> new TargetGroup(targetNode));
 			group.addConnection(clusterConnection.connection);
 		}
 
 		return groups;
 	}
 
+	/**
+	 * Every span power may leave this fitting by.
+	 *
+	 * A span has no direction of its own, so the same three rules were written out twice with start and end
+	 * swapped - and the two copies had drifted: the third rule read "input to output" one way round and
+	 * "output to input" the other, which is the same rule said backwards.
+	 */
 	private List<PowerConnection> getOutgoingConnections(int fromNodeId) {
 		List<PowerConnection> connections = new ArrayList<>();
 		for (PowerConnection connection : powerConnections.values()) {
-			if (connection.startNode.insulatorId == fromNodeId) {
-				boolean sameBlockPos = connection.startNode.position.equals(connection.endNode.position);
-				if (!canTransfer(connection.startNode, connection.endNode)) continue;
+			PowerNode from = connection.startNode.insulatorId == fromNodeId ? connection.startNode
+					: connection.endNode.insulatorId == fromNodeId ? connection.endNode : null;
+			if (from == null) continue;
 
-				if ("output".equals(connection.startPowerType) && ("input".equals(connection.endPowerType) || "bidirectional".equals(connection.endPowerType))) {
-					connections.add(connection);
-				} else if ("bidirectional".equals(connection.startPowerType) && ("input".equals(connection.endPowerType) || "bidirectional".equals(connection.endPowerType))) {
-					connections.add(connection);
-				} else if (sameBlockPos && "input".equals(connection.startPowerType) && "output".equals(connection.endPowerType)) {
-					connections.add(connection);
-				}
-			} else if (connection.endNode.insulatorId == fromNodeId) {
-				boolean sameBlockPos = connection.startNode.position.equals(connection.endNode.position);
-				if (!canTransfer(connection.endNode, connection.startNode)) continue;
-
-				if ("output".equals(connection.endPowerType) && ("input".equals(connection.startPowerType) || "bidirectional".equals(connection.startPowerType))) {
-					connections.add(connection);
-				} else if ("bidirectional".equals(connection.endPowerType) && ("input".equals(connection.startPowerType) || "bidirectional".equals(connection.startPowerType))) {
-					connections.add(connection);
-				} else if (sameBlockPos && "output".equals(connection.endPowerType) && "input".equals(connection.startPowerType)) {
-					connections.add(connection);
-				}
+			PowerNode to = connection.getOtherNode(from);
+			if (!canTransfer(from, to)) continue;
+			if (leaves(connection.typeOf(from), connection.typeOf(to), from.position.equals(to.position))) {
+				connections.add(connection);
 			}
 		}
 
 		return connections;
 	}
+
+	/**
+	 * Whether power leaves a fitting of this type for one of that type.
+	 *
+	 * An output or a bidirectional fitting feeds an input or a bidirectional one. The third rule is for two
+	 * fittings of one machine wired to each other, where an input may feed an output - that is a jumper across
+	 * the machine, and it is the only case where the direction runs the other way.
+	 */
+	private static boolean leaves(String from, String to, boolean sameBlock) {
+		boolean takes = "input".equals(to) || "bidirectional".equals(to);
+		if (("output".equals(from) || "bidirectional".equals(from)) && takes) return true;
+
+		return sameBlock && "input".equals(from) && "output".equals(to);
+	}
+
 	public void syncToClients() {
 		Map<BlockPos, Double> blockPower = new HashMap<>();
 		Map<BlockPos, PowerNode> representatives = new HashMap<>();
@@ -385,8 +377,22 @@ public class PowerNetwork {
 		lastSyncedPower.putAll(blockPower);
 	}
 
-	private boolean isClusterVisited(BlockPos position, Set<Integer> visitedIds) {
-		return isClusterVisited(nodesByPosition.get(position), visitedIds);
+	private boolean isClusterVisited(Bus bus, Set<Integer> visitedIds) {
+		return isClusterVisited(nodesByBus.get(bus), visitedIds);
+	}
+
+	/** Which fitting of its machine an id is, so the machine can be asked which bus that one is on. */
+	private static int indexOf(InsulatorHost host, int insulatorId) {
+		int[] ids = host.getInsulatorIds();
+		for (int index = 0; index < ids.length; index++) {
+			if (ids[index] == insulatorId) return index;
+		}
+
+		return 0;
+	}
+
+	/** One bus of one machine: what power crosses without a wire. */
+	private record Bus(BlockPos position, int index) {
 	}
 
 	private boolean isClusterVisited(List<PowerNode> clusterNodes, Set<Integer> visitedIds) {
@@ -399,17 +405,11 @@ public class PowerNetwork {
 	}
 
 	private static void applyPower(BlockEntity blockEntity, double power, PowerDeliveryEvent event) {
-		if (blockEntity == null) return;
-		if (blockEntity instanceof WindTurbineBlockEntity turbine) {
-			turbine.setCurrentPower(power);
-		} else if (blockEntity instanceof PvInverterBlockEntity) {
-			// nothing to tell it: an inverter's output is what it makes rather than what reaches it, and
-			// the figure a panel shows comes off its own conversion instead of off the network
-		} else if (blockEntity instanceof ElectricCabinBlockEntity cabin) {
-			cabin.setCurrentPower(power);
-		} else if (blockEntity instanceof UtilityPoleBlockEntity pole) {
-			pole.setCurrentPower(power);
-		} else if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
+		if (!(blockEntity instanceof InsulatorHost host)) return;
+
+		host.deliverPower(power);
+		// the kiosk is the one that needs the event as well as the figure: it bridges to Forge Energy
+		if (blockEntity instanceof PowerBoxBlockEntity powerBox) {
 			powerBox.setCurrentPower(power);
 			powerBox.setIncomingEvent(event);
 		}
@@ -418,13 +418,15 @@ public class PowerNetwork {
 	private static class PowerNode {
 		final int insulatorId;
 		final BlockPos position;
+		final Bus bus;
 		final BlockEntity blockEntity;
 		double power = 0.0;
 		private PowerDeliveryEvent event = PowerDeliveryEvent.none();
 
-		PowerNode(int insulatorId, BlockPos position, BlockEntity blockEntity) {
+		PowerNode(int insulatorId, BlockPos position, Bus bus, BlockEntity blockEntity) {
 			this.insulatorId = insulatorId;
 			this.position = position;
+			this.bus = bus;
 			this.blockEntity = blockEntity;
 		}
 
@@ -475,6 +477,11 @@ public class PowerNetwork {
 		PowerNode getOtherNode(PowerNode node) {
 			return node == startNode ? endNode : startNode;
 		}
+
+		/** Whether this end of the span is an input, an output, or either. */
+		String typeOf(PowerNode node) {
+			return node == startNode ? startPowerType : endPowerType;
+		}
 	}
 
 	private static class ClusterConnection {
@@ -487,29 +494,10 @@ public class PowerNetwork {
 		}
 	}
 
+	/** Whether power may flow along a wire, which each machine says for itself. */
 	private boolean canTransfer(PowerNode from, PowerNode to) {
-		BlockEntity a = from.blockEntity;
-		BlockEntity b = to.blockEntity;
-
-		// both generators feed a cabin, and either may be daisy-chained through another of its own kind -
-		// which is how a row of turbines or a bank of inverters shares one run of wire back to the cabin
-		if (a instanceof WindTurbineBlockEntity) {
-			return b instanceof ElectricCabinBlockEntity || b instanceof WindTurbineBlockEntity;
-		}
-
-		if (a instanceof PvInverterBlockEntity) {
-			return b instanceof ElectricCabinBlockEntity || b instanceof PvInverterBlockEntity;
-		}
-
-		if (a instanceof ElectricCabinBlockEntity) {
-			return b instanceof UtilityPoleBlockEntity;
-		}
-
-		if (a instanceof UtilityPoleBlockEntity) {
-			return b instanceof UtilityPoleBlockEntity || b instanceof PowerBoxBlockEntity;
-		}
-
-		return false;
+		return from.blockEntity instanceof InsulatorHost a && to.blockEntity instanceof InsulatorHost b
+				&& (a.feeds(b) || b.passesThrough());
 	}
 
 	private static class TargetGroup {

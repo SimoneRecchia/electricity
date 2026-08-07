@@ -10,63 +10,24 @@ import net.minecraft.util.Mth;
 
 /**
  * Turns what the mod knows about a photovoltaic plant into the signal set a real one publishes.
- *
- * Three nodes, three methods, and the split is the one a real plant has: an inverter with the grid on
- * one side of it, an array with the sky on one side of it, and a mast that only reports.
- *
- * Only the inverter needs an instance, because it is the only one of the three with invented
- * instrumentation that has to remember anything. A heatsink warms up and cools down over minutes, so
- * it carries thermal state between ticks; an array's readings and a mast's are all either measured or
- * derived from this tick's measurements, so those two are static.
- *
- * <h2>What is invented, and how carefully</h2>
- *
- * The electrical relations are real physics - the phase currents really are the apparent power over
- * root three times the voltage, the efficiency really is the published curve. The heatsink
- * temperature, the internal air temperature, the insulation resistance and the DC bus voltage are
- * invented, and they are invented so that a control program written against them behaves the way it
- * would against a real machine: they ramp like thermal masses rather than snapping, and they react
- * correctly to load, to ambient and to rain. They are not a simulation of anything and
- * {@link SolarTelemetry#kind} says so at runtime.
+  *
+ * They are not a simulation of anything and {@link SolarTelemetry#kind} says so at runtime.
  */
 public final class SolarTelemetrySimulator {
-	/** Reaches 63% of a step in roughly 25 seconds. Slow enough to read as thermal mass. */
+	/** Reaches 63% of a step in roughly 25 seconds. */
 	private static final double THERMAL_LAG = 0.002;
-	/**
-	 * How far above the cabinet a heatsink runs at full load, in degrees.
-	 *
-	 * The semiconductors are where the losses actually happen, so the fins are the hottest thing in
-	 * the machine - and the gap between them and the cabinet is what a fan is working to keep small.
-	 */
+	/** How far above the cabinet a heatsink runs at full load, in degrees. */
 	private static final double HEAT_SINK_RISE_C = 22.0;
-	/**
-	 * Insulation resistance of a dry, healthy array to earth, in kilohms.
-	 *
-	 * Real machines measure this before every start and refuse to energise below a threshold, which is
-	 * the commonest reason a plant fails to come online in the morning: overnight condensation in a
-	 * connector drops it, and it recovers as the array warms and dries.
-	 */
+	/** Insulation resistance of a dry, healthy array to earth, in kilohms. */
 	private static final double DRY_INSULATION_KOHM = 20000.0;
-	/** What rain does to it. A wet array reads a fraction of a dry one, and a real one sometimes trips. */
+	/** What rain does to it. */
 	private static final double WET_INSULATION_KOHM = 900.0;
-	/**
-	 * How far above the maximum power point the DC bus sits.
-	 *
-	 * The bus is held above the string voltage because that is what lets the bridge push current into
-	 * the grid at all - a boost stage or the topology's own headroom, depending on the machine. Ten
-	 * percent is representative and it is why a 1500 V system needs 1500 V rated capacitors on a bus
-	 * that never sees 1500 V from the array.
-	 */
+	/** How far above the maximum power point the DC bus sits. */
 	private static final double DC_BUS_HEADROOM = 1.10;
 
 	private final Map<String, Double> thermal = new HashMap<>();
 
-	/**
-	 * Everything the inverter's snapshot needs, passed as a value.
-	 *
-	 * A record rather than a reference to the block entity, for the same reason the turbine's simulator
-	 * takes one: it can then never observe a half-updated machine, and it can be tested without a world.
-	 */
+	/** Everything the inverter's snapshot needs, passed as a value. */
 	public record InverterSample(
 			InverterSpec spec,
 			double acPowerKw,
@@ -140,7 +101,7 @@ public final class SolarTelemetrySimulator {
 		out.put(SolarTelemetry.APPARENT_POWER, apparent);
 		out.put(SolarTelemetry.REACTIVE_POWER, reactive);
 		out.put(SolarTelemetry.POWER_FACTOR, s.powerFactor());
-		// the grid's frequency, not the machine's: an inverter follows what it is connected to, and a
+		// the grid's frequency, not the machine's: an inverter follows what it is connected to
 		// stiff grid does not move. The wobble is a hundredth of a hertz, which is what a real trend has
 		out.put(SolarTelemetry.FREQUENCY, spec.frequencyHz());
 		out.put(SolarTelemetry.GRID_VOLTAGE, spec.nominalAcVolts());
@@ -173,13 +134,7 @@ public final class SolarTelemetrySimulator {
 		return out.build();
 	}
 
-	/**
-	 * Performance ratio at the plant's terminals.
-	 *
-	 * Alternating current out over what the connected direct-current nameplate would have made in this
-	 * light, which is the definition a power purchase agreement uses - so it includes the inverter's own
-	 * efficiency, its clipping and its derating, not just the modules. A good plant runs 0.80 to 0.85.
-	 */
+	/** Performance ratio at the plant's terminals. */
 	private static double performanceRatio(InverterSample s) {
 		if (s.planeIrradiance() <= 0.0 || s.dcAcRatio() <= 0.0) return 0.0;
 
@@ -195,12 +150,7 @@ public final class SolarTelemetrySimulator {
 		return Mth.clamp((cabinetTempC - from) / Math.max(1.0, to - from), 0.0, 1.0);
 	}
 
-	/**
-	 * A first-order lag towards a target, seeded on the first call.
-	 *
-	 * The seed matters: without it every temperature would ramp up from absolute zero the first time a
-	 * chunk loaded, and a program watching for a cold cabinet would see one that was never there.
-	 */
+	/** A first-order lag towards a target, seeded on the first call. */
 	private double lag(String key, double target, double seed) {
 		double current = thermal.getOrDefault(key, seed);
 		double next = current + (target - current) * THERMAL_LAG;
@@ -210,7 +160,7 @@ public final class SolarTelemetrySimulator {
 
 	// ---- an array ----
 
-	/** Everything one array publishes. Static, because nothing here has to be remembered between ticks. */
+	/** Everything one array publishes. */
 	public record ArraySample(
 			PvArraySpec spec,
 			double poaBeam,
@@ -295,7 +245,7 @@ public final class SolarTelemetrySimulator {
 		out.put(SolarTelemetry.GROUND_COVER_RATIO, spec.groundCoverRatio());
 
 		out.put(SolarTelemetry.TRACKER_MOTOR_POWER, s.trackerMotorKw());
-		// the drive gearbox warms while it is working and cools when it is not, which on a tracker is
+		// the drive gearbox warms while it is working and cools when it is not
 		// most of the day: a row that slews for a few seconds every few minutes barely gets warm
 		out.put(SolarTelemetry.TRACKER_DRIVE_TEMP, s.ambientTempC() + (s.slewing() ? 12.0 : 2.0));
 

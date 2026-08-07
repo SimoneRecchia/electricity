@@ -7,13 +7,14 @@ import com.dooji.electricity.client.render.obj.ObjBoundingBoxRegistry;
 import com.dooji.electricity.client.render.obj.ObjModel;
 import com.dooji.electricity.client.wire.InsulatorLookup;
 import com.dooji.electricity.client.wire.WireManagerClient;
+import com.dooji.electricity.api.power.ConductorSpec;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.ElectricityServerConfig;
 import com.dooji.electricity.main.registry.ObjBlockDefinition;
 import com.dooji.electricity.main.registry.ObjDefinitions;
 import com.dooji.electricity.wire.InsulatorIdRegistry;
 import com.dooji.electricity.wire.InsulatorPartHelper;
-import com.dooji.electricity.power.PowerFieldManager;
+import com.dooji.electricity.wire.InsulatorHost;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -46,7 +47,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
-public class PowerBoxBlockEntity extends BlockEntity {
+public class PowerBoxBlockEntity extends BlockEntity implements InsulatorHost {
 	private Vec3[] wirePositions;
 	private int[] insulatorIds;
 
@@ -151,6 +152,11 @@ public class PowerBoxBlockEntity extends BlockEntity {
 		return FE_TRANSFER_PER_TICK;
 	}
 
+	@Override
+	public void deliverPower(double power) {
+		setCurrentPower(power);
+	}
+
 	public void setCurrentPower(double power) {
 		this.currentPower = power;
 	}
@@ -219,7 +225,6 @@ public class PowerBoxBlockEntity extends BlockEntity {
 
 	private void refreshPowerField() {
 		if (level == null) return;
-		PowerFieldManager.clearSource(worldPosition);
 		Set<BlockPos> newlyPowered = new HashSet<>();
 		var consumers = new ArrayList<PowerConsumerTarget>();
 
@@ -246,7 +251,6 @@ public class PowerBoxBlockEntity extends BlockEntity {
 	private void deactivatePowerField() {
 		if (level == null) return;
 
-		PowerFieldManager.clearSource(worldPosition);
 		for (BlockPos pos : poweredBlocks) {
 			applyPowerToBlock(pos, false);
 		}
@@ -360,7 +364,6 @@ public class PowerBoxBlockEntity extends BlockEntity {
 			boolean meets = regulated >= minimum;
 
 			target.consumer().onPowerSupplied(regulated, meets, consumerEvent);
-			PowerFieldManager.markPowered(worldPosition, target.position(), regulated);
 		}
 	}
 
@@ -602,5 +605,22 @@ public class PowerBoxBlockEntity extends BlockEntity {
 				WireManagerClient.invalidateInsulatorCache(this.getInsulatorIds());
 			});
 		}
+	}
+
+	@Override
+	public String fittingType() {
+		return InsulatorPartHelper.TYPE_POWER_BOX;
+	}
+
+	/** Low voltage only: a kiosk is the end of the line, and what arrives at one is a street bundle. */
+	@Override
+	public boolean takesConductor(ConductorSpec conductor, int index) {
+		return conductor.voltageClass() == ConductorSpec.VoltageClass.LOW;
+	}
+
+	/** The end of the line: a kiosk distributes, it does not feed another machine. */
+	@Override
+	public boolean feeds(InsulatorHost other) {
+		return false;
 	}
 }

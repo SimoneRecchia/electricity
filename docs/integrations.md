@@ -61,7 +61,7 @@ draw. The wire network still receives everything left over.
 
 Without a cap a turbine reaches 9844 J/t, roughly 20× Mekanism's own Wind Generator
 maximum of 480 J/t. The default sits at about 4× that Generator, which suits a machine
-costing a workbench, circuit boards, a CPU and a motor core against a single block, and
+costing circuit boards, a CPU and a motor core against a single block, and
 stays under the 5000 J/t the Power Box can already push — so the Power Box remains the
 primary bridge and the turbine's faces are a secondary tap.
 

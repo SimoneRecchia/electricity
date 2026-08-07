@@ -1,26 +1,17 @@
 package com.dooji.electricity.client.events;
 
-import com.dooji.electricity.block.ElectricCabinBlock;
-import com.dooji.electricity.block.ElectricCabinBlockEntity;
-import com.dooji.electricity.block.PowerBoxBlock;
-import com.dooji.electricity.block.PowerBoxBlockEntity;
-import com.dooji.electricity.block.UtilityPoleBlock;
-import com.dooji.electricity.block.UtilityPoleBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlock;
-import com.dooji.electricity.block.PvInverterBlockEntity;
-import com.dooji.electricity.block.WindTurbineBlockEntity;
 import com.dooji.electricity.client.render.obj.ObjRaycaster;
 import com.dooji.electricity.client.wire.WireAnchorHelper;
 import com.dooji.electricity.client.wire.WireManagerClient;
-import com.dooji.electricity.item.ItemWire;
+import com.dooji.electricity.item.ConductorItem;
 import com.dooji.electricity.main.Electricity;
 import com.dooji.electricity.main.network.ElectricityNetworking;
 import com.dooji.electricity.main.network.payloads.CreateWireFromInsulatorsPayload;
+import com.dooji.electricity.wire.InsulatorHost;
 import com.dooji.electricity.wire.InsulatorPartHelper;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -41,10 +32,10 @@ public class WireInteractionEvents {
 
 		InteractionHand hand = InteractionHand.MAIN_HAND;
 		ItemStack heldItem = player.getItemInHand(hand);
-		if (!(heldItem.getItem() instanceof ItemWire)) {
+		if (!(heldItem.getItem() instanceof ConductorItem)) {
 			hand = InteractionHand.OFF_HAND;
 			heldItem = player.getItemInHand(hand);
-			if (!(heldItem.getItem() instanceof ItemWire)) return;
+			if (!(heldItem.getItem() instanceof ConductorItem)) return;
 		}
 
 		Minecraft mc = Minecraft.getInstance();
@@ -56,39 +47,42 @@ public class WireInteractionEvents {
 		int range = 16;
 		BlockPos playerPos = mc.player.blockPosition();
 
+		// The nearest fitting on the ray, not the first cell of the search cube: scanning x then y then z
+		// returned whichever machine happened to be lowest and most westward, so aiming down a line of
+		// towers picked the wrong one.
+		BlockPos foundPos = null;
+		String foundPart = null;
+		Vec3 foundAnchor = null;
+		double nearest = Double.MAX_VALUE;
+
 		for (int x = -range; x <= range; x++) {
 			for (int y = -range; y <= range; y++) {
 				for (int z = -range; z <= range; z++) {
 					BlockPos checkPos = playerPos.offset(x, y, z);
 
 					BlockEntity blockEntity = mc.level.getBlockEntity(checkPos);
-					if (blockEntity != null) {
-						String hoveredPart = ObjRaycaster.getHoveredPart(cameraPos, lookDirection, checkPos);
-						if (hoveredPart != null) {
-							var blockState = mc.level.getBlockState(checkPos);
+					if (!wireable(blockEntity)) continue;
 
-							Direction facing = null;
+					String hoveredPart = ObjRaycaster.getHoveredPart(cameraPos, lookDirection, checkPos);
+					if (hoveredPart == null) continue;
 
-							if (blockState.hasProperty(UtilityPoleBlock.FACING)) {
-								facing = blockState.getValue(UtilityPoleBlock.FACING);
-							} else if (blockState.hasProperty(ElectricCabinBlock.FACING)) {
-								facing = blockState.getValue(ElectricCabinBlock.FACING);
-							} else if (blockState.hasProperty(PowerBoxBlock.FACING)) {
-								facing = blockState.getValue(PowerBoxBlock.FACING);
-							} else if (blockState.hasProperty(WindTurbineBlock.FACING)) {
-								facing = blockState.getValue(WindTurbineBlock.FACING);
-							}
+					Vec3 fallback = ObjRaycaster.getPartCenter(checkPos, hoveredPart);
+					Vec3 partCenter = WireAnchorHelper.anchorOrFallback(blockEntity, hoveredPart, fallback);
+					if (partCenter == null) continue;
 
-							Vec3 fallback = ObjRaycaster.getPartCenter(checkPos, hoveredPart, facing);
-							Vec3 partCenter = WireAnchorHelper.anchorOrFallback(blockEntity, hoveredPart, fallback);
-							if (partCenter != null) {
-								handleOBJPartClick(player, hand, partCenter, checkPos, hoveredPart);
-								return;
-							}
-						}
-					}
+					double distance = cameraPos.distanceToSqr(partCenter);
+					if (distance >= nearest) continue;
+
+					nearest = distance;
+					foundPos = checkPos;
+					foundPart = hoveredPart;
+					foundAnchor = partCenter;
 				}
 			}
+		}
+
+		if (foundAnchor != null) {
+			handleOBJPartClick(player, hand, foundAnchor, foundPos, foundPart);
 		}
 	}
 
@@ -118,16 +112,14 @@ public class WireInteractionEvents {
 
 	/**
 	 * Whether a wire may be attached to this block at all.
-	 *
-	 * Written once rather than as a chain of instanceof tests at each end of a wire, because the list has
-	 * grown a member and would otherwise have needed adding to in two places that read identically and
-	 * are eighty characters long.
+	  *
+	 * {@link InsulatorHost} is the one definition of it. Listed by type instead, this chain named five
+	 * machines and left out the lattice tower, the transformers and the ground conductor - so a player
+	 * pointing at a tower's insulator, which is the one place a 400 kV line can land, got nothing.
 	 */
 	@OnlyIn(Dist.CLIENT)
 	private static boolean wireable(net.minecraft.world.level.block.entity.BlockEntity entity) {
-		return entity instanceof UtilityPoleBlockEntity || entity instanceof ElectricCabinBlockEntity
-				|| entity instanceof PowerBoxBlockEntity || entity instanceof WindTurbineBlockEntity
-				|| entity instanceof PvInverterBlockEntity;
+		return entity instanceof InsulatorHost;
 	}
 
 	@OnlyIn(Dist.CLIENT)
